@@ -14,6 +14,7 @@
     "test:watch": "vitest",
     "lint": "tsc --noEmit",
     "docs": "typedoc",
+    "docs:serve": "typedoc && npx serve docs -p 3333",
     "playground": "tsx src/playground.ts"
   },
   "devDependencies": {

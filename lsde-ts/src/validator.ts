@@ -6,7 +6,16 @@ import type {
 	BlueprintExport, BlueprintScene,
 } from './types.js';
 
-/** Validate blueprint data integrity and optionally cross-validate against game capabilities. */
+/**
+ * Validate blueprint data integrity and optionally cross-validate against game capabilities.
+ *
+ * Checks: scene/block UUID uniqueness, connection integrity, single start block per scene,
+ * entryBlockId validity, and fork rules (max 1 non-async target per port).
+ * If `check` is provided, also warns about unknown signatures, dictionaries, and characters.
+ *
+ * @returns DiagnosticReport with errors, warnings, and stats.
+ * @see PLAN.md §3.1
+ */
 export function validateBlueprint( options: InitOptions ): DiagnosticReport {
 	const errors: DiagnosticEntry[] = [];
 	const warnings: DiagnosticEntry[] = [];

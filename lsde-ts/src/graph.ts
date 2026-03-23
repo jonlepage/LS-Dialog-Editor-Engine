@@ -9,7 +9,11 @@ import type {
 
 // ─── SceneGraph ──────────────────────────────────────────────────────────────
 
-/** Indexed representation of a single scene for O(1) lookups. */
+/**
+ * Indexed representation of a single scene for O(1) block and connection lookups.
+ * Built once during `init()`, used throughout traversal.
+ * @see PLAN.md §3.1
+ */
 export class SceneGraph {
 
 	private readonly scene: BlueprintScene;
@@ -65,7 +69,10 @@ export class SceneGraph {
 
 // ─── BlueprintGraph ──────────────────────────────────────────────────────────
 
-/** Indexed representation of an entire blueprint export. */
+/**
+ * Indexed representation of an entire blueprint export.
+ * Provides O(1) access to scenes, signatures, and dictionaries.
+ */
 export class BlueprintGraph {
 
 	private readonly sceneGraphs: Map<string, SceneGraph>;
