@@ -1,0 +1,20 @@
+{
+  "name": "@lsde/dialog-engine",
+  "version": "0.1.0",
+  "description": "LSDE Dialog Engine — TypeScript reference implementation",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest": "^2.0.0"
+  },
+  "license": "SEE LICENSE IN ../LICENSE"
+}

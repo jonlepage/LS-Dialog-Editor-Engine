@@ -1,0 +1,60 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build outputs
+dist/
+build/
+out/
+*.js.map
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# C# / Unity
+bin/
+obj/
+*.csproj.user
+Library/
+Temp/
+
+# C++
+*.o
+*.a
+*.so
+*.dylib
+CMakeCache.txt
+CMakeFiles/
+
+# Rust
+target/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Godot
+.godot/
+
+# BMAD output
+_bmad-output/
+_bmad/
+.claude/
+.github/
+
+# misc
+.env
+.env.local
+concept/
+plan/
+AGENTS.md
+PLAN.md
