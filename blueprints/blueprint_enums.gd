@@ -7,7 +7,7 @@ class_name BlueprintEnums
 ## Each value maps to the scene's UUID — stable even if the scene is renamed.
 class LSDE_SCENES:
 	## [b]Scene: New Scene[/b]
-	## 1 CHOICE, 1 DIALOG
+	## 1 ACTION, 1 CHOICE, 1 CONDITION, 5 DIALOG
 	## Entry: [code]DIALOG-001[/code]
 	## Emotions: [code]sad[/code]
 	## Characters: [code]Boo[/code], [code]Gigi Jinx [/code], [code]Gruht Tyron[/code], [code]Lulu Star[/code], [code]Salomon Sky[/code], [code]Svelt Moon[/code], [code]lia[/code]
@@ -27,9 +27,19 @@ class LSDE_SCENES:
 ## Use these to register callbacks or listeners on specific blocks.
 ## Each value maps to the block's UUID — stable even if the block is renamed.
 class LSDE_BLOCKS:
+	## [b]🟧[ACTION] ACTION-001[/b]
+	## Scene: [code]New Scene[/code]
+	## In: [code]DIALOG-001[/code]
+	## Out: [code]DIALOG-002[/code], [code]DIALOG-005[/code]
+	## ---
+	## <image url="./_images/action.webp" />
+	const newSceneAction001 = "b1e1cf07-e8d2-42cc-b1ec-7cfb21b6a3aa"
+
 	## [b]⬜[CHOICE] CHOICE-001[/b]
 	## Characters: [code]Gruht Tyron[/code], [code]Gigi Jinx [/code], [code]Lulu Star[/code], [code]Boo[/code], [code]Svelt Moon[/code], [code]Salomon Sky[/code]
 	## Scene: [code]New Scene[/code]
+	## In: [code]DIALOG-001[/code]
+	## Out: [code]CONDITION-001[/code], [code]DIALOG-001[/code]
 	## ---
 	## <image url="./_images/choice.webp" />
 	## <image url="./_images/char_gruht_tyron_0.png" />
@@ -40,10 +50,20 @@ class LSDE_BLOCKS:
 	## <image url="./_images/char_salomon_sky_5.png" />
 	const newSceneChoice001 = "014f503a-6688-429d-a5fe-801cf33f2410"
 
+	## [b]🟪[CONDITION] CONDITION-001[/b]
+	## Scene: [code]New Scene[/code]
+	## In: [code]DIALOG-002[/code], [code]CHOICE-001[/code]
+	## Out: [code]DIALOG-003[/code], [code]DIALOG-004[/code]
+	## ---
+	## <image url="./_images/cond.webp" />
+	const newSceneCondition001 = "85f4640b-9c6e-4940-9bc6-b4d12847d5f8"
+
 	## [b]🟦[DIALOG] DIALOG-001 (entry)[/b]
-	## [i]"sdasd"[/i]
+	## [i]"choice2"[/i]
 	## Characters: [code]Gruht Tyron[/code] (sad x2), [code]Svelt Moon[/code] (sad x2), [code]lia[/code] (sad x2), [code]Boo[/code] (sad x2)
 	## Scene: [code]New Scene[/code]
+	## In: [code]CHOICE-001[/code]
+	## Out: [code]CHOICE-001[/code], [code]ACTION-001[/code], [code]DIALOG-005[/code]
 	## ---
 	## <image url="./_images/dialog.webp" />
 	## <image url="./_images/char_gruht_tyron_0.png" />
@@ -52,20 +72,56 @@ class LSDE_BLOCKS:
 	## <image url="./_images/char_boo_3.png" />
 	const newSceneDialog001 = "6462dab3-0eb4-4a2c-a505-407556441156"
 
+	## [b]🟦[DIALOG] DIALOG-002[/b]
+	## [i]"text 2"[/i]
+	## Characters: [code]lia[/code]
+	## Scene: [code]New Scene[/code]
+	## In: [code]ACTION-001[/code]
+	## Out: [code]CONDITION-001[/code]
+	## ---
+	## <image url="./_images/dialog.webp" />
+	## <image url="./_images/char_lia_0.png" />
+	const newSceneDialog002 = "df23757c-a35a-4bcb-8056-e7ad232eff1d"
+
+	## [b]🟦[DIALOG] DIALOG-003[/b]
+	## [i]"text 3"[/i]
+	## Scene: [code]New Scene[/code]
+	## In: [code]CONDITION-001[/code]
+	## ---
+	## <image url="./_images/dialog.webp" />
+	const newSceneDialog003 = "bccf5542-80f1-4415-b0c4-24ff4a638aa7"
+
+	## [b]🟦[DIALOG] DIALOG-004[/b]
+	## [i]"text 3.2"[/i]
+	## Scene: [code]New Scene[/code]
+	## In: [code]CONDITION-001[/code], [code]DIALOG-005[/code]
+	## ---
+	## <image url="./_images/dialog.webp" />
+	const newSceneDialog004 = "0c524a39-6bbe-468f-8876-43c1fbb2a030"
+
+	## [b]🟦[DIALOG] DIALOG-005[/b]
+	## [i]"action fail"[/i]
+	## Scene: [code]New Scene[/code]
+	## In: [code]ACTION-001[/code], [code]DIALOG-001[/code]
+	## Out: [code]DIALOG-004[/code]
+	## ---
+	## <image url="./_images/dialog.webp" />
+	const newSceneDialog005 = "9b47c43c-4b06-4e37-bec6-2ee2597d4bae"
+
 
 ## Choice item identifiers for type-safe access to individual player choices.
 ## Each value maps to a choice item's UUID within a CHOICE block.
 ## Use these for switch/case handling of specific player decisions.
 class LSDE_CHOICES:
-	## [b]⬜[CHOICE_ITEM] sdasdasdf              f[/b]
-	## [i]"sdasdasdf              f"[/i]
+	## [b]⬜[CHOICE_ITEM] choice1[/b]
+	## [i]"choice1"[/i]
 	## Scene: [code]New Scene[/code]
 	## See LSDE_BLOCKS.newSceneChoice001
-	const newSceneSdasdasdfF = "17e98de3-1690-4ca4-8ea5-8070c15b1fe1"
+	const newSceneChoice1 = "17e98de3-1690-4ca4-8ea5-8070c15b1fe1"
 
-	## [b]⬜[CHOICE_ITEM] sdasd[/b]
-	## [i]"sdasd"[/i]
+	## [b]⬜[CHOICE_ITEM] choice2[/b]
+	## [i]"choice2"[/i]
 	## Scene: [code]New Scene[/code]
 	## See LSDE_BLOCKS.newSceneChoice001
-	const newSceneSdasd = "a0eee458-6ccc-4a23-bd36-0b3d1f73771e"
+	const newSceneChoice2 = "a0eee458-6ccc-4a23-bd36-0b3d1f73771e"
 

@@ -42,7 +42,7 @@ export type lsdeActionId = 'signatureID1';
  * Union of all block types present in this export.
  * Use for type-safe block type comparisons.
  */
-export type blockType = 'CHOICE' | 'DIALOG';
+export type blockType = 'ACTION' | 'CHOICE' | 'CONDITION' | 'DIALOG';
 
 /**
  * Union of all locale codes included in this export.

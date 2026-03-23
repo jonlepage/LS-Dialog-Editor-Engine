@@ -11,7 +11,7 @@
 namespace LSDE_SCENES {
 	/**
 	 * @brief Scene: New Scene
-	 * 1 CHOICE, 1 DIALOG
+	 * 1 ACTION, 1 CHOICE, 1 CONDITION, 5 DIALOG
 	 * Entry: `DIALOG-001`
 	 * - Emotions: `sad`
 	 * - Characters: `Boo`, `Gigi Jinx `, `Gruht Tyron`, `Lulu Star`, `Salomon Sky`, `Svelt Moon`, `lia`
@@ -36,10 +36,23 @@ namespace LSDE_SCENES {
  */
 namespace LSDE_BLOCKS {
 	/**
+	 * @brief 🟧[ACTION] ACTION-001
+	 * - Scene: `New Scene`
+	 * - In: `DIALOG-001`
+	 * - Out: `DIALOG-002`, `DIALOG-005`
+	 * `7908f59d-b97d-40ea-80f1-30c6f762e30d`()
+	 * ---
+	 * <image url="./_images/action.webp" />
+	 */
+	constexpr const char* newSceneAction001 = "b1e1cf07-e8d2-42cc-b1ec-7cfb21b6a3aa";
+
+	/**
 	 * @brief ⬜[CHOICE] CHOICE-001
 	 * - Characters: `Gruht Tyron`, `Gigi Jinx `, `Lulu Star`, `Boo`, `Svelt Moon`, `Salomon Sky`
 	 * - Scene: `New Scene`
-	 * - Choices: `sdasdasdf              f`, `sdasd`
+	 * - In: `DIALOG-001`
+	 * - Out: `CONDITION-001`, `DIALOG-001`
+	 * - Choices: `choice1`, `choice2`
 	 * ---
 	 * <image url="./_images/choice.webp" />
 	 * <image url="./_images/char_gruht_tyron_0.png" />
@@ -52,10 +65,25 @@ namespace LSDE_BLOCKS {
 	constexpr const char* newSceneChoice001 = "014f503a-6688-429d-a5fe-801cf33f2410";
 
 	/**
+	 * @brief 🟪[CONDITION] CONDITION-001
+	 * - Scene: `New Scene`
+	 * - In: `DIALOG-002`, `CHOICE-001`
+	 * - Out: `DIALOG-003`, `DIALOG-004`
+	 * `variable_0` = ``
+	 * `variable_0` = ``
+	 * `variable_0` = ``
+	 * ---
+	 * <image url="./_images/cond.webp" />
+	 */
+	constexpr const char* newSceneCondition001 = "85f4640b-9c6e-4940-9bc6-b4d12847d5f8";
+
+	/**
 	 * @brief 🟦[DIALOG] DIALOG-001 (entry)
-	 * "sdasd"
+	 * "choice2"
 	 * - Characters: `Gruht Tyron` (sad x2), `Svelt Moon` (sad x2), `lia` (sad x2), `Boo` (sad x2)
 	 * - Scene: `New Scene`
+	 * - In: `CHOICE-001`
+	 * - Out: `CHOICE-001`, `ACTION-001`, `DIALOG-005`
 	 * ---
 	 * <image url="./_images/dialog.webp" />
 	 * <image url="./_images/char_gruht_tyron_0.png" />
@@ -64,6 +92,50 @@ namespace LSDE_BLOCKS {
 	 * <image url="./_images/char_boo_3.png" />
 	 */
 	constexpr const char* newSceneDialog001 = "6462dab3-0eb4-4a2c-a505-407556441156";
+
+	/**
+	 * @brief 🟦[DIALOG] DIALOG-002
+	 * "text 2"
+	 * - Characters: `lia`
+	 * - Scene: `New Scene`
+	 * - In: `ACTION-001`
+	 * - Out: `CONDITION-001`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 * <image url="./_images/char_lia_0.png" />
+	 */
+	constexpr const char* newSceneDialog002 = "df23757c-a35a-4bcb-8056-e7ad232eff1d";
+
+	/**
+	 * @brief 🟦[DIALOG] DIALOG-003
+	 * "text 3"
+	 * - Scene: `New Scene`
+	 * - In: `CONDITION-001`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	constexpr const char* newSceneDialog003 = "bccf5542-80f1-4415-b0c4-24ff4a638aa7";
+
+	/**
+	 * @brief 🟦[DIALOG] DIALOG-004
+	 * "text 3.2"
+	 * - Scene: `New Scene`
+	 * - In: `CONDITION-001`, `DIALOG-005`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	constexpr const char* newSceneDialog004 = "0c524a39-6bbe-468f-8876-43c1fbb2a030";
+
+	/**
+	 * @brief 🟦[DIALOG] DIALOG-005
+	 * "action fail"
+	 * - Scene: `New Scene`
+	 * - In: `ACTION-001`, `DIALOG-001`
+	 * - Out: `DIALOG-004`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	constexpr const char* newSceneDialog005 = "9b47c43c-4b06-4e37-bec6-2ee2597d4bae";
 
 }
 
@@ -74,21 +146,21 @@ namespace LSDE_BLOCKS {
  */
 namespace LSDE_CHOICES {
 	/**
-	 * @brief ⬜[CHOICE_ITEM] sdasdasdf              f
-	 * "sdasdasdf              f"
+	 * @brief ⬜[CHOICE_ITEM] choice1
+	 * "choice1"
 	 * - Scene: `New Scene`
 	 * - Parent: `CHOICE-001`
 	 */
 	/** @see LSDE_BLOCKS::newSceneChoice001 */
-	constexpr const char* newSceneSdasdasdfF = "17e98de3-1690-4ca4-8ea5-8070c15b1fe1";
+	constexpr const char* newSceneChoice1 = "17e98de3-1690-4ca4-8ea5-8070c15b1fe1";
 
 	/**
-	 * @brief ⬜[CHOICE_ITEM] sdasd
-	 * "sdasd"
+	 * @brief ⬜[CHOICE_ITEM] choice2
+	 * "choice2"
 	 * - Scene: `New Scene`
 	 * - Parent: `CHOICE-001`
 	 */
 	/** @see LSDE_BLOCKS::newSceneChoice001 */
-	constexpr const char* newSceneSdasd = "a0eee458-6ccc-4a23-bd36-0b3d1f73771e";
+	constexpr const char* newSceneChoice2 = "a0eee458-6ccc-4a23-bd36-0b3d1f73771e";
 
 }

@@ -9,7 +9,7 @@ public static class LSDE_SCENES
 {
 	/// <summary>
 	/// <para>Scene: New Scene</para>
-	/// <para>1 CHOICE, 1 DIALOG</para>
+	/// <para>1 ACTION, 1 CHOICE, 1 CONDITION, 5 DIALOG</para>
 	/// <para>Entry: <c>DIALOG-001</c></para>
 	/// <para>Emotions: <c>sad</c></para>
 	/// <para>Characters: <c>Boo</c>, <c>Gigi Jinx </c>, <c>Gruht Tyron</c>, <c>Lulu Star</c>, <c>Salomon Sky</c>, <c>Svelt Moon</c>, <c>lia</c></para>
@@ -36,9 +36,22 @@ public static class LSDE_SCENES
 public static class LSDE_BLOCKS
 {
 	/// <summary>
+	/// <para>🟧[ACTION] ACTION-001</para>
+	/// <para>Scene: <c>New Scene</c></para>
+	/// <para>In: <c>DIALOG-001</c></para>
+	/// <para>Out: <c>DIALOG-002</c>, <c>DIALOG-005</c></para>
+	/// </summary>
+	/// <remarks>
+	/// <image url="./_images/action.webp" />
+	/// </remarks>
+	public const string newSceneAction001 = "b1e1cf07-e8d2-42cc-b1ec-7cfb21b6a3aa";
+
+	/// <summary>
 	/// <para>⬜[CHOICE] CHOICE-001</para>
 	/// <para>Characters: <c>Gruht Tyron</c>, <c>Gigi Jinx </c>, <c>Lulu Star</c>, <c>Boo</c>, <c>Svelt Moon</c>, <c>Salomon Sky</c></para>
 	/// <para>Scene: <c>New Scene</c></para>
+	/// <para>In: <c>DIALOG-001</c></para>
+	/// <para>Out: <c>CONDITION-001</c>, <c>DIALOG-001</c></para>
 	/// </summary>
 	/// <remarks>
 	/// <image url="./_images/choice.webp" />
@@ -52,10 +65,23 @@ public static class LSDE_BLOCKS
 	public const string newSceneChoice001 = "014f503a-6688-429d-a5fe-801cf33f2410";
 
 	/// <summary>
+	/// <para>🟪[CONDITION] CONDITION-001</para>
+	/// <para>Scene: <c>New Scene</c></para>
+	/// <para>In: <c>DIALOG-002</c>, <c>CHOICE-001</c></para>
+	/// <para>Out: <c>DIALOG-003</c>, <c>DIALOG-004</c></para>
+	/// </summary>
+	/// <remarks>
+	/// <image url="./_images/cond.webp" />
+	/// </remarks>
+	public const string newSceneCondition001 = "85f4640b-9c6e-4940-9bc6-b4d12847d5f8";
+
+	/// <summary>
 	/// <para>🟦[DIALOG] DIALOG-001 (entry)</para>
-	/// <para>"sdasd"</para>
+	/// <para>"choice2"</para>
 	/// <para>Characters: <c>Gruht Tyron</c> (sad x2), <c>Svelt Moon</c> (sad x2), <c>lia</c> (sad x2), <c>Boo</c> (sad x2)</para>
 	/// <para>Scene: <c>New Scene</c></para>
+	/// <para>In: <c>CHOICE-001</c></para>
+	/// <para>Out: <c>CHOICE-001</c>, <c>ACTION-001</c>, <c>DIALOG-005</c></para>
 	/// </summary>
 	/// <remarks>
 	/// <image url="./_images/dialog.webp" />
@@ -65,6 +91,54 @@ public static class LSDE_BLOCKS
 	/// <image url="./_images/char_boo_3.png" />
 	/// </remarks>
 	public const string newSceneDialog001 = "6462dab3-0eb4-4a2c-a505-407556441156";
+
+	/// <summary>
+	/// <para>🟦[DIALOG] DIALOG-002</para>
+	/// <para>"text 2"</para>
+	/// <para>Characters: <c>lia</c></para>
+	/// <para>Scene: <c>New Scene</c></para>
+	/// <para>In: <c>ACTION-001</c></para>
+	/// <para>Out: <c>CONDITION-001</c></para>
+	/// </summary>
+	/// <remarks>
+	/// <image url="./_images/dialog.webp" />
+	/// <image url="./_images/char_lia_0.png" />
+	/// </remarks>
+	public const string newSceneDialog002 = "df23757c-a35a-4bcb-8056-e7ad232eff1d";
+
+	/// <summary>
+	/// <para>🟦[DIALOG] DIALOG-003</para>
+	/// <para>"text 3"</para>
+	/// <para>Scene: <c>New Scene</c></para>
+	/// <para>In: <c>CONDITION-001</c></para>
+	/// </summary>
+	/// <remarks>
+	/// <image url="./_images/dialog.webp" />
+	/// </remarks>
+	public const string newSceneDialog003 = "bccf5542-80f1-4415-b0c4-24ff4a638aa7";
+
+	/// <summary>
+	/// <para>🟦[DIALOG] DIALOG-004</para>
+	/// <para>"text 3.2"</para>
+	/// <para>Scene: <c>New Scene</c></para>
+	/// <para>In: <c>CONDITION-001</c>, <c>DIALOG-005</c></para>
+	/// </summary>
+	/// <remarks>
+	/// <image url="./_images/dialog.webp" />
+	/// </remarks>
+	public const string newSceneDialog004 = "0c524a39-6bbe-468f-8876-43c1fbb2a030";
+
+	/// <summary>
+	/// <para>🟦[DIALOG] DIALOG-005</para>
+	/// <para>"action fail"</para>
+	/// <para>Scene: <c>New Scene</c></para>
+	/// <para>In: <c>ACTION-001</c>, <c>DIALOG-001</c></para>
+	/// <para>Out: <c>DIALOG-004</c></para>
+	/// </summary>
+	/// <remarks>
+	/// <image url="./_images/dialog.webp" />
+	/// </remarks>
+	public const string newSceneDialog005 = "9b47c43c-4b06-4e37-bec6-2ee2597d4bae";
 
 }
 
@@ -76,19 +150,19 @@ public static class LSDE_BLOCKS
 public static class LSDE_CHOICES
 {
 	/// <summary>
-	/// <para>⬜[CHOICE_ITEM] sdasdasdf              f</para>
-	/// <para>"sdasdasdf              f"</para>
+	/// <para>⬜[CHOICE_ITEM] choice1</para>
+	/// <para>"choice1"</para>
 	/// <para>Scene: <c>New Scene</c></para>
 	/// </summary>
 	/// <summary>See <see cref="LSDE_BLOCKS.newSceneChoice001"/></summary>
-	public const string newSceneSdasdasdfF = "17e98de3-1690-4ca4-8ea5-8070c15b1fe1";
+	public const string newSceneChoice1 = "17e98de3-1690-4ca4-8ea5-8070c15b1fe1";
 
 	/// <summary>
-	/// <para>⬜[CHOICE_ITEM] sdasd</para>
-	/// <para>"sdasd"</para>
+	/// <para>⬜[CHOICE_ITEM] choice2</para>
+	/// <para>"choice2"</para>
 	/// <para>Scene: <c>New Scene</c></para>
 	/// </summary>
 	/// <summary>See <see cref="LSDE_BLOCKS.newSceneChoice001"/></summary>
-	public const string newSceneSdasd = "a0eee458-6ccc-4a23-bd36-0b3d1f73771e";
+	public const string newSceneChoice2 = "a0eee458-6ccc-4a23-bd36-0b3d1f73771e";
 
 }
