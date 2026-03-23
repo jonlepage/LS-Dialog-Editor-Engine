@@ -35,7 +35,7 @@ export function validateBlueprint( options: InitOptions ): DiagnosticReport {
 	let totalConnections = 0;
 
 	for ( const scene of data.scenes ) {
-		validateScene( scene, globalBlockUuids, errors );
+		validateScene( scene, globalBlockUuids, errors, warnings );
 		totalBlocks += scene.blocks.length;
 		totalConnections += scene.connections.length;
 	}
@@ -59,6 +59,7 @@ function validateScene(
 	scene: BlueprintScene,
 	globalBlockUuids: Set<string>,
 	errors: DiagnosticEntry[],
+	warnings: DiagnosticEntry[],
 ): void {
 	if ( !scene.uuid ) {
 		errors.push( { code: 'MISSING_SCENE_UUID', message: 'Scene is missing a UUID.' } );
@@ -130,6 +131,35 @@ function validateScene(
 			errors.push( {
 				code: 'BROKEN_CONNECTION_TO',
 				message: `Connection "${ conn.id }" toId "${ conn.toId }" references a non-existent block.`,
+				sceneId: scene.uuid,
+			} );
+		}
+	}
+
+	// Fork validation: max 1 non-async target per output port group
+	const blockMap = new Map( scene.blocks.map( b => [b.uuid, b] ) );
+	const portGroups = new Map<string, string[]>(); // "blockId:portKey" → toId[]
+	for ( const conn of scene.connections ) {
+		const key = conn.fromPortIndex !== undefined
+			? `${ conn.fromId }:idx:${ conn.fromPortIndex }`
+			: `${ conn.fromId }:port:${ conn.fromPort }`;
+		const group = portGroups.get( key );
+		if ( group ) { group.push( conn.toId ); }
+		else { portGroups.set( key, [conn.toId] ); }
+	}
+	for ( const [, targets] of portGroups ) {
+		if ( targets.length <= 1 ) continue;
+		let nonAsyncCount = 0;
+		for ( const toId of targets ) {
+			const target = blockMap.get( toId );
+			if ( target && !target.nativeProperties?.isAsync ) {
+				nonAsyncCount++;
+			}
+		}
+		if ( nonAsyncCount > 1 ) {
+			warnings.push( {
+				code: 'MULTIPLE_NON_ASYNC_FORK',
+				message: `A port has ${ targets.length } outgoing connections with ${ nonAsyncCount } non-async targets. Mark secondary targets as isAsync.`,
 				sceneId: scene.uuid,
 			} );
 		}

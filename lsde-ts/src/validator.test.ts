@@ -172,6 +172,42 @@ describe( 'validateBlueprint', () => {
 
 	} );
 
+	describe( 'fork validation', () => {
+
+		it( 'warns when a fork has multiple non-async targets', () => {
+			const scene = makeScene( {
+				blocks: [
+					{ uuid: 'b1', type: 'DIALOG', properties: [], isStartBlock: true },
+					{ uuid: 'b2', type: 'DIALOG', properties: [] },
+					{ uuid: 'b3', type: 'DIALOG', properties: [] },
+				],
+				connections: [
+					{ id: 'c1', fromId: 'b1', toId: 'b2', fromPort: 'out', toPort: 'in' },
+					{ id: 'c2', fromId: 'b1', toId: 'b3', fromPort: 'out', toPort: 'in' },
+				],
+			} );
+			const report = validateBlueprint( makeOptions( { scenes: [scene] } ) );
+			expect( report.warnings.some( w => w.code === 'MULTIPLE_NON_ASYNC_FORK' ) ).toBe( true );
+		} );
+
+		it( 'no warning when fork has 1 non-async + 1 async', () => {
+			const scene = makeScene( {
+				blocks: [
+					{ uuid: 'b1', type: 'DIALOG', properties: [], isStartBlock: true },
+					{ uuid: 'b2', type: 'DIALOG', properties: [] },
+					{ uuid: 'b3', type: 'DIALOG', properties: [], nativeProperties: { isAsync: true } },
+				],
+				connections: [
+					{ id: 'c1', fromId: 'b1', toId: 'b2', fromPort: 'out', toPort: 'in' },
+					{ id: 'c2', fromId: 'b1', toId: 'b3', fromPort: 'out', toPort: 'in' },
+				],
+			} );
+			const report = validateBlueprint( makeOptions( { scenes: [scene] } ) );
+			expect( report.warnings.some( w => w.code === 'MULTIPLE_NON_ASYNC_FORK' ) ).toBe( false );
+		} );
+
+	} );
+
 	describe( 'stats', () => {
 
 		it( 'counts scenes, blocks, and connections correctly', () => {

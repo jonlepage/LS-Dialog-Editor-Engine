@@ -25,6 +25,233 @@ export interface SceneHandleCallbacks {
 	getLocale: () => string;
 }
 
+// ─── AsyncTrack — parallel execution branch ──────────────────────────────────
+
+class AsyncTrack {
+
+	private running = true;
+	private currentBlock: BlueprintBlock | null = null;
+	private previousCleanup: CleanupFn | null = null;
+	private readonly followNarrative: boolean;
+	private pendingAdvance: ( () => void ) | null = null;
+
+	constructor(
+		private readonly sceneGraph: SceneGraph,
+		private readonly parentHandle: SceneHandleImpl,
+		startBlock: BlueprintBlock,
+	) {
+		this.followNarrative = startBlock.nativeProperties?.followNarrative ?? false;
+		this.processBlock( startBlock );
+	}
+
+	cancel(): void {
+		if ( !this.running ) return;
+		this.running = false;
+		if ( this.previousCleanup ) {
+			this.previousCleanup();
+			this.previousCleanup = null;
+		}
+		this.currentBlock = null;
+		this.pendingAdvance = null;
+	}
+
+	isRunning(): boolean {
+		return this.running;
+	}
+
+	isFollowNarrative(): boolean {
+		return this.followNarrative;
+	}
+
+	/** Called by the main track when it advances. Triggers pending follow-narrative advance. */
+	notifyMainAdvance(): void {
+		if ( !this.running || !this.followNarrative ) return;
+
+		if ( this.pendingAdvance ) {
+			// next() was already called — execute the pending advance
+			const advance = this.pendingAdvance;
+			this.pendingAdvance = null;
+			advance();
+		} else {
+			// next() hasn't been called yet — force-advance (skip current block)
+			this.forceAdvance();
+		}
+	}
+
+	// ─── Traversal (mirrors SceneHandleImpl logic) ───────────────────
+
+	private processBlock( block: BlueprintBlock ): void {
+		if ( !this.running ) return;
+
+		// Skip NOTE blocks
+		if ( block.type === 'NOTE' ) {
+			const connections = this.sceneGraph.getOutgoingConnections( block.uuid );
+			if ( connections.length > 0 ) {
+				const nextBlock = this.sceneGraph.getBlock( connections[0]!.toId );
+				if ( nextBlock ) {
+					this.processBlock( nextBlock );
+					return;
+				}
+			}
+			this.endTrack();
+			return;
+		}
+
+		this.currentBlock = block;
+		this.parentHandle.addVisited( block.uuid );
+
+		// Skip onBeforeBlock for async tracks — go straight to handler
+		this.executeBlockHandler( block );
+	}
+
+	private executeBlockHandler( block: BlueprintBlock ): void {
+		if ( !this.running ) return;
+
+		const { sceneHandler, globalHandler } = resolveHandler(
+			block.type, block.uuid,
+			this.parentHandle.getSceneRegistry(),
+			this.parentHandle.getGlobalRegistry(),
+		);
+
+		const context = this.parentHandle.createBlockContext( block );
+		if ( !context ) {
+			this.advanceToNextBlock( block, null );
+			return;
+		}
+
+		// Auto-behavior
+		if ( !sceneHandler && !globalHandler ) {
+			if ( isConditionBlock( block ) ) {
+				this.autoEvaluateCondition( block, context as InternalConditionContext );
+				return;
+			}
+			if ( isActionBlock( block ) ) {
+				this.autoExecuteAction( block, context as InternalActionContext );
+				return;
+			}
+		}
+
+		let nextCalled = false;
+		let syncPhase = true;
+		let sceneCleanup: CleanupFn | void = undefined;
+		let globalCleanup: CleanupFn | void = undefined;
+
+		const next = () => {
+			if ( nextCalled ) return;
+			nextCalled = true;
+
+			if ( this.followNarrative ) {
+				// Don't advance yet — wait for notifyMainAdvance
+				this.pendingAdvance = () => this.advanceToNextBlock( block, context );
+				return;
+			}
+
+			if ( syncPhase ) return;
+			this.advanceToNextBlock( block, context );
+		};
+
+		const handlerArgs = { scene: this.parentHandle as SceneHandle, block, context, next };
+
+		if ( sceneHandler ) {
+			sceneCleanup = sceneHandler( handlerArgs );
+			if ( !context._globalPrevented && globalHandler ) {
+				globalCleanup = globalHandler( handlerArgs );
+			}
+		} else if ( globalHandler ) {
+			globalCleanup = globalHandler( handlerArgs );
+		}
+
+		this.previousCleanup = this.combineCleanups( sceneCleanup, globalCleanup );
+
+		syncPhase = false;
+		if ( nextCalled && !this.followNarrative ) {
+			this.advanceToNextBlock( block, context );
+		}
+	}
+
+	private advanceToNextBlock( block: BlueprintBlock, context: InternalContext | null ): void {
+		if ( !this.running ) return;
+
+		const connections = this.sceneGraph.getOutgoingConnections( block.uuid );
+		const resolution = resolvePort( {
+			block,
+			connections,
+			selectedChoiceUuid: context && '_selectedChoiceUuid' in context ? context._selectedChoiceUuid : undefined,
+			conditionResult: context && '_conditionResult' in context ? context._conditionResult : undefined,
+			actionRejected: context && '_actionRejected' in context ? context._actionRejected : undefined,
+			characterPortIndex: context && '_characterPortIndex' in context ? context._characterPortIndex : undefined,
+		} );
+
+		// Async tracks follow the first connection only (no nested forking)
+		const conn = resolution.connections[0];
+		if ( conn ) {
+			const nextBlock = this.sceneGraph.getBlock( conn.toId );
+			if ( nextBlock ) {
+				const cleanupToRun = this.previousCleanup;
+				this.previousCleanup = null;
+				if ( cleanupToRun ) cleanupToRun();
+				this.processBlock( nextBlock );
+				return;
+			}
+		}
+
+		this.endTrack();
+	}
+
+	private forceAdvance(): void {
+		if ( !this.running || !this.currentBlock ) return;
+		// Force cleanup and advance even if next() wasn't called
+		const block = this.currentBlock;
+		if ( this.previousCleanup ) {
+			this.previousCleanup();
+			this.previousCleanup = null;
+		}
+		this.advanceToNextBlock( block, null );
+	}
+
+	private endTrack(): void {
+		if ( this.previousCleanup ) {
+			this.previousCleanup();
+			this.previousCleanup = null;
+		}
+		this.running = false;
+		this.currentBlock = null;
+		this.parentHandle.removeTrack( this );
+	}
+
+	private autoEvaluateCondition( block: BlueprintBlock, context: InternalConditionContext ): void {
+		const bridge = this.parentHandle.getStateBridge();
+		if ( !bridge ) { this.endTrack(); return; }
+		if ( isConditionBlock( block ) ) {
+			context._conditionResult = evaluateConditionChain( block.conditions ?? [], bridge.evaluateCondition );
+		}
+		this.previousCleanup = null;
+		this.advanceToNextBlock( block, context );
+	}
+
+	private autoExecuteAction( block: BlueprintBlock, context: InternalActionContext ): void {
+		const bridge = this.parentHandle.getStateBridge();
+		if ( !bridge ) { this.endTrack(); return; }
+		if ( isActionBlock( block ) ) {
+			for ( const action of block.actions ?? [] ) {
+				bridge.executeAction( action );
+			}
+		}
+		context._actionRejected = false;
+		this.previousCleanup = null;
+		this.advanceToNextBlock( block, context );
+	}
+
+	private combineCleanups( a: CleanupFn | void, b: CleanupFn | void ): CleanupFn | null {
+		if ( a && b ) return () => { a(); b(); };
+		if ( a ) return a;
+		if ( b ) return b;
+		return null;
+	}
+}
+
+// ─── SceneHandleImpl ─────────────────────────────────────────────────────────
+
 /** Concrete implementation of SceneHandle. @see PLAN.md §3.8, §6 */
 export class SceneHandleImpl implements SceneHandle {
 
@@ -39,6 +266,7 @@ export class SceneHandleImpl implements SceneHandle {
 	private previousBlock: BlueprintBlock | null = null;
 	private readonly visited = new Set<string>();
 	private previousCleanup: CleanupFn | null = null;
+	private readonly asyncTracks: AsyncTrack[] = [];
 
 	constructor(
 		sceneGraph: SceneGraph,
@@ -58,7 +286,6 @@ export class SceneHandleImpl implements SceneHandle {
 		this.cancelled = false;
 		this.callbacks.onSceneStarted( this );
 
-		// Fire onSceneEnter (Tier 2 takes priority, else Tier 1)
 		this.fireSceneEnter();
 
 		const startBlock = this.sceneGraph.getStartBlock();
@@ -72,7 +299,12 @@ export class SceneHandleImpl implements SceneHandle {
 	cancel(): void {
 		if ( !this.running ) return;
 		this.cancelled = true;
-		// Call cleanup of current block
+		// Cancel all async tracks
+		for ( const track of this.asyncTracks ) {
+			track.cancel();
+		}
+		this.asyncTracks.length = 0;
+		// Cleanup main track
 		if ( this.previousCleanup ) {
 			this.previousCleanup();
 			this.previousCleanup = null;
@@ -123,8 +355,28 @@ export class SceneHandleImpl implements SceneHandle {
 		return this.running;
 	}
 
+	getActiveTracks(): number {
+		return this.asyncTracks.filter( t => t.isRunning() ).length;
+	}
+
 	getSceneGraph(): SceneGraph {
 		return this.sceneGraph;
+	}
+
+	// ─── Internal API (used by AsyncTrack) ───────────────────────────────
+
+	/** @internal */ getSceneRegistry(): SceneHandlerRegistry { return this.sceneRegistry; }
+	/** @internal */ getGlobalRegistry(): HandlerRegistry { return this.globalRegistry; }
+	/** @internal */ getStateBridge(): StateBridge | null { return this.callbacks.getStateBridge(); }
+	/** @internal */ addVisited( uuid: string ): void { this.visited.add( uuid ); }
+
+	/** @internal */ removeTrack( track: AsyncTrack ): void {
+		const idx = this.asyncTracks.indexOf( track );
+		if ( idx >= 0 ) this.asyncTracks.splice( idx, 1 );
+	}
+
+	/** @internal */ createBlockContext( block: BlueprintBlock ): InternalContext | null {
+		return this.createContext( block );
 	}
 
 	// ─── Traversal loop — PLAN.md §6 ────────────────────────────────────
@@ -195,7 +447,6 @@ export class SceneHandleImpl implements SceneHandle {
 		// Create context
 		const context = this.createContext( block );
 		if ( !context ) {
-			// Unknown block type — advance
 			this.advanceToNextBlock( block, null );
 			return;
 		}
@@ -212,10 +463,6 @@ export class SceneHandleImpl implements SceneHandle {
 			}
 		}
 
-		// Steps 5-6: Call handlers, wait for next()
-		// next() may be called synchronously (inside the handler) or asynchronously (later).
-		// We must capture the cleanup return value BEFORE advancing, so next() defers
-		// the advance if called during handler execution.
 		let nextCalled = false;
 		let syncPhase = true;
 		let sceneCleanup: CleanupFn | void = undefined;
@@ -224,7 +471,7 @@ export class SceneHandleImpl implements SceneHandle {
 		const next = () => {
 			if ( nextCalled ) return;
 			nextCalled = true;
-			if ( syncPhase ) return; // Will be picked up after handler returns
+			if ( syncPhase ) return;
 			this.advanceToNextBlock( block, context );
 		};
 
@@ -252,19 +499,9 @@ export class SceneHandleImpl implements SceneHandle {
 	private advanceToNextBlock( block: BlueprintBlock, context: InternalContext | null ): void {
 		if ( this.cancelled ) return;
 
-		// Step 7: Cleanup of the PREVIOUS block (swap is done in processBlock by tracking previousBlock)
-		// Actually: at this point, previousCleanup holds the cleanup of the block BEFORE this one.
-		// We already set the NEW cleanup in executeBlockHandler. We need to call the OLD one.
-		// The flow: when next() is called on block N, we need to call cleanup from block N-1.
-		// But we already stored block N's cleanup as previousCleanup in executeBlockHandler.
-		// Solution: we swap cleanups. The old one fires, the new one persists for the next advance.
-		// Note: this is handled correctly because previousCleanup was already stored in
-		// executeBlockHandler for block N. We need to track the cleanup separately.
-
-		// Record this block as previous for validation context
 		this.previousBlock = block;
 
-		// Step 8: Port resolution
+		// Step 8: Port resolution — returns ALL matching connections
 		const connections = this.sceneGraph.getOutgoingConnections( block.uuid );
 		const resolution = resolvePort( {
 			block,
@@ -275,16 +512,45 @@ export class SceneHandleImpl implements SceneHandle {
 			characterPortIndex: context && '_characterPortIndex' in context ? context._characterPortIndex : undefined,
 		} );
 
-		// Step 9: Follow connection
-		if ( resolution.connection ) {
-			const nextBlock = this.sceneGraph.getBlock( resolution.connection.toId );
+		const allConnections = resolution.connections;
+
+		// Separate: first non-async target = main track, rest = async tracks
+		let mainConnection = null as typeof allConnections[number] | null;
+		const asyncConnections: typeof allConnections = [];
+
+		for ( const conn of allConnections ) {
+			const targetBlock = this.sceneGraph.getBlock( conn.toId );
+			if ( !targetBlock ) continue;
+
+			if ( !mainConnection && !targetBlock.nativeProperties?.isAsync ) {
+				mainConnection = conn;
+			} else {
+				asyncConnections.push( conn );
+			}
+		}
+
+		// Spawn async tracks
+		for ( const conn of asyncConnections ) {
+			const targetBlock = this.sceneGraph.getBlock( conn.toId );
+			if ( targetBlock ) {
+				this.asyncTracks.push( new AsyncTrack( this.sceneGraph, this, targetBlock ) );
+			}
+		}
+
+		// Notify existing follow-narrative tracks
+		for ( const track of this.asyncTracks ) {
+			if ( track.isFollowNarrative() ) {
+				track.notifyMainAdvance();
+			}
+		}
+
+		// Step 9: Continue main track
+		if ( mainConnection ) {
+			const nextBlock = this.sceneGraph.getBlock( mainConnection.toId );
 			if ( nextBlock ) {
-				// Call cleanup of the block we're leaving (current block)
-				// This is the correct timing: cleanup fires when advancing AWAY from the block.
 				const cleanupToRun = this.previousCleanup;
 				this.previousCleanup = null;
 				if ( cleanupToRun ) cleanupToRun();
-
 				this.processBlock( nextBlock );
 				return;
 			}
@@ -295,6 +561,11 @@ export class SceneHandleImpl implements SceneHandle {
 	}
 
 	private endScene(): void {
+		// Cancel all async tracks
+		for ( const track of this.asyncTracks ) {
+			track.cancel();
+		}
+		this.asyncTracks.length = 0;
 		// Call cleanup of the last block
 		if ( this.previousCleanup ) {
 			this.previousCleanup();

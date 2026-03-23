@@ -4,11 +4,11 @@
 
 import type { PortResolutionInput, PortResolutionResult, BlueprintConnection } from './types.js';
 
-const NONE: PortResolutionResult = { connection: null };
+const NONE: PortResolutionResult = { connections: [] };
 
 /**
- * Determine which outgoing connection to follow based on block type and context.
- * This is the deterministic core of the engine — must produce identical results in every runtime.
+ * Determine which outgoing connections to follow based on block type and context.
+ * Returns ALL matching connections — the caller decides which are main vs async tracks.
  * @see PLAN.md §5
  */
 export function resolvePort( input: PortResolutionInput ): PortResolutionResult {
@@ -29,16 +29,14 @@ export function resolvePort( input: PortResolutionInput ): PortResolutionResult 
 			return resolveActionPort( connections, input.actionRejected );
 
 		case 'NOTE':
-			// NOTE blocks are skipped; follow the first available connection.
-			return connections.length > 0 ? { connection: connections[0]! } : NONE;
+			return { connections };
 	}
 }
 
 /**
  * DIALOG port resolution:
- * - Without portPerCharacter: single `out` port.
- * - With portPerCharacter: match `fromPortIndex === characterIndex`.
- *   Character index = position in block.metadata.characters[].
+ * - Without portPerCharacter: all connections with `fromPort === 'out'`.
+ * - With portPerCharacter: all connections with `fromPortIndex === characterIndex`.
  *   Fallback to `fromPort === 'out'` ("Else / Undefined").
  */
 function resolveDialogPort(
@@ -46,11 +44,11 @@ function resolveDialogPort(
 	characterPortIndex: number | undefined,
 ): PortResolutionResult {
 	if ( characterPortIndex !== undefined ) {
-		const match = connections.find( c => c.fromPortIndex === characterPortIndex );
-		if ( match ) return { connection: match };
+		const matches = connections.filter( c => c.fromPortIndex === characterPortIndex );
+		if ( matches.length > 0 ) return { connections: matches };
 		// Fallback to 'out' when character port index not found
 	}
-	return findByFromPort( connections, 'out' );
+	return filterByFromPort( connections, 'out' );
 }
 
 function resolveChoicePort(
@@ -58,7 +56,7 @@ function resolveChoicePort(
 	selectedChoiceUuid: string | undefined,
 ): PortResolutionResult {
 	if ( !selectedChoiceUuid ) return NONE;
-	return findByFromPort( connections, selectedChoiceUuid );
+	return filterByFromPort( connections, selectedChoiceUuid );
 }
 
 function resolveConditionPort(
@@ -67,13 +65,13 @@ function resolveConditionPort(
 ): PortResolutionResult {
 	if ( conditionResult === undefined ) return NONE;
 	const targetIndex = conditionResult ? 0 : 1;
-	const match = connections.find( c => c.fromPortIndex === targetIndex );
-	return match ? { connection: match } : NONE;
+	const matches = connections.filter( c => c.fromPortIndex === targetIndex );
+	return { connections: matches };
 }
 
 /**
  * ACTION port resolution:
- * - Success: `fromPort === 'then'`
+ * - Success: all connections with `fromPort === 'then'`
  * - Reject: `fromPort === 'catch'`, fallback to `then`
  */
 function resolveActionPort(
@@ -81,14 +79,14 @@ function resolveActionPort(
 	actionRejected: boolean | undefined,
 ): PortResolutionResult {
 	if ( actionRejected ) {
-		const catchPort = connections.find( c => c.fromPort === 'catch' );
-		if ( catchPort ) return { connection: catchPort };
+		const catchPorts = connections.filter( c => c.fromPort === 'catch' );
+		if ( catchPorts.length > 0 ) return { connections: catchPorts };
 		// Fallback to 'then' on reject when no catch port
 	}
-	return findByFromPort( connections, 'then' );
+	return filterByFromPort( connections, 'then' );
 }
 
-function findByFromPort( connections: BlueprintConnection[], port: string ): PortResolutionResult {
-	const match = connections.find( c => c.fromPort === port );
-	return match ? { connection: match } : NONE;
+function filterByFromPort( connections: BlueprintConnection[], port: string ): PortResolutionResult {
+	const matches = connections.filter( c => c.fromPort === port );
+	return { connections: matches };
 }

@@ -60,6 +60,8 @@ export interface NativeProperties {
 	debug?: boolean;
 	portPerCharacter?: boolean;
 	skipIfMissingActor?: boolean;
+	/** When true (requires isAsync), this async track advances automatically when the main track advances. */
+	followNarrative?: boolean;
 }
 
 /** Character (actor) assigned to a dialogue block. */
@@ -378,6 +380,8 @@ export interface SceneHandle {
 	getVisitedBlocks(): ReadonlySet<string>;
 	/** Check if the scene flow is currently active. */
 	isRunning(): boolean;
+	/** Get the number of async tracks currently running in parallel. */
+	getActiveTracks(): number;
 }
 
 // ─── Port Resolution Types ──────────────────────────────────────────────────
@@ -398,7 +402,7 @@ export interface PortResolutionInput {
 	characterPortIndex?: number;
 }
 
-/** Result of port resolution. */
+/** Result of port resolution — all matching connections. */
 export interface PortResolutionResult {
-	connection: BlueprintConnection | null;
+	connections: BlueprintConnection[];
 }

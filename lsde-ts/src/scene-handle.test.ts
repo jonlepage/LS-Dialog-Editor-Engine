@@ -269,7 +269,7 @@ describe( 'SceneHandleImpl', () => {
 				] } as BlueprintBlock,
 				dialog( 'after' ),
 			],
-			connections: [conn( 'act1', 'after' )],
+			connections: [conn( 'act1', 'after', 'then' )],
 		} );
 		const bridge: StateBridge = {
 			evaluateCondition: () => true,
@@ -354,6 +354,205 @@ describe( 'SceneHandleImpl', () => {
 
 		expect( handle.isRunning() ).toBe( false );
 		expect( cbs.onSceneEnded ).toHaveBeenCalledOnce();
+	} );
+
+} );
+
+// ─── Multi-track (AsyncTrack) ────────────────────────────────────────────────
+
+function asyncDialog( uuid: string, follow = false ): BlueprintBlock {
+	return {
+		uuid, type: 'DIALOG', properties: [],
+		nativeProperties: { isAsync: true, followNarrative: follow },
+	} as BlueprintBlock;
+}
+
+describe( 'SceneHandleImpl — AsyncTracks', () => {
+
+	it( 'spawns async track for isAsync target block', () => {
+		const visited: string[] = [];
+		const scene = makeScene( {
+			blocks: [
+				dialog( 'b1', true ),
+				asyncDialog( 'async1' ),
+				dialog( 'b2' ),
+			],
+			connections: [
+				conn( 'b1', 'b2' ),       // main track
+				conn( 'b1', 'async1' ),    // async track (same fromPort 'out')
+			],
+		} );
+		const global = new HandlerRegistry();
+		global.dialogHandler = ( { block, next } ) => {
+			visited.push( block.uuid );
+			next();
+		};
+
+		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		handle.start();
+
+		expect( visited ).toContain( 'b1' );
+		expect( visited ).toContain( 'b2' );
+		expect( visited ).toContain( 'async1' );
+	} );
+
+	it( 'async track handler fires independently', () => {
+		const calls: string[] = [];
+		const scene = makeScene( {
+			blocks: [
+				dialog( 'main1', true ),
+				asyncDialog( 'async1' ),
+				dialog( 'async2' ),  // connected after async1
+			],
+			connections: [
+				conn( 'main1', 'async1' ),         // async fork
+				conn( 'async1', 'async2' ),         // async continues
+			],
+		} );
+		const global = new HandlerRegistry();
+		global.dialogHandler = ( { block, next } ) => {
+			calls.push( block.uuid );
+			next();
+		};
+
+		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		handle.start();
+
+		// main1 fires, then async1 fires in track, async2 follows
+		expect( calls ).toContain( 'main1' );
+		expect( calls ).toContain( 'async1' );
+		expect( calls ).toContain( 'async2' );
+	} );
+
+	it( 'cancel() cascades to async tracks', () => {
+		const cleanupSpy = vi.fn();
+		const scene = makeScene( {
+			blocks: [
+				dialog( 'main1', true ),
+				asyncDialog( 'async1' ),
+				dialog( 'main2' ),
+			],
+			connections: [
+				conn( 'main1', 'main2' ),
+				conn( 'main1', 'async1' ),
+			],
+		} );
+		const global = new HandlerRegistry();
+		global.dialogHandler = ( { block, next } ) => {
+			if ( block.uuid === 'async1' ) {
+				// Don't call next — keep async track alive
+				return cleanupSpy;
+			}
+			next();
+		};
+
+		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		handle.start();
+
+		// main track finishes (main1 → main2 → end), async still alive?
+		// Actually main track ends → endScene cancels async tracks
+		expect( cleanupSpy ).toHaveBeenCalled();
+	} );
+
+	it( 'getActiveTracks() returns correct count', () => {
+		let capturedCount = -1;
+		const scene = makeScene( {
+			blocks: [
+				dialog( 'main1', true ),
+				asyncDialog( 'async1' ),
+				dialog( 'main2' ),
+			],
+			connections: [
+				conn( 'main1', 'main2' ),
+				conn( 'main1', 'async1' ),
+			],
+		} );
+		const global = new HandlerRegistry();
+		global.dialogHandler = ( { block, next } ) => {
+			if ( block.uuid === 'async1' ) {
+				// Don't call next — stay active
+				return;
+			}
+			if ( block.uuid === 'main2' ) {
+				capturedCount = (block as unknown as { _handle?: SceneHandleImpl })?._handle?.getActiveTracks() ?? -1;
+			}
+			next();
+		};
+
+		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		// Capture count during main2 handler
+		global.dialogHandler = ( { block, next } ) => {
+			if ( block.uuid === 'async1' ) return; // stay active
+			if ( block.uuid === 'main2' ) capturedCount = handle.getActiveTracks();
+			next();
+		};
+		handle.start();
+
+		expect( capturedCount ).toBe( 1 );
+	} );
+
+	it( 'follow-narrative track advances when main advances', () => {
+		const calls: string[] = [];
+		const scene = makeScene( {
+			blocks: [
+				dialog( 'main1', true ),
+				dialog( 'main2' ),
+				asyncDialog( 'follow1', true ),  // followNarrative
+				asyncDialog( 'follow2', true ),  // followNarrative continuation
+			],
+			connections: [
+				conn( 'main1', 'main2' ),        // main track
+				conn( 'main1', 'follow1' ),      // async fork
+				conn( 'follow1', 'follow2' ),    // follow continues
+			],
+		} );
+		const global = new HandlerRegistry();
+		global.dialogHandler = ( { block, next } ) => {
+			calls.push( block.uuid );
+			next();
+		};
+
+		new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() ).start();
+
+		// main1 → forks to main2 + follow1
+		// main1 next() → main2 fires + notifyMainAdvance → follow1 advances to follow2
+		// main2 next() → endScene → follow track cancelled
+		expect( calls ).toContain( 'main1' );
+		expect( calls ).toContain( 'main2' );
+		expect( calls ).toContain( 'follow1' );
+		expect( calls ).toContain( 'follow2' );
+	} );
+
+	it( 'follow-narrative track shorter than main ends silently', () => {
+		const calls: string[] = [];
+		const scene = makeScene( {
+			blocks: [
+				dialog( 'main1', true ),
+				dialog( 'main2' ),
+				dialog( 'main3' ),
+				asyncDialog( 'follow1', true ),
+				// follow1 has no next connection → ends after first advance
+			],
+			connections: [
+				conn( 'main1', 'main2' ),
+				conn( 'main2', 'main3' ),
+				conn( 'main1', 'follow1' ),
+			],
+		} );
+		const global = new HandlerRegistry();
+		global.dialogHandler = ( { block, next } ) => {
+			calls.push( block.uuid );
+			next();
+		};
+
+		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		handle.start();
+
+		expect( calls ).toContain( 'main1' );
+		expect( calls ).toContain( 'main2' );
+		expect( calls ).toContain( 'main3' );
+		expect( calls ).toContain( 'follow1' );
+		expect( handle.isRunning() ).toBe( false );
 	} );
 
 } );

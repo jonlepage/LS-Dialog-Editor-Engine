@@ -25,15 +25,16 @@ describe( 'resolvePort — DIALOG', () => {
 			block: block( 'DIALOG' ),
 			connections: [conn( 'out', 'target' )],
 		} );
-		expect( result.connection?.toId ).toBe( 'target' );
+		expect( result.connections ).toHaveLength( 1 );
+		expect( result.connections[0]?.toId ).toBe( 'target' );
 	} );
 
-	it( 'returns null when no connections', () => {
+	it( 'returns empty when no connections', () => {
 		const result = resolve( {
 			block: block( 'DIALOG' ),
 			connections: [],
 		} );
-		expect( result.connection ).toBeNull();
+		expect( result.connections ).toHaveLength( 0 );
 	} );
 
 	it( 'follows characterPortIndex when portPerCharacter', () => {
@@ -42,34 +43,38 @@ describe( 'resolvePort — DIALOG', () => {
 			connections: [conn( 'out', 'default' ), conn( 'char-uuid-0', 'char0-branch', 0 ), conn( 'char-uuid-1', 'char1-branch', 1 )],
 			characterPortIndex: 1,
 		} );
-		expect( result.connection?.toId ).toBe( 'char1-branch' );
+		expect( result.connections ).toHaveLength( 1 );
+		expect( result.connections[0]?.toId ).toBe( 'char1-branch' );
 	} );
 
-	it( 'follows characterPortIndex 0', () => {
+	it( 'returns multiple connections for same portIndex (multi-track)', () => {
 		const result = resolve( {
 			block: block( 'DIALOG' ),
-			connections: [conn( 'char-uuid-0', 'first-char', 0 ), conn( 'char-uuid-1', 'second-char', 1 )],
+			connections: [conn( 'char-uuid-0', 'target-A', 0 ), conn( 'char-uuid-0b', 'target-B', 0 )],
 			characterPortIndex: 0,
 		} );
-		expect( result.connection?.toId ).toBe( 'first-char' );
+		expect( result.connections ).toHaveLength( 2 );
+		expect( result.connections[0]?.toId ).toBe( 'target-A' );
+		expect( result.connections[1]?.toId ).toBe( 'target-B' );
 	} );
 
 	it( 'falls back to "out" when characterPortIndex not found', () => {
 		const result = resolve( {
 			block: block( 'DIALOG' ),
 			connections: [conn( 'out', 'default' ), conn( 'char-uuid-0', 'char0-branch', 0 )],
-			characterPortIndex: 5, // no such index
+			characterPortIndex: 5,
 		} );
-		expect( result.connection?.toId ).toBe( 'default' );
+		expect( result.connections ).toHaveLength( 1 );
+		expect( result.connections[0]?.toId ).toBe( 'default' );
 	} );
 
-	it( 'returns null when characterPortIndex not found and no "out" port', () => {
+	it( 'returns empty when characterPortIndex not found and no "out" port', () => {
 		const result = resolve( {
 			block: block( 'DIALOG' ),
 			connections: [conn( 'char-uuid-0', 'char0-branch', 0 )],
 			characterPortIndex: 5,
 		} );
-		expect( result.connection ).toBeNull();
+		expect( result.connections ).toHaveLength( 0 );
 	} );
 
 } );
@@ -84,24 +89,25 @@ describe( 'resolvePort — CHOICE', () => {
 			connections: [conn( 'choice-A', 'branch-A' ), conn( 'choice-B', 'branch-B' )],
 			selectedChoiceUuid: 'choice-B',
 		} );
-		expect( result.connection?.toId ).toBe( 'branch-B' );
+		expect( result.connections ).toHaveLength( 1 );
+		expect( result.connections[0]?.toId ).toBe( 'branch-B' );
 	} );
 
-	it( 'returns null when no selection', () => {
+	it( 'returns empty when no selection', () => {
 		const result = resolve( {
 			block: block( 'CHOICE' ),
 			connections: [conn( 'choice-A', 'branch-A' )],
 		} );
-		expect( result.connection ).toBeNull();
+		expect( result.connections ).toHaveLength( 0 );
 	} );
 
-	it( 'returns null when selected choice has no matching connection', () => {
+	it( 'returns empty when selected choice has no matching connection', () => {
 		const result = resolve( {
 			block: block( 'CHOICE' ),
 			connections: [conn( 'choice-A', 'branch-A' )],
 			selectedChoiceUuid: 'choice-C',
 		} );
-		expect( result.connection ).toBeNull();
+		expect( result.connections ).toHaveLength( 0 );
 	} );
 
 } );
@@ -116,7 +122,8 @@ describe( 'resolvePort — CONDITION', () => {
 			connections: [conn( 'true', 'yes', 0 ), conn( 'false', 'no', 1 )],
 			conditionResult: true,
 		} );
-		expect( result.connection?.toId ).toBe( 'yes' );
+		expect( result.connections ).toHaveLength( 1 );
+		expect( result.connections[0]?.toId ).toBe( 'yes' );
 	} );
 
 	it( 'follows port index 1 for false', () => {
@@ -125,24 +132,25 @@ describe( 'resolvePort — CONDITION', () => {
 			connections: [conn( 'true', 'yes', 0 ), conn( 'false', 'no', 1 )],
 			conditionResult: false,
 		} );
-		expect( result.connection?.toId ).toBe( 'no' );
+		expect( result.connections ).toHaveLength( 1 );
+		expect( result.connections[0]?.toId ).toBe( 'no' );
 	} );
 
-	it( 'returns null when conditionResult is undefined', () => {
+	it( 'returns empty when conditionResult is undefined', () => {
 		const result = resolve( {
 			block: block( 'CONDITION' ),
 			connections: [conn( 'true', 'yes', 0 )],
 		} );
-		expect( result.connection ).toBeNull();
+		expect( result.connections ).toHaveLength( 0 );
 	} );
 
-	it( 'returns null when no connection matches the port index', () => {
+	it( 'returns empty when no connection matches the port index', () => {
 		const result = resolve( {
 			block: block( 'CONDITION' ),
 			connections: [conn( 'true', 'yes', 0 )],
 			conditionResult: false,
 		} );
-		expect( result.connection ).toBeNull();
+		expect( result.connections ).toHaveLength( 0 );
 	} );
 
 } );
@@ -156,7 +164,8 @@ describe( 'resolvePort — ACTION', () => {
 			block: block( 'ACTION' ),
 			connections: [conn( 'then', 'next' ), conn( 'catch', 'error' )],
 		} );
-		expect( result.connection?.toId ).toBe( 'next' );
+		expect( result.connections ).toHaveLength( 1 );
+		expect( result.connections[0]?.toId ).toBe( 'next' );
 	} );
 
 	it( 'follows "catch" port on reject', () => {
@@ -165,7 +174,8 @@ describe( 'resolvePort — ACTION', () => {
 			connections: [conn( 'then', 'next' ), conn( 'catch', 'error' )],
 			actionRejected: true,
 		} );
-		expect( result.connection?.toId ).toBe( 'error' );
+		expect( result.connections ).toHaveLength( 1 );
+		expect( result.connections[0]?.toId ).toBe( 'error' );
 	} );
 
 	it( 'falls back to "then" on reject when no "catch" port', () => {
@@ -174,16 +184,17 @@ describe( 'resolvePort — ACTION', () => {
 			connections: [conn( 'then', 'next' )],
 			actionRejected: true,
 		} );
-		expect( result.connection?.toId ).toBe( 'next' );
+		expect( result.connections ).toHaveLength( 1 );
+		expect( result.connections[0]?.toId ).toBe( 'next' );
 	} );
 
-	it( 'returns null on reject with no connections', () => {
+	it( 'returns empty on reject with no connections', () => {
 		const result = resolve( {
 			block: block( 'ACTION' ),
 			connections: [],
 			actionRejected: true,
 		} );
-		expect( result.connection ).toBeNull();
+		expect( result.connections ).toHaveLength( 0 );
 	} );
 
 } );
@@ -192,20 +203,20 @@ describe( 'resolvePort — ACTION', () => {
 
 describe( 'resolvePort — NOTE', () => {
 
-	it( 'follows the first available connection', () => {
+	it( 'returns all connections', () => {
 		const result = resolve( {
 			block: block( 'NOTE' ),
-			connections: [conn( 'any', 'next' )],
+			connections: [conn( 'any', 'next' ), conn( 'other', 'alt' )],
 		} );
-		expect( result.connection?.toId ).toBe( 'next' );
+		expect( result.connections ).toHaveLength( 2 );
 	} );
 
-	it( 'returns null when no connections', () => {
+	it( 'returns empty when no connections', () => {
 		const result = resolve( {
 			block: block( 'NOTE' ),
 			connections: [],
 		} );
-		expect( result.connection ).toBeNull();
+		expect( result.connections ).toHaveLength( 0 );
 	} );
 
 } );
