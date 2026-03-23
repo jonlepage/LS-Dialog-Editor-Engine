@@ -272,7 +272,7 @@ export class SceneHandleImpl implements SceneHandle {
 			selectedChoiceUuid: context && '_selectedChoiceUuid' in context ? context._selectedChoiceUuid : undefined,
 			conditionResult: context && '_conditionResult' in context ? context._conditionResult : undefined,
 			actionRejected: context && '_actionRejected' in context ? context._actionRejected : undefined,
-			characterPort: context && '_characterPort' in context ? context._characterPort : undefined,
+			characterPortIndex: context && '_characterPortIndex' in context ? context._characterPortIndex : undefined,
 		} );
 
 		// Step 9: Follow connection

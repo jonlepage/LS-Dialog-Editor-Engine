@@ -392,10 +392,10 @@ export interface PortResolutionInput {
 	selectedChoiceUuid?: string;
 	/** CONDITION blocks only — evaluation result. `true` → port index 0, `false` → port index 1. */
 	conditionResult?: boolean;
-	/** ACTION blocks only — if `true`, the resolver looks for a `catch` port before falling back to `out`. */
+	/** ACTION blocks only — if `true`, the resolver looks for a `catch` port before falling back to `then`. */
 	actionRejected?: boolean;
-	/** DIALOG blocks with `portPerCharacter` — character name to match against `connection.fromPort`. */
-	characterPort?: string;
+	/** DIALOG blocks with `portPerCharacter` — character index in metadata.characters to match against `connection.fromPortIndex`. */
+	characterPortIndex?: number;
 }
 
 /** Result of port resolution. */

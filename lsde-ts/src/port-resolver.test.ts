@@ -36,29 +36,38 @@ describe( 'resolvePort — DIALOG', () => {
 		expect( result.connection ).toBeNull();
 	} );
 
-	it( 'follows characterPort when portPerCharacter', () => {
+	it( 'follows characterPortIndex when portPerCharacter', () => {
 		const result = resolve( {
 			block: block( 'DIALOG' ),
-			connections: [conn( 'out', 'default' ), conn( 'Boss', 'boss-branch' )],
-			characterPort: 'Boss',
+			connections: [conn( 'out', 'default' ), conn( 'char-uuid-0', 'char0-branch', 0 ), conn( 'char-uuid-1', 'char1-branch', 1 )],
+			characterPortIndex: 1,
 		} );
-		expect( result.connection?.toId ).toBe( 'boss-branch' );
+		expect( result.connection?.toId ).toBe( 'char1-branch' );
 	} );
 
-	it( 'falls back to "out" when characterPort not found', () => {
+	it( 'follows characterPortIndex 0', () => {
 		const result = resolve( {
 			block: block( 'DIALOG' ),
-			connections: [conn( 'out', 'default' )],
-			characterPort: 'Ghost',
+			connections: [conn( 'char-uuid-0', 'first-char', 0 ), conn( 'char-uuid-1', 'second-char', 1 )],
+			characterPortIndex: 0,
+		} );
+		expect( result.connection?.toId ).toBe( 'first-char' );
+	} );
+
+	it( 'falls back to "out" when characterPortIndex not found', () => {
+		const result = resolve( {
+			block: block( 'DIALOG' ),
+			connections: [conn( 'out', 'default' ), conn( 'char-uuid-0', 'char0-branch', 0 )],
+			characterPortIndex: 5, // no such index
 		} );
 		expect( result.connection?.toId ).toBe( 'default' );
 	} );
 
-	it( 'returns null when characterPort not found and no "out" port', () => {
+	it( 'returns null when characterPortIndex not found and no "out" port', () => {
 		const result = resolve( {
 			block: block( 'DIALOG' ),
-			connections: [conn( 'Hero', 'hero-branch' )],
-			characterPort: 'Ghost',
+			connections: [conn( 'char-uuid-0', 'char0-branch', 0 )],
+			characterPortIndex: 5,
 		} );
 		expect( result.connection ).toBeNull();
 	} );
@@ -142,10 +151,10 @@ describe( 'resolvePort — CONDITION', () => {
 
 describe( 'resolvePort — ACTION', () => {
 
-	it( 'follows "out" port on success', () => {
+	it( 'follows "then" port on success', () => {
 		const result = resolve( {
 			block: block( 'ACTION' ),
-			connections: [conn( 'out', 'next' ), conn( 'catch', 'error' )],
+			connections: [conn( 'then', 'next' ), conn( 'catch', 'error' )],
 		} );
 		expect( result.connection?.toId ).toBe( 'next' );
 	} );
@@ -153,16 +162,16 @@ describe( 'resolvePort — ACTION', () => {
 	it( 'follows "catch" port on reject', () => {
 		const result = resolve( {
 			block: block( 'ACTION' ),
-			connections: [conn( 'out', 'next' ), conn( 'catch', 'error' )],
+			connections: [conn( 'then', 'next' ), conn( 'catch', 'error' )],
 			actionRejected: true,
 		} );
 		expect( result.connection?.toId ).toBe( 'error' );
 	} );
 
-	it( 'falls back to "out" on reject when no "catch" port', () => {
+	it( 'falls back to "then" on reject when no "catch" port', () => {
 		const result = resolve( {
 			block: block( 'ACTION' ),
-			connections: [conn( 'out', 'next' )],
+			connections: [conn( 'then', 'next' )],
 			actionRejected: true,
 		} );
 		expect( result.connection?.toId ).toBe( 'next' );

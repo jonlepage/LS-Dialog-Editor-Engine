@@ -17,7 +17,7 @@ export function resolvePort( input: PortResolutionInput ): PortResolutionResult 
 	switch ( block.type ) {
 
 		case 'DIALOG':
-			return resolveDialogPort( connections, input.characterPort );
+			return resolveDialogPort( connections, input.characterPortIndex );
 
 		case 'CHOICE':
 			return resolveChoicePort( connections, input.selectedChoiceUuid );
@@ -34,14 +34,21 @@ export function resolvePort( input: PortResolutionInput ): PortResolutionResult 
 	}
 }
 
+/**
+ * DIALOG port resolution:
+ * - Without portPerCharacter: single `out` port.
+ * - With portPerCharacter: match `fromPortIndex === characterIndex`.
+ *   Character index = position in block.metadata.characters[].
+ *   Fallback to `fromPort === 'out'` ("Else / Undefined").
+ */
 function resolveDialogPort(
 	connections: BlueprintConnection[],
-	characterPort: string | undefined,
+	characterPortIndex: number | undefined,
 ): PortResolutionResult {
-	if ( characterPort ) {
-		const match = connections.find( c => c.fromPort === characterPort );
+	if ( characterPortIndex !== undefined ) {
+		const match = connections.find( c => c.fromPortIndex === characterPortIndex );
 		if ( match ) return { connection: match };
-		// Fallback to 'out' when character port not found
+		// Fallback to 'out' when character port index not found
 	}
 	return findByFromPort( connections, 'out' );
 }
@@ -64,6 +71,11 @@ function resolveConditionPort(
 	return match ? { connection: match } : NONE;
 }
 
+/**
+ * ACTION port resolution:
+ * - Success: `fromPort === 'then'`
+ * - Reject: `fromPort === 'catch'`, fallback to `then`
+ */
 function resolveActionPort(
 	connections: BlueprintConnection[],
 	actionRejected: boolean | undefined,
@@ -71,9 +83,9 @@ function resolveActionPort(
 	if ( actionRejected ) {
 		const catchPort = connections.find( c => c.fromPort === 'catch' );
 		if ( catchPort ) return { connection: catchPort };
-		// Fallback to 'out' on reject when no catch port
+		// Fallback to 'then' on reject when no catch port
 	}
-	return findByFromPort( connections, 'out' );
+	return findByFromPort( connections, 'then' );
 }
 
 function findByFromPort( connections: BlueprintConnection[], port: string ): PortResolutionResult {

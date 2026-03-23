@@ -12,7 +12,7 @@ import { filterVisibleChoices } from './condition-evaluator.js';
 
 export interface InternalDialogContext extends DialogContext {
 	_globalPrevented: boolean;
-	_characterPort: string | undefined;
+	_characterPortIndex: number | undefined;
 }
 
 export interface InternalChoiceContext extends ChoiceContext {
@@ -34,12 +34,14 @@ export interface InternalActionContext extends ActionContext {
 
 export function createDialogContext( block: DialogBlock ): InternalDialogContext {
 	const character: BlockCharacter | null = getFirstCharacter( block );
+	const characters = block.metadata?.characters ?? [];
 	const ctx: InternalDialogContext = {
 		_globalPrevented: false,
-		_characterPort: undefined,
+		_characterPortIndex: undefined,
 		character,
 		resolveCharacterPort( name: string ) {
-			ctx._characterPort = name;
+			const index = characters.findIndex( c => c.name === name );
+			ctx._characterPortIndex = index >= 0 ? index : undefined;
 		},
 		preventGlobalHandler() {
 			ctx._globalPrevented = true;

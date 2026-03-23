@@ -23,11 +23,24 @@ describe( 'createDialogContext', () => {
 		expect( ctx.character ).toBeNull();
 	} );
 
-	it( 'resolveCharacterPort stores the port name', () => {
-		const block: DialogBlock = { ...baseProps, type: 'DIALOG' };
+	it( 'resolveCharacterPort stores the character index from metadata', () => {
+		const block: DialogBlock = {
+			...baseProps, type: 'DIALOG',
+			metadata: { characters: [{ name: 'Hero' }, { name: 'Boss' }, { name: 'NPC' }] },
+		};
 		const ctx = createDialogContext( block );
 		ctx.resolveCharacterPort( 'Boss' );
-		expect( ctx._characterPort ).toBe( 'Boss' );
+		expect( ctx._characterPortIndex ).toBe( 1 );
+	} );
+
+	it( 'resolveCharacterPort sets undefined for unknown character', () => {
+		const block: DialogBlock = {
+			...baseProps, type: 'DIALOG',
+			metadata: { characters: [{ name: 'Hero' }] },
+		};
+		const ctx = createDialogContext( block );
+		ctx.resolveCharacterPort( 'Ghost' );
+		expect( ctx._characterPortIndex ).toBeUndefined();
 	} );
 
 	it( 'preventGlobalHandler sets the flag', () => {
