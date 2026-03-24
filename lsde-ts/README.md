@@ -1,4 +1,4 @@
-<!-- ![LSDE Dialog Engine — TypeScript](banner.png) -->
+![LSDE Dialog Engine — TypeScript](banner.png)
 
 # LSDE Dialog Engine — TypeScript
 

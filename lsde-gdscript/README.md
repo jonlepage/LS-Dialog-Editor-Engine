@@ -1,4 +1,4 @@
-<!-- ![LSDE Dialog Engine — GDScript](banner.png) -->
+![LSDE Dialog Engine — GDScript](banner.png)
 
 # LSDE Dialog Engine — GDScript
 

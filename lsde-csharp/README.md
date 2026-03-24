@@ -1,4 +1,4 @@
-<!-- ![LSDE Dialog Engine — C#](banner.png) -->
+![LSDE Dialog Engine — C#](banner.png)
 
 # LSDE Dialog Engine — C#
 
