@@ -3,7 +3,7 @@ import typedocSidebar from '../api-ref/typedoc-sidebar.json';
 
 export default defineConfig({
 	title: 'LSDE Dialog Engine',
-	description: 'TypeScript reference implementation — callback-driven graph dispatcher for dialogue blueprints',
+	description: 'Callback-driven graph dispatcher for interactive dialogue blueprints',
 	base: '/LS-Dialog-Editor-Engine/',
 
 	themeConfig: {
@@ -17,15 +17,15 @@ export default defineConfig({
 				{
 					text: 'Introduction',
 					items: [
-						{ text: 'Qu\'est-ce que LSDE?', link: '/guide/what-is-lsde' },
-						{ text: 'Démarrage rapide', link: '/guide/getting-started' },
+						{ text: 'What is LSDE?', link: '/guide/what-is-lsde' },
+						{ text: 'Getting Started', link: '/guide/getting-started' },
 					],
 				},
 				{
 					text: 'Concepts',
 					items: [
-						{ text: 'Blueprints & Scènes', link: '/guide/blueprints' },
-						{ text: 'Types de blocs', link: '/guide/block-types' },
+						{ text: 'Blueprints & Scenes', link: '/guide/blueprints' },
+						{ text: 'Block Types', link: '/guide/block-types' },
 						{ text: 'StateBridge', link: '/guide/state-bridge' },
 						{ text: 'Handlers & Lifecycle', link: '/guide/handlers' },
 					],
@@ -35,7 +35,7 @@ export default defineConfig({
 		},
 
 		socialLinks: [
-			{ icon: 'github', link: 'https://github.com/nicmusic/LS-Dialog-Editor-Engine' },
+			{ icon: 'github', link: 'https://github.com/jonlepage/LS-Dialog-Editor-Engine' },
 		],
 
 		outline: { level: [2, 3] },

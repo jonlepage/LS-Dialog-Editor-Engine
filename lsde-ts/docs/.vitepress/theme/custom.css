@@ -1,0 +1,26 @@
+/* Sharp corners — no rounded borders */
+:root {
+  --vp-border-radius: 1px;
+}
+
+.VPButton {
+  border-radius: 1px !important;
+}
+
+.VPFeature {
+  border-radius: 1px !important;
+}
+
+.VPNavBarSearch .search-input,
+.VPNavBarSearch button,
+.DocSearch-Button {
+  border-radius: 1px !important;
+}
+
+.vp-doc div[class*="language-"] {
+  border-radius: 1px;
+}
+
+.vp-doc .custom-block {
+  border-radius: 1px;
+}

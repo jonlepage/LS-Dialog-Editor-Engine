@@ -1,8 +1,8 @@
-# Blueprints & Scènes
+# Blueprints & Scenes
 
-## Structure d'un blueprint
+## Blueprint Structure
 
-Un `BlueprintExport` est le fichier JSON exporté depuis l'éditeur LS-Dialog. Il contient toutes les données nécessaires au moteur.
+A `BlueprintExport` is the JSON file exported from the LS-Dialog editor. It contains all the data the engine needs.
 
 ```ts
 interface BlueprintExport {
@@ -10,47 +10,47 @@ interface BlueprintExport {
   exportDate: string;
   projectName?: string;
   primaryLanguage?: string;
-  locales: string[];           // Langues disponibles
-  dictionaries?: Dictionary[]; // Groupes de valeurs nommées
-  signatures?: ActionSignature[]; // Signatures d'actions réutilisables
-  scenes: BlueprintScene[];    // Les scènes du dialogue
+  locales: string[];           // Available languages
+  dictionaries?: Dictionary[]; // Named value groups
+  signatures?: ActionSignature[]; // Reusable action signatures
+  scenes: BlueprintScene[];    // Dialogue scenes
 }
 ```
 
-## Scènes
+## Scenes
 
-Chaque scène est un sous-graphe indépendant avec un point d'entrée :
+Each scene is an independent subgraph with an entry point:
 
 ```ts
 interface BlueprintScene {
   uuid: string;
   label: string;
   note?: string;
-  entryBlockId?: string;       // Premier bloc à exécuter
+  entryBlockId?: string;       // First block to execute
   date: string;
-  blocks: BlueprintBlock[];    // Tous les blocs de la scène
-  connections: BlueprintConnection[]; // Les arêtes du graphe
+  blocks: BlueprintBlock[];    // All blocks in the scene
+  connections: BlueprintConnection[]; // Graph edges
 }
 ```
 
-## Connexions
+## Connections
 
-Les connexions relient les ports de sortie d'un bloc aux ports d'entrée du suivant :
+Connections link output ports of a block to input ports of the next:
 
 ```ts
 interface BlueprintConnection {
   id: string;
-  fromId: string;              // UUID du bloc source
-  toId: string;                // UUID du bloc cible
-  fromPort: string;            // Nom du port de sortie
-  toPort: string;              // Nom du port d'entrée
-  fromPortIndex?: number;      // Index du port (portPerCharacter)
+  fromId: string;              // Source block UUID
+  toId: string;                // Target block UUID
+  fromPort: string;            // Output port name
+  toPort: string;              // Input port name
+  fromPortIndex?: number;      // Port index (portPerCharacter)
 }
 ```
 
-## Dictionnaires
+## Dictionaries
 
-Les dictionnaires définissent des ensembles de valeurs nommées utilisés par les conditions et paramètres d'actions :
+Dictionaries define named value sets used by conditions and action parameters:
 
 ```ts
 interface Dictionary {
@@ -61,14 +61,14 @@ interface Dictionary {
 }
 ```
 
-## Signatures d'actions
+## Action Signatures
 
-Les signatures décrivent les types d'actions réutilisables avec leurs paramètres :
+Signatures describe reusable action types with their parameters:
 
 ```ts
 interface ActionSignature {
   uuid: string;
-  id: string;                  // Identifiant unique (ex: "set_flag")
+  id: string;                  // Unique identifier (e.g. "set_flag")
   label?: string;
   params: SignatureParam[];
 }

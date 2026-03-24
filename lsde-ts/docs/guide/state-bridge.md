@@ -1,6 +1,6 @@
 # StateBridge
 
-Le `StateBridge` est le pont entre le moteur de dialogue et l'état de votre jeu. C'est l'interface que vous implémentez pour connecter la logique du blueprint à votre application.
+The `StateBridge` is the bridge between the dialogue engine and your game state. It's the interface you implement to connect blueprint logic to your application.
 
 ## Interface
 
@@ -14,16 +14,16 @@ interface StateBridge {
 
 ## evaluateCondition
 
-Appelé automatiquement par le moteur pour :
-- **Blocs CONDITION** — quand aucun `onCondition` handler n'est enregistré
-- **Visibility conditions** — pour filtrer les choix visibles dans un bloc CHOICE
+Called automatically by the engine for:
+- **CONDITION blocks** — when no `onCondition` handler is registered
+- **Visibility conditions** — to filter visible choices in a CHOICE block
 
 ```ts
 evaluateCondition: (cond) => {
-  // cond.key      — clé de la condition (ex: "has_item")
-  // cond.operator — opérateur (ex: "==", "!=", ">")
-  // cond.value    — valeur à comparer
-  // cond.chain    — '|' (OR) ou '&' (AND) avec la condition précédente
+  // cond.key      — condition key (e.g. "has_item")
+  // cond.operator — operator (e.g. "==", "!=", ">")
+  // cond.value    — value to compare against
+  // cond.chain    — '|' (OR) or '&' (AND) with previous condition
 
   const gameValue = gameState.get(cond.key);
   switch (cond.operator) {
@@ -37,13 +37,13 @@ evaluateCondition: (cond) => {
 
 ## executeAction
 
-Appelé automatiquement pour les blocs ACTION sans handler `onAction`. La signature correspondante est passée si elle existe dans le blueprint.
+Called automatically for ACTION blocks without an `onAction` handler. The matching signature is passed if it exists in the blueprint.
 
 ```ts
 executeAction: (action, signature) => {
-  // action.actionId — identifiant de l'action (ex: "set_flag")
-  // action.params   — paramètres [(string | number | boolean)]
-  // signature       — définition complète avec labels des params
+  // action.actionId — action identifier (e.g. "set_flag")
+  // action.params   — parameters [(string | number | boolean)]
+  // signature       — full definition with param labels
 
   switch (action.actionId) {
     case 'set_flag':
@@ -58,41 +58,41 @@ executeAction: (action, signature) => {
 
 ## resolveDictionary
 
-Résout une valeur de dictionnaire par son groupe et sa clé. Utilisé par le moteur lors de l'évaluation des conditions et paramètres d'actions.
+Resolves a dictionary value by its group and key. Used by the engine when evaluating conditions and action parameters.
 
 ```ts
 resolveDictionary: (groupLabel, rowKey) => {
-  // Lookup dans vos données de jeu
+  // Lookup in your game data
   return gameData.dictionaries[groupLabel]?.[rowKey] ?? rowKey;
 }
 ```
 
-## Quand le StateBridge est-il utilisé ?
+## When is StateBridge Used?
 
-| Situation | Méthode appelée |
-|-----------|-----------------|
-| Bloc CONDITION sans handler | `evaluateCondition()` |
-| Filtrage `visibilityConditions` sur un choix | `evaluateCondition()` |
-| Bloc ACTION sans handler | `executeAction()` |
-| Résolution de paramètre dictionnaire | `resolveDictionary()` |
+| Situation | Method called |
+|-----------|---------------|
+| CONDITION block without handler | `evaluateCondition()` |
+| `visibilityConditions` filtering on a choice | `evaluateCondition()` |
+| ACTION block without handler | `executeAction()` |
+| Dictionary parameter resolution | `resolveDictionary()` |
 
 ::: tip
-Si vous enregistrez un handler `onCondition` ou `onAction`, c'est **votre handler** qui prend le contrôle. Le StateBridge n'est pas appelé automatiquement dans ce cas — c'est à vous de l'invoquer si nécessaire.
+If you register an `onCondition` or `onAction` handler, **your handler** takes control. The StateBridge is not called automatically in that case — it's up to you to invoke it if needed.
 :::
 
-## Chaînage des conditions
+## Condition Chaining
 
-Quand un bloc CONDITION ou un choix a plusieurs conditions, le moteur les évalue **de gauche à droite** sans précédence d'opérateur :
+When a CONDITION block or a choice has multiple conditions, the engine evaluates them **left-to-right** with no operator precedence:
 
 ```
-[cond1]  →  résultat initial
-[cond2, chain='&']  →  résultat AND cond2
-[cond3, chain='|']  →  (résultat précédent) OR cond3
+[cond1]  →  initial result
+[cond2, chain='&']  →  result AND cond2
+[cond3, chain='|']  →  (previous result) OR cond3
 ```
 
-Règles :
-- **Array vide** → `true` (pas de conditions = passe)
-- **Première condition** → son résultat brut (le champ `chain` est ignoré)
-- **`chain = '&'`** ou **absent** → AND avec le résultat accumulé
-- **`chain = '|'`** → OR avec le résultat accumulé
-- **Pas de précédence** — `A AND B OR C` s'évalue comme `(A AND B) OR C`
+Rules:
+- **Empty array** → `true` (no conditions = pass)
+- **First condition** → its raw result (`chain` field is ignored)
+- **`chain = '&'`** or **absent** → AND with accumulated result
+- **`chain = '|'`** → OR with accumulated result
+- **No precedence** — `A AND B OR C` evaluates as `(A AND B) OR C`

@@ -1,29 +1,29 @@
-# Types de blocs
+# Block Types
 
-Le moteur supporte 5 types de blocs. Chacun a un handler dédié et un contexte spécifique.
+The engine supports 5 block types. Each has a dedicated handler and specific context.
 
 ## DIALOG
 
-Affiche du texte parlé par un personnage.
+Displays text spoken by a character.
 
 ```ts
 interface DialogBlock {
   type: 'DIALOG';
   structureKey?: string;
   content?: string;
-  dialogueText?: Record<string, string>; // Texte par locale
-  // + champs communs (uuid, label, properties, metadata, nativeProperties)
+  dialogueText?: Record<string, string>; // Text per locale
+  // + common fields (uuid, label, properties, metadata, nativeProperties)
 }
 ```
 
-**Handler :**
+**Handler:**
 
 ```ts
 engine.onDialog(({ block, context, next }) => {
   const char = context.character;       // BlockCharacter | null
-  const text = block.dialogueText?.['fr'];
+  const text = block.dialogueText?.['en'];
 
-  // Si portPerCharacter est activé :
+  // If portPerCharacter is enabled:
   if (block.nativeProperties?.portPerCharacter && char) {
     context.resolveCharacterPort(char.name);
   }
@@ -34,7 +34,7 @@ engine.onDialog(({ block, context, next }) => {
 
 ## CHOICE
 
-Présente des options sélectionnables au joueur.
+Presents selectable options to the player.
 
 ```ts
 interface ChoiceBlock {
@@ -44,14 +44,14 @@ interface ChoiceBlock {
 }
 ```
 
-**Handler :**
+**Handler:**
 
 ```ts
 engine.onChoice(({ context, next }) => {
-  // context.choices contient seulement les choix visibles
+  // context.choices contains only visible choices
   console.log(context.choices);
 
-  // Sélectionner un choix par UUID
+  // Select a choice by UUID
   context.selectChoice(context.choices[0].uuid);
   next();
 });
@@ -59,7 +59,7 @@ engine.onChoice(({ context, next }) => {
 
 ## CONDITION
 
-Évalue une logique pour brancher le flux. Si aucun handler n'est enregistré, le moteur utilise `StateBridge.evaluateCondition()` automatiquement.
+Evaluates logic to branch the flow. If no handler is registered, the engine uses `StateBridge.evaluateCondition()` automatically.
 
 ```ts
 interface ConditionBlock {
@@ -69,7 +69,7 @@ interface ConditionBlock {
 }
 ```
 
-**Handler :**
+**Handler:**
 
 ```ts
 engine.onCondition(({ block, context, next }) => {
@@ -81,7 +81,7 @@ engine.onCondition(({ block, context, next }) => {
 
 ## ACTION
 
-Déclenche des changements d'état. Si aucun handler n'est enregistré, le moteur utilise `StateBridge.executeAction()` automatiquement.
+Triggers game state changes. If no handler is registered, the engine uses `StateBridge.executeAction()` automatically.
 
 ```ts
 interface ActionBlock {
@@ -91,44 +91,44 @@ interface ActionBlock {
 }
 ```
 
-**Handler :**
+**Handler:**
 
 ```ts
 engine.onAction(({ block, context, next }) => {
-  context.resolve();   // Succès → port "then"
-  // ou context.reject(error); → port "catch" (fallback "then")
+  context.resolve();   // Success → "then" port
+  // or context.reject(error); → "catch" port (fallback "then")
   next();
 });
 ```
 
 ## NOTE
 
-Bloc de documentation pour le designer. Jamais exécuté par le moteur.
+Documentation block for the designer. Never executed by the engine.
 
-## Propriétés communes
+## Common Properties
 
-Tous les blocs partagent `BlueprintBlockBase` :
+All blocks share `BlueprintBlockBase`:
 
-| Champ | Type | Description |
+| Field | Type | Description |
 |-------|------|-------------|
-| `uuid` | `string` | Identifiant unique |
-| `type` | `BlockType` | Type discriminant |
-| `label` | `string?` | Nom lisible |
-| `parentLabels` | `string[]?` | Labels parents (hiérarchie) |
-| `properties` | `BlockProperty[]` | Propriétés clé-valeur |
-| `userProperties` | `Record<...>?` | Propriétés utilisateur libres |
-| `nativeProperties` | `NativeProperties?` | Propriétés d'exécution (async, delay, etc.) |
-| `metadata` | `BlockMetadata?` | Métadonnées d'affichage |
-| `isStartBlock` | `boolean?` | Marque le bloc d'entrée |
+| `uuid` | `string` | Unique identifier |
+| `type` | `BlockType` | Discriminant type |
+| `label` | `string?` | Human-readable name |
+| `parentLabels` | `string[]?` | Parent labels (hierarchy) |
+| `properties` | `BlockProperty[]` | Key-value properties |
+| `userProperties` | `Record<...>?` | Free-form user properties |
+| `nativeProperties` | `NativeProperties?` | Execution properties (async, delay, etc.) |
+| `metadata` | `BlockMetadata?` | Display metadata |
+| `isStartBlock` | `boolean?` | Marks the entry block |
 
 ### NativeProperties
 
-| Champ | Type | Description |
+| Field | Type | Description |
 |-------|------|-------------|
-| `isAsync` | `boolean?` | Exécution sur une track asynchrone |
-| `delay` | `number?` | Délai avant exécution (secondes) |
-| `timeout` | `number?` | Timeout d'exécution |
-| `debug` | `boolean?` | Mode debug |
-| `portPerCharacter` | `boolean?` | Un port de sortie par personnage |
-| `skipIfMissingActor` | `boolean?` | Skip si l'acteur est absent |
-| `followNarrative` | `boolean?` | Track async suit la narrative principale |
+| `isAsync` | `boolean?` | Execute on an async track |
+| `delay` | `number?` | Delay before execution (seconds) |
+| `timeout` | `number?` | Execution timeout |
+| `debug` | `boolean?` | Debug mode |
+| `portPerCharacter` | `boolean?` | One output port per character |
+| `skipIfMissingActor` | `boolean?` | Skip if actor is missing |
+| `followNarrative` | `boolean?` | Async track follows the main narrative |

@@ -2,14 +2,14 @@
 
 ## Two-Tier Handler System
 
-Le moteur utilise un système de handlers à deux niveaux :
+The engine uses a two-level handler system:
 
-1. **Tier 1 — Global (engine-level)** : enregistrés sur `DialogueEngine` via `onDialog()`, `onChoice()`, etc.
-2. **Tier 2 — Scene-level** : enregistrés sur un `SceneHandle` via `handle.onDialog()`, etc.
+1. **Tier 1 — Global (engine-level)**: registered on `DialogueEngine` via `onDialog()`, `onChoice()`, etc.
+2. **Tier 2 — Scene-level**: registered on a `SceneHandle` via `handle.onDialog()`, etc.
 
-Quand un bloc est dispatché :
-1. Le handler de scène (Tier 2) est appelé en premier, s'il existe.
-2. Le handler global (Tier 1) est ensuite appelé, **sauf** si le handler de scène a appelé `context.preventGlobalHandler()`.
+When a block is dispatched:
+1. The scene handler (Tier 2) is called first, if it exists.
+2. The global handler (Tier 1) is then called, **unless** the scene handler called `context.preventGlobalHandler()`.
 
 ```ts
 // Tier 1 — global
@@ -22,61 +22,61 @@ engine.onDialog(({ block, context, next }) => {
 const handle = engine.scene(sceneId);
 handle.onDialog(({ block, context, next }) => {
   console.log('Scene-specific dialog handler');
-  context.preventGlobalHandler(); // Skip le handler global
+  context.preventGlobalHandler(); // Skip the global handler
   next();
 });
 handle.start();
 ```
 
-## Lifecycle complet
+## Full Lifecycle
 
-### Ordre d'exécution pour chaque bloc
+### Execution Order for Each Block
 
-1. `onValidateNextBlock` — Validation avant exécution
-2. **Cleanup du bloc précédent** — La cleanup function retournée par le handler du bloc *précédent* est exécutée ici, au moment d'entrer dans le nouveau bloc
-3. `onBeforeBlock` — Pré-traitement (doit appeler `resolve()` pour continuer)
-4. Handler de type (Tier 2 puis Tier 1)
+1. `onValidateNextBlock` — Validation before execution
+2. **Previous block cleanup** — The cleanup function returned by the *previous* block's handler is executed here, when entering the new block
+3. `onBeforeBlock` — Pre-processing (must call `resolve()` to continue)
+4. Type handler (Tier 2 then Tier 1)
 
-::: info Priorité des handlers
-Quand un bloc est dispatché, le moteur résout le handler dans cet ordre de priorité :
-1. `handle.onBlock(uuid)` — override spécifique à un bloc par UUID
-2. `handle.onDialog()` / `handle.onChoice()` / ... — override par type pour la scène
-3. `engine.onDialog()` / `engine.onChoice()` / ... — handler global
+::: info Handler Priority
+When a block is dispatched, the engine resolves the handler in this priority order:
+1. `handle.onBlock(uuid)` — block-specific override by UUID
+2. `handle.onDialog()` / `handle.onChoice()` / ... — type override for the scene
+3. `engine.onDialog()` / `engine.onChoice()` / ... — global handler
 
-Si un handler de scène (Tier 2) existe, le handler global (Tier 1) est aussi appelé **après**, sauf si `context.preventGlobalHandler()` a été appelé.
+If a scene handler (Tier 2) exists, the global handler (Tier 1) is also called **after**, unless `context.preventGlobalHandler()` was called.
 :::
 
-### Événements de scène
+### Scene Events
 
 ```ts
 engine.onSceneEnter(({ scene, context }) => {
-  // Appelé quand handle.start() est exécuté
+  // Called when handle.start() is executed
 });
 
 engine.onSceneExit(({ scene, context }) => {
-  // Appelé quand la scène se termine (naturellement ou par cancel)
+  // Called when the scene ends (naturally or via cancel)
 });
 ```
 
 ## onValidateNextBlock
 
-Intercepte chaque transition entre blocs pour validation :
+Intercepts each block transition for validation:
 
 ```ts
 engine.onValidateNextBlock(({ nextBlock, fromBlock, port }) => {
-  // Retourner { valid: false, reason: '...' } pour bloquer
+  // Return { valid: false, reason: '...' } to block
   return { valid: true };
 });
 
 engine.onInvalidateBlock(({ scene, reason }) => {
-  console.error('Bloc invalide:', reason);
-  scene.cancel(); // Arrêter la scène
+  console.error('Invalid block:', reason);
+  scene.cancel(); // Stop the scene
 });
 ```
 
 ## onBeforeBlock
 
-Appelé avant chaque bloc. **Doit appeler `resolve()`** pour continuer :
+Called before each block. **Must call `resolve()`** to continue:
 
 ```ts
 engine.onBeforeBlock(({ block, resolve }) => {
@@ -91,7 +91,7 @@ engine.onBeforeBlock(({ block, resolve }) => {
 
 ## Cleanup Functions
 
-Un handler peut retourner une fonction de cleanup, appelée quand on quitte le bloc :
+A handler can return a cleanup function, called when leaving the block:
 
 ```ts
 engine.onDialog(({ block, next }) => {
@@ -99,69 +99,69 @@ engine.onDialog(({ block, next }) => {
   next();
 
   return () => {
-    // Appelé quand le bloc suivant prend le relais
+    // Called when the next block takes over
     element.remove();
   };
 });
 ```
 
-## Override par bloc
+## Block Override
 
-Un `SceneHandle` peut aussi overrider un bloc spécifique par UUID :
+A `SceneHandle` can also override a specific block by UUID:
 
 ```ts
 const handle = engine.scene(sceneId);
 handle.onBlock('block-uuid-123', ({ block, context, next }) => {
-  // Handler spécifique à ce bloc uniquement
+  // Handler specific to this block only
   next();
 });
 ```
 
-## Blocs sans handler
+## Blocks Without Handlers
 
-| Type | Comportement sans handler |
+| Type | Behavior without handler |
 |------|--------------------------|
-| **DIALOG** | Le bloc est visité puis le moteur avance silencieusement au bloc suivant. |
-| **CHOICE** | Le bloc est visité puis le moteur avance silencieusement. Aucun choix n'est sélectionné — le flux peut se terminer. |
-| **CONDITION** | Le moteur auto-évalue via `StateBridge.evaluateCondition()` et suit le port correspondant. |
-| **ACTION** | Le moteur auto-exécute via `StateBridge.executeAction()` pour chaque action du bloc. |
-| **NOTE** | Jamais exécuté — les blocs NOTE sont toujours ignorés par le moteur. |
+| **DIALOG** | The block is visited then the engine silently advances to the next block. |
+| **CHOICE** | The block is visited then the engine silently advances. No choice is selected — the flow may end. |
+| **CONDITION** | The engine auto-evaluates via `StateBridge.evaluateCondition()` and follows the corresponding port. |
+| **ACTION** | The engine auto-executes via `StateBridge.executeAction()` for each action in the block. |
+| **NOTE** | Never executed — NOTE blocks are always skipped by the engine. |
 
 ## cancel()
 
-Appeler `scene.cancel()` déclenche cette séquence :
+Calling `scene.cancel()` triggers this sequence:
 
-1. Toutes les **tracks asynchrones** sont annulées
-2. La **cleanup function** du bloc courant est exécutée
-3. Le handler `onSceneExit` est appelé
-4. La scène est marquée comme terminée
+1. All **async tracks** are cancelled
+2. The **cleanup function** of the current block is executed
+3. The `onSceneExit` handler is called
+4. The scene is marked as finished
 
 ```ts
 engine.onInvalidateBlock(({ scene, reason }) => {
-  console.error('Validation échouée:', reason);
-  scene.cancel(); // Cleanup + onSceneExit sont appelés
+  console.error('Validation failed:', reason);
+  scene.cancel(); // Cleanup + onSceneExit are called
 });
 ```
 
-## Tracks asynchrones
+## Async Tracks
 
-Quand un bloc a `nativeProperties.isAsync = true`, le moteur crée une **track parallèle** qui s'exécute indépendamment du flux principal.
+When a block has `nativeProperties.isAsync = true`, the engine creates a **parallel track** that runs independently of the main flow.
 
-### Comment les tracks sont créées
+### How Tracks are Created
 
-Lors de la résolution de port, si plusieurs connexions sortantes existent :
-- La **première connexion non-async** devient la suite du flux principal
-- Les **autres connexions** (vers des blocs avec `isAsync`) deviennent des tracks parallèles
+During port resolution, if multiple outgoing connections exist:
+- The **first non-async connection** becomes the continuation of the main flow
+- The **other connections** (to blocks with `isAsync`) become parallel tracks
 
-### Différences avec le flux principal
+### Differences from the Main Flow
 
-- `onBeforeBlock` est **sauté** sur les tracks asynchrones — le handler de type est appelé directement
-- Chaque track async ne suit qu'**une seule connexion** (pas de branching multi-path)
-- Les tracks sont automatiquement annulées quand la scène se termine
+- `onBeforeBlock` is **skipped** on async tracks — the type handler is called directly
+- Each async track follows only **one connection** (no multi-path branching)
+- Tracks are automatically cancelled when the scene ends
 
 ### followNarrative
 
-Quand `followNarrative = true` sur un bloc async :
-- La track async **attend** que le flux principal avance
-- Si `next()` a déjà été appelé dans le handler, l'avance en attente s'exécute
-- Si `next()` n'a **pas** été appelé, le bloc est **force-advanced** (sauté)
+When `followNarrative = true` on an async block:
+- The async track **waits** for the main flow to advance
+- If `next()` has already been called in the handler, the pending advance executes
+- If `next()` has **not** been called, the block is **force-advanced** (skipped)

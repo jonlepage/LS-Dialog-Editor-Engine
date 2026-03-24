@@ -1,27 +1,27 @@
-# Qu'est-ce que LSDE?
+# What is LSDE?
 
-**LSDE Dialog Engine** est le runtime TypeScript de référence pour exécuter les blueprints de dialogues créés avec l'éditeur LS-Dialog.
+**LSDE Dialog Engine** is the reference TypeScript runtime for executing dialogue blueprints created with the LS-Dialog editor.
 
 ## Architecture
 
-Le moteur fonctionne comme un **graph dispatcher callback-driven** :
+The engine works as a **callback-driven graph dispatcher**:
 
-1. **Blueprint** — Un fichier JSON exporté depuis l'éditeur, contenant des scènes, blocs et connexions.
-2. **Engine** — Valide le blueprint, construit le graphe interne et dispatch les blocs vers vos handlers.
-3. **Handlers** — Vos fonctions qui réagissent à chaque type de bloc (dialogue, choix, condition, action).
-4. **StateBridge** — Le pont entre le moteur et l'état de votre jeu.
+1. **Blueprint** — A JSON file exported from the editor, containing scenes, blocks and connections.
+2. **Engine** — Validates the blueprint, builds the internal graph and dispatches blocks to your handlers.
+3. **Handlers** — Your functions that react to each block type (dialog, choice, condition, action).
+4. **StateBridge** — The bridge between the engine and your game state.
 
 ```
 Blueprint JSON → engine.init() → engine.scene(id).start()
                                         ↓
                               onDialog / onChoice / ...
                                         ↓
-                                  next() → bloc suivant
+                                  next() → next block
 ```
 
-## Principes de design
+## Design Principles
 
-- **Zero-dependency** — Aucune dépendance runtime.
-- **Framework-agnostic** — Fonctionne avec n'importe quel moteur de jeu ou framework UI.
-- **Callback-driven** — Pas de boucle de rendu interne. Vous appelez `next()` quand vous êtes prêt.
-- **Two-tier handlers** — Handlers globaux (engine-level) et handlers de scène (scene-level) avec `preventGlobalHandler()`.
+- **Zero-dependency** — No runtime dependencies.
+- **Framework-agnostic** — Works with any game engine or UI framework.
+- **Callback-driven** — No internal render loop. You call `next()` when you're ready.
+- **Two-tier handlers** — Global (engine-level) and scene-level handlers with `preventGlobalHandler()`.

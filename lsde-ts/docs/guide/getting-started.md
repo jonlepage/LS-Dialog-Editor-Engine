@@ -1,4 +1,4 @@
-# Démarrage rapide
+# Getting Started
 
 ## Installation
 
@@ -6,76 +6,76 @@
 npm install @lsde/dialog-engine
 ```
 
-## Usage minimal
+## Minimal Usage
 
 ```ts
 import { DialogueEngine } from '@lsde/dialog-engine';
 import type { BlueprintExport, StateBridge } from '@lsde/dialog-engine';
 
-// 1. Charger le blueprint exporté depuis l'éditeur
+// 1. Load the blueprint exported from the editor
 import blueprintJson from './blueprint.json';
 const data = blueprintJson as BlueprintExport;
 
-// 2. Créer et initialiser le moteur
+// 2. Create and initialize the engine
 const engine = new DialogueEngine();
 const report = engine.init({ data });
 
 if (report.errors.length > 0) {
-  console.error('Blueprint invalide:', report.errors);
-  // Ne pas continuer — le moteur n'est pas initialisé
+  console.error('Invalid blueprint:', report.errors);
+  // Do not proceed — the engine is not initialized
 }
 
-// 3. Configurer la locale
-engine.setLocale('fr');
+// 3. Set the locale
+engine.setLocale('en');
 
-// 4. Brancher le StateBridge
+// 4. Connect the StateBridge
 const bridge: StateBridge = {
   evaluateCondition: (cond) => {
-    // Évaluer la condition contre l'état du jeu
+    // Evaluate the condition against game state
     return true;
   },
   executeAction: (action, signature) => {
-    // Exécuter l'action dans le jeu
+    // Execute the action in the game
   },
   resolveDictionary: (group, key) => {
-    // Résoudre une valeur de dictionnaire
+    // Resolve a dictionary value
     return `${group}.${key}`;
   },
 };
 engine.setStateBridge(bridge);
 
-// 5. Enregistrer les handlers
+// 5. Register handlers
 engine.onDialog(({ block, context, next }) => {
-  const text = block.dialogueText?.['fr'] ?? '';
+  const text = block.dialogueText?.['en'] ?? '';
   const char = context.character;
   console.log(`${char?.name ?? '???'}: ${text}`);
-  next(); // Avancer au bloc suivant
+  next(); // Advance to next block
 });
 
 engine.onChoice(({ context, next }) => {
-  console.log('Choix disponibles:', context.choices);
-  // Sélectionner un choix
+  console.log('Available choices:', context.choices);
+  // Select a choice
   context.selectChoice(context.choices[0].uuid);
   next();
 });
 
-// 6. Lancer une scène
+// 6. Run a scene
 const sceneId = data.scenes[0].uuid;
 const handle = engine.scene(sceneId);
 handle.start();
 ```
 
-## Validation du blueprint
+## Blueprint Validation
 
-`engine.init()` retourne un `DiagnosticReport` contenant :
+`engine.init()` returns a `DiagnosticReport` containing:
 
-| Champ | Type | Description |
+| Field | Type | Description |
 |-------|------|-------------|
-| `errors` | `DiagnosticEntry[]` | Erreurs bloquantes — le moteur ne s'initialise pas |
-| `warnings` | `DiagnosticEntry[]` | Avertissements non-bloquants |
-| `stats` | `DiagnosticStats` | Compteurs : scènes, blocs, connexions |
+| `errors` | `DiagnosticEntry[]` | Blocking errors — the engine does not initialize |
+| `warnings` | `DiagnosticEntry[]` | Non-blocking warnings |
+| `stats` | `DiagnosticStats` | Counts: scenes, blocks, connections |
 
-Vous pouvez aussi fournir `check` pour cross-valider contre les capacités de votre jeu :
+You can also provide `check` to cross-validate against your game's capabilities:
 
 ```ts
 engine.init({
