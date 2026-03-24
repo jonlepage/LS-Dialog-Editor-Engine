@@ -6,20 +6,20 @@ LSDE exports dialogue graphs (scenes, blocks, connections, dictionaries, signatu
 
 ## Runtimes
 
-<a href="lsde-ts/"><img src="lsde-ts/banner.png" width="250" alt="TypeScript"></a>
-<a href="lsde-csharp/"><img src="lsde-csharp/banner.png" width="250" alt="C#"></a>
-<a href="lsde-cpp/"><img src="lsde-cpp/banner.png" width="250" alt="C++"></a>
-<a href="lsde-gdscript/"><img src="lsde-gdscript/banner.png" width="250" alt="GDScript"></a>
+<a href="lsde-ts/"><img src="lsde-ts/banner.png" width="240" alt="TypeScript"></a>
+<a href="lsde-csharp/"><img src="lsde-csharp/banner.png" width="240" alt="C#"></a>
+<a href="lsde-cpp/"><img src="lsde-cpp/banner.png" width="240" alt="C++"></a>
+<a href="lsde-gdscript/"><img src="lsde-gdscript/banner.png" width="240" alt="GDScript"></a>
 
-| Runtime | Language | Target | Tests |
-|---------|----------|--------|-------|
-| [lsde-ts](lsde-ts/) | TypeScript | Reference implementation | 216/216 |
-| [lsde-csharp](lsde-csharp/) | C# | Unity, .NET | 42/42 |
-| [lsde-cpp](lsde-cpp/) | C++ | Unreal, custom engines | 40/42 |
-| [lsde-gdscript](lsde-gdscript/) | GDScript | Godot 4 | 42/42 |
-| [lsde-rust](lsde-rust/) | Rust | Native | planned |
-| [lsde-lua](lsde-lua/) | Lua | Defold, LOVE | planned |
-| [lsde-python](lsde-python/) | Python | Tooling, prototyping | planned |
+| Runtime                         | Language   | Target                   | Tests   |
+| ------------------------------- | ---------- | ------------------------ | ------- |
+| [lsde-ts](lsde-ts/)             | TypeScript | Reference implementation | 216/216 |
+| [lsde-csharp](lsde-csharp/)     | C#         | Unity, .NET              | 42/42   |
+| [lsde-cpp](lsde-cpp/)           | C++        | Unreal, custom engines   | 40/42   |
+| [lsde-gdscript](lsde-gdscript/) | GDScript   | Godot 4                  | 42/42   |
+| [lsde-rust](lsde-rust/)         | Rust       | Native                   | planned |
+| [lsde-lua](lsde-lua/)           | Lua        | Defold, LOVE             | planned |
+| [lsde-python](lsde-python/)     | Python     | Tooling, prototyping     | planned |
 
 ## Principles
 
