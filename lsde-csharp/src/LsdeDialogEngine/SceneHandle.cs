@@ -687,22 +687,25 @@ namespace LsdeDialogEngine
 
         private IBaseBlockContext? CreateContext(BlueprintBlock block)
         {
+            var bridge = _callbacks.GetStateBridge?.Invoke();
+            var characters = block.Metadata?.Characters ?? new List<BlockCharacter>();
+            var resolvedCharacter = bridge?.ResolveCharacter(characters);
+
             switch (block)
             {
                 case DialogBlock db:
-                    return BlockContextFactory.CreateDialogContext(db);
+                    return BlockContextFactory.CreateDialogContext(db, resolvedCharacter);
                 case ChoiceBlock cb:
                 {
-                    var bridge = _callbacks.GetStateBridge?.Invoke();
                     Func<ExportCondition, bool> evaluator = bridge != null
                         ? bridge.EvaluateCondition
                         : (_ => true);
-                    return BlockContextFactory.CreateChoiceContext(cb, evaluator);
+                    return BlockContextFactory.CreateChoiceContext(cb, evaluator, resolvedCharacter);
                 }
                 case ConditionBlock _:
-                    return BlockContextFactory.CreateConditionContext();
+                    return BlockContextFactory.CreateConditionContext(resolvedCharacter);
                 case ActionBlock _:
-                    return BlockContextFactory.CreateActionContext();
+                    return BlockContextFactory.CreateActionContext(resolvedCharacter);
                 default:
                     return null;
             }

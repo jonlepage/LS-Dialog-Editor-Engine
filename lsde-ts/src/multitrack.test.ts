@@ -27,6 +27,7 @@ function makeBridge( overrides: Partial<StateBridge> = {} ): StateBridge {
 		evaluateCondition: () => true,
 		executeAction: vi.fn(),
 		resolveDictionary: () => '',
+		resolveCharacter: ( chars ) => chars[0],
 		...overrides,
 	};
 }

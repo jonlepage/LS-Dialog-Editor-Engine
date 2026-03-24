@@ -15,9 +15,9 @@ namespace LsdeDialogEngine
 
         public BlockCharacter? Character { get; }
 
-        internal InternalDialogContext(DialogBlock block)
+        internal InternalDialogContext(DialogBlock block, BlockCharacter? resolvedCharacter)
         {
-            Character = Utils.GetFirstCharacter(block);
+            Character = resolvedCharacter;
             _characters = block.Metadata?.Characters ?? new List<BlockCharacter>();
         }
 
@@ -42,11 +42,13 @@ namespace LsdeDialogEngine
         internal bool GlobalPrevented;
         internal string? SelectedChoiceUuid;
 
+        public BlockCharacter? Character { get; }
         public IReadOnlyList<ChoiceItem> Choices { get; }
 
-        internal InternalChoiceContext(List<ChoiceItem> visibleChoices)
+        internal InternalChoiceContext(List<ChoiceItem> visibleChoices, BlockCharacter? resolvedCharacter)
         {
             Choices = visibleChoices;
+            Character = resolvedCharacter;
         }
 
         public void SelectChoice(string choiceUuid)
@@ -62,6 +64,13 @@ namespace LsdeDialogEngine
         internal bool GlobalPrevented;
         internal bool? ConditionResult;
 
+        public BlockCharacter? Character { get; }
+
+        internal InternalConditionContext(BlockCharacter? resolvedCharacter)
+        {
+            Character = resolvedCharacter;
+        }
+
         public void Resolve(bool result)
         {
             ConditionResult = result;
@@ -74,6 +83,13 @@ namespace LsdeDialogEngine
     {
         internal bool GlobalPrevented;
         internal bool ActionRejected;
+
+        public BlockCharacter? Character { get; }
+
+        internal InternalActionContext(BlockCharacter? resolvedCharacter)
+        {
+            Character = resolvedCharacter;
+        }
 
         public void Resolve()
         {
@@ -92,28 +108,29 @@ namespace LsdeDialogEngine
 
     internal static class BlockContextFactory
     {
-        internal static InternalDialogContext CreateDialogContext(DialogBlock block)
+        internal static InternalDialogContext CreateDialogContext(DialogBlock block, BlockCharacter? resolvedCharacter)
         {
-            return new InternalDialogContext(block);
+            return new InternalDialogContext(block, resolvedCharacter);
         }
 
         internal static InternalChoiceContext CreateChoiceContext(
             ChoiceBlock block,
-            Func<ExportCondition, bool> evaluator)
+            Func<ExportCondition, bool> evaluator,
+            BlockCharacter? resolvedCharacter)
         {
             var choices = block.Choices ?? new List<ChoiceItem>();
             var visibleChoices = ConditionEvaluator.FilterVisibleChoices(choices, evaluator);
-            return new InternalChoiceContext(visibleChoices);
+            return new InternalChoiceContext(visibleChoices, resolvedCharacter);
         }
 
-        internal static InternalConditionContext CreateConditionContext()
+        internal static InternalConditionContext CreateConditionContext(BlockCharacter? resolvedCharacter)
         {
-            return new InternalConditionContext();
+            return new InternalConditionContext(resolvedCharacter);
         }
 
-        internal static InternalActionContext CreateActionContext()
+        internal static InternalActionContext CreateActionContext(BlockCharacter? resolvedCharacter)
         {
-            return new InternalActionContext();
+            return new InternalActionContext(resolvedCharacter);
         }
     }
 }

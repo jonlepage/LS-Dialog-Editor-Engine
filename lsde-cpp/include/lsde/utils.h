@@ -12,11 +12,4 @@ inline bool isConditionBlock(const BlueprintBlock& b) { return dynamic_cast<cons
 inline bool isActionBlock(const BlueprintBlock& b) { return dynamic_cast<const ActionBlock*>(&b) != nullptr; }
 inline bool isNoteBlock(const BlueprintBlock& b) { return dynamic_cast<const NoteBlock*>(&b) != nullptr; }
 
-inline const BlockCharacter* getFirstCharacter(const BlueprintBlock& b) {
-    if (b.metadata && !b.metadata->characters.empty()) {
-        return &b.metadata->characters[0];
-    }
-    return nullptr;
-}
-
 } // namespace lsde

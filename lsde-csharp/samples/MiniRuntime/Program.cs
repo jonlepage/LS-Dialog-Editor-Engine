@@ -296,4 +296,9 @@ class PlaygroundStateBridge : IStateBridge
     {
         return $"{groupLabel}.{rowKey}";
     }
+
+    public BlockCharacter? ResolveCharacter(IReadOnlyList<BlockCharacter> characters)
+    {
+        return characters.Count > 0 ? characters[0] : null;
+    }
 }

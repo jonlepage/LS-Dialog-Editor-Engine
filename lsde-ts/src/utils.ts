@@ -2,7 +2,6 @@
 
 import type {
 	BlueprintBlock, DialogBlock, ChoiceBlock, ConditionBlock, ActionBlock, NoteBlock,
-	BlockCharacter,
 } from './types.js';
 
 /** Exhaustive switch helper — causes a compile error if a case is missing. */
@@ -32,9 +31,3 @@ export function isNoteBlock( block: BlueprintBlock ): block is NoteBlock {
 	return block.type === 'NOTE';
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/** Extract the first character from a block's metadata, or null. */
-export function getFirstCharacter( block: BlueprintBlock ): BlockCharacter | null {
-	return block.metadata?.characters?.[0] ?? null;
-}

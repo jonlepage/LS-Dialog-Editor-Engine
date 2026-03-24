@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isDialogBlock, isChoiceBlock, isConditionBlock, isActionBlock, isNoteBlock, getFirstCharacter } from './utils.js';
+import { isDialogBlock, isChoiceBlock, isConditionBlock, isActionBlock, isNoteBlock } from './utils.js';
 import type { BlueprintBlock } from './types.js';
 
 const baseBlock = {
@@ -43,34 +43,3 @@ describe( 'type guards', () => {
 
 } );
 
-describe( 'getFirstCharacter', () => {
-
-	it( 'returns null when no metadata', () => {
-		expect( getFirstCharacter( dialogBlock ) ).toBeNull();
-	} );
-
-	it( 'returns null when no characters', () => {
-		const block: BlueprintBlock = { ...dialogBlock, metadata: { tags: [] } };
-		expect( getFirstCharacter( block ) ).toBeNull();
-	} );
-
-	it( 'returns null when characters array is empty', () => {
-		const block: BlueprintBlock = { ...dialogBlock, metadata: { characters: [] } };
-		expect( getFirstCharacter( block ) ).toBeNull();
-	} );
-
-	it( 'returns the first character', () => {
-		const block: BlueprintBlock = {
-			...dialogBlock,
-			metadata: {
-				characters: [
-					{ name: 'Hero', emotion: 'happy', emotionIntensity: 3 },
-					{ name: 'Villain', emotion: 'angry', emotionIntensity: 5 },
-				],
-			},
-		};
-		const char = getFirstCharacter( block );
-		expect( char ).toEqual( { name: 'Hero', emotion: 'happy', emotionIntensity: 3 } );
-	} );
-
-} );

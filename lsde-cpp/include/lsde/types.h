@@ -254,6 +254,7 @@ public:
     virtual bool evaluateCondition(const ExportCondition& condition) = 0;
     virtual void executeAction(const ExportAction& action, const ActionSignature* signature) = 0;
     virtual PropertyValue resolveDictionary(const std::string& groupLabel, const std::string& rowKey) = 0;
+    virtual const BlockCharacter* resolveCharacter(const std::vector<BlockCharacter>& characters) = 0;
 };
 
 /// Result of block validation.
@@ -274,13 +275,13 @@ using CleanupFn = std::function<void()>;
 class IBaseBlockContext {
 public:
     virtual ~IBaseBlockContext() = default;
+    virtual const BlockCharacter* character() const = 0;
     virtual void preventGlobalHandler() = 0;
 };
 
 /// Context for DIALOG block handlers.
 class IDialogContext : public IBaseBlockContext {
 public:
-    virtual const BlockCharacter* character() const = 0;
     virtual void resolveCharacterPort(const std::string& characterName) = 0;
 };
 

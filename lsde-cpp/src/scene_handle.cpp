@@ -488,24 +488,28 @@ void SceneHandleImpl::fireSceneExit() {
 // ─── Internal ────────────────────────────────────────────────────────────────
 
 std::unique_ptr<IBaseBlockContext> SceneHandleImpl::createContext(const BlueprintBlock& block) {
+    auto* bridge = getStateBridge();
+    static const std::vector<BlockCharacter> emptyCharacters;
+    const auto& characters = block.metadata ? block.metadata->characters : emptyCharacters;
+    const BlockCharacter* resolvedCharacter = bridge ? bridge->resolveCharacter(characters) : nullptr;
+
     if (auto* db = dynamic_cast<const DialogBlock*>(&block)) {
-        return createDialogContext(*db);
+        return createDialogContext(*db, resolvedCharacter);
     }
     if (auto* cb = dynamic_cast<const ChoiceBlock*>(&block)) {
-        auto* bridge = getStateBridge();
         std::function<bool(const ExportCondition&)> evaluator;
         if (bridge) {
             evaluator = [bridge](const ExportCondition& c) { return bridge->evaluateCondition(c); };
         } else {
             evaluator = [](const ExportCondition&) { return true; };
         }
-        return createChoiceContext(*cb, evaluator);
+        return createChoiceContext(*cb, evaluator, resolvedCharacter);
     }
     if (dynamic_cast<const ConditionBlock*>(&block)) {
-        return createConditionContext();
+        return createConditionContext(resolvedCharacter);
     }
     if (dynamic_cast<const ActionBlock*>(&block)) {
-        return createActionContext();
+        return createActionContext(resolvedCharacter);
     }
     return nullptr;
 }

@@ -681,23 +681,26 @@ export class SceneHandleImpl implements SceneHandle {
 	}
 
 	private createContext( block: BlueprintBlock ): InternalContext | null {
+		const bridge = this.callbacks.getStateBridge();
+		const characters = block.metadata?.characters ?? [];
+		const resolvedCharacter = bridge?.resolveCharacter( characters );
+
 		if ( isDialogBlock( block ) ) {
-			return createDialogContext( block );
+			return createDialogContext( block, resolvedCharacter );
 		}
 		if ( isChoiceBlock( block ) ) {
-			const bridge = this.callbacks.getStateBridge();
 			const rawEvaluator = bridge ? bridge.evaluateCondition : () => true;
 			const evaluator = ( condition: ExportCondition ) =>
 				this.evaluateConditionWithHistory( condition, rawEvaluator );
 			return createChoiceContext( block, evaluator, ( blockUuid, choiceUuid ) => {
 				this.recordChoice( blockUuid, choiceUuid );
-			} );
+			}, resolvedCharacter );
 		}
 		if ( isConditionBlock( block ) ) {
-			return createConditionContext();
+			return createConditionContext( resolvedCharacter );
 		}
 		if ( isActionBlock( block ) ) {
-			return createActionContext();
+			return createActionContext( resolvedCharacter );
 		}
 		return null;
 	}

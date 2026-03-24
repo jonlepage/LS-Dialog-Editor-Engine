@@ -247,6 +247,7 @@ describe( 'SceneHandleImpl', () => {
 			evaluateCondition: () => true,
 			executeAction: vi.fn(),
 			resolveDictionary: () => '',
+			resolveCharacter: ( chars ) => chars[0],
 		};
 		const global = new HandlerRegistry();
 		global.dialogHandler = ( { block, next } ) => {
@@ -275,6 +276,7 @@ describe( 'SceneHandleImpl', () => {
 			evaluateCondition: () => true,
 			executeAction: ( action ) => { executedActions.push( action.actionId ); },
 			resolveDictionary: () => '',
+			resolveCharacter: ( chars ) => chars[0],
 		};
 		const global = new HandlerRegistry();
 		global.dialogHandler = ( { next } ) => next();
@@ -611,6 +613,7 @@ describe( 'SceneHandleImpl — Choice Condition Resolution', () => {
 			evaluateCondition: () => true, // quest == active → true
 			executeAction: vi.fn(),
 			resolveDictionary: () => '',
+			resolveCharacter: ( chars ) => chars[0],
 		};
 		const global = new HandlerRegistry();
 		global.choiceHandler = ( { context, next } ) => { context.selectChoice( 'opt-a' ); next(); };

@@ -144,6 +144,11 @@ namespace LsdeDialogEngine.Tests
                 return val;
             return "";
         }
+
+        public BlockCharacter? ResolveCharacter(IReadOnlyList<BlockCharacter> characters)
+        {
+            return characters.Count > 0 ? characters[0] : null;
+        }
     }
 
     // ─── Mutable test state wrapper (for lambda capture) ─────────────────────────

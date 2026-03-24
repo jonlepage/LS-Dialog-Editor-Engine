@@ -49,6 +49,9 @@ public:
     PropertyValue resolveDictionary(const std::string& group, const std::string& key) override {
         return std::string(group + "." + key);
     }
+    const BlockCharacter* resolveCharacter(const std::vector<BlockCharacter>& characters) override {
+        return characters.empty() ? nullptr : &characters[0];
+    }
 };
 
 // ─── Main ────────────────────────────────────────────────────────────────────

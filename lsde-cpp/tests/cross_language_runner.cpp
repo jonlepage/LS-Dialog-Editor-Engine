@@ -38,6 +38,10 @@ public:
         auto it = _config.dictionaries.find(k);
         return it != _config.dictionaries.end() ? PropertyValue{it->second} : PropertyValue{std::string{}};
     }
+
+    const BlockCharacter* resolveCharacter(const std::vector<BlockCharacter>& characters) override {
+        return characters.empty() ? nullptr : &characters[0];
+    }
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

@@ -265,6 +265,7 @@ namespace LsdeDialogEngine
         bool EvaluateCondition(ExportCondition condition);
         void ExecuteAction(ExportAction action, ActionSignature? signature);
         object ResolveDictionary(string groupLabel, string rowKey);
+        BlockCharacter? ResolveCharacter(IReadOnlyList<BlockCharacter> characters);
     }
 
     /// <summary>Result of block validation.</summary>
@@ -282,13 +283,13 @@ namespace LsdeDialogEngine
     /// <summary>Base context available to all block handlers.</summary>
     public interface IBaseBlockContext
     {
+        BlockCharacter? Character { get; }
         void PreventGlobalHandler();
     }
 
     /// <summary>Context for DIALOG block handlers.</summary>
     public interface IDialogContext : IBaseBlockContext
     {
-        BlockCharacter? Character { get; }
         void ResolveCharacterPort(string characterName);
     }
 

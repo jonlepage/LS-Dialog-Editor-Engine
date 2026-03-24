@@ -29,6 +29,7 @@ function makeBridge(): StateBridge {
 		evaluateCondition: () => true,
 		executeAction: vi.fn(),
 		resolveDictionary: () => '',
+		resolveCharacter: ( chars ) => chars[0],
 	};
 }
 
@@ -213,6 +214,7 @@ describe( 'DialogueEngine', () => {
 				evaluateCondition: () => false, // → false branch
 				executeAction: vi.fn(),
 				resolveDictionary: () => '',
+				resolveCharacter: ( chars ) => chars[0],
 			} );
 			engine.onDialog( ( { block, next } ) => {
 				visited.push( block.uuid );
@@ -243,6 +245,7 @@ describe( 'DialogueEngine', () => {
 				evaluateCondition: () => true,
 				executeAction: ( action ) => { executed.push( action.actionId ); },
 				resolveDictionary: () => '',
+				resolveCharacter: ( chars ) => chars[0],
 			} );
 			engine.onDialog( ( { next } ) => next() );
 
@@ -285,6 +288,7 @@ describe( 'DialogueEngine', () => {
 				evaluateCondition: () => true,
 				executeAction: vi.fn(),
 				resolveDictionary: () => '',
+				resolveCharacter: ( chars ) => chars[0],
 			} );
 
 			engine.onDialog( ( { block, next } ) => {
@@ -309,6 +313,7 @@ describe( 'DialogueEngine', () => {
 				evaluateCondition: () => false, // can_leave = false → opt-leave hidden
 				executeAction: vi.fn(),
 				resolveDictionary: () => '',
+				resolveCharacter: ( chars ) => chars[0],
 			} );
 
 			engine.onDialog( ( { next } ) => next() );
@@ -642,6 +647,7 @@ describe( 'DialogueEngine', () => {
 				evaluateCondition: ( c ) => c.key === 'player_level', // returns true
 				executeAction: ( action ) => { executed.push( action.actionId ); },
 				resolveDictionary: () => '',
+				resolveCharacter: ( chars ) => chars[0],
 			} );
 
 			engine.onDialog( ( { block, next } ) => {

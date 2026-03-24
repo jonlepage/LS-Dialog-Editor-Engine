@@ -8,7 +8,7 @@
 export enum LSDE_SCENES {
 	/**
 	 * ### Scene: New Scene
-	 * 1 ACTION, 1 CHOICE, 1 CONDITION, 5 DIALOG
+	 * 1 ACTION, 1 CHOICE, 1 CONDITION, 6 DIALOG
 	 * Entry: `DIALOG-001` ⭐
 	 * - Emotions: `sad`
 	 * - Characters: `Boo`, `Gigi Jinx `, `Gruht Tyron`, `Lulu Star`, `Salomon Sky`, `Svelt Moon`, `lia`
@@ -46,7 +46,7 @@ export enum LSDE_BLOCKS {
 	 * - Characters: `Gruht Tyron`, `Gigi Jinx `, `Lulu Star`, `Boo`, `Svelt Moon`, `Salomon Sky`
 	 * - Scene: `New Scene`
 	 * - In: `DIALOG-001`
-	 * - Out: `CONDITION-001`, `DIALOG-001`
+	 * - Out: `CONDITION-001`
 	 * - Choices: `choice1`, `choice2`
 	 * ---
 	 * <image url="./_images/choice.webp" />
@@ -62,9 +62,9 @@ export enum LSDE_BLOCKS {
 	 * ### 🟪[CONDITION] CONDITION-001
 	 * - Scene: `New Scene`
 	 * - In: `DIALOG-002`, `CHOICE-001`
-	 * - Out: `DIALOG-003`, `DIALOG-004`
+	 * - Out: `DIALOG-003`, `DIALOG-004`, `DIALOG-006`
 	 * `variable_0` = ``
-	 * `variable_0` = ``
+	 * `choice:014f503a-6688-429d-a5fe-801cf33f2410` = `17e98de3-1690-4ca4-8ea5-8070c15b1fe1`
 	 * `variable_0` = ``
 	 * ---
 	 * <image url="./_images/cond.webp" />
@@ -75,8 +75,7 @@ export enum LSDE_BLOCKS {
 	 * _"choice2"_
 	 * - Characters: `Gruht Tyron` (sad ×2), `Svelt Moon` (sad ×2), `lia` (sad ×2), `Boo` (sad ×2)
 	 * - Scene: `New Scene`
-	 * - In: `CHOICE-001`
-	 * - Out: `CHOICE-001`, `ACTION-001`, `DIALOG-005`
+	 * - Out: `ACTION-001`, `CHOICE-001`
 	 * ---
 	 * <image url="./_images/dialog.webp" />
 	 * <image url="./_images/char_gruht_tyron_0.png" />
@@ -119,12 +118,20 @@ export enum LSDE_BLOCKS {
 	 * ### 🟦[DIALOG] DIALOG-005
 	 * _"action fail"_
 	 * - Scene: `New Scene`
-	 * - In: `ACTION-001`, `DIALOG-001`
+	 * - In: `ACTION-001`
 	 * - Out: `DIALOG-004`
 	 * ---
 	 * <image url="./_images/dialog.webp" />
 	 */
 	newSceneDialog005 = '9b47c43c-4b06-4e37-bec6-2ee2597d4bae',
+	/**
+	 * ### 🟦[DIALOG] DIALOG-006
+	 * - Scene: `New Scene`
+	 * - In: `CONDITION-001`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	newSceneDialog006 = '5547d053-4173-4047-84f7-df30209a0752',
 }
 
 /**

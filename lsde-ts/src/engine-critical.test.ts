@@ -35,6 +35,7 @@ function makeBridge(): StateBridge {
 		evaluateCondition: () => true,
 		executeAction: vi.fn(),
 		resolveDictionary: () => '',
+		resolveCharacter: ( chars ) => chars[0],
 	};
 }
 

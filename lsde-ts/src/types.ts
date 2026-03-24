@@ -219,7 +219,7 @@ export interface BlueprintBlockBase {
  * Dialog block — displays text spoken by a character.
  *
  * @remarks
- * The first character in `metadata.characters` is exposed as `context.character` in the handler.
+ * The character is resolved by {@link StateBridge.resolveCharacter} and exposed as `context.character` in the handler.
  * When `nativeProperties.portPerCharacter` is enabled, each character gets a dedicated output port
  * and the handler must call `context.resolveCharacterPort(name)` to select which port to follow.
  *
@@ -593,6 +593,9 @@ export interface InitOptions {
  *   resolveDictionary: (group, key) => {
  *     return gameData.dictionaries[group]?.[key] ?? key;
  *   },
+ *   resolveCharacter: (characters) => {
+ *     return characters.find(c => party.includes(c.name));
+ *   },
  * };
  * engine.setStateBridge(bridge);
  * ```
@@ -608,6 +611,8 @@ export interface StateBridge {
 	executeAction: (action: ExportAction, signature?: ActionSignature) => void;
 	/** Resolve a dictionary value by group label and row key. Used when evaluating condition values or action parameters that reference dictionaries. */
 	resolveDictionary: (groupLabel: string, rowKey: string) => string | number | boolean;
+	/** Resolve which character to use for a block. Called for every block with the characters from `metadata.characters` (may be empty). Return the chosen character or `undefined` if none applies. */
+	resolveCharacter: (characters: BlockCharacter[]) => BlockCharacter | undefined;
 }
 
 /** Result of block validation. */
@@ -625,14 +630,14 @@ export type CleanupFn = () => void;
 
 /** Base context available to all block handlers. */
 export interface BaseBlockContext {
+	/** Character resolved by {@link StateBridge.resolveCharacter} for this block, or `undefined` if none. */
+	character: BlockCharacter | undefined;
 	/** Prevent the global (Tier 1) handler from executing after this scene handler. */
 	preventGlobalHandler: () => void;
 }
 
 /** Context for DIALOG block handlers. */
 export interface DialogContext extends BaseBlockContext {
-	/** First character assigned to this block, or null. */
-	character: BlockCharacter | null;
 	/** When portPerCharacter is enabled, specify which character port to follow. */
 	resolveCharacterPort: (characterName: string) => void;
 }

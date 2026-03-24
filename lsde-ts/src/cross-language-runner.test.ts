@@ -87,6 +87,7 @@ function buildStateBridge( config?: StateBridgeConfig ): StateBridge {
 		},
 		resolveDictionary: ( group: string, key: string ) =>
 			config?.dictionaries?.[`${ group }.${ key }`] ?? '',
+		resolveCharacter: ( chars ) => chars[0],
 	};
 }
 
