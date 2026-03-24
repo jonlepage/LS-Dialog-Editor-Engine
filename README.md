@@ -33,7 +33,7 @@ LSDE exports dialogue graphs (scenes, blocks, connections, dictionaries, signatu
 
 ## Documentation
 
-- [API Reference & Guides](https://jonlepage.github.io/LS-Dialog-Editor-Engine/) — Full documentation
+- <a href="https://jonlepage.github.io/LS-Dialog-Editor-Engine/" target="_blank">API Reference & Guides</a> — Full documentation
 
 ## License
 
