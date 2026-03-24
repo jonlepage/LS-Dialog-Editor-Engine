@@ -1,5 +1,4 @@
 // LSDE Dialog Engine — Handler registration + Tier 1/Tier 2 resolution
-// Implementation: PLAN.md §4
 
 import type {
 	BlockType, BlockHandler, BaseBlockContext, DialogContext, ChoiceContext,
@@ -79,7 +78,6 @@ export interface ResolvedHandlers {
 /**
  * Resolve which handlers to call for a given block.
  * Priority: onBlock(uuid) > scene.onType > engine.onType
- * @see PLAN.md §4
  */
 export function resolveHandler(
 	blockType: BlockType,

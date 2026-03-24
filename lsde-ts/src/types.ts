@@ -1,6 +1,5 @@
 // LSDE Dialog Engine — Type definitions
 // All interfaces and types for the engine.
-// Implementation: PLAN.md §3, §8
 //
 // These types are structurally compatible with the LSDE-generated
 // blueprint.types.ts. TypeScript's structural typing ensures any
@@ -35,7 +34,28 @@ export interface BlockProperty {
 	value: string | number | boolean;
 }
 
-/** Condition evaluated to control dialogue flow or choice visibility. Conditions are evaluated left-to-right with no operator precedence; an empty array passes (returns true). */
+/**
+ * Condition evaluated to control dialogue flow or choice visibility.
+ *
+ * @remarks
+ * Conditions are evaluated **left-to-right with no operator precedence**. The `chain` field
+ * on each condition determines how it combines with the accumulated result:
+ *
+ * - Empty array → `true` (no conditions = pass)
+ * - First condition → its raw boolean result (`chain` is ignored)
+ * - `chain = '&'` or absent → AND with the accumulated result
+ * - `chain = '|'` → OR with the accumulated result
+ *
+ * This means `A AND B OR C` evaluates as `(A AND B) OR C`, not `A AND (B OR C)`.
+ *
+ * The engine passes each condition to {@link StateBridge.evaluateCondition} individually.
+ * The StateBridge is responsible for interpreting `key`, `operator`, and `value` against
+ * your game state — the engine only handles the chaining logic.
+ *
+ * @see {@link ConditionBlock} for condition blocks
+ * @see {@link ChoiceItem.visibilityConditions} for choice filtering
+ * @see {@link StateBridge.evaluateCondition} for evaluation callback
+ */
 export interface ExportCondition {
 	/** Unique identifier for this condition instance. */
 	uuid: string;
@@ -73,7 +93,31 @@ export interface ChoiceItem {
 	visibilityConditions?: ExportCondition[];
 }
 
-/** LSDE native execution properties for a block. */
+/**
+ * LSDE native execution properties controlling how a block is dispatched by the engine.
+ *
+ * @remarks
+ * These properties affect the engine's execution flow, not the block's content:
+ *
+ * - **Async tracks**: When `isAsync = true`, the block runs on a parallel track independent
+ *   of the main flow. Async tracks skip `onBeforeBlock`, follow only one connection, and are
+ *   automatically cancelled when the scene ends.
+ *
+ * - **followNarrative**: Only meaningful when `isAsync = true`. The async track waits for
+ *   the main flow to advance before continuing. If `next()` was already called in the handler,
+ *   the pending advance executes immediately; otherwise the block is force-advanced (skipped).
+ *
+ * - **delay**: Consumed by `onBeforeBlock` — the engine does not enforce it automatically.
+ *   Your `onBeforeBlock` handler should read `block.nativeProperties.delay` and call
+ *   `resolve()` after the delay.
+ *
+ * - **portPerCharacter**: Creates one output port per character in `metadata.characters`.
+ *   The DIALOG handler must call `context.resolveCharacterPort(name)` to pick which port
+ *   to follow.
+ *
+ * @see {@link DialogBlock} for portPerCharacter usage
+ * @see {@link BeforeBlockArgs} for delay handling
+ */
 export interface NativeProperties {
 	/** Execute this block on a separate async track running in parallel with the main flow. */
 	isAsync?: boolean;
@@ -127,7 +171,29 @@ export interface BlockMetadata {
 	others?: Record<string, string | number | boolean | (string | number | boolean)[]>;
 }
 
-/** Common properties shared by all block types. Use the `type` field to narrow to a specific block type. */
+/**
+ * Common properties shared by all block types.
+ *
+ * @remarks
+ * All five block types ({@link DialogBlock}, {@link ChoiceBlock}, {@link ConditionBlock},
+ * {@link ActionBlock}, {@link NoteBlock}) extend this base. Use the `type` discriminant field
+ * to narrow to a specific block type in TypeScript:
+ *
+ * ```ts
+ * if (block.type === 'DIALOG') {
+ *   // block is DialogBlock here
+ *   console.log(block.dialogueText);
+ * }
+ * ```
+ *
+ * The `properties` array contains designer-defined key-value pairs from the editor's block
+ * configuration panel. `userProperties` is a free-form dictionary for narrative-designer data
+ * that doesn't fit the structured property model.
+ *
+ * @see {@link BlueprintBlock} for the discriminated union type
+ * @see {@link NativeProperties} for execution-related properties
+ * @see {@link BlockMetadata} for non-logic display metadata
+ */
 export interface BlueprintBlockBase {
 	/** Unique block identifier. */
 	uuid: string;
@@ -149,7 +215,31 @@ export interface BlueprintBlockBase {
 	isStartBlock?: boolean;
 }
 
-/** Dialog block — displays text spoken by a character. */
+/**
+ * Dialog block — displays text spoken by a character.
+ *
+ * @remarks
+ * The first character in `metadata.characters` is exposed as `context.character` in the handler.
+ * When `nativeProperties.portPerCharacter` is enabled, each character gets a dedicated output port
+ * and the handler must call `context.resolveCharacterPort(name)` to select which port to follow.
+ *
+ * If no `onDialog` handler is registered, the engine silently advances to the next block.
+ *
+ * @example
+ * ```ts
+ * engine.onDialog(({ block, context, next }) => {
+ *   const dialog = block as DialogBlock;
+ *   const text = dialog.dialogueText?.['en'] ?? '';
+ *   const char = context.character;
+ *   showDialogUI(char?.name, text);
+ *   next();
+ * });
+ * ```
+ *
+ * @see {@link DialogContext} for handler context
+ * @see {@link BlockCharacter} for character data
+ * @see {@link NativeProperties.portPerCharacter} for multi-port routing
+ */
 export interface DialogBlock extends BlueprintBlockBase {
 	type: 'DIALOG';
 	/** Hierarchical key for tree navigation and localization lookup. */
@@ -160,7 +250,34 @@ export interface DialogBlock extends BlueprintBlockBase {
 	dialogueText?: Record<string, string>;
 }
 
-/** Choice block — presents selectable options to the player. */
+/**
+ * Choice block — presents selectable options to the player.
+ *
+ * @remarks
+ * Before the handler is called, the engine filters `choices` through their `visibilityConditions`
+ * using {@link StateBridge.evaluateCondition}. The handler receives only visible choices via
+ * `context.choices`.
+ *
+ * The handler must call `context.selectChoice(uuid)` to pick a choice. The engine then follows
+ * the connection whose `fromPort` matches the selected choice UUID.
+ *
+ * If no `onChoice` handler is registered, the engine silently advances with no selection — the
+ * flow may end if no default connection exists.
+ *
+ * @example
+ * ```ts
+ * engine.onChoice(({ context, next }) => {
+ *   showChoicesUI(context.choices, (selectedUuid) => {
+ *     context.selectChoice(selectedUuid);
+ *     next();
+ *   });
+ * });
+ * ```
+ *
+ * @see {@link ChoiceItem} for choice structure
+ * @see {@link ChoiceContext} for handler context
+ * @see {@link ExportCondition} for visibility conditions
+ */
 export interface ChoiceBlock extends BlueprintBlockBase {
 	type: 'CHOICE';
 	/** Available player choices. Visibility is filtered at runtime via `visibilityConditions`. */
@@ -169,7 +286,32 @@ export interface ChoiceBlock extends BlueprintBlockBase {
 	note?: string;
 }
 
-/** Condition block — evaluates logic to branch the flow. True → port index 0, false → port index 1. */
+/**
+ * Condition block — evaluates logic to branch the dialogue flow.
+ *
+ * @remarks
+ * If no `onCondition` handler is registered, the engine automatically evaluates the `conditions`
+ * array using {@link StateBridge.evaluateCondition}. Conditions are chained left-to-right with
+ * no operator precedence: `'&'` = AND, `'|'` = OR. An empty array evaluates to `true`.
+ *
+ * The result maps to output ports: `true` follows port index 0, `false` follows port index 1.
+ * When using a handler, call `context.resolve(result)` to set the branch direction.
+ *
+ * @example
+ * ```ts
+ * // Custom handler — overrides StateBridge auto-evaluation
+ * engine.onCondition(({ block, context, next }) => {
+ *   const cond = block as ConditionBlock;
+ *   const result = myCustomEvaluator(cond.conditions ?? []);
+ *   context.resolve(result); // true → port 0, false → port 1
+ *   next();
+ * });
+ * ```
+ *
+ * @see {@link ExportCondition} for condition structure and chaining rules
+ * @see {@link ConditionContext} for handler context
+ * @see {@link StateBridge.evaluateCondition} for automatic evaluation
+ */
 export interface ConditionBlock extends BlueprintBlockBase {
 	type: 'CONDITION';
 	/** Conditions to evaluate. Chained left-to-right with `chain` operators. */
@@ -178,7 +320,39 @@ export interface ConditionBlock extends BlueprintBlockBase {
 	note?: string;
 }
 
-/** Action block — triggers game state changes. */
+/**
+ * Action block — triggers game state changes.
+ *
+ * @remarks
+ * If no `onAction` handler is registered, the engine automatically executes each action in the
+ * `actions` array using {@link StateBridge.executeAction}, passing the matching
+ * {@link ActionSignature} when available.
+ *
+ * The block has two output ports: `"then"` (success) and `"catch"` (failure). When using a
+ * handler, call `context.resolve()` for success or `context.reject(error)` for failure. If no
+ * `"catch"` connection exists, rejection falls back to the `"then"` port.
+ *
+ * @example
+ * ```ts
+ * engine.onAction(({ block, context, next }) => {
+ *   const act = block as ActionBlock;
+ *   try {
+ *     for (const action of act.actions ?? []) {
+ *       executeGameAction(action);
+ *     }
+ *     context.resolve();   // → "then" port
+ *   } catch (err) {
+ *     context.reject(err); // → "catch" port (fallback "then")
+ *   }
+ *   next();
+ * });
+ * ```
+ *
+ * @see {@link ExportAction} for action structure
+ * @see {@link ActionSignature} for reusable action type definitions
+ * @see {@link ActionContext} for handler context
+ * @see {@link StateBridge.executeAction} for automatic execution
+ */
 export interface ActionBlock extends BlueprintBlockBase {
 	type: 'ACTION';
 	/** Actions to execute. Each references an `ActionSignature` via `actionId`. */
@@ -195,7 +369,32 @@ export interface NoteBlock extends BlueprintBlockBase {
 /** Discriminated union of all block types. Narrow on the `type` field. */
 export type BlueprintBlock = DialogBlock | ChoiceBlock | ConditionBlock | ActionBlock | NoteBlock;
 
-/** A scene containing a group of related dialogue blocks and their connections. */
+/**
+ * A scene — an independent dialogue subgraph with its own entry point.
+ *
+ * @remarks
+ * A scene is the unit of execution in the engine. Call `engine.scene(uuid)` to obtain a
+ * {@link SceneHandle}, then `handle.start()` to begin traversing from `entryBlockId`.
+ *
+ * The `blocks` array contains all blocks in this scene. The `connections` array defines the
+ * directed edges between blocks (output port → input port). Together they form a directed
+ * graph that the engine traverses at runtime.
+ *
+ * Multiple scenes can run concurrently — each gets its own `SceneHandle` with independent
+ * state, visited blocks, and async tracks.
+ *
+ * @example
+ * ```ts
+ * const sceneId = blueprint.scenes[0].uuid;
+ * const handle = engine.scene(sceneId);
+ * handle.onDialog(({ block, next }) => { next(); });
+ * handle.start();
+ * ```
+ *
+ * @see {@link SceneHandle} for runtime scene control
+ * @see {@link BlueprintConnection} for edge structure
+ * @see {@link BlueprintBlock} for block types
+ */
 export interface BlueprintScene {
 	/** Unique scene identifier. */
 	uuid: string;
@@ -257,7 +456,44 @@ export interface ActionSignature {
 	params: SignatureParam[];
 }
 
-/** Root container for exported blueprint data. Contains all scenes, dictionaries, signatures, and metadata. */
+/**
+ * Root container for exported blueprint data.
+ *
+ * @remarks
+ * This is the top-level JSON structure exported by the LS-Dialog editor. Pass it to
+ * `engine.init({ data })` to load and validate the blueprint. The engine indexes all scenes,
+ * blocks, and connections internally — the original object is not mutated.
+ *
+ * The `locales` array lists all available languages. Call `engine.setLocale(code)` to store
+ * the active locale — your handlers are responsible for reading the appropriate key from
+ * `DialogBlock.dialogueText` and `ChoiceItem.dialogueText`.
+ *
+ * Use the optional `check` parameter in `init()` to cross-validate blueprint references
+ * (signatures, dictionaries, characters) against your game's known capabilities.
+ *
+ * @example
+ * ```ts
+ * import blueprint from './blueprint.json';
+ *
+ * const engine = new DialogueEngine();
+ * const report = engine.init({
+ *   data: blueprint as BlueprintExport,
+ *   check: {
+ *     signatures: ['set_flag', 'play_sound'],
+ *     characters: ['Alice', 'Bob'],
+ *   },
+ * });
+ *
+ * if (report.errors.length > 0) {
+ *   console.error('Invalid blueprint:', report.errors);
+ * }
+ * ```
+ *
+ * @see {@link BlueprintScene} for scene structure
+ * @see {@link ActionSignature} for action type definitions
+ * @see {@link Dictionary} for dictionary groups
+ * @see {@link DiagnosticReport} for validation results
+ */
 export interface BlueprintExport {
 	/** Schema version of this export format. */
 	version: string;
@@ -298,7 +534,7 @@ export interface DiagnosticStats {
 	connectionCount: number;
 }
 
-/** Result of `engine.init()` — validation report. @see PLAN.md §3.1 */
+/** Result of `engine.init()` — validation report. */
 export interface DiagnosticReport {
 	errors: DiagnosticEntry[];
 	warnings: DiagnosticEntry[];
@@ -321,14 +557,63 @@ export interface InitOptions {
 	check?: CheckOptions;
 }
 
-/** Bridge between the engine and the game state. @see PLAN.md §3.2 */
+/**
+ * Bridge between the dialogue engine and your game state.
+ *
+ * @remarks
+ * The StateBridge connects blueprint-driven conditions, actions, and dictionary lookups to
+ * your game's runtime state. It complements the handler system — handlers (`onDialog`,
+ * `onChoice`, etc.) control UI and game flow, while the StateBridge provides data-level
+ * evaluation and execution.
+ *
+ * The engine calls StateBridge methods **automatically** in these situations:
+ *
+ * | Situation | Method called |
+ * |-----------|---------------|
+ * | CONDITION block without `onCondition` handler | `evaluateCondition()` |
+ * | Choice `visibilityConditions` filtering | `evaluateCondition()` (always, even with an `onCondition` handler) |
+ * | ACTION block without `onAction` handler | `executeAction()` |
+ * | Dictionary parameter resolution | `resolveDictionary()` |
+ *
+ * If you register an `onCondition` handler, it replaces auto-evaluation for **CONDITION blocks
+ * only**. Choice visibility filtering still calls `evaluateCondition()` regardless.
+ * Similarly, an `onAction` handler replaces auto-execution for ACTION blocks only.
+ *
+ * @example
+ * ```ts
+ * const bridge: StateBridge = {
+ *   evaluateCondition: (cond) => {
+ *     const val = gameState.get(cond.key);
+ *     switch (cond.operator) {
+ *       case '==': return val === cond.value;
+ *       case '!=': return val !== cond.value;
+ *       default:   return false;
+ *     }
+ *   },
+ *   executeAction: (action, signature) => {
+ *     gameActions.dispatch(action.actionId, action.params);
+ *   },
+ *   resolveDictionary: (group, key) => {
+ *     return gameData.dictionaries[group]?.[key] ?? key;
+ *   },
+ * };
+ * engine.setStateBridge(bridge);
+ * ```
+ *
+ * @see {@link ExportCondition} for condition structure
+ * @see {@link ExportAction} for action structure
+ * @see {@link ActionSignature} for action type definitions
+ */
 export interface StateBridge {
+	/** Evaluate a single condition against your game state. Return `true` if the condition passes. Called for CONDITION blocks (auto-evaluation) and choice visibility filtering. */
 	evaluateCondition: (condition: ExportCondition) => boolean;
+	/** Execute a game action. Called for ACTION blocks when no `onAction` handler is registered. The matching `signature` is provided when available in the blueprint. */
 	executeAction: (action: ExportAction, signature?: ActionSignature) => void;
+	/** Resolve a dictionary value by group label and row key. Used when evaluating condition values or action parameters that reference dictionaries. */
 	resolveDictionary: (groupLabel: string, rowKey: string) => string | number | boolean;
 }
 
-/** Result of block validation. @see PLAN.md §3.3 */
+/** Result of block validation. */
 export interface ValidationResult {
 	/** Whether the block passed validation. When `false`, the `onInvalidateBlock` handler is called. */
 	valid: boolean;
@@ -341,7 +626,7 @@ export type CleanupFn = () => void;
 
 // ─── Context Types ───────────────────────────────────────────────────────────
 
-/** Base context available to all block handlers. @see PLAN.md §3.6 */
+/** Base context available to all block handlers. */
 export interface BaseBlockContext {
 	/** Prevent the global (Tier 1) handler from executing after this scene handler. */
 	preventGlobalHandler: () => void;
@@ -389,7 +674,26 @@ export interface SceneContext {
 
 // ─── Handler Types ───────────────────────────────────────────────────────────
 
-/** Arguments passed to any block handler. @see PLAN.md §3.5 */
+/**
+ * Arguments passed to any block handler.
+ *
+ * @remarks
+ * Every block handler receives this common structure. The generic `C` parameter provides
+ * the type-specific context ({@link DialogContext}, {@link ChoiceContext}, etc.).
+ *
+ * The engine uses a **two-tier handler system**:
+ * 1. **Tier 2 (scene)**: registered via `handle.onDialog()`, `handle.onChoice()`, etc.
+ * 2. **Tier 1 (global)**: registered via `engine.onDialog()`, `engine.onChoice()`, etc.
+ *
+ * When a block is dispatched, the scene handler (Tier 2) is called first. The global handler
+ * (Tier 1) is then called **after**, unless `context.preventGlobalHandler()` was invoked.
+ *
+ * A block-specific override via `handle.onBlock(uuid, handler)` takes highest priority.
+ *
+ * @see {@link BlockHandler} for the handler function signature
+ * @see {@link SceneHandle} for scene-level handler registration
+ * @see {@link BaseBlockContext.preventGlobalHandler} for suppressing Tier 1
+ */
 export interface BlockHandlerArgs<C extends BaseBlockContext> {
 	/** The scene handle that owns this block. Use it to inspect state, cancel the scene, etc. */
 	scene: SceneHandle;
@@ -401,10 +705,31 @@ export interface BlockHandlerArgs<C extends BaseBlockContext> {
 	next: () => void;
 }
 
-/** A block handler function. May return a cleanup function. @see PLAN.md §3.5 */
+/**
+ * A block handler function. May return a cleanup function.
+ *
+ * @remarks
+ * The handler is called when the engine dispatches a block of the matching type. It **must**
+ * call `next()` exactly once to advance the flow to the next block.
+ *
+ * If the handler returns a function, it is stored as a **cleanup function** and called when
+ * the engine moves to the next block — use this to tear down UI, stop timers, etc.
+ *
+ * @example
+ * ```ts
+ * engine.onDialog(({ block, next }) => {
+ *   const el = showDialogUI(block);
+ *   next();
+ *   return () => el.remove(); // cleanup when leaving this block
+ * });
+ * ```
+ *
+ * @see {@link CleanupFn} for the cleanup function type
+ * @see {@link BlockHandlerArgs} for handler arguments
+ */
 export type BlockHandler<C extends BaseBlockContext> = (args: BlockHandlerArgs<C>) => CleanupFn | void;
 
-/** Arguments for the onValidateNextBlock handler. @see PLAN.md §3.3 */
+/** Arguments for the onValidateNextBlock handler. */
 export interface ValidateNextBlockArgs {
 	nextBlock: BlueprintBlock;
 	fromBlock: BlueprintBlock | null;
@@ -424,7 +749,7 @@ export interface InvalidateBlockArgs {
 /** Handler called when a block fails validation. */
 export type InvalidateBlockHandler = (args: InvalidateBlockArgs) => void;
 
-/** Arguments for the onBeforeBlock handler. @see PLAN.md §3.4 */
+/** Arguments for the onBeforeBlock handler. */
 export interface BeforeBlockArgs {
 	block: BlueprintBlock;
 	scene: SceneHandle;
@@ -441,12 +766,45 @@ export interface SceneLifecycleArgs {
 	context: SceneContext;
 }
 
-/** Handler for scene enter/exit events. @see PLAN.md §3.7 */
+/** Handler for scene enter/exit events. */
 export type SceneLifecycleHandler = (args: SceneLifecycleArgs) => void;
 
 // ─── SceneHandle Interface ──────────────────────────────────────────────────
 
-/** Public interface for a scene handle. @see PLAN.md §3.8 */
+/**
+ * Public interface for controlling a running scene.
+ *
+ * @remarks
+ * Obtain a `SceneHandle` by calling `engine.scene(sceneUuid)`. Use it to register
+ * scene-specific (Tier 2) handlers, then call `start()` to begin traversal from the
+ * scene's entry block.
+ *
+ * **Lifecycle**:
+ * 1. `start()` → `onSceneEnter` fires → first block is dispatched
+ * 2. Blocks are dispatched sequentially, following connections via port resolution
+ * 3. Scene ends when: no more connections, or `cancel()` is called
+ * 4. All async tracks are cancelled → current block cleanup runs → `onSceneExit` fires
+ *
+ * Scene-level handlers (`onDialog`, `onChoice`, etc.) are called **before** global handlers.
+ * Both tiers execute unless the scene handler calls `context.preventGlobalHandler()`.
+ * Use `onBlock(uuid, handler)` for a block-specific handler that takes highest priority.
+ *
+ * @example
+ * ```ts
+ * const handle = engine.scene(sceneId);
+ * handle.onDialog(({ block, context, next }) => {
+ *   showText(block.dialogueText?.['en']);
+ *   next();
+ * });
+ * handle.onExit(({ scene }) => {
+ *   console.log('Scene finished, visited:', scene.getVisitedBlocks().size);
+ * });
+ * handle.start();
+ * ```
+ *
+ * @see {@link BlockHandlerArgs} for handler arguments
+ * @see {@link BlueprintScene} for the scene data structure
+ */
 export interface SceneHandle {
 	/** Start the scene flow from the entry block. */
 	start(): void;
@@ -481,7 +839,7 @@ export interface SceneHandle {
 
 // ─── Port Resolution Types ──────────────────────────────────────────────────
 
-/** Input data for port resolution. @see PLAN.md §5 */
+/** Input data for port resolution. */
 export interface PortResolutionInput {
 	/** The block whose output port is being resolved. Its `type` determines the routing rules. */
 	block: BlueprintBlock;

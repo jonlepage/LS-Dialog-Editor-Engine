@@ -1,6 +1,5 @@
 // LSDE Dialog Engine — Port resolution (critical algorithm)
 // Must be identical across all runtimes.
-// Implementation: PLAN.md §5
 
 import type { PortResolutionInput, PortResolutionResult, BlueprintConnection } from './types.js';
 
@@ -9,7 +8,6 @@ const NONE: PortResolutionResult = { connections: [] };
 /**
  * Determine which outgoing connections to follow based on block type and context.
  * Returns ALL matching connections — the caller decides which are main vs async tracks.
- * @see PLAN.md §5
  */
 export function resolvePort( input: PortResolutionInput ): PortResolutionResult {
 	const { block, connections } = input;

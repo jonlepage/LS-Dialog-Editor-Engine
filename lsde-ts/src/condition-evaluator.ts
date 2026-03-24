@@ -1,5 +1,4 @@
 // LSDE Dialog Engine — Condition chain evaluation (AND/OR)
-// Implementation: PLAN.md §7
 
 import type { ExportCondition, ChoiceItem } from './types.js';
 
@@ -8,7 +7,6 @@ import type { ExportCondition, ChoiceItem } from './types.js';
  * - Empty array → true (no conditions = pass)
  * - First condition: standalone result
  * - Subsequent conditions: '&' = AND, '|' = OR with accumulated result
- * @see PLAN.md §7
  */
 export function evaluateConditionChain(
 	conditions: ExportCondition[],

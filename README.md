@@ -33,10 +33,7 @@ LSDE exports dialogue graphs (scenes, blocks, connections, dictionaries, signatu
 
 ## Documentation
 
-- [API Reference & Guides](https://jonlepage.github.io/LS-Dialog-Editor-Engine/) — Full documentation (TypeDoc + VitePress)
-- [PLAN.md](PLAN.md) — Complete specification (source of truth)
-- [concept/](concept/) — Non-functional prototype illustrating the design
-- [blueprints/](blueprints/) — Test data, types, and schemas exported from LSDE
+- [API Reference & Guides](https://jonlepage.github.io/LS-Dialog-Editor-Engine/) — Full documentation
 
 ## License
 

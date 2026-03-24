@@ -1,26 +1,51 @@
-/* Sharp corners — no rounded borders */
+/* Sharp corners — kill all rounded borders globally */
 :root {
   --vp-border-radius: 1px;
 }
 
-.VPButton {
+/* Nuclear option: override every border-radius in VitePress */
+*,
+*::before,
+*::after {
   border-radius: 1px !important;
 }
 
-.VPFeature {
+/* Scrollbar — thin, sharp, no round thumb */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--vp-c-bg-soft);
+  border-radius: 0 !important;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--vp-c-divider);
+  border-radius: 0 !important;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vp-c-text-3);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--vp-c-divider) var(--vp-c-bg-soft);
+}
+
+/* VPSwitch (dark mode toggle) — rectangle, not pill */
+.VPSwitch {
   border-radius: 1px !important;
 }
 
-.VPNavBarSearch .search-input,
-.VPNavBarSearch button,
-.DocSearch-Button {
+.VPSwitch .check {
   border-radius: 1px !important;
 }
 
-.vp-doc div[class*="language-"] {
-  border-radius: 1px;
-}
-
-.vp-doc .custom-block {
-  border-radius: 1px;
+.VPSwitchAppearance .sun,
+.VPSwitchAppearance .moon {
+  border-radius: 0 !important;
 }

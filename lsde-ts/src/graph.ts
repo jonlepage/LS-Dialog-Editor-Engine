@@ -1,6 +1,5 @@
 // LSDE Dialog Engine — Graph indexing and lookups
 // Indexes blocks by UUID, connections by blockId.
-// Implementation: PLAN.md §3.1
 
 import type {
 	BlueprintBlock, BlueprintConnection, BlueprintScene,
@@ -12,7 +11,6 @@ import type {
 /**
  * Indexed representation of a single scene for O(1) block and connection lookups.
  * Built once during `init()`, used throughout traversal.
- * @see PLAN.md §3.1
  */
 export class SceneGraph {
 

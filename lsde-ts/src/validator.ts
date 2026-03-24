@@ -1,5 +1,4 @@
 // LSDE Dialog Engine — Init validation + diagnostic report
-// Implementation: PLAN.md §3.1
 
 import type {
 	InitOptions, DiagnosticReport, DiagnosticEntry, DiagnosticStats,
@@ -14,7 +13,6 @@ import type {
  * If `check` is provided, also warns about unknown signatures, dictionaries, and characters.
  *
  * @returns DiagnosticReport with errors, warnings, and stats.
- * @see PLAN.md §3.1
  */
 export function validateBlueprint( options: InitOptions ): DiagnosticReport {
 	const errors: DiagnosticEntry[] = [];

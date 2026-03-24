@@ -1,5 +1,4 @@
 // LSDE Dialog Engine — Public facade
-// Implementation: PLAN.md §3
 
 import type {
 	InitOptions, DiagnosticReport, StateBridge, SceneHandle,
@@ -12,7 +11,7 @@ import { BlueprintGraph } from './graph.js';
 import { HandlerRegistry } from './handler-registry.js';
 import { SceneHandleImpl } from './scene-handle.js';
 
-/** LSDE Dialog Engine — callback-driven graph dispatcher. @see PLAN.md §3 */
+/** LSDE Dialog Engine — callback-driven graph dispatcher. */
 export class DialogueEngine {
 
 	private graph: BlueprintGraph | null = null;
@@ -69,34 +68,34 @@ export class DialogueEngine {
 
 	// ─── Type handlers — §3.5 ────────────────────────────────────────────
 
-	/** Register a global handler for DIALOG blocks. May return a cleanup function. @see PLAN.md §3.5 */
+	/** Register a global handler for DIALOG blocks. May return a cleanup function. */
 	onDialog( handler: BlockHandler<DialogContext> ): void {
 		this.globalRegistry.dialogHandler = handler;
 	}
 
-	/** Register a global handler for CHOICE blocks. Choices are pre-filtered by visibilityConditions. @see PLAN.md §3.5 */
+	/** Register a global handler for CHOICE blocks. Choices are pre-filtered by visibilityConditions. */
 	onChoice( handler: BlockHandler<ChoiceContext> ): void {
 		this.globalRegistry.choiceHandler = handler;
 	}
 
-	/** Register a global handler for CONDITION blocks. If absent, the engine auto-evaluates via StateBridge. @see PLAN.md §3.5 */
+	/** Register a global handler for CONDITION blocks. If absent, the engine auto-evaluates via StateBridge. */
 	onCondition( handler: BlockHandler<ConditionContext> ): void {
 		this.globalRegistry.conditionHandler = handler;
 	}
 
-	/** Register a global handler for ACTION blocks. If absent, the engine auto-executes via StateBridge. @see PLAN.md §3.5 */
+	/** Register a global handler for ACTION blocks. If absent, the engine auto-executes via StateBridge. */
 	onAction( handler: BlockHandler<ActionContext> ): void {
 		this.globalRegistry.actionHandler = handler;
 	}
 
 	// ─── Scene lifecycle — §3.7 ──────────────────────────────────────────
 
-	/** Register a handler called when any scene starts. @see PLAN.md §3.7 */
+	/** Register a handler called when any scene starts. */
 	onSceneEnter( handler: SceneLifecycleHandler ): void {
 		this.globalRegistry.sceneEnterHandler = handler;
 	}
 
-	/** Register a handler called when any scene ends (natural or cancelled). @see PLAN.md §3.7 */
+	/** Register a handler called when any scene ends (natural or cancelled). */
 	onSceneExit( handler: SceneLifecycleHandler ): void {
 		this.globalRegistry.sceneExitHandler = handler;
 	}

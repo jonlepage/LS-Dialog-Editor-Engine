@@ -2,7 +2,7 @@ import { defineConfig } from 'vitepress';
 import typedocSidebar from '../api-ref/typedoc-sidebar.json';
 
 export default defineConfig({
-	title: 'LSDE Dialog Engine',
+	title: 'LSDEDE',
 	description: 'Callback-driven graph dispatcher for interactive dialogue blueprints',
 	base: '/LS-Dialog-Editor-Engine/',
 
@@ -17,7 +17,7 @@ export default defineConfig({
 				{
 					text: 'Introduction',
 					items: [
-						{ text: 'What is LSDE?', link: '/guide/what-is-lsde' },
+						{ text: 'What is LSDEDE?', link: '/guide/what-is-lsde' },
 						{ text: 'Getting Started', link: '/guide/getting-started' },
 					],
 				},

@@ -1,5 +1,4 @@
 // LSDE Dialog Engine — SceneHandle (Tier 2) + traversal loop
-// Implementation: PLAN.md §3.8, §6
 
 import type {
 	BlueprintBlock, SceneHandle,
@@ -252,7 +251,7 @@ class AsyncTrack {
 
 // ─── SceneHandleImpl ─────────────────────────────────────────────────────────
 
-/** Concrete implementation of SceneHandle. @see PLAN.md §3.8, §6 */
+/** Concrete implementation of SceneHandle. */
 export class SceneHandleImpl implements SceneHandle {
 
 	private readonly sceneGraph: SceneGraph;
@@ -379,7 +378,7 @@ export class SceneHandleImpl implements SceneHandle {
 		return this.createContext( block );
 	}
 
-	// ─── Traversal loop — PLAN.md §6 ────────────────────────────────────
+	// ─── Traversal loop ─────────────────────────────────────────────────
 
 	private processBlock( block: BlueprintBlock ): void {
 		if ( this.cancelled ) return;
