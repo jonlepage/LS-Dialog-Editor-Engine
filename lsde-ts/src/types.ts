@@ -11,19 +11,27 @@
 /** All possible block types in a blueprint. */
 export type BlockType = 'DIALOG' | 'CHOICE' | 'CONDITION' | 'ACTION' | 'NOTE';
 
-/** Directed connection between two blocks in the blueprint. */
+/** Directed connection between two blocks in the blueprint. Connections define the dialogue flow by linking output ports of source blocks to input ports of target blocks. */
 export interface BlueprintConnection {
+	/** Unique identifier for this connection. */
 	id: string;
+	/** UUID of the source block. */
 	fromId: string;
+	/** UUID of the target block. */
 	toId: string;
+	/** Output port identifier on the source block. For CHOICE blocks: the selected choice UUID. For ACTION blocks: `"then"` or `"catch"`. */
 	fromPort: string;
+	/** Input port identifier on the target block. */
 	toPort: string;
+	/** Zero-based index of the output port. For CONDITION blocks: 0 = true, 1 = false. For DIALOG with `portPerCharacter`: index of the character. */
 	fromPortIndex?: number;
 }
 
 /** Generic key-value property attached to a block. */
 export interface BlockProperty {
+	/** Property name or identifier. */
 	key: string;
+	/** Property value. */
 	value: string | number | boolean;
 }
 
@@ -53,10 +61,15 @@ export interface ExportAction {
 
 /** Player choice option within a choice block. */
 export interface ChoiceItem {
+	/** Unique identifier for this choice. */
 	uuid: string;
+	/** Hierarchical key for localization lookup. */
 	structureKey: string;
+	/** Display label for editor reference. */
 	label?: string;
+	/** Localized text map: `{ locale -> text }`. */
 	dialogueText?: Record<string, string>;
+	/** Conditions controlling whether this choice is visible. If all pass (or none set), the choice is shown. */
 	visibilityConditions?: ExportCondition[];
 }
 
@@ -90,65 +103,91 @@ export interface BlockCharacter {
 	emotionIntensity?: number;
 }
 
-/** Screenshot captured from the editor. */
+/** Screenshot or image captured from the editor for documentation. */
 export interface BlockScreenshot {
+	/** Image source as a data URL (base64) or file path. */
 	src: string;
+	/** Optional caption or description. */
 	note?: string;
 }
 
-/** Non-logic metadata for display and organization. */
+/** Non-logic metadata for display and organization. Should not affect game logic. */
 export interface BlockMetadata {
+	/** Visual color coding (hex) assigned by the designer. */
 	color?: string;
+	/** Free-form designer notes. Not displayed to players. */
 	comments?: string;
+	/** Contextual tags for categorization and filtering. */
 	tags?: string[];
+	/** Screenshots captured from the editor for this block. */
 	screenShots?: BlockScreenshot[];
+	/** Characters (actors) assigned to this block. */
 	characters?: BlockCharacter[];
+	/** Additional designer-defined metadata key-value pairs. */
 	others?: Record<string, string | number | boolean | (string | number | boolean)[]>;
 }
 
-/** Common properties shared by all block types. */
+/** Common properties shared by all block types. Use the `type` field to narrow to a specific block type. */
 export interface BlueprintBlockBase {
+	/** Unique block identifier. */
 	uuid: string;
+	/** Block type determining behavior and rendering. */
 	type: BlockType;
+	/** Display label assigned in the editor. */
 	label?: string;
+	/** Hierarchy of parent folder labels providing structural context. */
 	parentLabels?: string[];
+	/** Custom key-value properties defined by block configuration. */
 	properties: BlockProperty[];
+	/** User-defined custom properties dictionary set by the narrative designer. */
 	userProperties?: Record<string, string | number | boolean>;
+	/** LSDE native execution properties (async, delay, portPerCharacter, etc.). */
 	nativeProperties?: NativeProperties;
+	/** Non-logic metadata for display and organization. */
 	metadata?: BlockMetadata;
+	/** When true, this block is the entry point of the scene. Only one per scene. */
 	isStartBlock?: boolean;
 }
 
 /** Dialog block — displays text spoken by a character. */
 export interface DialogBlock extends BlueprintBlockBase {
 	type: 'DIALOG';
+	/** Hierarchical key for tree navigation and localization lookup. */
 	structureKey?: string;
+	/** Raw text content in the primary language. */
 	content?: string;
+	/** Localized text map: `{ locale -> text }`. */
 	dialogueText?: Record<string, string>;
 }
 
 /** Choice block — presents selectable options to the player. */
 export interface ChoiceBlock extends BlueprintBlockBase {
 	type: 'CHOICE';
+	/** Available player choices. Visibility is filtered at runtime via `visibilityConditions`. */
 	choices?: ChoiceItem[];
+	/** Designer note. Not displayed to players. */
 	note?: string;
 }
 
-/** Condition block — evaluates logic to branch the flow. */
+/** Condition block — evaluates logic to branch the flow. True → port index 0, false → port index 1. */
 export interface ConditionBlock extends BlueprintBlockBase {
 	type: 'CONDITION';
+	/** Conditions to evaluate. Chained left-to-right with `chain` operators. */
 	conditions?: ExportCondition[];
+	/** Designer note. Not displayed to players. */
 	note?: string;
 }
 
 /** Action block — triggers game state changes. */
 export interface ActionBlock extends BlueprintBlockBase {
 	type: 'ACTION';
+	/** Actions to execute. Each references an `ActionSignature` via `actionId`. */
 	actions?: ExportAction[];
+	/** Designer note. Not displayed to players. */
 	note?: string;
 }
 
-/** Note block — designer documentation, never executed. */
+/** Note block — designer documentation, never executed at runtime. */
 export interface NoteBlock extends BlueprintBlockBase {
 	type: 'NOTE';
 }
@@ -156,56 +195,85 @@ export interface NoteBlock extends BlueprintBlockBase {
 /** Discriminated union of all block types. Narrow on the `type` field. */
 export type BlueprintBlock = DialogBlock | ChoiceBlock | ConditionBlock | ActionBlock | NoteBlock;
 
-/** A scene containing dialogue blocks and their connections. */
+/** A scene containing a group of related dialogue blocks and their connections. */
 export interface BlueprintScene {
+	/** Unique scene identifier. */
 	uuid: string;
+	/** Scene name assigned by the designer. */
 	label: string;
+	/** Scene-level designer notes. */
 	note?: string;
+	/** UUID of the entry block for this scene. */
 	entryBlockId?: string;
+	/** Scene creation or last modification date. */
 	date: string;
+	/** All blocks contained within this scene. */
 	blocks: BlueprintBlock[];
+	/** All connections defining the dialogue flow in this scene. */
 	connections: BlueprintConnection[];
 }
 
-/** Dictionary row entry. */
+/** A single entry in a dictionary group. */
 export interface DictionaryRow {
+	/** Key identifier referenced in conditions and action parameters. */
 	key: string;
+	/** Optional description for this dictionary entry. */
 	note?: string;
 }
 
-/** Dictionary group for conditions and action parameters. */
+/** Dictionary group defining reusable key-value pairs for conditions and actions. */
 export interface Dictionary {
+	/** Unique identifier for this dictionary group. */
 	uuid: string;
+	/** Display name, used as prefix in condition keys (e.g. `"groupLabel.rowKey"`). */
 	label?: string;
+	/** Data type of values in this dictionary. Determines how condition values are parsed. */
 	valueType: 'string' | 'number' | 'boolean';
+	/** All entries in this dictionary group. */
 	rows: DictionaryRow[];
 }
 
 /** Parameter definition for an action signature. */
 export interface SignatureParam {
+	/** Display label for this parameter. */
 	label?: string;
+	/** Data type of this parameter. */
 	type: 'boolean' | 'string' | 'number' | 'enum' | 'dictionary';
+	/** UUID of the dictionary group this parameter references. Only when `type` is `"dictionary"`. */
 	dictionaryGroupUuid?: string;
+	/** Available options when `type` is `"enum"`. */
 	enumOptions?: { id: string; label?: string }[];
 }
 
-/** Action signature describing a reusable action type. */
+/** Action signature defining a reusable action type. Map `id` to your engine's action handlers. */
 export interface ActionSignature {
+	/** Unique identifier for this signature. */
 	uuid: string;
+	/** Short action type identifier (e.g. "set_flag"). Referenced by `ExportAction.actionId`. */
 	id: string;
+	/** Human-readable description of what this action does. */
 	label?: string;
+	/** Parameter definitions describing the expected inputs. */
 	params: SignatureParam[];
 }
 
-/** Root container for exported blueprint data. */
+/** Root container for exported blueprint data. Contains all scenes, dictionaries, signatures, and metadata. */
 export interface BlueprintExport {
+	/** Schema version of this export format. */
 	version: string;
+	/** ISO 8601 timestamp of when this export was generated. */
 	exportDate: string;
+	/** Name of the LSDE project. */
 	projectName?: string;
+	/** Primary language locale code (e.g. "fr", "en"). */
 	primaryLanguage?: string;
+	/** All language locale codes included in this export. */
 	locales: string[];
+	/** Dictionary groups for conditions and action parameters. */
 	dictionaries?: Dictionary[];
+	/** Action signature definitions describing available action types. */
 	signatures?: ActionSignature[];
+	/** All exported scenes. */
 	scenes: BlueprintScene[];
 }
 
