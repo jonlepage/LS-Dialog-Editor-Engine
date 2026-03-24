@@ -6,15 +6,20 @@ LSDE exports dialogue graphs (scenes, blocks, connections, dictionaries, signatu
 
 ## Runtimes
 
-| Runtime | Language | Target |
-|---------|----------|--------|
-| [lsde-ts](lsde-ts/) | TypeScript | Reference implementation |
-| [lsde-csharp](lsde-csharp/) | C# | Unity, .NET |
-| [lsde-gdscript](lsde-gdscript/) | GDScript | Godot 4 |
-| [lsde-cpp](lsde-cpp/) | C++ | Unreal, custom engines |
-| [lsde-rust](lsde-rust/) | Rust | Native |
-| [lsde-lua](lsde-lua/) | Lua | Defold, LÖVE |
-| [lsde-python](lsde-python/) | Python | Tooling, prototyping |
+[![TypeScript](lsde-ts/banner.png)](lsde-ts/)
+[![C#](lsde-csharp/banner.png)](lsde-csharp/)
+[![C++](lsde-cpp/banner.png)](lsde-cpp/)
+[![GDScript](lsde-gdscript/banner.png)](lsde-gdscript/)
+
+| Runtime | Language | Target | Tests |
+|---------|----------|--------|-------|
+| [lsde-ts](lsde-ts/) | TypeScript | Reference implementation | 216/216 |
+| [lsde-csharp](lsde-csharp/) | C# | Unity, .NET | 42/42 |
+| [lsde-cpp](lsde-cpp/) | C++ | Unreal, custom engines | 40/42 |
+| [lsde-gdscript](lsde-gdscript/) | GDScript | Godot 4 | 42/42 |
+| [lsde-rust](lsde-rust/) | Rust | Native | planned |
+| [lsde-lua](lsde-lua/) | Lua | Defold, LOVE | planned |
+| [lsde-python](lsde-python/) | Python | Tooling, prototyping | planned |
 
 ## Principles
 
