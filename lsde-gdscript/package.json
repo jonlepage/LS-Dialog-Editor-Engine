@@ -1,0 +1,10 @@
+{
+  "name": "@lsde/dialog-engine-gdscript",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Task runner for the GDScript LSDE Dialog Engine (requires Godot 4.6+)",
+  "scripts": {
+    "test": "\"D:\\Users\\jonle\\Downloads\\Godot_v4.6.1-stable_win64.exe\\Godot_v4.6.1-stable_win64.exe\" --headless --path . --script tests/test_runner.gd --quit",
+    "playground": "\"D:\\Users\\jonle\\Downloads\\Godot_v4.6.1-stable_win64.exe\\Godot_v4.6.1-stable_win64.exe\" --headless --path . --script examples/playground.gd --quit"
+  }
+}
