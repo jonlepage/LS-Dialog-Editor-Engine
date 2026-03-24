@@ -21,25 +21,25 @@ static void validateScene(
     int startBlockCount = 0;
 
     for (const auto& block : scene.blocks) {
-        if (sceneBlockUuids.count(block.uuid)) {
+        if (sceneBlockUuids.count(block->uuid)) {
             errors.push_back({
                 "DUPLICATE_BLOCK_UUID",
-                "Duplicate block UUID \"" + block.uuid + "\" within scene \"" + scene.label + "\".",
-                scene.uuid, block.uuid
+                "Duplicate block UUID \"" + block->uuid + "\" within scene \"" + scene.label + "\".",
+                scene.uuid, block->uuid
             });
         }
-        sceneBlockUuids.insert(block.uuid);
+        sceneBlockUuids.insert(block->uuid);
 
-        if (globalBlockUuids.count(block.uuid)) {
+        if (globalBlockUuids.count(block->uuid)) {
             errors.push_back({
                 "DUPLICATE_BLOCK_UUID_GLOBAL",
-                "Block UUID \"" + block.uuid + "\" exists in multiple scenes.",
-                scene.uuid, block.uuid
+                "Block UUID \"" + block->uuid + "\" exists in multiple scenes.",
+                scene.uuid, block->uuid
             });
         }
-        globalBlockUuids.insert(block.uuid);
+        globalBlockUuids.insert(block->uuid);
 
-        if (block.isStartBlock && *block.isStartBlock) {
+        if (block->isStartBlock && *block->isStartBlock) {
             startBlockCount++;
         }
     }
@@ -80,7 +80,7 @@ static void validateScene(
     // Fork validation: max 1 non-async target per output port group
     std::unordered_map<std::string, const BlueprintBlock*> blockMap;
     for (const auto& block : scene.blocks) {
-        blockMap[block.uuid] = &block;
+        blockMap[block->uuid] = block.get();
     }
 
     std::unordered_map<std::string, std::vector<std::string>> portGroups;
@@ -161,8 +161,8 @@ static void crossValidate(
         std::unordered_set<std::string> blueprintCharacters;
         for (const auto& scene : data.scenes) {
             for (const auto& block : scene.blocks) {
-                if (block.metadata) {
-                    for (const auto& ch : block.metadata->characters) {
+                if (block->metadata) {
+                    for (const auto& ch : block->metadata->characters) {
                         blueprintCharacters.insert(ch.name);
                     }
                 }

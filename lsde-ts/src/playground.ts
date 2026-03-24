@@ -4,13 +4,7 @@ declare const console: { log: (...args: unknown[]) => void };
 // This file is excluded from build (tsconfig.json exclude).
 
 import { DialogueEngine } from "./index.js";
-import type {
-	BlueprintExport,
-	StateBridge,
-	DialogBlock,
-	ConditionBlock,
-	ActionBlock,
-} from "./index.js";
+import type { BlueprintExport, StateBridge } from "./index.js";
 import blueprintJson from "../../blueprints/blueprint.json";
 
 const testData = blueprintJson as unknown as BlueprintExport;
@@ -21,8 +15,11 @@ const engine = new DialogueEngine();
 const { errors, warnings, stats } = engine.init({ data: testData });
 const { sceneCount, blockCount, connectionCount } = stats;
 console.log(`\n🔧 Init — ${errors.length} errors, ${warnings.length} warnings`);
-console.log(`   📊 ${sceneCount} scenes, ${blockCount} blocks, ${connectionCount} connections`);
-for (const { code, message } of warnings) console.log(`   ⚠️  ${code}: ${message}`);
+console.log(
+	`   📊 ${sceneCount} scenes, ${blockCount} blocks, ${connectionCount} connections`,
+);
+for (const { code, message } of warnings)
+	console.log(`   ⚠️  ${code}: ${message}`);
 
 engine.setLocale("en");
 
@@ -36,9 +33,12 @@ const bridge: StateBridge = {
 	},
 	executeAction: (action, sig) => {
 		const { actionId, params } = action;
-		console.log(`   🔗 bridge.exec: ${sig?.label ?? actionId}(${params.join(", ")})`);
+		console.log(
+			`   🔗 bridge.exec: ${sig?.label ?? actionId}(${params.join(", ")})`,
+		);
 	},
 	resolveDictionary: (group, key) => `${group}.${key}`,
+	resolveCharacter: (characters) => characters[0],
 };
 engine.setStateBridge(bridge);
 
@@ -53,10 +53,12 @@ engine.onBeforeBlock(({ block, resolve }) => {
 
 engine.onDialog(({ block, context, next }) => {
 	const { label, nativeProperties } = block;
-	const { dialogueText } = block as DialogBlock;
+	const { dialogueText } = block;
 	const { character, resolveCharacterPort } = context;
 	const text = dialogueText?.["en"] ?? "—";
-	const name = character ? `${character.name} (${character.emotion ?? "?"})` : "(no character)";
+	const name = character
+		? `${character.name} (${character.emotion ?? "?"})`
+		: "(no character)";
 
 	console.log(`\n💬 DIALOG  ${label}`);
 	console.log(`   🎭 ${name}`);
@@ -77,9 +79,11 @@ engine.onChoice(({ block, context, next }) => {
 	const { choices, selectChoice } = context;
 	choiceCount++;
 	console.log(`\n❓ CHOICE  ${label} — ${choices.length} visible`);
-	for (const ch of choices) {
-		const { label: choiceLabel, uuid, dialogueText } = ch;
-		console.log(`   👉 ${choiceLabel ?? uuid.slice(0, 8)}: "${dialogueText?.["en"] ?? "—"}"`);
+	for (const choice of choices) {
+		const { label: choiceLabel, uuid, dialogueText } = choice;
+		console.log(
+			`   👉 ${choiceLabel ?? uuid.slice(0, 8)}: "${dialogueText?.["en"] ?? "—"}"`,
+		);
 	}
 	const pick = choices.length > 1 && choiceCount > 1 ? choices[1]! : choices[0];
 	if (pick) {
@@ -91,7 +95,7 @@ engine.onChoice(({ block, context, next }) => {
 
 engine.onCondition(({ block, context, next }) => {
 	const { label } = block;
-	const { conditions } = block as ConditionBlock;
+	const { conditions } = block;
 	const { resolve } = context;
 	const count = conditions?.length ?? 0;
 	const result = count > 0;
@@ -102,13 +106,18 @@ engine.onCondition(({ block, context, next }) => {
 
 engine.onAction(({ block, context, next }) => {
 	const { label } = block;
-	const { actions = [] } = block as ActionBlock;
-	const { resolve } = context;
+	const { actions = [] } = block;
+	const { resolve, reject } = context;
 	console.log(`\n⚡ ACTION  ${label} — ${actions.length} actions`);
-	for (const { actionId, params } of actions) {
-		console.log(`   🎯 ${actionId}(${params.join(", ")})`);
+	try {
+		for (const { actionId, params } of actions) {
+			console.log(`   🎯 ${actionId}(${params.join(", ")})`);
+		}
+		resolve();
+	} catch (err) {
+		reject(err);
 	}
-	resolve();
+
 	next();
 
 	return () => console.log(`   🧹 cleanup: ${label}`);
@@ -123,7 +132,8 @@ engine.onSceneExit(() => {
 });
 
 engine.onValidateNextBlock(({ nextBlock, fromBlock }) => {
-	if (fromBlock) console.log(`   ✔️  validate: ${fromBlock.label} → ${nextBlock.label}`);
+	if (fromBlock)
+		console.log(`   ✔️  validate: ${fromBlock.label} → ${nextBlock.label}`);
 	return { valid: true };
 });
 
@@ -149,4 +159,13 @@ const visited = Array.from(handle.getVisitedBlocks()).map((uuid) => {
 	return uuid.slice(0, 8);
 });
 console.log(`\n📋 Visited: ${visited.join(", ")}`);
+console.log(
+	`📊 Choice History:`,
+	Object.fromEntries(handle.getChoiceHistory()),
+);
 console.log(`🏁 Engine running: ${engine.isRunning()}`);
+
+//TODO:
+// charactere name ? ces pas ce quon veut !? on veut le charactere id pour recuperer cela en jeux ! pk ces comme ca ?
+// pareil pour emotion ? check si ces bien le id qui est export !
+// character est actuelement le premier character de la liste characters ! mais ce que on veut en vrai ces les personnages passer par le game

@@ -2,8 +2,10 @@
 
 import type {
 	BlueprintBlock, SceneHandle,
-	BlockHandler, BaseBlockContext, DialogContext, ChoiceContext, ConditionContext, ActionContext,
+	BlockHandler, BaseBlockContext,
+	DialogHandler, ChoiceHandler, ConditionHandler, ActionHandler,
 	SceneLifecycleHandler, StateBridge, CleanupFn,
+	ExportCondition,
 } from './types.js';
 import { SceneGraph } from './graph.js';
 import { HandlerRegistry, SceneHandlerRegistry, resolveHandler } from './handler-registry.js';
@@ -220,9 +222,16 @@ class AsyncTrack {
 
 	private autoEvaluateCondition( block: BlueprintBlock, context: InternalConditionContext ): void {
 		const bridge = this.parentHandle.getStateBridge();
-		if ( !bridge ) { this.endTrack(); return; }
 		if ( isConditionBlock( block ) ) {
-			context._conditionResult = evaluateConditionChain( block.conditions ?? [], bridge.evaluateCondition );
+			const conditions = block.conditions ?? [];
+			const hasChoiceConditions = conditions.some( c => c.key.startsWith( 'choice:' ) );
+			if ( !bridge && !hasChoiceConditions ) { this.endTrack(); return; }
+			const evaluator = ( condition: ExportCondition ) =>
+				this.parentHandle.evaluateConditionForBlock( condition, bridge ? bridge.evaluateCondition : () => false );
+			context._conditionResult = evaluateConditionChain( conditions, evaluator );
+		} else if ( !bridge ) {
+			this.endTrack();
+			return;
 		}
 		this.previousCleanup = null;
 		this.advanceToNextBlock( block, context );
@@ -264,6 +273,7 @@ export class SceneHandleImpl implements SceneHandle {
 	private currentBlock: BlueprintBlock | null = null;
 	private previousBlock: BlueprintBlock | null = null;
 	private readonly visited = new Set<string>();
+	private readonly choiceHistory = new Map<string, string[]>();
 	private previousCleanup: CleanupFn | null = null;
 	private readonly asyncTracks: AsyncTrack[] = [];
 
@@ -322,23 +332,23 @@ export class SceneHandleImpl implements SceneHandle {
 		this.sceneRegistry.exitHandler = handler;
 	}
 
-	onBlock( blockUuid: string, handler: BlockHandler<BaseBlockContext> ): void {
+	onBlock( blockUuid: string, handler: BlockHandler<BlueprintBlock, BaseBlockContext> ): void {
 		this.sceneRegistry.setBlockHandler( blockUuid, handler );
 	}
 
-	onDialog( handler: BlockHandler<DialogContext> ): void {
+	onDialog( handler: DialogHandler ): void {
 		this.sceneRegistry.dialogHandler = handler;
 	}
 
-	onChoice( handler: BlockHandler<ChoiceContext> ): void {
+	onChoice( handler: ChoiceHandler ): void {
 		this.sceneRegistry.choiceHandler = handler;
 	}
 
-	onCondition( handler: BlockHandler<ConditionContext> ): void {
+	onCondition( handler: ConditionHandler ): void {
 		this.sceneRegistry.conditionHandler = handler;
 	}
 
-	onAction( handler: BlockHandler<ActionContext> ): void {
+	onAction( handler: ActionHandler ): void {
 		this.sceneRegistry.actionHandler = handler;
 	}
 
@@ -362,12 +372,36 @@ export class SceneHandleImpl implements SceneHandle {
 		return this.sceneGraph;
 	}
 
+	getChoiceHistory(): ReadonlyMap<string, readonly string[]> {
+		return this.choiceHistory;
+	}
+
+	getChoice( blockUuid: string ): readonly string[] | undefined {
+		return this.choiceHistory.get( blockUuid );
+	}
+
 	// ─── Internal API (used by AsyncTrack) ───────────────────────────────
 
 	/** @internal */ getSceneRegistry(): SceneHandlerRegistry { return this.sceneRegistry; }
 	/** @internal */ getGlobalRegistry(): HandlerRegistry { return this.globalRegistry; }
 	/** @internal */ getStateBridge(): StateBridge | null { return this.callbacks.getStateBridge(); }
 	/** @internal */ addVisited( uuid: string ): void { this.visited.add( uuid ); }
+
+	/** @internal */ recordChoice( blockUuid: string, choiceUuid: string ): void {
+		const existing = this.choiceHistory.get( blockUuid );
+		if ( existing ) {
+			existing.push( choiceUuid );
+		} else {
+			this.choiceHistory.set( blockUuid, [choiceUuid] );
+		}
+	}
+
+	/** @internal */ evaluateConditionForBlock(
+		condition: ExportCondition,
+		bridgeEvaluator: ( condition: ExportCondition ) => boolean,
+	): boolean {
+		return this.evaluateConditionWithHistory( condition, bridgeEvaluator );
+	}
 
 	/** @internal */ removeTrack( track: AsyncTrack ): void {
 		const idx = this.asyncTracks.indexOf( track );
@@ -580,13 +614,19 @@ export class SceneHandleImpl implements SceneHandle {
 
 	private autoEvaluateCondition( block: BlueprintBlock, context: InternalConditionContext ): void {
 		const bridge = this.callbacks.getStateBridge();
-		if ( !bridge ) {
+		if ( isConditionBlock( block ) ) {
+			const conditions = block.conditions ?? [];
+			const hasChoiceConditions = conditions.some( c => c.key.startsWith( 'choice:' ) );
+			if ( !bridge && !hasChoiceConditions ) {
+				this.endScene();
+				return;
+			}
+			const evaluator = ( condition: ExportCondition ) =>
+				this.evaluateConditionWithHistory( condition, bridge ? bridge.evaluateCondition : () => false );
+			context._conditionResult = evaluateConditionChain( conditions, evaluator );
+		} else if ( !bridge ) {
 			this.endScene();
 			return;
-		}
-		if ( isConditionBlock( block ) ) {
-			const result = evaluateConditionChain( block.conditions ?? [], bridge.evaluateCondition );
-			context._conditionResult = result;
 		}
 		this.previousCleanup = null;
 		this.advanceToNextBlock( block, context );
@@ -626,14 +666,32 @@ export class SceneHandleImpl implements SceneHandle {
 
 	// ─── Internal helpers ────────────────────────────────────────────────
 
+	private evaluateConditionWithHistory(
+		condition: ExportCondition,
+		bridgeEvaluator: ( condition: ExportCondition ) => boolean,
+	): boolean {
+		if ( condition.key.startsWith( 'choice:' ) ) {
+			const blockUuid = condition.key.slice( 7 );
+			const history = this.choiceHistory.get( blockUuid );
+			if ( !history ) return condition.operator === '!=';
+			const includes = history.includes( condition.value );
+			return condition.operator === '!=' ? !includes : includes;
+		}
+		return bridgeEvaluator( condition );
+	}
+
 	private createContext( block: BlueprintBlock ): InternalContext | null {
 		if ( isDialogBlock( block ) ) {
 			return createDialogContext( block );
 		}
 		if ( isChoiceBlock( block ) ) {
 			const bridge = this.callbacks.getStateBridge();
-			const evaluator = bridge ? bridge.evaluateCondition : () => true;
-			return createChoiceContext( block, evaluator );
+			const rawEvaluator = bridge ? bridge.evaluateCondition : () => true;
+			const evaluator = ( condition: ExportCondition ) =>
+				this.evaluateConditionWithHistory( condition, rawEvaluator );
+			return createChoiceContext( block, evaluator, ( blockUuid, choiceUuid ) => {
+				this.recordChoice( blockUuid, choiceUuid );
+			} );
 		}
 		if ( isConditionBlock( block ) ) {
 			return createConditionContext();

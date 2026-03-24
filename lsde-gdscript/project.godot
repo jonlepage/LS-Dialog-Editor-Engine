@@ -3,12 +3,13 @@
 ; since the parameters that go here are not all obvious.
 ;
 ; Format:
-;   [section] key=value
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
 
 [application]
 
 config/name="LSDE Dialog Engine"
-config/features=PackedStringArray("4.6")
 run/main_scene="res://tests/test_runner.tscn"
-
-[autoload]
+config/features=PackedStringArray("4.6")

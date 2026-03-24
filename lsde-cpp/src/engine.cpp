@@ -25,10 +25,10 @@ void DialogueEngine::onValidateNextBlock(ValidateNextBlockHandler h) { _globalRe
 void DialogueEngine::onInvalidateBlock(InvalidateBlockHandler h) { _globalRegistry.invalidateBlockHandler = std::move(h); }
 void DialogueEngine::onBeforeBlock(BeforeBlockHandler h) { _globalRegistry.beforeBlockHandler = std::move(h); }
 
-void DialogueEngine::onDialog(TypedBlockHandler<IDialogContext> h) { _globalRegistry.dialogHandler = wrapHandler<IDialogContext>(std::move(h)); }
-void DialogueEngine::onChoice(TypedBlockHandler<IChoiceContext> h) { _globalRegistry.choiceHandler = wrapHandler<IChoiceContext>(std::move(h)); }
-void DialogueEngine::onCondition(TypedBlockHandler<IConditionContext> h) { _globalRegistry.conditionHandler = wrapHandler<IConditionContext>(std::move(h)); }
-void DialogueEngine::onAction(TypedBlockHandler<IActionContext> h) { _globalRegistry.actionHandler = wrapHandler<IActionContext>(std::move(h)); }
+void DialogueEngine::onDialog(TypedBlockHandler<DialogBlock, IDialogContext> h) { _globalRegistry.dialogHandler = wrapHandler<DialogBlock, IDialogContext>(std::move(h)); }
+void DialogueEngine::onChoice(TypedBlockHandler<ChoiceBlock, IChoiceContext> h) { _globalRegistry.choiceHandler = wrapHandler<ChoiceBlock, IChoiceContext>(std::move(h)); }
+void DialogueEngine::onCondition(TypedBlockHandler<ConditionBlock, IConditionContext> h) { _globalRegistry.conditionHandler = wrapHandler<ConditionBlock, IConditionContext>(std::move(h)); }
+void DialogueEngine::onAction(TypedBlockHandler<ActionBlock, IActionContext> h) { _globalRegistry.actionHandler = wrapHandler<ActionBlock, IActionContext>(std::move(h)); }
 
 void DialogueEngine::onSceneEnter(SceneLifecycleHandler h) { _globalRegistry.sceneEnterHandler = std::move(h); }
 void DialogueEngine::onSceneExit(SceneLifecycleHandler h) { _globalRegistry.sceneExitHandler = std::move(h); }

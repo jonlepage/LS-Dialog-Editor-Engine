@@ -11,10 +11,10 @@ namespace LsdeDialogEngine
     /// <summary>Stores global (Tier 1) handlers. Last-write-wins per slot.</summary>
     internal class HandlerRegistry
     {
-        internal BlockHandler<IDialogContext>? DialogHandler;
-        internal BlockHandler<IChoiceContext>? ChoiceHandler;
-        internal BlockHandler<IConditionContext>? ConditionHandler;
-        internal BlockHandler<IActionContext>? ActionHandler;
+        internal BlockHandler<DialogBlock, IDialogContext>? DialogHandler;
+        internal BlockHandler<ChoiceBlock, IChoiceContext>? ChoiceHandler;
+        internal BlockHandler<ConditionBlock, IConditionContext>? ConditionHandler;
+        internal BlockHandler<ActionBlock, IActionContext>? ActionHandler;
 
         internal SceneLifecycleHandler? SceneEnterHandler;
         internal SceneLifecycleHandler? SceneExitHandler;
@@ -42,10 +42,12 @@ namespace LsdeDialogEngine
             }
         }
 
-        private static InternalBlockHandler WrapHandler<TContext>(BlockHandler<TContext> handler) where TContext : IBaseBlockContext
+        private static InternalBlockHandler WrapHandler<TBlock, TContext>(BlockHandler<TBlock, TContext> handler)
+            where TBlock : BlueprintBlock
+            where TContext : IBaseBlockContext
         {
             return (scene, block, context, next) =>
-                handler(new BlockHandlerArgs<TContext>(scene, block, (TContext)context, next));
+                handler(new BlockHandlerArgs<TBlock, TContext>(scene, (TBlock)block, (TContext)context, next));
         }
     }
 
@@ -54,10 +56,10 @@ namespace LsdeDialogEngine
     {
         private readonly Dictionary<string, InternalBlockHandler> _blockHandlers = new Dictionary<string, InternalBlockHandler>();
 
-        internal BlockHandler<IDialogContext>? DialogHandler;
-        internal BlockHandler<IChoiceContext>? ChoiceHandler;
-        internal BlockHandler<IConditionContext>? ConditionHandler;
-        internal BlockHandler<IActionContext>? ActionHandler;
+        internal BlockHandler<DialogBlock, IDialogContext>? DialogHandler;
+        internal BlockHandler<ChoiceBlock, IChoiceContext>? ChoiceHandler;
+        internal BlockHandler<ConditionBlock, IConditionContext>? ConditionHandler;
+        internal BlockHandler<ActionBlock, IActionContext>? ActionHandler;
 
         internal SceneLifecycleHandler? EnterHandler;
         internal SceneLifecycleHandler? ExitHandler;
@@ -91,10 +93,12 @@ namespace LsdeDialogEngine
             }
         }
 
-        private static InternalBlockHandler WrapHandler<TContext>(BlockHandler<TContext> handler) where TContext : IBaseBlockContext
+        private static InternalBlockHandler WrapHandler<TBlock, TContext>(BlockHandler<TBlock, TContext> handler)
+            where TBlock : BlueprintBlock
+            where TContext : IBaseBlockContext
         {
             return (scene, block, context, next) =>
-                handler(new BlockHandlerArgs<TContext>(scene, block, (TContext)context, next));
+                handler(new BlockHandlerArgs<TBlock, TContext>(scene, (TBlock)block, (TContext)context, next));
         }
     }
 

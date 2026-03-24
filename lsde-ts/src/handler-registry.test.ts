@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { HandlerRegistry, SceneHandlerRegistry, resolveHandler } from './handler-registry.js';
-import type { BlockHandler, DialogContext, BaseBlockContext } from './types.js';
+import type { BlockHandler, BlueprintBlock, BaseBlockContext, DialogHandler } from './types.js';
 
-const noop: BlockHandler<BaseBlockContext> = () => {};
-const noopDialog: BlockHandler<DialogContext> = () => {};
+const noop: BlockHandler<BlueprintBlock, BaseBlockContext> = () => {};
+const noopDialog: DialogHandler = () => {};
 
 describe( 'resolveHandler', () => {
 
@@ -27,7 +27,7 @@ describe( 'resolveHandler', () => {
 		const global = new HandlerRegistry();
 		global.dialogHandler = noopDialog;
 		const scene = new SceneHandlerRegistry();
-		const sceneDialogHandler: BlockHandler<DialogContext> = () => {};
+		const sceneDialogHandler: DialogHandler = () => {};
 		scene.dialogHandler = sceneDialogHandler;
 
 		const result = resolveHandler( 'DIALOG', 'b1', scene, global );
@@ -40,7 +40,7 @@ describe( 'resolveHandler', () => {
 		global.dialogHandler = noopDialog;
 		const scene = new SceneHandlerRegistry();
 		scene.dialogHandler = noopDialog;
-		const blockHandler: BlockHandler<BaseBlockContext> = () => {};
+		const blockHandler: BlockHandler<BlueprintBlock, BaseBlockContext> = () => {};
 		scene.setBlockHandler( 'b1', blockHandler );
 
 		const result = resolveHandler( 'DIALOG', 'b1', scene, global );

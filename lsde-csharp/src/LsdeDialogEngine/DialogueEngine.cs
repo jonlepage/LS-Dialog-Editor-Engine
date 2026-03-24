@@ -70,25 +70,25 @@ namespace LsdeDialogEngine
         // ─── Type handlers ───────────────────────────────────────────────
 
         /// <summary>Register a global handler for DIALOG blocks.</summary>
-        public void OnDialog(BlockHandler<IDialogContext> handler)
+        public void OnDialog(BlockHandler<DialogBlock, IDialogContext> handler)
         {
             _globalRegistry.DialogHandler = handler;
         }
 
         /// <summary>Register a global handler for CHOICE blocks.</summary>
-        public void OnChoice(BlockHandler<IChoiceContext> handler)
+        public void OnChoice(BlockHandler<ChoiceBlock, IChoiceContext> handler)
         {
             _globalRegistry.ChoiceHandler = handler;
         }
 
         /// <summary>Register a global handler for CONDITION blocks.</summary>
-        public void OnCondition(BlockHandler<IConditionContext> handler)
+        public void OnCondition(BlockHandler<ConditionBlock, IConditionContext> handler)
         {
             _globalRegistry.ConditionHandler = handler;
         }
 
         /// <summary>Register a global handler for ACTION blocks.</summary>
-        public void OnAction(BlockHandler<IActionContext> handler)
+        public void OnAction(BlockHandler<ActionBlock, IActionContext> handler)
         {
             _globalRegistry.ActionHandler = handler;
         }

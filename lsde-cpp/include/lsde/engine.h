@@ -26,10 +26,10 @@ public:
     void onBeforeBlock(BeforeBlockHandler handler);
 
     // ─── Type handlers ───────────────────────────────────────────────
-    void onDialog(TypedBlockHandler<IDialogContext> handler);
-    void onChoice(TypedBlockHandler<IChoiceContext> handler);
-    void onCondition(TypedBlockHandler<IConditionContext> handler);
-    void onAction(TypedBlockHandler<IActionContext> handler);
+    void onDialog(TypedBlockHandler<DialogBlock, IDialogContext> handler);
+    void onChoice(TypedBlockHandler<ChoiceBlock, IChoiceContext> handler);
+    void onCondition(TypedBlockHandler<ConditionBlock, IConditionContext> handler);
+    void onAction(TypedBlockHandler<ActionBlock, IActionContext> handler);
 
     // ─── Scene lifecycle ─────────────────────────────────────────────
     void onSceneEnter(SceneLifecycleHandler handler);

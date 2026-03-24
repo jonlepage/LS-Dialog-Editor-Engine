@@ -6,11 +6,7 @@ import type {
 	DiagnosticReport,
 	StateBridge,
 	SceneHandle,
-	BlockHandler,
-	DialogContext,
-	ChoiceContext,
-	ConditionContext,
-	ActionContext,
+	DialogHandler, ChoiceHandler, ConditionHandler, ActionHandler,
 	SceneLifecycleHandler,
 	ValidateNextBlockHandler,
 	InvalidateBlockHandler,
@@ -69,19 +65,19 @@ export class DialogueEngine implements IDialogueEngine {
 		this.globalRegistry.beforeBlockHandler = handler;
 	}
 
-	onDialog(handler: BlockHandler<DialogContext>): void {
+	onDialog(handler: DialogHandler): void {
 		this.globalRegistry.dialogHandler = handler;
 	}
 
-	onChoice(handler: BlockHandler<ChoiceContext>): void {
+	onChoice(handler: ChoiceHandler): void {
 		this.globalRegistry.choiceHandler = handler;
 	}
 
-	onCondition(handler: BlockHandler<ConditionContext>): void {
+	onCondition(handler: ConditionHandler): void {
 		this.globalRegistry.conditionHandler = handler;
 	}
 
-	onAction(handler: BlockHandler<ActionContext>): void {
+	onAction(handler: ActionHandler): void {
 		this.globalRegistry.actionHandler = handler;
 	}
 

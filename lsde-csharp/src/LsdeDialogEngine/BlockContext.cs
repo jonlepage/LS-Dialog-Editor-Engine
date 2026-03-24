@@ -15,7 +15,7 @@ namespace LsdeDialogEngine
 
         public BlockCharacter? Character { get; }
 
-        internal InternalDialogContext(BlueprintBlock block)
+        internal InternalDialogContext(DialogBlock block)
         {
             Character = Utils.GetFirstCharacter(block);
             _characters = block.Metadata?.Characters ?? new List<BlockCharacter>();
@@ -92,13 +92,13 @@ namespace LsdeDialogEngine
 
     internal static class BlockContextFactory
     {
-        internal static InternalDialogContext CreateDialogContext(BlueprintBlock block)
+        internal static InternalDialogContext CreateDialogContext(DialogBlock block)
         {
             return new InternalDialogContext(block);
         }
 
         internal static InternalChoiceContext CreateChoiceContext(
-            BlueprintBlock block,
+            ChoiceBlock block,
             Func<ExportCondition, bool> evaluator)
         {
             var choices = block.Choices ?? new List<ChoiceItem>();

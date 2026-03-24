@@ -358,6 +358,271 @@ describe( 'SceneHandleImpl', () => {
 
 } );
 
+// ─── Choice History ──────────────────────────────────────────────────────────
+
+function choiceBlock( uuid: string, choices: { uuid: string }[], start = false ): BlueprintBlock {
+	return { uuid, type: 'CHOICE', properties: [], choices: choices.map( c => ( { ...c, structureKey: c.uuid } ) ), isStartBlock: start } as BlueprintBlock;
+}
+
+function conditionBlock( uuid: string, conditions: { uuid: string; key: string; operator: string; value: string; chain?: '|' | '&' }[], start = false ): BlueprintBlock {
+	return { uuid, type: 'CONDITION', properties: [], conditions, isStartBlock: start } as BlueprintBlock;
+}
+
+function condConn( fromId: string, toIdTrue: string, toIdFalse: string ) {
+	return [
+		{ id: `${ fromId }-t`, fromId, toId: toIdTrue, fromPort: 'true', toPort: 'in', fromPortIndex: 0 },
+		{ id: `${ fromId }-f`, fromId, toId: toIdFalse, fromPort: 'false', toPort: 'in', fromPortIndex: 1 },
+	];
+}
+
+describe( 'SceneHandleImpl — Choice History', () => {
+
+	it( 'records selected choice in history', () => {
+		const scene = makeScene( {
+			blocks: [
+				choiceBlock( 'ch1', [{ uuid: 'opt-a' }, { uuid: 'opt-b' }], true ),
+				dialog( 'after' ),
+			],
+			connections: [
+				{ id: 'ch1-a', fromId: 'ch1', toId: 'after', fromPort: 'opt-a', toPort: 'in' },
+			],
+		} );
+		const global = new HandlerRegistry();
+		global.choiceHandler = ( { context, next } ) => {
+			context.selectChoice( 'opt-a' );
+			next();
+		};
+		global.dialogHandler = ( { next } ) => next();
+
+		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		handle.start();
+
+		expect( handle.getChoiceHistory().size ).toBe( 1 );
+		expect( handle.getChoice( 'ch1' ) ).toEqual( ['opt-a'] );
+	} );
+
+	it( 'getChoice returns undefined for non-choice blocks', () => {
+		const scene = makeScene( { blocks: [dialog( 'b1', true )] } );
+		const global = new HandlerRegistry();
+		global.dialogHandler = ( { next } ) => next();
+
+		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		handle.start();
+
+		expect( handle.getChoice( 'b1' ) ).toBeUndefined();
+	} );
+
+	it( 'accumulates choices in loops', () => {
+		const scene = makeScene( {
+			blocks: [
+				choiceBlock( 'ch1', [{ uuid: 'opt-a' }, { uuid: 'opt-b' }], true ),
+				dialog( 'mid' ),
+			],
+			connections: [
+				{ id: 'ch1-a', fromId: 'ch1', toId: 'mid', fromPort: 'opt-a', toPort: 'in' },
+				{ id: 'ch1-b', fromId: 'ch1', toId: 'mid', fromPort: 'opt-b', toPort: 'in' },
+				conn( 'mid', 'ch1' ),
+			],
+		} );
+		const global = new HandlerRegistry();
+		let visit = 0;
+		global.choiceHandler = ( { context, next } ) => {
+			visit++;
+			if ( visit === 1 ) context.selectChoice( 'opt-a' );
+			else if ( visit === 2 ) context.selectChoice( 'opt-b' );
+			// 3rd visit: don't select → ends flow
+			next();
+		};
+		global.dialogHandler = ( { next } ) => next();
+
+		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		handle.start();
+
+		expect( handle.getChoice( 'ch1' ) ).toEqual( ['opt-a', 'opt-b'] );
+	} );
+
+	it( 'getChoiceHistory returns empty map when no choices', () => {
+		const scene = makeScene( { blocks: [dialog( 'b1', true )] } );
+		const global = new HandlerRegistry();
+		global.dialogHandler = ( { next } ) => next();
+
+		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		handle.start();
+
+		expect( handle.getChoiceHistory().size ).toBe( 0 );
+	} );
+
+	it( 'choice history survives after scene ends', () => {
+		const scene = makeScene( {
+			blocks: [
+				choiceBlock( 'ch1', [{ uuid: 'opt-a' }], true ),
+				dialog( 'after' ),
+			],
+			connections: [
+				{ id: 'ch1-a', fromId: 'ch1', toId: 'after', fromPort: 'opt-a', toPort: 'in' },
+			],
+		} );
+		const global = new HandlerRegistry();
+		global.choiceHandler = ( { context, next } ) => { context.selectChoice( 'opt-a' ); next(); };
+		global.dialogHandler = ( { next } ) => next();
+
+		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		handle.start();
+
+		expect( handle.isRunning() ).toBe( false );
+		expect( handle.getChoice( 'ch1' ) ).toEqual( ['opt-a'] );
+	} );
+
+} );
+
+// ─── Choice Condition Resolution ─────────────────────────────────────────────
+
+describe( 'SceneHandleImpl — Choice Condition Resolution', () => {
+
+	it( 'choice: condition resolves == match (auto-evaluate)', () => {
+		const visited: string[] = [];
+		const scene = makeScene( {
+			blocks: [
+				choiceBlock( 'ch1', [{ uuid: 'opt-a' }], true ),
+				conditionBlock( 'cond1', [{ uuid: 'c1', key: 'choice:ch1', operator: '==', value: 'opt-a' }] ),
+				dialog( 'yes' ),
+				dialog( 'no' ),
+			],
+			connections: [
+				{ id: 'ch1-a', fromId: 'ch1', toId: 'cond1', fromPort: 'opt-a', toPort: 'in' },
+				...condConn( 'cond1', 'yes', 'no' ),
+			],
+		} );
+		const global = new HandlerRegistry();
+		global.choiceHandler = ( { context, next } ) => { context.selectChoice( 'opt-a' ); next(); };
+		global.dialogHandler = ( { block, next } ) => { visited.push( block.uuid ); next(); };
+
+		new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() ).start();
+
+		expect( visited ).toEqual( ['yes'] );
+	} );
+
+	it( 'choice: condition resolves == no match (auto-evaluate)', () => {
+		const visited: string[] = [];
+		const scene = makeScene( {
+			blocks: [
+				choiceBlock( 'ch1', [{ uuid: 'opt-a' }], true ),
+				conditionBlock( 'cond1', [{ uuid: 'c1', key: 'choice:ch1', operator: '==', value: 'opt-b' }] ),
+				dialog( 'yes' ),
+				dialog( 'no' ),
+			],
+			connections: [
+				{ id: 'ch1-a', fromId: 'ch1', toId: 'cond1', fromPort: 'opt-a', toPort: 'in' },
+				...condConn( 'cond1', 'yes', 'no' ),
+			],
+		} );
+		const global = new HandlerRegistry();
+		global.choiceHandler = ( { context, next } ) => { context.selectChoice( 'opt-a' ); next(); };
+		global.dialogHandler = ( { block, next } ) => { visited.push( block.uuid ); next(); };
+
+		new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() ).start();
+
+		expect( visited ).toEqual( ['no'] );
+	} );
+
+	it( 'choice: condition resolves != operator', () => {
+		const visited: string[] = [];
+		const scene = makeScene( {
+			blocks: [
+				choiceBlock( 'ch1', [{ uuid: 'opt-a' }], true ),
+				conditionBlock( 'cond1', [{ uuid: 'c1', key: 'choice:ch1', operator: '!=', value: 'opt-a' }] ),
+				dialog( 'yes' ),
+				dialog( 'no' ),
+			],
+			connections: [
+				{ id: 'ch1-a', fromId: 'ch1', toId: 'cond1', fromPort: 'opt-a', toPort: 'in' },
+				...condConn( 'cond1', 'yes', 'no' ),
+			],
+		} );
+		const global = new HandlerRegistry();
+		global.choiceHandler = ( { context, next } ) => { context.selectChoice( 'opt-a' ); next(); };
+		global.dialogHandler = ( { block, next } ) => { visited.push( block.uuid ); next(); };
+
+		new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() ).start();
+
+		expect( visited ).toEqual( ['no'] );
+	} );
+
+	it( 'choice: condition returns false for unvisited block', () => {
+		const visited: string[] = [];
+		const scene = makeScene( {
+			blocks: [
+				conditionBlock( 'cond1', [{ uuid: 'c1', key: 'choice:nonexistent', operator: '==', value: 'opt-a' }], true ),
+				dialog( 'yes' ),
+				dialog( 'no' ),
+			],
+			connections: condConn( 'cond1', 'yes', 'no' ),
+		} );
+		const global = new HandlerRegistry();
+		global.dialogHandler = ( { block, next } ) => { visited.push( block.uuid ); next(); };
+
+		new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() ).start();
+
+		expect( visited ).toEqual( ['no'] );
+	} );
+
+	it( 'choice: condition works without StateBridge', () => {
+		const visited: string[] = [];
+		const scene = makeScene( {
+			blocks: [
+				choiceBlock( 'ch1', [{ uuid: 'opt-a' }], true ),
+				conditionBlock( 'cond1', [{ uuid: 'c1', key: 'choice:ch1', operator: '==', value: 'opt-a' }] ),
+				dialog( 'yes' ),
+				dialog( 'no' ),
+			],
+			connections: [
+				{ id: 'ch1-a', fromId: 'ch1', toId: 'cond1', fromPort: 'opt-a', toPort: 'in' },
+				...condConn( 'cond1', 'yes', 'no' ),
+			],
+		} );
+		const global = new HandlerRegistry();
+		global.choiceHandler = ( { context, next } ) => { context.selectChoice( 'opt-a' ); next(); };
+		global.dialogHandler = ( { block, next } ) => { visited.push( block.uuid ); next(); };
+
+		// No StateBridge at all
+		new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() ).start();
+
+		expect( visited ).toEqual( ['yes'] );
+	} );
+
+	it( 'mixed choice: and bridge conditions chain correctly', () => {
+		const visited: string[] = [];
+		const scene = makeScene( {
+			blocks: [
+				choiceBlock( 'ch1', [{ uuid: 'opt-a' }], true ),
+				conditionBlock( 'cond1', [
+					{ uuid: 'c1', key: 'choice:ch1', operator: '==', value: 'opt-a' },
+					{ uuid: 'c2', key: 'quest', operator: '==', value: 'active', chain: '&' },
+				] ),
+				dialog( 'yes' ),
+				dialog( 'no' ),
+			],
+			connections: [
+				{ id: 'ch1-a', fromId: 'ch1', toId: 'cond1', fromPort: 'opt-a', toPort: 'in' },
+				...condConn( 'cond1', 'yes', 'no' ),
+			],
+		} );
+		const bridge: StateBridge = {
+			evaluateCondition: () => true, // quest == active → true
+			executeAction: vi.fn(),
+			resolveDictionary: () => '',
+		};
+		const global = new HandlerRegistry();
+		global.choiceHandler = ( { context, next } ) => { context.selectChoice( 'opt-a' ); next(); };
+		global.dialogHandler = ( { block, next } ) => { visited.push( block.uuid ); next(); };
+
+		new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks( bridge ) ).start();
+
+		expect( visited ).toEqual( ['yes'] );
+	} );
+
+} );
+
 // ─── Multi-track (AsyncTrack) ────────────────────────────────────────────────
 
 function asyncDialog( uuid: string, follow = false ): BlueprintBlock {

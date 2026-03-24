@@ -96,7 +96,7 @@ void from_json(const nlohmann::json& j, BlockMetadata& v) {
     if (j.contains("characters")) v.characters = j["characters"].get<std::vector<BlockCharacter>>();
 }
 
-void from_json(const nlohmann::json& j, BlueprintBlock& v) {
+static void parseBaseFields(const nlohmann::json& j, BlueprintBlock& v) {
     j.at("uuid").get_to(v.uuid);
     v.type = parseBlockType(j.at("type").get<std::string>());
     if (j.contains("label") && !j["label"].is_null()) v.label = j["label"].get<std::string>();
@@ -108,21 +108,50 @@ void from_json(const nlohmann::json& j, BlueprintBlock& v) {
         v.metadata = j["metadata"].get<BlockMetadata>();
     if (j.contains("isStartBlock") && !j["isStartBlock"].is_null())
         v.isStartBlock = j["isStartBlock"].get<bool>();
+}
 
-    // Dialog
-    if (j.contains("structureKey") && !j["structureKey"].is_null()) v.structureKey = j["structureKey"].get<std::string>();
-    if (j.contains("content") && !j["content"].is_null()) v.content = j["content"].get<std::string>();
-    if (j.contains("dialogueText") && j["dialogueText"].is_object()) {
-        for (auto& [k, val] : j["dialogueText"].items()) v.dialogueText[k] = val.get<std::string>();
+static std::shared_ptr<BlueprintBlock> parseBlock(const nlohmann::json& j) {
+    auto typeStr = j.at("type").get<std::string>();
+    auto blockType = parseBlockType(typeStr);
+
+    switch (blockType) {
+        case BlockType::Dialog: {
+            auto b = std::make_shared<DialogBlock>();
+            parseBaseFields(j, *b);
+            if (j.contains("structureKey") && !j["structureKey"].is_null()) b->structureKey = j["structureKey"].get<std::string>();
+            if (j.contains("content") && !j["content"].is_null()) b->content = j["content"].get<std::string>();
+            if (j.contains("dialogueText") && j["dialogueText"].is_object()) {
+                for (auto& [k, val] : j["dialogueText"].items()) b->dialogueText[k] = val.get<std::string>();
+            }
+            return b;
+        }
+        case BlockType::Choice: {
+            auto b = std::make_shared<ChoiceBlock>();
+            parseBaseFields(j, *b);
+            if (j.contains("choices")) b->choices = j["choices"].get<std::vector<ChoiceItem>>();
+            if (j.contains("note") && !j["note"].is_null()) b->note = j["note"].get<std::string>();
+            return b;
+        }
+        case BlockType::Condition: {
+            auto b = std::make_shared<ConditionBlock>();
+            parseBaseFields(j, *b);
+            if (j.contains("conditions")) b->conditions = j["conditions"].get<std::vector<ExportCondition>>();
+            if (j.contains("note") && !j["note"].is_null()) b->note = j["note"].get<std::string>();
+            return b;
+        }
+        case BlockType::Action: {
+            auto b = std::make_shared<ActionBlock>();
+            parseBaseFields(j, *b);
+            if (j.contains("actions")) b->actions = j["actions"].get<std::vector<ExportAction>>();
+            if (j.contains("note") && !j["note"].is_null()) b->note = j["note"].get<std::string>();
+            return b;
+        }
+        default: {
+            auto b = std::make_shared<NoteBlock>();
+            parseBaseFields(j, *b);
+            return b;
+        }
     }
-    // Choice
-    if (j.contains("choices")) v.choices = j["choices"].get<std::vector<ChoiceItem>>();
-    // Condition
-    if (j.contains("conditions")) v.conditions = j["conditions"].get<std::vector<ExportCondition>>();
-    // Action
-    if (j.contains("actions")) v.actions = j["actions"].get<std::vector<ExportAction>>();
-    // Shared
-    if (j.contains("note") && !j["note"].is_null()) v.note = j["note"].get<std::string>();
 }
 
 void from_json(const nlohmann::json& j, BlueprintScene& v) {
@@ -131,7 +160,9 @@ void from_json(const nlohmann::json& j, BlueprintScene& v) {
     if (j.contains("note") && !j["note"].is_null()) v.note = j["note"].get<std::string>();
     if (j.contains("entryBlockId") && !j["entryBlockId"].is_null()) v.entryBlockId = j["entryBlockId"].get<std::string>();
     if (j.contains("date")) j.at("date").get_to(v.date);
-    v.blocks = j.at("blocks").get<std::vector<BlueprintBlock>>();
+    for (const auto& blockJson : j.at("blocks")) {
+        v.blocks.push_back(parseBlock(blockJson));
+    }
     v.connections = j.at("connections").get<std::vector<BlueprintConnection>>();
 }
 

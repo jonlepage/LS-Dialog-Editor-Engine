@@ -6,11 +6,11 @@
 
 namespace lsde {
 
-inline bool isDialogBlock(const BlueprintBlock& b) { return b.type == BlockType::Dialog; }
-inline bool isChoiceBlock(const BlueprintBlock& b) { return b.type == BlockType::Choice; }
-inline bool isConditionBlock(const BlueprintBlock& b) { return b.type == BlockType::Condition; }
-inline bool isActionBlock(const BlueprintBlock& b) { return b.type == BlockType::Action; }
-inline bool isNoteBlock(const BlueprintBlock& b) { return b.type == BlockType::Note; }
+inline bool isDialogBlock(const BlueprintBlock& b) { return dynamic_cast<const DialogBlock*>(&b) != nullptr; }
+inline bool isChoiceBlock(const BlueprintBlock& b) { return dynamic_cast<const ChoiceBlock*>(&b) != nullptr; }
+inline bool isConditionBlock(const BlueprintBlock& b) { return dynamic_cast<const ConditionBlock*>(&b) != nullptr; }
+inline bool isActionBlock(const BlueprintBlock& b) { return dynamic_cast<const ActionBlock*>(&b) != nullptr; }
+inline bool isNoteBlock(const BlueprintBlock& b) { return dynamic_cast<const NoteBlock*>(&b) != nullptr; }
 
 inline const BlockCharacter* getFirstCharacter(const BlueprintBlock& b) {
     if (b.metadata && !b.metadata->characters.empty()) {

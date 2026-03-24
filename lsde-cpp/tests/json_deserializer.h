@@ -18,7 +18,6 @@ void from_json(const nlohmann::json& j, NativeProperties& v);
 void from_json(const nlohmann::json& j, BlockCharacter& v);
 void from_json(const nlohmann::json& j, BlockScreenshot& v);
 void from_json(const nlohmann::json& j, BlockMetadata& v);
-void from_json(const nlohmann::json& j, BlueprintBlock& v);
 void from_json(const nlohmann::json& j, BlueprintScene& v);
 void from_json(const nlohmann::json& j, DictionaryRow& v);
 void from_json(const nlohmann::json& j, LsdeDictionary& v);

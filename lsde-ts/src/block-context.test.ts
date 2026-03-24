@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
 	createDialogContext, createChoiceContext, createConditionContext, createActionContext,
 } from './block-context.js';
@@ -84,6 +84,28 @@ describe( 'createChoiceContext', () => {
 	} );
 
 	it( 'selectChoice stores the UUID', () => {
+		const block: ChoiceBlock = {
+			...baseProps, type: 'CHOICE',
+			choices: [{ uuid: 'c1', structureKey: 'c1' }],
+		};
+		const ctx = createChoiceContext( block, alwaysTrue );
+		ctx.selectChoice( 'c1' );
+		expect( ctx._selectedChoiceUuid ).toBe( 'c1' );
+	} );
+
+	it( 'selectChoice invokes onChoiceSelected callback', () => {
+		const block: ChoiceBlock = {
+			...baseProps, type: 'CHOICE',
+			choices: [{ uuid: 'c1', structureKey: 'c1' }],
+		};
+		const spy = vi.fn();
+		const ctx = createChoiceContext( block, alwaysTrue, spy );
+		ctx.selectChoice( 'c1' );
+		expect( spy ).toHaveBeenCalledOnce();
+		expect( spy ).toHaveBeenCalledWith( 'b1', 'c1' );
+	} );
+
+	it( 'selectChoice works without callback (backward compat)', () => {
 		const block: ChoiceBlock = {
 			...baseProps, type: 'CHOICE',
 			choices: [{ uuid: 'c1', structureKey: 'c1' }],

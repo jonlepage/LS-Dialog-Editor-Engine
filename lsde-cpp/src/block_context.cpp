@@ -8,7 +8,7 @@ namespace lsde {
 
 // ─── InternalDialogContext ───────────────────────────────────────────────────
 
-InternalDialogContext::InternalDialogContext(const BlueprintBlock& block) {
+InternalDialogContext::InternalDialogContext(const DialogBlock& block) {
     _character = getFirstCharacter(block);
     if (block.metadata) {
         _characters = &block.metadata->characters;
@@ -58,12 +58,12 @@ void InternalActionContext::preventGlobalHandler() { globalPrevented = true; }
 
 // ─── Factories ───────────────────────────────────────────────────────────────
 
-std::unique_ptr<InternalDialogContext> createDialogContext(const BlueprintBlock& block) {
+std::unique_ptr<InternalDialogContext> createDialogContext(const DialogBlock& block) {
     return std::make_unique<InternalDialogContext>(block);
 }
 
 std::unique_ptr<InternalChoiceContext> createChoiceContext(
-    const BlueprintBlock& block,
+    const ChoiceBlock& block,
     const std::function<bool(const ExportCondition&)>& evaluator)
 {
     auto visible = filterVisibleChoices(block.choices, evaluator);

@@ -13,12 +13,47 @@ namespace LsdeDialogEngine.Tests
 {
     // ─── JSON Deserialization ─────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Polymorphic JSON converter for BlueprintBlock — reads the "type" field
+    /// and deserializes to the correct subclass (DialogBlock, ChoiceBlock, etc.).
+    /// </summary>
+    internal class BlueprintBlockConverter : JsonConverter<BlueprintBlock>
+    {
+        public override bool CanConvert(Type typeToConvert) => typeToConvert == typeof(BlueprintBlock);
+
+        public override BlueprintBlock Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            using var doc = JsonDocument.ParseValue(ref reader);
+            var root = doc.RootElement;
+
+            if (!root.TryGetProperty("type", out var typeProp))
+                throw new JsonException("BlueprintBlock missing 'type' field");
+
+            var typeStr = typeProp.GetString();
+            var json = root.GetRawText();
+            return typeStr switch
+            {
+                "DIALOG" => JsonSerializer.Deserialize<DialogBlock>(json, options)!,
+                "CHOICE" => JsonSerializer.Deserialize<ChoiceBlock>(json, options)!,
+                "CONDITION" => JsonSerializer.Deserialize<ConditionBlock>(json, options)!,
+                "ACTION" => JsonSerializer.Deserialize<ActionBlock>(json, options)!,
+                "NOTE" => JsonSerializer.Deserialize<NoteBlock>(json, options)!,
+                _ => throw new JsonException($"Unknown block type: {typeStr}")
+            };
+        }
+
+        public override void Write(Utf8JsonWriter writer, BlueprintBlock value, JsonSerializerOptions options)
+        {
+            JsonSerializer.Serialize(writer, value, value.GetType(), options);
+        }
+    }
+
     internal static class TestLoader
     {
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            Converters = { new JsonStringEnumConverter(), new BlockPropertyValueConverter() }
+            Converters = { new JsonStringEnumConverter(), new BlockPropertyValueConverter(), new BlueprintBlockConverter() }
         };
 
         internal static TestFile LoadTestFile(string filename)

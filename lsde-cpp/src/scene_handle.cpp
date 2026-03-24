@@ -181,8 +181,8 @@ void AsyncTrack::endTrack() {
 void AsyncTrack::autoEvaluateCondition(const BlueprintBlock& block, InternalConditionContext* context) {
     auto* bridge = _parent.getStateBridge();
     if (!bridge) { endTrack(); return; }
-    if (block.type == BlockType::Condition) {
-        context->conditionResult = evaluateConditionChain(block.conditions,
+    if (auto* cb = dynamic_cast<const ConditionBlock*>(&block)) {
+        context->conditionResult = evaluateConditionChain(cb->conditions,
             [bridge](const ExportCondition& c) { return bridge->evaluateCondition(c); });
     }
     _previousCleanup = {};
@@ -192,8 +192,8 @@ void AsyncTrack::autoEvaluateCondition(const BlueprintBlock& block, InternalCond
 void AsyncTrack::autoExecuteAction(const BlueprintBlock& block, InternalActionContext* context) {
     auto* bridge = _parent.getStateBridge();
     if (!bridge) { endTrack(); return; }
-    if (block.type == BlockType::Action) {
-        for (const auto& action : block.actions) {
+    if (auto* ab = dynamic_cast<const ActionBlock*>(&block)) {
+        for (const auto& action : ab->actions) {
             bridge->executeAction(action, nullptr);
         }
     }
@@ -238,13 +238,13 @@ void SceneHandleImpl::cancel() {
 void SceneHandleImpl::onEnter(SceneLifecycleHandler h) { _sceneRegistry.enterHandler = std::move(h); }
 void SceneHandleImpl::onExit(SceneLifecycleHandler h) { _sceneRegistry.exitHandler = std::move(h); }
 void SceneHandleImpl::onBlock(const std::string& uuid, InternalBlockHandler h) { _sceneRegistry.setBlockHandler(uuid, std::move(h)); }
-void SceneHandleImpl::onDialog(TypedBlockHandler<IDialogContext> h) { _sceneRegistry.dialogHandler = wrapHandler<IDialogContext>(std::move(h)); }
-void SceneHandleImpl::onChoice(TypedBlockHandler<IChoiceContext> h) { _sceneRegistry.choiceHandler = wrapHandler<IChoiceContext>(std::move(h)); }
-void SceneHandleImpl::onCondition(TypedBlockHandler<IConditionContext> h) { _sceneRegistry.conditionHandler = wrapHandler<IConditionContext>(std::move(h)); }
-void SceneHandleImpl::onAction(TypedBlockHandler<IActionContext> h) { _sceneRegistry.actionHandler = wrapHandler<IActionContext>(std::move(h)); }
+void SceneHandleImpl::onDialog(TypedBlockHandler<DialogBlock, IDialogContext> h) { _sceneRegistry.dialogHandler = wrapHandler<DialogBlock, IDialogContext>(std::move(h)); }
+void SceneHandleImpl::onChoice(TypedBlockHandler<ChoiceBlock, IChoiceContext> h) { _sceneRegistry.choiceHandler = wrapHandler<ChoiceBlock, IChoiceContext>(std::move(h)); }
+void SceneHandleImpl::onCondition(TypedBlockHandler<ConditionBlock, IConditionContext> h) { _sceneRegistry.conditionHandler = wrapHandler<ConditionBlock, IConditionContext>(std::move(h)); }
+void SceneHandleImpl::onAction(TypedBlockHandler<ActionBlock, IActionContext> h) { _sceneRegistry.actionHandler = wrapHandler<ActionBlock, IActionContext>(std::move(h)); }
 
 const BlueprintBlock* SceneHandleImpl::getCurrentBlock() const { return _currentBlock; }
-const std::unordered_set<std::string>& SceneHandleImpl::getVisitedBlocks() const { return _visited; }
+const std::vector<std::string>& SceneHandleImpl::getVisitedBlocks() const { return _visitedOrder; }
 bool SceneHandleImpl::isRunning() const { return _running; }
 
 int SceneHandleImpl::getActiveTracks() const {
@@ -257,7 +257,11 @@ const SceneGraph& SceneHandleImpl::getSceneGraph() const { return _sceneGraph; }
 const SceneHandlerRegistry& SceneHandleImpl::getSceneRegistry() const { return _sceneRegistry; }
 const HandlerRegistry& SceneHandleImpl::getGlobalRegistry() const { return _globalRegistry; }
 IStateBridge* SceneHandleImpl::getStateBridge() const { return _callbacks.getStateBridge ? _callbacks.getStateBridge() : nullptr; }
-void SceneHandleImpl::addVisited(const std::string& uuid) { _visited.insert(uuid); }
+void SceneHandleImpl::addVisited(const std::string& uuid) {
+    if (_visitedSet.insert(uuid).second) {
+        _visitedOrder.push_back(uuid);
+    }
+}
 
 void SceneHandleImpl::removeTrack(AsyncTrack* track) {
     auto it = std::find_if(_asyncTracks.begin(), _asyncTracks.end(),
@@ -299,7 +303,7 @@ void SceneHandleImpl::processBlock(const BlueprintBlock& block) {
     if (_cancelled) return;
 
     _currentBlock = &block;
-    _visited.insert(block.uuid);
+    addVisited(block.uuid);
 
     // onBeforeBlock
     if (_globalRegistry.beforeBlockHandler) {
@@ -448,8 +452,8 @@ void SceneHandleImpl::endScene() {
 void SceneHandleImpl::autoEvaluateCondition(const BlueprintBlock& block, InternalConditionContext* context) {
     auto* bridge = getStateBridge();
     if (!bridge) { endScene(); return; }
-    if (block.type == BlockType::Condition) {
-        context->conditionResult = evaluateConditionChain(block.conditions,
+    if (auto* cb = dynamic_cast<const ConditionBlock*>(&block)) {
+        context->conditionResult = evaluateConditionChain(cb->conditions,
             [bridge](const ExportCondition& c) { return bridge->evaluateCondition(c); });
     }
     _previousCleanup = {};
@@ -459,8 +463,8 @@ void SceneHandleImpl::autoEvaluateCondition(const BlueprintBlock& block, Interna
 void SceneHandleImpl::autoExecuteAction(const BlueprintBlock& block, InternalActionContext* context) {
     auto* bridge = getStateBridge();
     if (!bridge) { endScene(); return; }
-    if (block.type == BlockType::Action) {
-        for (const auto& action : block.actions) {
+    if (auto* ab = dynamic_cast<const ActionBlock*>(&block)) {
+        for (const auto& action : ab->actions) {
             bridge->executeAction(action, nullptr);
         }
     }
@@ -484,26 +488,26 @@ void SceneHandleImpl::fireSceneExit() {
 // ─── Internal ────────────────────────────────────────────────────────────────
 
 std::unique_ptr<IBaseBlockContext> SceneHandleImpl::createContext(const BlueprintBlock& block) {
-    switch (block.type) {
-        case BlockType::Dialog:
-            return createDialogContext(block);
-        case BlockType::Choice: {
-            auto* bridge = getStateBridge();
-            std::function<bool(const ExportCondition&)> evaluator;
-            if (bridge) {
-                evaluator = [bridge](const ExportCondition& c) { return bridge->evaluateCondition(c); };
-            } else {
-                evaluator = [](const ExportCondition&) { return true; };
-            }
-            return createChoiceContext(block, evaluator);
-        }
-        case BlockType::Condition:
-            return createConditionContext();
-        case BlockType::Action:
-            return createActionContext();
-        default:
-            return nullptr;
+    if (auto* db = dynamic_cast<const DialogBlock*>(&block)) {
+        return createDialogContext(*db);
     }
+    if (auto* cb = dynamic_cast<const ChoiceBlock*>(&block)) {
+        auto* bridge = getStateBridge();
+        std::function<bool(const ExportCondition&)> evaluator;
+        if (bridge) {
+            evaluator = [bridge](const ExportCondition& c) { return bridge->evaluateCondition(c); };
+        } else {
+            evaluator = [](const ExportCondition&) { return true; };
+        }
+        return createChoiceContext(*cb, evaluator);
+    }
+    if (dynamic_cast<const ConditionBlock*>(&block)) {
+        return createConditionContext();
+    }
+    if (dynamic_cast<const ActionBlock*>(&block)) {
+        return createActionContext();
+    }
+    return nullptr;
 }
 
 } // namespace lsde

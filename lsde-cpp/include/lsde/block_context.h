@@ -13,7 +13,7 @@ public:
     bool globalPrevented = false;
     std::optional<int> characterPortIndex;
 
-    explicit InternalDialogContext(const BlueprintBlock& block);
+    explicit InternalDialogContext(const DialogBlock& block);
     const BlockCharacter* character() const override;
     void resolveCharacterPort(const std::string& name) override;
     void preventGlobalHandler() override;
@@ -58,10 +58,10 @@ public:
 
 // ─── Factory functions ───────────────────────────────────────────────────────
 
-std::unique_ptr<InternalDialogContext> createDialogContext(const BlueprintBlock& block);
+std::unique_ptr<InternalDialogContext> createDialogContext(const DialogBlock& block);
 
 std::unique_ptr<InternalChoiceContext> createChoiceContext(
-    const BlueprintBlock& block,
+    const ChoiceBlock& block,
     const std::function<bool(const ExportCondition&)>& evaluator);
 
 std::unique_ptr<InternalConditionContext> createConditionContext();

@@ -108,9 +108,10 @@ struct BlockMetadata {
     // others: preserved as-is, not used by engine
 };
 
-/// Blueprint block — single struct with type enum + optional type-specific fields.
+/// Base class for all blueprint blocks. Use typed subclasses for block-specific data.
 struct BlueprintBlock {
-    // Common (BlueprintBlockBase)
+    virtual ~BlueprintBlock() = default;
+
     std::string uuid;
     BlockType type = BlockType::Dialog;
     std::optional<std::string> label;
@@ -120,24 +121,35 @@ struct BlueprintBlock {
     std::optional<NativeProperties> nativeProperties;
     std::optional<BlockMetadata> metadata;
     std::optional<bool> isStartBlock;
+};
 
-    // DialogBlock-specific
+/// A dialogue block displaying text from a character.
+struct DialogBlock : BlueprintBlock {
     std::optional<std::string> structureKey;
     std::optional<std::string> content;
     std::unordered_map<std::string, std::string> dialogueText;
+};
 
-    // ChoiceBlock-specific
+/// A choice block presenting player options.
+struct ChoiceBlock : BlueprintBlock {
     std::vector<ChoiceItem> choices;
-
-    // ConditionBlock-specific
-    std::vector<ExportCondition> conditions;
-
-    // ActionBlock-specific
-    std::vector<ExportAction> actions;
-
-    // Shared by Choice, Condition, Action
     std::optional<std::string> note;
 };
+
+/// A condition block evaluating game state to branch the flow.
+struct ConditionBlock : BlueprintBlock {
+    std::vector<ExportCondition> conditions;
+    std::optional<std::string> note;
+};
+
+/// An action block triggering game-side effects.
+struct ActionBlock : BlueprintBlock {
+    std::vector<ExportAction> actions;
+    std::optional<std::string> note;
+};
+
+/// A designer-only note block. Skipped during traversal.
+struct NoteBlock : BlueprintBlock {};
 
 /// A scene containing blocks and their connections.
 struct BlueprintScene {
@@ -146,7 +158,7 @@ struct BlueprintScene {
     std::optional<std::string> note;
     std::optional<std::string> entryBlockId;
     std::string date;
-    std::vector<BlueprintBlock> blocks;
+    std::vector<std::shared_ptr<BlueprintBlock>> blocks;
     std::vector<BlueprintConnection> connections;
 };
 
@@ -310,23 +322,23 @@ using InternalBlockHandler = std::function<CleanupFn(
     std::function<void()> next
 )>;
 
-/// Typed handler for a specific context type.
-template<typename TContext>
+/// Typed handler for a specific block + context type pair.
+template<typename TBlock, typename TContext>
 using TypedBlockHandler = std::function<CleanupFn(
     ISceneHandle* scene,
-    const BlueprintBlock* block,
+    const TBlock* block,
     TContext* context,
     std::function<void()> next
 )>;
 
 /// Wrap a typed handler into the internal non-generic type.
-template<typename TContext>
-InternalBlockHandler wrapHandler(TypedBlockHandler<TContext> handler) {
+template<typename TBlock, typename TContext>
+InternalBlockHandler wrapHandler(TypedBlockHandler<TBlock, TContext> handler) {
     return [h = std::move(handler)](
         ISceneHandle* scene, const BlueprintBlock* block,
         IBaseBlockContext* ctx, std::function<void()> next
     ) -> CleanupFn {
-        return h(scene, block, static_cast<TContext*>(ctx), std::move(next));
+        return h(scene, static_cast<const TBlock*>(block), static_cast<TContext*>(ctx), std::move(next));
     };
 }
 
@@ -378,13 +390,13 @@ public:
     virtual void onExit(SceneLifecycleHandler handler) = 0;
 
     virtual void onBlock(const std::string& blockUuid, InternalBlockHandler handler) = 0;
-    virtual void onDialog(TypedBlockHandler<IDialogContext> handler) = 0;
-    virtual void onChoice(TypedBlockHandler<IChoiceContext> handler) = 0;
-    virtual void onCondition(TypedBlockHandler<IConditionContext> handler) = 0;
-    virtual void onAction(TypedBlockHandler<IActionContext> handler) = 0;
+    virtual void onDialog(TypedBlockHandler<DialogBlock, IDialogContext> handler) = 0;
+    virtual void onChoice(TypedBlockHandler<ChoiceBlock, IChoiceContext> handler) = 0;
+    virtual void onCondition(TypedBlockHandler<ConditionBlock, IConditionContext> handler) = 0;
+    virtual void onAction(TypedBlockHandler<ActionBlock, IActionContext> handler) = 0;
 
     virtual const BlueprintBlock* getCurrentBlock() const = 0;
-    virtual const std::unordered_set<std::string>& getVisitedBlocks() const = 0;
+    virtual const std::vector<std::string>& getVisitedBlocks() const = 0;
     virtual bool isRunning() const = 0;
     virtual int getActiveTracks() const = 0;
 };

@@ -228,8 +228,7 @@ export interface BlueprintBlockBase {
  * @example
  * ```ts
  * engine.onDialog(({ block, context, next }) => {
- *   const dialog = block as DialogBlock;
- *   const text = dialog.dialogueText?.['en'] ?? '';
+ *   const text = block.dialogueText?.['en'] ?? '';
  *   const char = context.character;
  *   showDialogUI(char?.name, text);
  *   next();
@@ -301,8 +300,7 @@ export interface ChoiceBlock extends BlueprintBlockBase {
  * ```ts
  * // Custom handler — overrides StateBridge auto-evaluation
  * engine.onCondition(({ block, context, next }) => {
- *   const cond = block as ConditionBlock;
- *   const result = myCustomEvaluator(cond.conditions ?? []);
+ *   const result = myCustomEvaluator(block.conditions ?? []);
  *   context.resolve(result); // true → port 0, false → port 1
  *   next();
  * });
@@ -335,9 +333,8 @@ export interface ConditionBlock extends BlueprintBlockBase {
  * @example
  * ```ts
  * engine.onAction(({ block, context, next }) => {
- *   const act = block as ActionBlock;
  *   try {
- *     for (const action of act.actions ?? []) {
+ *     for (const action of block.actions ?? []) {
  *       executeGameAction(action);
  *     }
  *     context.resolve();   // → "then" port
@@ -678,7 +675,8 @@ export interface SceneContext {
  * Arguments passed to any block handler.
  *
  * @remarks
- * Every block handler receives this common structure. The generic `C` parameter provides
+ * Every block handler receives this common structure. The generic `B` parameter provides
+ * the block type ({@link DialogBlock}, {@link ChoiceBlock}, etc.) and `C` provides
  * the type-specific context ({@link DialogContext}, {@link ChoiceContext}, etc.).
  *
  * The engine uses a **two-tier handler system**:
@@ -694,11 +692,11 @@ export interface SceneContext {
  * @see {@link SceneHandle} for scene-level handler registration
  * @see {@link BaseBlockContext.preventGlobalHandler} for suppressing Tier 1
  */
-export interface BlockHandlerArgs<C extends BaseBlockContext> {
+export interface BlockHandlerArgs<B extends BlueprintBlock, C extends BaseBlockContext> {
 	/** The scene handle that owns this block. Use it to inspect state, cancel the scene, etc. */
 	scene: SceneHandle;
-	/** The block currently being executed. Narrow on `block.type` for type-specific fields. */
-	block: BlueprintBlock;
+	/** The block being executed, typed to match the handler (e.g. `DialogBlock` for `onDialog`). */
+	block: B;
 	/** Type-specific context providing actions for this block (e.g. selectChoice, resolve). */
 	context: C;
 	/** Advance the flow to the next block. Must be called exactly once to continue traversal. */
@@ -727,7 +725,16 @@ export interface BlockHandlerArgs<C extends BaseBlockContext> {
  * @see {@link CleanupFn} for the cleanup function type
  * @see {@link BlockHandlerArgs} for handler arguments
  */
-export type BlockHandler<C extends BaseBlockContext> = (args: BlockHandlerArgs<C>) => CleanupFn | void;
+export type BlockHandler<B extends BlueprintBlock, C extends BaseBlockContext> = (args: BlockHandlerArgs<B, C>) => CleanupFn | void;
+
+/** Handler for DIALOG blocks. Shorthand for `BlockHandler<DialogBlock, DialogContext>`. */
+export type DialogHandler = BlockHandler<DialogBlock, DialogContext>;
+/** Handler for CHOICE blocks. Shorthand for `BlockHandler<ChoiceBlock, ChoiceContext>`. */
+export type ChoiceHandler = BlockHandler<ChoiceBlock, ChoiceContext>;
+/** Handler for CONDITION blocks. Shorthand for `BlockHandler<ConditionBlock, ConditionContext>`. */
+export type ConditionHandler = BlockHandler<ConditionBlock, ConditionContext>;
+/** Handler for ACTION blocks. Shorthand for `BlockHandler<ActionBlock, ActionContext>`. */
+export type ActionHandler = BlockHandler<ActionBlock, ActionContext>;
 
 /** Arguments for the onValidateNextBlock handler. */
 export interface ValidateNextBlockArgs {
@@ -817,15 +824,15 @@ export interface SceneHandle {
 	onExit(handler: SceneLifecycleHandler): void;
 
 	/** Override a specific block by UUID. */
-	onBlock(blockUuid: string, handler: BlockHandler<BaseBlockContext>): void;
+	onBlock(blockUuid: string, handler: BlockHandler<BlueprintBlock, BaseBlockContext>): void;
 	/** Override all DIALOG blocks for this scene. */
-	onDialog(handler: BlockHandler<DialogContext>): void;
+	onDialog(handler: DialogHandler): void;
 	/** Override all CHOICE blocks for this scene. */
-	onChoice(handler: BlockHandler<ChoiceContext>): void;
+	onChoice(handler: ChoiceHandler): void;
 	/** Override all CONDITION blocks for this scene. */
-	onCondition(handler: BlockHandler<ConditionContext>): void;
+	onCondition(handler: ConditionHandler): void;
 	/** Override all ACTION blocks for this scene. */
-	onAction(handler: BlockHandler<ActionContext>): void;
+	onAction(handler: ActionHandler): void;
 
 	/** Get the block currently being executed. */
 	getCurrentBlock(): BlueprintBlock | null;
@@ -835,6 +842,11 @@ export interface SceneHandle {
 	isRunning(): boolean;
 	/** Get the number of async tracks currently running in parallel. */
 	getActiveTracks(): number;
+
+	/** Get the full choice history for this scene. Keys are block UUIDs, values are arrays of selected choice UUIDs. */
+	getChoiceHistory(): ReadonlyMap<string, readonly string[]>;
+	/** Get the choice(s) selected at a specific block. Returns undefined if block never visited as choice. */
+	getChoice( blockUuid: string ): readonly string[] | undefined;
 }
 
 // ─── DialogueEngine Interface ────────────────────────────────────────────────
@@ -874,13 +886,13 @@ export interface IDialogueEngine {
 	// ── Type handlers (Tier 1 — global) ─────────────────────────────────
 
 	/** Register a global handler for DIALOG blocks. May return a cleanup function. */
-	onDialog(handler: BlockHandler<DialogContext>): void;
+	onDialog(handler: DialogHandler): void;
 	/** Register a global handler for CHOICE blocks. Choices are pre-filtered by visibilityConditions. */
-	onChoice(handler: BlockHandler<ChoiceContext>): void;
+	onChoice(handler: ChoiceHandler): void;
 	/** Register a global handler for CONDITION blocks. If absent, the engine auto-evaluates via StateBridge. */
-	onCondition(handler: BlockHandler<ConditionContext>): void;
+	onCondition(handler: ConditionHandler): void;
 	/** Register a global handler for ACTION blocks. If absent, the engine auto-executes via StateBridge. */
-	onAction(handler: BlockHandler<ActionContext>): void;
+	onAction(handler: ActionHandler): void;
 
 	// ── Scene lifecycle ─────────────────────────────────────────────────
 

@@ -8,7 +8,7 @@ namespace lsde {
 
 SceneGraph::SceneGraph(const BlueprintScene& scene) : _scene(scene) {
     for (const auto& block : scene.blocks) {
-        _blocksByUuid[block.uuid] = &block;
+        _blocksByUuid[block->uuid] = block.get();
     }
     for (const auto& conn : scene.connections) {
         _connectionsByFromId[conn.fromId].push_back(&conn);
@@ -27,7 +27,7 @@ std::vector<const BlueprintConnection*> SceneGraph::getOutgoingConnections(const
 
 const BlueprintBlock* SceneGraph::getStartBlock() const {
     for (const auto& block : _scene.blocks) {
-        if (block.isStartBlock && *block.isStartBlock) return &block;
+        if (block->isStartBlock && *block->isStartBlock) return block.get();
     }
     if (_scene.entryBlockId) {
         return getBlock(*_scene.entryBlockId);

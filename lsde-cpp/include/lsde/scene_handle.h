@@ -60,12 +60,12 @@ public:
     void onEnter(SceneLifecycleHandler handler) override;
     void onExit(SceneLifecycleHandler handler) override;
     void onBlock(const std::string& blockUuid, InternalBlockHandler handler) override;
-    void onDialog(TypedBlockHandler<IDialogContext> handler) override;
-    void onChoice(TypedBlockHandler<IChoiceContext> handler) override;
-    void onCondition(TypedBlockHandler<IConditionContext> handler) override;
-    void onAction(TypedBlockHandler<IActionContext> handler) override;
+    void onDialog(TypedBlockHandler<DialogBlock, IDialogContext> handler) override;
+    void onChoice(TypedBlockHandler<ChoiceBlock, IChoiceContext> handler) override;
+    void onCondition(TypedBlockHandler<ConditionBlock, IConditionContext> handler) override;
+    void onAction(TypedBlockHandler<ActionBlock, IActionContext> handler) override;
     const BlueprintBlock* getCurrentBlock() const override;
-    const std::unordered_set<std::string>& getVisitedBlocks() const override;
+    const std::vector<std::string>& getVisitedBlocks() const override;
     bool isRunning() const override;
     int getActiveTracks() const override;
 
@@ -100,7 +100,8 @@ private:
     bool _cancelled = false;
     const BlueprintBlock* _currentBlock = nullptr;
     const BlueprintBlock* _previousBlock = nullptr;
-    std::unordered_set<std::string> _visited;
+    std::unordered_set<std::string> _visitedSet;
+    std::vector<std::string> _visitedOrder;
     CleanupFn _previousCleanup;
     std::vector<std::unique_ptr<AsyncTrack>> _asyncTracks;
     std::unique_ptr<IBaseBlockContext> _ownedContext; // keeps main-track context alive

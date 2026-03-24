@@ -52,6 +52,7 @@ export function createDialogContext( block: DialogBlock ): InternalDialogContext
 export function createChoiceContext(
 	block: ChoiceBlock,
 	evaluator: ( condition: ExportCondition ) => boolean,
+	onChoiceSelected?: ( blockUuid: string, choiceUuid: string ) => void,
 ): InternalChoiceContext {
 	const visibleChoices: ChoiceItem[] = filterVisibleChoices( block.choices ?? [], evaluator );
 	const ctx: InternalChoiceContext = {
@@ -60,6 +61,9 @@ export function createChoiceContext(
 		choices: visibleChoices,
 		selectChoice( choiceUuid: string ) {
 			ctx._selectedChoiceUuid = choiceUuid;
+			if ( onChoiceSelected ) {
+				onChoiceSelected( block.uuid, choiceUuid );
+			}
 		},
 		preventGlobalHandler() {
 			ctx._globalPrevented = true;

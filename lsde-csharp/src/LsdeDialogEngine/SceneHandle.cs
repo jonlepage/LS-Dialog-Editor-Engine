@@ -114,14 +114,14 @@ namespace LsdeDialogEngine
             // Auto-behavior
             if (resolved.SceneHandler == null && resolved.GlobalHandler == null)
             {
-                if (block.Type == BlockType.CONDITION)
+                if (block is ConditionBlock cb)
                 {
-                    AutoEvaluateCondition(block, (InternalConditionContext)context);
+                    AutoEvaluateCondition(cb, (InternalConditionContext)context);
                     return;
                 }
-                if (block.Type == BlockType.ACTION)
+                if (block is ActionBlock ab)
                 {
-                    AutoExecuteAction(block, (InternalActionContext)context);
+                    AutoExecuteAction(ab, (InternalActionContext)context);
                     return;
                 }
             }
@@ -226,30 +226,24 @@ namespace LsdeDialogEngine
             _parentHandle.RemoveTrack(this);
         }
 
-        private void AutoEvaluateCondition(BlueprintBlock block, InternalConditionContext context)
+        private void AutoEvaluateCondition(ConditionBlock block, InternalConditionContext context)
         {
             var bridge = _parentHandle.GetStateBridgeInternal();
             if (bridge == null) { EndTrack(); return; }
-            if (block.Type == BlockType.CONDITION)
-            {
-                context.ConditionResult = ConditionEvaluator.EvaluateConditionChain(
-                    block.Conditions ?? new List<ExportCondition>(),
-                    bridge.EvaluateCondition);
-            }
+            context.ConditionResult = ConditionEvaluator.EvaluateConditionChain(
+                block.Conditions ?? new List<ExportCondition>(),
+                bridge.EvaluateCondition);
             _previousCleanup = null;
             AdvanceToNextBlock(block, context);
         }
 
-        private void AutoExecuteAction(BlueprintBlock block, InternalActionContext context)
+        private void AutoExecuteAction(ActionBlock block, InternalActionContext context)
         {
             var bridge = _parentHandle.GetStateBridgeInternal();
             if (bridge == null) { EndTrack(); return; }
-            if (block.Type == BlockType.ACTION)
+            foreach (var action in block.Actions ?? new List<ExportAction>())
             {
-                foreach (var action in block.Actions ?? new List<ExportAction>())
-                {
-                    bridge.ExecuteAction(action, null);
-                }
+                bridge.ExecuteAction(action, null);
             }
             context.ActionRejected = false;
             _previousCleanup = null;
@@ -353,28 +347,28 @@ namespace LsdeDialogEngine
             _sceneRegistry.ExitHandler = handler;
         }
 
-        public void OnBlock(string blockUuid, BlockHandler<IBaseBlockContext> handler)
+        public void OnBlock(string blockUuid, BlockHandler<BlueprintBlock, IBaseBlockContext> handler)
         {
             _sceneRegistry.SetBlockHandler(blockUuid,
-                (scene, block, context, next) => handler(new BlockHandlerArgs<IBaseBlockContext>(scene, block, context, next)));
+                (scene, block, context, next) => handler(new BlockHandlerArgs<BlueprintBlock, IBaseBlockContext>(scene, block, context, next)));
         }
 
-        public void OnDialog(BlockHandler<IDialogContext> handler)
+        public void OnDialog(BlockHandler<DialogBlock, IDialogContext> handler)
         {
             _sceneRegistry.DialogHandler = handler;
         }
 
-        public void OnChoice(BlockHandler<IChoiceContext> handler)
+        public void OnChoice(BlockHandler<ChoiceBlock, IChoiceContext> handler)
         {
             _sceneRegistry.ChoiceHandler = handler;
         }
 
-        public void OnCondition(BlockHandler<IConditionContext> handler)
+        public void OnCondition(BlockHandler<ConditionBlock, IConditionContext> handler)
         {
             _sceneRegistry.ConditionHandler = handler;
         }
 
-        public void OnAction(BlockHandler<IActionContext> handler)
+        public void OnAction(BlockHandler<ActionBlock, IActionContext> handler)
         {
             _sceneRegistry.ActionHandler = handler;
         }
@@ -500,14 +494,14 @@ namespace LsdeDialogEngine
             // Auto-behavior: no handlers → auto-evaluate/execute
             if (resolved.SceneHandler == null && resolved.GlobalHandler == null)
             {
-                if (block.Type == BlockType.CONDITION)
+                if (block is ConditionBlock cb)
                 {
-                    AutoEvaluateCondition(block, (InternalConditionContext)context);
+                    AutoEvaluateCondition(cb, (InternalConditionContext)context);
                     return;
                 }
-                if (block.Type == BlockType.ACTION)
+                if (block is ActionBlock ab)
                 {
-                    AutoExecuteAction(block, (InternalActionContext)context);
+                    AutoExecuteAction(ab, (InternalActionContext)context);
                     return;
                 }
             }
@@ -643,7 +637,7 @@ namespace LsdeDialogEngine
 
         // ─── Auto-behaviors ──────────────────────────────────────────────────
 
-        private void AutoEvaluateCondition(BlueprintBlock block, InternalConditionContext context)
+        private void AutoEvaluateCondition(ConditionBlock block, InternalConditionContext context)
         {
             var bridge = _callbacks.GetStateBridge?.Invoke();
             if (bridge == null)
@@ -651,18 +645,14 @@ namespace LsdeDialogEngine
                 EndScene();
                 return;
             }
-            if (block.Type == BlockType.CONDITION)
-            {
-                var result = ConditionEvaluator.EvaluateConditionChain(
-                    block.Conditions ?? new List<ExportCondition>(),
-                    bridge.EvaluateCondition);
-                context.ConditionResult = result;
-            }
+            context.ConditionResult = ConditionEvaluator.EvaluateConditionChain(
+                block.Conditions ?? new List<ExportCondition>(),
+                bridge.EvaluateCondition);
             _previousCleanup = null;
             AdvanceToNextBlock(block, context);
         }
 
-        private void AutoExecuteAction(BlueprintBlock block, InternalActionContext context)
+        private void AutoExecuteAction(ActionBlock block, InternalActionContext context)
         {
             var bridge = _callbacks.GetStateBridge?.Invoke();
             if (bridge == null)
@@ -670,12 +660,9 @@ namespace LsdeDialogEngine
                 EndScene();
                 return;
             }
-            if (block.Type == BlockType.ACTION)
+            foreach (var action in block.Actions ?? new List<ExportAction>())
             {
-                foreach (var action in block.Actions ?? new List<ExportAction>())
-                {
-                    bridge.ExecuteAction(action, null);
-                }
+                bridge.ExecuteAction(action, null);
             }
             context.ActionRejected = false;
             _previousCleanup = null;
@@ -700,21 +687,21 @@ namespace LsdeDialogEngine
 
         private IBaseBlockContext? CreateContext(BlueprintBlock block)
         {
-            switch (block.Type)
+            switch (block)
             {
-                case BlockType.DIALOG:
-                    return BlockContextFactory.CreateDialogContext(block);
-                case BlockType.CHOICE:
+                case DialogBlock db:
+                    return BlockContextFactory.CreateDialogContext(db);
+                case ChoiceBlock cb:
                 {
                     var bridge = _callbacks.GetStateBridge?.Invoke();
                     Func<ExportCondition, bool> evaluator = bridge != null
                         ? bridge.EvaluateCondition
                         : (_ => true);
-                    return BlockContextFactory.CreateChoiceContext(block, evaluator);
+                    return BlockContextFactory.CreateChoiceContext(cb, evaluator);
                 }
-                case BlockType.CONDITION:
+                case ConditionBlock _:
                     return BlockContextFactory.CreateConditionContext();
-                case BlockType.ACTION:
+                case ActionBlock _:
                     return BlockContextFactory.CreateActionContext();
                 default:
                     return null;

@@ -123,13 +123,13 @@ TEST_P(CrossLanguageFlowTest, Run) {
     auto handle = engine.scene(*suite.sceneId);
 
     if (stepTypes.count("DIALOG")) {
-        handle->onDialog([&](ISceneHandle*, const BlueprintBlock* block, IDialogContext* ctx, std::function<void()> next) -> CleanupFn {
+        handle->onDialog([&](ISceneHandle*, const DialogBlock* block, IDialogContext* ctx, std::function<void()> next) -> CleanupFn {
             return handleStep("DIALOG", block, ctx, std::move(next), steps, state);
         });
     }
 
     if (stepTypes.count("CHOICE")) {
-        handle->onChoice([&](ISceneHandle*, const BlueprintBlock* block, IChoiceContext* ctx, std::function<void()> next) -> CleanupFn {
+        handle->onChoice([&](ISceneHandle*, const ChoiceBlock* block, IChoiceContext* ctx, std::function<void()> next) -> CleanupFn {
             auto* step = state.stepIndex < static_cast<int>(steps.size()) ? &steps[state.stepIndex] : nullptr;
             if (step && step->expect.type == "CHOICE"
                 && (!step->expect.blockUuid || *step->expect.blockUuid == block->uuid)) {
@@ -142,13 +142,13 @@ TEST_P(CrossLanguageFlowTest, Run) {
     }
 
     if (stepTypes.count("CONDITION")) {
-        handle->onCondition([&](ISceneHandle*, const BlueprintBlock* block, IConditionContext* ctx, std::function<void()> next) -> CleanupFn {
+        handle->onCondition([&](ISceneHandle*, const ConditionBlock* block, IConditionContext* ctx, std::function<void()> next) -> CleanupFn {
             return handleStep("CONDITION", block, ctx, std::move(next), steps, state);
         });
     }
 
     if (stepTypes.count("ACTION")) {
-        handle->onAction([&](ISceneHandle*, const BlueprintBlock* block, IActionContext* ctx, std::function<void()> next) -> CleanupFn {
+        handle->onAction([&](ISceneHandle*, const ActionBlock* block, IActionContext* ctx, std::function<void()> next) -> CleanupFn {
             return handleStep("ACTION", block, ctx, std::move(next), steps, state);
         });
     }

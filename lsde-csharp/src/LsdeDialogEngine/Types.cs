@@ -103,13 +103,9 @@ namespace LsdeDialogEngine
         public Dictionary<string, object>? Others { get; set; }
     }
 
-    /// <summary>
-    /// Blueprint block — single class with Type enum + nullable type-specific fields.
-    /// Use block.Type to determine which fields are relevant.
-    /// </summary>
-    public class BlueprintBlock
+    /// <summary>Base class for all blueprint blocks. Use typed subclasses for block-specific data.</summary>
+    public abstract class BlueprintBlock
     {
-        // Common fields (BlueprintBlockBase)
         public string Uuid { get; set; } = "";
         public BlockType Type { get; set; }
         public string? Label { get; set; }
@@ -119,23 +115,40 @@ namespace LsdeDialogEngine
         public NativeProperties? NativeProperties { get; set; }
         public BlockMetadata? Metadata { get; set; }
         public bool? IsStartBlock { get; set; }
+    }
 
-        // DialogBlock-specific
+    /// <summary>A dialogue block displaying text from a character.</summary>
+    public class DialogBlock : BlueprintBlock
+    {
         public string? StructureKey { get; set; }
         public string? Content { get; set; }
         public Dictionary<string, string>? DialogueText { get; set; }
+    }
 
-        // ChoiceBlock-specific
+    /// <summary>A choice block presenting player options.</summary>
+    public class ChoiceBlock : BlueprintBlock
+    {
         public List<ChoiceItem>? Choices { get; set; }
-
-        // ConditionBlock-specific
-        public List<ExportCondition>? Conditions { get; set; }
-
-        // ActionBlock-specific
-        public List<ExportAction>? Actions { get; set; }
-
-        // Shared by Choice, Condition, Action
         public string? Note { get; set; }
+    }
+
+    /// <summary>A condition block evaluating game state to branch the flow.</summary>
+    public class ConditionBlock : BlueprintBlock
+    {
+        public List<ExportCondition>? Conditions { get; set; }
+        public string? Note { get; set; }
+    }
+
+    /// <summary>An action block triggering game-side effects.</summary>
+    public class ActionBlock : BlueprintBlock
+    {
+        public List<ExportAction>? Actions { get; set; }
+        public string? Note { get; set; }
+    }
+
+    /// <summary>A designer-only note block. Skipped during traversal.</summary>
+    public class NoteBlock : BlueprintBlock
+    {
     }
 
     /// <summary>A scene containing blocks and their connections.</summary>
@@ -313,14 +326,16 @@ namespace LsdeDialogEngine
     // ─── Handler Args & Delegates ────────────────────────────────────────────────
 
     /// <summary>Arguments passed to any block handler.</summary>
-    public class BlockHandlerArgs<TContext> where TContext : IBaseBlockContext
+    public class BlockHandlerArgs<TBlock, TContext>
+        where TBlock : BlueprintBlock
+        where TContext : IBaseBlockContext
     {
         public ISceneHandle Scene { get; }
-        public BlueprintBlock Block { get; }
+        public TBlock Block { get; }
         public TContext Context { get; }
         public Action Next { get; }
 
-        public BlockHandlerArgs(ISceneHandle scene, BlueprintBlock block, TContext context, Action next)
+        public BlockHandlerArgs(ISceneHandle scene, TBlock block, TContext context, Action next)
         {
             Scene = scene;
             Block = block;
@@ -361,8 +376,9 @@ namespace LsdeDialogEngine
         public SceneContext Context { get; set; } = new SceneContext();
     }
 
-    // Handler delegates using Func/Action per PLAN.md §11
-    public delegate Action? BlockHandler<TContext>(BlockHandlerArgs<TContext> args) where TContext : IBaseBlockContext;
+    public delegate Action? BlockHandler<TBlock, TContext>(BlockHandlerArgs<TBlock, TContext> args)
+        where TBlock : BlueprintBlock
+        where TContext : IBaseBlockContext;
     public delegate ValidationResult ValidateNextBlockHandler(ValidateNextBlockArgs args);
     public delegate void InvalidateBlockHandler(InvalidateBlockArgs args);
     public delegate void BeforeBlockHandler(BeforeBlockArgs args);
@@ -379,11 +395,11 @@ namespace LsdeDialogEngine
         void OnEnter(SceneLifecycleHandler handler);
         void OnExit(SceneLifecycleHandler handler);
 
-        void OnBlock(string blockUuid, BlockHandler<IBaseBlockContext> handler);
-        void OnDialog(BlockHandler<IDialogContext> handler);
-        void OnChoice(BlockHandler<IChoiceContext> handler);
-        void OnCondition(BlockHandler<IConditionContext> handler);
-        void OnAction(BlockHandler<IActionContext> handler);
+        void OnBlock(string blockUuid, BlockHandler<BlueprintBlock, IBaseBlockContext> handler);
+        void OnDialog(BlockHandler<DialogBlock, IDialogContext> handler);
+        void OnChoice(BlockHandler<ChoiceBlock, IChoiceContext> handler);
+        void OnCondition(BlockHandler<ConditionBlock, IConditionContext> handler);
+        void OnAction(BlockHandler<ActionBlock, IActionContext> handler);
 
         BlueprintBlock? GetCurrentBlock();
         IReadOnlyCollection<string> GetVisitedBlocks();

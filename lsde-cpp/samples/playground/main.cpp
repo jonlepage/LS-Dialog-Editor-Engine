@@ -105,7 +105,7 @@ int main(int argc, char* argv[]) {
     int choiceCount = 0;
 
     // Handlers
-    engine.onDialog([&](ISceneHandle*, const BlueprintBlock* block, IDialogContext* ctx, std::function<void()> next) -> CleanupFn {
+    engine.onDialog([&](ISceneHandle*, const DialogBlock* block, IDialogContext* ctx, std::function<void()> next) -> CleanupFn {
         auto* ch = ctx->character();
         auto charStr = ch ? Magenta(ch->name) + " " + Dim("(" + ch->emotion.value_or("?") + ")") : Dim("(no character)");
         auto it = block->dialogueText.find(locale);
@@ -128,7 +128,7 @@ int main(int argc, char* argv[]) {
         return [block]() { std::cout << Gray("       [cleanup] " + Label(*block)) << "\n"; };
     });
 
-    engine.onChoice([&](ISceneHandle*, const BlueprintBlock* block, IChoiceContext* ctx, std::function<void()> next) -> CleanupFn {
+    engine.onChoice([&](ISceneHandle*, const ChoiceBlock* block, IChoiceContext* ctx, std::function<void()> next) -> CleanupFn {
         choiceCount++;
         std::cout << "\n  " << Bold(Yellow("CHOICE")) << " " << Cyan(Label(*block))
                   << " " << ctx->choices().size() << " visible:\n";
@@ -145,7 +145,7 @@ int main(int argc, char* argv[]) {
         return {};
     });
 
-    engine.onCondition([&](ISceneHandle*, const BlueprintBlock* block, IConditionContext* ctx, std::function<void()> next) -> CleanupFn {
+    engine.onCondition([&](ISceneHandle*, const ConditionBlock* block, IConditionContext* ctx, std::function<void()> next) -> CleanupFn {
         bool result = !block->conditions.empty();
         std::cout << "\n  " << Bold(Magenta("CONDITION")) << " " << Cyan(Label(*block))
                   << " " << block->conditions.size() << " conditions -> "
@@ -155,7 +155,7 @@ int main(int argc, char* argv[]) {
         return {};
     });
 
-    engine.onAction([&](ISceneHandle*, const BlueprintBlock* block, IActionContext* ctx, std::function<void()> next) -> CleanupFn {
+    engine.onAction([&](ISceneHandle*, const ActionBlock* block, IActionContext* ctx, std::function<void()> next) -> CleanupFn {
         std::cout << "\n  " << Bold(Green("ACTION")) << " " << Cyan(Label(*block))
                   << " " << block->actions.size() << " actions\n";
         for (const auto& a : block->actions)
@@ -196,7 +196,7 @@ int main(int argc, char* argv[]) {
         std::string lbl = uuid.substr(0, 8);
         for (const auto& s : blueprint.scenes) {
             for (const auto& b : s.blocks) {
-                if (b.uuid == uuid) { lbl = b.label.value_or(lbl); break; }
+                if (b->uuid == uuid) { lbl = b->label.value_or(lbl); break; }
             }
         }
         std::cout << Cyan(lbl);

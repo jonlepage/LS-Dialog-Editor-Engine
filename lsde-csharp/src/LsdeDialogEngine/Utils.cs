@@ -4,11 +4,11 @@ namespace LsdeDialogEngine
 {
     public static class Utils
     {
-        public static bool IsDialogBlock(BlueprintBlock block) => block.Type == BlockType.DIALOG;
-        public static bool IsChoiceBlock(BlueprintBlock block) => block.Type == BlockType.CHOICE;
-        public static bool IsConditionBlock(BlueprintBlock block) => block.Type == BlockType.CONDITION;
-        public static bool IsActionBlock(BlueprintBlock block) => block.Type == BlockType.ACTION;
-        public static bool IsNoteBlock(BlueprintBlock block) => block.Type == BlockType.NOTE;
+        public static bool IsDialogBlock(BlueprintBlock block) => block is DialogBlock;
+        public static bool IsChoiceBlock(BlueprintBlock block) => block is ChoiceBlock;
+        public static bool IsConditionBlock(BlueprintBlock block) => block is ConditionBlock;
+        public static bool IsActionBlock(BlueprintBlock block) => block is ActionBlock;
+        public static bool IsNoteBlock(BlueprintBlock block) => block is NoteBlock;
 
         public static BlockCharacter? GetFirstCharacter(BlueprintBlock block)
         {
