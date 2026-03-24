@@ -49,7 +49,8 @@ __pycache__/
 _bmad-output/
 _bmad/
 .claude/
-.github/
+.github/*
+!.github/workflows/
 
 # VitePress & TypeDoc generated
 lsde-ts/docs/api-ref/
