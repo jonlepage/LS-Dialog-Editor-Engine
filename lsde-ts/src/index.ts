@@ -30,8 +30,9 @@ export type {
 	BeforeBlockArgs, BeforeBlockHandler,
 	SceneLifecycleArgs, SceneLifecycleHandler,
 
-	// Scene handle
+	// Scene handle & engine interface
 	SceneHandle,
+	IDialogueEngine,
 
 	// Port resolution
 	PortResolutionInput, PortResolutionResult,

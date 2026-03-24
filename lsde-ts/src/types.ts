@@ -837,6 +837,77 @@ export interface SceneHandle {
 	getActiveTracks(): number;
 }
 
+// ─── DialogueEngine Interface ────────────────────────────────────────────────
+
+/**
+ * Public interface for the dialogue engine facade.
+ *
+ * @remarks
+ * This is the top-level entry point for the LSDEDE runtime. It manages blueprint loading,
+ * global handler registration, and scene creation. Use {@link SceneHandle} for per-scene control.
+ *
+ * @see {@link SceneHandle} for per-scene runtime control
+ * @see {@link StateBridge} for game state integration
+ */
+export interface IDialogueEngine {
+	// ── Initialization ──────────────────────────────────────────────────
+
+	/** Validate blueprint data, build internal graph, return diagnostic report. */
+	init(options: InitOptions): DiagnosticReport;
+	/** Set the active locale for text resolution. */
+	setLocale(locale: string): void;
+	/** Set the bridge between the engine and the game state. */
+	setStateBridge(bridge: StateBridge): void;
+
+	// ── Validation handlers ─────────────────────────────────────────────
+
+	/** Register a handler called before each block to validate it. */
+	onValidateNextBlock(handler: ValidateNextBlockHandler): void;
+	/** Register a handler called when a block fails validation. */
+	onInvalidateBlock(handler: InvalidateBlockHandler): void;
+
+	// ── Pre-execution ───────────────────────────────────────────────────
+
+	/** Register a handler called before every block. Must call resolve() to continue. */
+	onBeforeBlock(handler: BeforeBlockHandler): void;
+
+	// ── Type handlers (Tier 1 — global) ─────────────────────────────────
+
+	/** Register a global handler for DIALOG blocks. May return a cleanup function. */
+	onDialog(handler: BlockHandler<DialogContext>): void;
+	/** Register a global handler for CHOICE blocks. Choices are pre-filtered by visibilityConditions. */
+	onChoice(handler: BlockHandler<ChoiceContext>): void;
+	/** Register a global handler for CONDITION blocks. If absent, the engine auto-evaluates via StateBridge. */
+	onCondition(handler: BlockHandler<ConditionContext>): void;
+	/** Register a global handler for ACTION blocks. If absent, the engine auto-executes via StateBridge. */
+	onAction(handler: BlockHandler<ActionContext>): void;
+
+	// ── Scene lifecycle ─────────────────────────────────────────────────
+
+	/** Register a handler called when any scene starts. */
+	onSceneEnter(handler: SceneLifecycleHandler): void;
+	/** Register a handler called when any scene ends (natural or cancelled). */
+	onSceneExit(handler: SceneLifecycleHandler): void;
+
+	// ── Scene handles ───────────────────────────────────────────────────
+
+	/** Create a scene handle. Does NOT start the flow — call handle.start(). */
+	scene(sceneId: string): SceneHandle;
+
+	// ── Engine control ──────────────────────────────────────────────────
+
+	/** Stop all active scenes. */
+	stop(): void;
+	/** True if at least one scene is active. */
+	isRunning(): boolean;
+	/** Get all currently active scene handles. */
+	getActiveScenes(): SceneHandle[];
+	/** Get the current block of every active scene. */
+	getCurrentBlocks(): BlueprintBlock[];
+	/** Get connections for a scene (for inter-scene navigation). */
+	getSceneConnections(sceneId: string): BlueprintConnection[];
+}
+
 // ─── Port Resolution Types ──────────────────────────────────────────────────
 
 /** Input data for port resolution. */
