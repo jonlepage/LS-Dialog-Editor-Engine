@@ -13,14 +13,19 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "tsc --noEmit",
-    "docs": "typedoc",
-    "docs:serve": "typedoc && npx serve docs -p 3333",
+    "docs:api": "typedoc",
+    "docs:dev": "typedoc && vitepress dev docs",
+    "docs": "typedoc && vitepress build docs",
+    "docs:preview": "vitepress preview docs",
     "playground": "tsx src/playground.ts"
   },
   "devDependencies": {
     "tsx": "^4.21.0",
     "typedoc": "^0.28.18",
+    "typedoc-plugin-markdown": "^4.11.0",
+    "typedoc-vitepress-theme": "^1.1.2",
     "typescript": "^5.4.0",
+    "vitepress": "^1.6.4",
     "vitest": "^2.0.0"
   },
   "license": "SEE LICENSE IN ../LICENSE"

@@ -1,8 +1,10 @@
 {
 	"$schema": "https://typedoc.org/schema.json",
+	"plugin": ["typedoc-plugin-markdown", "typedoc-vitepress-theme"],
 	"entryPoints": ["src/index.ts"],
-	"out": "docs",
+	"out": "docs/api-ref",
 	"exclude": ["**/*.test.ts"],
 	"name": "LSDE Dialog Engine",
-	"readme": "none"
+	"readme": "none",
+	"docsRoot": "docs"
 }

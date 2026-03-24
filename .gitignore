@@ -51,6 +51,11 @@ _bmad/
 .claude/
 .github/
 
+# VitePress & TypeDoc generated
+lsde-ts/docs/api-ref/
+lsde-ts/docs/.vitepress/dist
+lsde-ts/docs/.vitepress/cache
+
 # misc
 .env
 .env.local

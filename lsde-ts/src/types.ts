@@ -27,19 +27,27 @@ export interface BlockProperty {
 	value: string | number | boolean;
 }
 
-/** Condition evaluated to control dialogue flow or choice visibility. */
+/** Condition evaluated to control dialogue flow or choice visibility. Conditions are evaluated left-to-right with no operator precedence; an empty array passes (returns true). */
 export interface ExportCondition {
+	/** Unique identifier for this condition instance. */
 	uuid: string;
+	/** State key to evaluate (e.g. "has_item", "player_level"). Resolved by `StateBridge.evaluateCondition()`. */
 	key: string;
+	/** Logical chaining with the previous condition: `'|'` (OR) or `'&'` (AND). Defaults to AND if omitted. Ignored on the first condition in a chain. */
 	chain?: '|' | '&';
+	/** Comparison operator (e.g. "==", "!=", ">", "<", ">=", "<="). Interpretation is up to `StateBridge.evaluateCondition()`. */
 	operator: string;
+	/** Value to compare against. Always a string — the StateBridge is responsible for type coercion. */
 	value: string;
 }
 
 /** Action triggered during block execution. */
 export interface ExportAction {
+	/** Unique identifier for this action instance. */
 	uuid: string;
+	/** Action type identifier matching an `ActionSignature.id` (e.g. "set_flag", "play_sound"). */
 	actionId: string;
+	/** Ordered parameter values for the action, as defined by the matching `ActionSignature.params`. */
 	params: (string | number | boolean)[];
 }
 
@@ -54,21 +62,31 @@ export interface ChoiceItem {
 
 /** LSDE native execution properties for a block. */
 export interface NativeProperties {
+	/** Execute this block on a separate async track running in parallel with the main flow. */
 	isAsync?: boolean;
+	/** Delay in seconds before the block is executed. Applied by the `onBeforeBlock` handler. */
 	delay?: number;
+	/** Timeout in seconds for block execution. */
 	timeout?: number;
+	/** Enable debug mode for this block (editor use). */
 	debug?: boolean;
+	/** One output port per character in `metadata.characters`. The handler calls `resolveCharacterPort()` to pick which port to follow. */
 	portPerCharacter?: boolean;
+	/** Skip this block entirely if the assigned actor/character is missing at runtime. */
 	skipIfMissingActor?: boolean;
-	/** When true (requires isAsync), this async track advances automatically when the main track advances. */
+	/** When true (requires `isAsync`), this async track advances automatically when the main track advances. If `next()` was already called, the pending advance executes; otherwise the block is force-advanced (skipped). */
 	followNarrative?: boolean;
 }
 
 /** Character (actor) assigned to a dialogue block. */
 export interface BlockCharacter {
+	/** Character display name. */
 	name: string;
+	/** Optional portrait/avatar image path. */
 	image?: string;
+	/** Emotion label for the character in this block (e.g. "happy", "angry"). */
 	emotion?: string;
+	/** Emotion intensity from 0 (neutral) to 1 (maximum). */
 	emotionIntensity?: number;
 }
 
@@ -195,9 +213,13 @@ export interface BlueprintExport {
 
 /** Single diagnostic entry (error or warning). */
 export interface DiagnosticEntry {
+	/** Machine-readable error/warning code (e.g. "NO_ENTRY_BLOCK", "ORPHAN_CONNECTION"). */
 	code: string;
+	/** Human-readable description of the issue. */
 	message: string;
+	/** UUID of the scene where the issue was found, if applicable. */
 	sceneId?: string;
+	/** UUID of the block where the issue was found, if applicable. */
 	blockId?: string;
 }
 
@@ -215,10 +237,13 @@ export interface DiagnosticReport {
 	stats: DiagnosticStats;
 }
 
-/** Options for cross-validating blueprint data against game capabilities. */
+/** Options for cross-validating blueprint data against game capabilities. When provided, the engine warns about blueprint references that don't match your game's known capabilities. */
 export interface CheckOptions {
+	/** Known action signature IDs in your game. Blueprint actions referencing unknown IDs will produce warnings. */
 	signatures?: string[];
+	/** Known dictionary groups and their row keys. Blueprint references to unknown groups/keys will produce warnings. */
 	dictionaries?: Record<string, string[]>;
+	/** Known character names in your game. Blueprint blocks referencing unknown characters will produce warnings. */
 	characters?: string[];
 }
 
@@ -237,7 +262,9 @@ export interface StateBridge {
 
 /** Result of block validation. @see PLAN.md §3.3 */
 export interface ValidationResult {
+	/** Whether the block passed validation. When `false`, the `onInvalidateBlock` handler is called. */
 	valid: boolean;
+	/** Reason for validation failure. Passed to `InvalidateBlockArgs.reason` when `valid` is `false`. */
 	reason?: string;
 }
 
@@ -276,9 +303,9 @@ export interface ConditionContext extends BaseBlockContext {
 
 /** Context for ACTION block handlers. */
 export interface ActionContext extends BaseBlockContext {
-	/** Mark action as succeeded. Engine follows the `out` port. */
+	/** Mark action as succeeded. Engine follows the `then` port. */
 	resolve: () => void;
-	/** Mark action as failed. Engine follows the `catch` port (fallback `out`). */
+	/** Mark action as failed. Engine follows the `catch` port (fallback `then` if no catch port exists). */
 	reject: (error: unknown) => void;
 }
 
