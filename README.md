@@ -6,10 +6,10 @@ LSDE exports dialogue graphs (scenes, blocks, connections, dictionaries, signatu
 
 ## Runtimes
 
-[![TypeScript](lsde-ts/banner.png)](lsde-ts/)
-[![C#](lsde-csharp/banner.png)](lsde-csharp/)
-[![C++](lsde-cpp/banner.png)](lsde-cpp/)
-[![GDScript](lsde-gdscript/banner.png)](lsde-gdscript/)
+<a href="lsde-ts/"><img src="lsde-ts/banner.png" width="250" alt="TypeScript"></a>
+<a href="lsde-csharp/"><img src="lsde-csharp/banner.png" width="250" alt="C#"></a>
+<a href="lsde-cpp/"><img src="lsde-cpp/banner.png" width="250" alt="C++"></a>
+<a href="lsde-gdscript/"><img src="lsde-gdscript/banner.png" width="250" alt="GDScript"></a>
 
 | Runtime | Language | Target | Tests |
 |---------|----------|--------|-------|
