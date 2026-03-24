@@ -4,7 +4,7 @@ import typedocSidebar from '../api-ref/typedoc-sidebar.json';
 export default defineConfig({
 	title: 'LSDE Dialog Engine',
 	description: 'TypeScript reference implementation — callback-driven graph dispatcher for dialogue blueprints',
-	base: '/',
+	base: '/LS-Dialog-Editor-Engine/',
 
 	themeConfig: {
 		nav: [
