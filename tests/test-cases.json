@@ -1,4 +1,2001 @@
 {
   "version": "1.0",
-  "suites": []
+  "suites": [
+    {
+      "id": "linear-dialog",
+      "description": "P0 — Two sequential DIALOG blocks forming a minimal linear flow",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": [
+          "en"
+        ],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-linear",
+            "label": "Linear Scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "b1",
+                "type": "DIALOG",
+                "label": "Hello Block",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Hello"
+                },
+                "isStartBlock": true
+              },
+              {
+                "uuid": "b2",
+                "type": "DIALOG",
+                "label": "World Block",
+                "properties": [],
+                "dialogueText": {
+                  "en": "World"
+                }
+              }
+            ],
+            "connections": [
+              {
+                "id": "conn-1",
+                "fromId": "b1",
+                "toId": "b2",
+                "fromPort": "out",
+                "toPort": "in"
+              }
+            ]
+          }
+        ]
+      },
+      "sceneId": "scene-linear",
+      "locale": "en",
+      "stateBridge": {},
+      "cases": [
+        {
+          "id": "linear-001",
+          "description": "Advance through two dialogs then reach end of scene",
+          "steps": [
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "b1",
+                "dialogueText": "Hello"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "b2",
+                "dialogueText": "World"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "END_OF_SCENE"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "b1",
+            "b2"
+          ],
+          "expectedCleanupCalls": 2
+        }
+      ]
+    },
+    {
+      "id": "choice-branch",
+      "description": "P0 — DIALOG into CHOICE with two branches leading to different outcomes",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": [
+          "en"
+        ],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-choice",
+            "label": "Choice Scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "greeting",
+                "type": "DIALOG",
+                "label": "Greeting",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Welcome!"
+                },
+                "isStartBlock": true
+              },
+              {
+                "uuid": "choice1",
+                "type": "CHOICE",
+                "label": "Buy or Leave",
+                "properties": [],
+                "choices": [
+                  {
+                    "uuid": "opt-buy",
+                    "structureKey": "buy",
+                    "dialogueText": {
+                      "en": "Buy"
+                    }
+                  },
+                  {
+                    "uuid": "opt-leave",
+                    "structureKey": "leave",
+                    "dialogueText": {
+                      "en": "Leave"
+                    }
+                  }
+                ]
+              },
+              {
+                "uuid": "shop",
+                "type": "DIALOG",
+                "label": "Shop",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Here are my wares."
+                }
+              },
+              {
+                "uuid": "bye",
+                "type": "DIALOG",
+                "label": "Bye",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Safe travels."
+                }
+              }
+            ],
+            "connections": [
+              {
+                "id": "conn-1",
+                "fromId": "greeting",
+                "toId": "choice1",
+                "fromPort": "out",
+                "toPort": "in"
+              },
+              {
+                "id": "conn-2",
+                "fromId": "choice1",
+                "toId": "shop",
+                "fromPort": "opt-buy",
+                "toPort": "in"
+              },
+              {
+                "id": "conn-3",
+                "fromId": "choice1",
+                "toId": "bye",
+                "fromPort": "opt-leave",
+                "toPort": "in"
+              }
+            ]
+          }
+        ]
+      },
+      "sceneId": "scene-choice",
+      "locale": "en",
+      "stateBridge": {},
+      "cases": [
+        {
+          "id": "choice-buy",
+          "description": "Select Buy and reach the shop dialog",
+          "steps": [
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "greeting",
+                "dialogueText": "Welcome!"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "CHOICE",
+                "blockUuid": "choice1",
+                "visibleChoiceCount": 2
+              },
+              "action": {
+                "type": "selectChoice",
+                "choiceUuid": "opt-buy"
+              }
+            },
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "shop",
+                "dialogueText": "Here are my wares."
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "END_OF_SCENE"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "greeting",
+            "choice1",
+            "shop"
+          ]
+        },
+        {
+          "id": "choice-leave",
+          "description": "Select Leave and reach the goodbye dialog",
+          "steps": [
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "greeting",
+                "dialogueText": "Welcome!"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "CHOICE",
+                "blockUuid": "choice1",
+                "visibleChoiceCount": 2
+              },
+              "action": {
+                "type": "selectChoice",
+                "choiceUuid": "opt-leave"
+              }
+            },
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "bye",
+                "dialogueText": "Safe travels."
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "END_OF_SCENE"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "greeting",
+            "choice1",
+            "bye"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "condition-auto",
+      "description": "P0 — CONDITION block auto-evaluates to true, routing to the yes branch",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": [
+          "en"
+        ],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-cond",
+            "label": "Condition Scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "start",
+                "type": "DIALOG",
+                "label": "Start",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Begin"
+                },
+                "isStartBlock": true
+              },
+              {
+                "uuid": "cond1",
+                "type": "CONDITION",
+                "label": "Check Quest",
+                "properties": [],
+                "conditions": [
+                  {
+                    "uuid": "vc1",
+                    "key": "quest_active",
+                    "operator": "=",
+                    "value": "true"
+                  }
+                ]
+              },
+              {
+                "uuid": "yes",
+                "type": "DIALOG",
+                "label": "Quest Active",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Quest active!"
+                }
+              },
+              {
+                "uuid": "no",
+                "type": "DIALOG",
+                "label": "No Quest",
+                "properties": [],
+                "dialogueText": {
+                  "en": "No quest."
+                }
+              }
+            ],
+            "connections": [
+              {
+                "id": "conn-1",
+                "fromId": "start",
+                "toId": "cond1",
+                "fromPort": "out",
+                "toPort": "in"
+              },
+              {
+                "id": "conn-2",
+                "fromId": "cond1",
+                "toId": "yes",
+                "fromPort": "out",
+                "toPort": "in",
+                "fromPortIndex": 0
+              },
+              {
+                "id": "conn-3",
+                "fromId": "cond1",
+                "toId": "no",
+                "fromPort": "out",
+                "toPort": "in",
+                "fromPortIndex": 1
+              }
+            ]
+          }
+        ]
+      },
+      "sceneId": "scene-cond",
+      "locale": "en",
+      "stateBridge": {
+        "conditions": {
+          "quest_active": true
+        }
+      },
+      "cases": [
+        {
+          "id": "condition-true",
+          "description": "Condition evaluates to true, routes to yes branch",
+          "steps": [
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "start",
+                "dialogueText": "Begin"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "yes",
+                "dialogueText": "Quest active!"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "END_OF_SCENE"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "start",
+            "cond1",
+            "yes"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "condition-auto-false",
+      "description": "P0 — CONDITION block auto-evaluates to false, routing to the no branch",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": [
+          "en"
+        ],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-cond-false",
+            "label": "Condition Scene False",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "start",
+                "type": "DIALOG",
+                "label": "Start",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Begin"
+                },
+                "isStartBlock": true
+              },
+              {
+                "uuid": "cond1",
+                "type": "CONDITION",
+                "label": "Check Quest",
+                "properties": [],
+                "conditions": [
+                  {
+                    "uuid": "vc1",
+                    "key": "quest_active",
+                    "operator": "=",
+                    "value": "true"
+                  }
+                ]
+              },
+              {
+                "uuid": "yes",
+                "type": "DIALOG",
+                "label": "Quest Active",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Quest active!"
+                }
+              },
+              {
+                "uuid": "no",
+                "type": "DIALOG",
+                "label": "No Quest",
+                "properties": [],
+                "dialogueText": {
+                  "en": "No quest."
+                }
+              }
+            ],
+            "connections": [
+              {
+                "id": "conn-1",
+                "fromId": "start",
+                "toId": "cond1",
+                "fromPort": "out",
+                "toPort": "in"
+              },
+              {
+                "id": "conn-2",
+                "fromId": "cond1",
+                "toId": "yes",
+                "fromPort": "out",
+                "toPort": "in",
+                "fromPortIndex": 0
+              },
+              {
+                "id": "conn-3",
+                "fromId": "cond1",
+                "toId": "no",
+                "fromPort": "out",
+                "toPort": "in",
+                "fromPortIndex": 1
+              }
+            ]
+          }
+        ]
+      },
+      "sceneId": "scene-cond-false",
+      "locale": "en",
+      "stateBridge": {
+        "conditions": {
+          "quest_active": false
+        }
+      },
+      "cases": [
+        {
+          "id": "condition-false",
+          "description": "Condition evaluates to false, routes to no branch",
+          "steps": [
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "start",
+                "dialogueText": "Begin"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "no",
+                "dialogueText": "No quest."
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "END_OF_SCENE"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "start",
+            "cond1",
+            "no"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "action-then-catch",
+      "description": "P0 — ACTION block with then/catch branching based on resolve or reject",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": [
+          "en"
+        ],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-action",
+            "label": "Action Scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "act1",
+                "type": "ACTION",
+                "label": "Risky Operation",
+                "properties": [],
+                "actions": [
+                  {
+                    "uuid": "a1",
+                    "actionId": "risky_op",
+                    "params": []
+                  }
+                ],
+                "isStartBlock": true
+              },
+              {
+                "uuid": "success",
+                "type": "DIALOG",
+                "label": "Success",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Success!"
+                }
+              },
+              {
+                "uuid": "failure",
+                "type": "DIALOG",
+                "label": "Failure",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Failed!"
+                }
+              }
+            ],
+            "connections": [
+              {
+                "id": "conn-1",
+                "fromId": "act1",
+                "toId": "success",
+                "fromPort": "then",
+                "toPort": "in"
+              },
+              {
+                "id": "conn-2",
+                "fromId": "act1",
+                "toId": "failure",
+                "fromPort": "catch",
+                "toPort": "in"
+              }
+            ]
+          }
+        ]
+      },
+      "sceneId": "scene-action",
+      "locale": "en",
+      "stateBridge": {},
+      "cases": [
+        {
+          "id": "action-resolve",
+          "description": "ACTION resolves and routes to the then branch",
+          "steps": [
+            {
+              "expect": {
+                "type": "ACTION",
+                "blockUuid": "act1"
+              },
+              "action": {
+                "type": "resolveAction"
+              }
+            },
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "success",
+                "dialogueText": "Success!"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "END_OF_SCENE"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "act1",
+            "success"
+          ]
+        },
+        {
+          "id": "action-reject",
+          "description": "ACTION rejects and routes to the catch branch",
+          "steps": [
+            {
+              "expect": {
+                "type": "ACTION",
+                "blockUuid": "act1"
+              },
+              "action": {
+                "type": "rejectAction",
+                "reason": "error msg"
+              }
+            },
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "failure",
+                "dialogueText": "Failed!"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "END_OF_SCENE"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "act1",
+            "failure"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "port-per-character",
+      "description": "P1 — DIALOG with portPerCharacter routing to character-specific branches",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": [
+          "en"
+        ],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-ppc",
+            "label": "Port Per Character Scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "multi",
+                "type": "DIALOG",
+                "label": "Multi Character",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Who speaks?"
+                },
+                "isStartBlock": true,
+                "nativeProperties": {
+                  "portPerCharacter": true
+                },
+                "metadata": {
+                  "characters": [
+                    {
+                      "name": "Hero"
+                    },
+                    {
+                      "name": "Boss"
+                    }
+                  ]
+                }
+              },
+              {
+                "uuid": "hero-path",
+                "type": "DIALOG",
+                "label": "Hero Path",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Hero speaks."
+                }
+              },
+              {
+                "uuid": "boss-path",
+                "type": "DIALOG",
+                "label": "Boss Path",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Boss roars."
+                }
+              },
+              {
+                "uuid": "fallback",
+                "type": "DIALOG",
+                "label": "Fallback",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Default."
+                }
+              }
+            ],
+            "connections": [
+              {
+                "id": "conn-1",
+                "fromId": "multi",
+                "toId": "hero-path",
+                "fromPort": "char-hero-uuid",
+                "toPort": "in",
+                "fromPortIndex": 0
+              },
+              {
+                "id": "conn-2",
+                "fromId": "multi",
+                "toId": "boss-path",
+                "fromPort": "char-boss-uuid",
+                "toPort": "in",
+                "fromPortIndex": 1
+              },
+              {
+                "id": "conn-3",
+                "fromId": "multi",
+                "toId": "fallback",
+                "fromPort": "out",
+                "toPort": "in"
+              }
+            ]
+          }
+        ]
+      },
+      "sceneId": "scene-ppc",
+      "locale": "en",
+      "stateBridge": {},
+      "cases": [
+        {
+          "id": "resolve-hero",
+          "description": "Resolve character port to Hero, follow hero-path",
+          "steps": [
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "multi",
+                "dialogueText": "Who speaks?"
+              },
+              "action": {
+                "type": "resolveCharacterPort",
+                "characterName": "Hero"
+              }
+            },
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "hero-path",
+                "dialogueText": "Hero speaks."
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "END_OF_SCENE"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "multi",
+            "hero-path"
+          ]
+        },
+        {
+          "id": "resolve-boss",
+          "description": "Resolve character port to Boss, follow boss-path",
+          "steps": [
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "multi",
+                "dialogueText": "Who speaks?"
+              },
+              "action": {
+                "type": "resolveCharacterPort",
+                "characterName": "Boss"
+              }
+            },
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "boss-path",
+                "dialogueText": "Boss roars."
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "END_OF_SCENE"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "multi",
+            "boss-path"
+          ]
+        },
+        {
+          "id": "resolve-unknown-fallback",
+          "description": "Resolve unknown character falls back to default out port",
+          "steps": [
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "multi",
+                "dialogueText": "Who speaks?"
+              },
+              "action": {
+                "type": "resolveCharacterPort",
+                "characterName": "Ghost"
+              }
+            },
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "fallback",
+                "dialogueText": "Default."
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "END_OF_SCENE"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "multi",
+            "fallback"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "choice-visibility",
+      "description": "P1 — CHOICE with visibility conditions filtering out hidden choices",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": [
+          "en"
+        ],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-vis",
+            "label": "Visibility Scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "greeting",
+                "type": "DIALOG",
+                "label": "Greeting",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Welcome!"
+                },
+                "isStartBlock": true
+              },
+              {
+                "uuid": "choice1",
+                "type": "CHOICE",
+                "label": "Buy or Leave",
+                "properties": [],
+                "choices": [
+                  {
+                    "uuid": "opt-buy",
+                    "structureKey": "buy",
+                    "dialogueText": {
+                      "en": "Buy"
+                    }
+                  },
+                  {
+                    "uuid": "opt-leave",
+                    "structureKey": "leave",
+                    "dialogueText": {
+                      "en": "Leave"
+                    },
+                    "visibilityConditions": [
+                      {
+                        "uuid": "vc1",
+                        "key": "can_leave",
+                        "operator": "=",
+                        "value": "true"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "uuid": "shop",
+                "type": "DIALOG",
+                "label": "Shop",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Here are my wares."
+                }
+              },
+              {
+                "uuid": "bye",
+                "type": "DIALOG",
+                "label": "Bye",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Safe travels."
+                }
+              }
+            ],
+            "connections": [
+              {
+                "id": "conn-1",
+                "fromId": "greeting",
+                "toId": "choice1",
+                "fromPort": "out",
+                "toPort": "in"
+              },
+              {
+                "id": "conn-2",
+                "fromId": "choice1",
+                "toId": "shop",
+                "fromPort": "opt-buy",
+                "toPort": "in"
+              },
+              {
+                "id": "conn-3",
+                "fromId": "choice1",
+                "toId": "bye",
+                "fromPort": "opt-leave",
+                "toPort": "in"
+              }
+            ]
+          }
+        ]
+      },
+      "sceneId": "scene-vis",
+      "locale": "en",
+      "stateBridge": {
+        "conditions": {
+          "can_leave": false
+        }
+      },
+      "cases": [
+        {
+          "id": "visibility-filtered",
+          "description": "Leave choice hidden because can_leave is false, only Buy visible",
+          "steps": [
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "greeting",
+                "dialogueText": "Welcome!"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "CHOICE",
+                "blockUuid": "choice1",
+                "visibleChoiceCount": 1
+              },
+              "action": {
+                "type": "selectChoice",
+                "choiceUuid": "opt-buy"
+              }
+            },
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "shop",
+                "dialogueText": "Here are my wares."
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "END_OF_SCENE"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "greeting",
+            "choice1",
+            "shop"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "note-skip",
+      "description": "P1 — NOTE block is silently skipped by the engine, never appears in visited",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": [
+          "en"
+        ],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-note",
+            "label": "Note Scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "b1",
+                "type": "DIALOG",
+                "label": "Before Note",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Before note"
+                },
+                "isStartBlock": true
+              },
+              {
+                "uuid": "note1",
+                "type": "NOTE",
+                "label": "Designer Note",
+                "properties": [],
+                "note": "This is a designer note, should be skipped"
+              },
+              {
+                "uuid": "b3",
+                "type": "DIALOG",
+                "label": "After Note",
+                "properties": [],
+                "dialogueText": {
+                  "en": "After note"
+                }
+              }
+            ],
+            "connections": [
+              {
+                "id": "conn-1",
+                "fromId": "b1",
+                "toId": "note1",
+                "fromPort": "out",
+                "toPort": "in"
+              },
+              {
+                "id": "conn-2",
+                "fromId": "note1",
+                "toId": "b3",
+                "fromPort": "out",
+                "toPort": "in"
+              }
+            ]
+          }
+        ]
+      },
+      "sceneId": "scene-note",
+      "locale": "en",
+      "stateBridge": {},
+      "cases": [
+        {
+          "id": "note-skip-001",
+          "description": "NOTE block is transparently skipped, flow goes directly from b1 to b3",
+          "steps": [
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "b1",
+                "dialogueText": "Before note"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "b3",
+                "dialogueText": "After note"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "END_OF_SCENE"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "b1",
+            "b3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "loop-exit",
+      "description": "P1 — CHOICE loops back to start then exits on second pass",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": [
+          "en"
+        ],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-loop",
+            "label": "Loop Scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "start",
+                "type": "DIALOG",
+                "label": "Start",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Hello!"
+                },
+                "isStartBlock": true
+              },
+              {
+                "uuid": "ask",
+                "type": "CHOICE",
+                "label": "Again or Done",
+                "properties": [],
+                "choices": [
+                  {
+                    "uuid": "opt-again",
+                    "structureKey": "again",
+                    "dialogueText": {
+                      "en": "Again"
+                    }
+                  },
+                  {
+                    "uuid": "opt-done",
+                    "structureKey": "done",
+                    "dialogueText": {
+                      "en": "Done"
+                    }
+                  }
+                ]
+              },
+              {
+                "uuid": "end",
+                "type": "DIALOG",
+                "label": "End",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Goodbye!"
+                }
+              }
+            ],
+            "connections": [
+              {
+                "id": "conn-1",
+                "fromId": "start",
+                "toId": "ask",
+                "fromPort": "out",
+                "toPort": "in"
+              },
+              {
+                "id": "conn-2",
+                "fromId": "ask",
+                "toId": "start",
+                "fromPort": "opt-again",
+                "toPort": "in"
+              },
+              {
+                "id": "conn-3",
+                "fromId": "ask",
+                "toId": "end",
+                "fromPort": "opt-done",
+                "toPort": "in"
+              }
+            ]
+          }
+        ]
+      },
+      "sceneId": "scene-loop",
+      "locale": "en",
+      "stateBridge": {},
+      "cases": [
+        {
+          "id": "loop-once-exit",
+          "description": "Loop back once via Again then exit via Done",
+          "steps": [
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "start",
+                "dialogueText": "Hello!"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "CHOICE",
+                "blockUuid": "ask",
+                "visibleChoiceCount": 2
+              },
+              "action": {
+                "type": "selectChoice",
+                "choiceUuid": "opt-again"
+              }
+            },
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "start",
+                "dialogueText": "Hello!"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "CHOICE",
+                "blockUuid": "ask",
+                "visibleChoiceCount": 2
+              },
+              "action": {
+                "type": "selectChoice",
+                "choiceUuid": "opt-done"
+              }
+            },
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "end",
+                "dialogueText": "Goodbye!"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "END_OF_SCENE"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "start",
+            "ask",
+            "end"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "action-auto-execute",
+      "description": "P1 — ACTION block auto-executes via stateBridge, does not appear as a step",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": [
+          "en"
+        ],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-auto-action",
+            "label": "Auto Action Scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "act1",
+                "type": "ACTION",
+                "label": "Give Item",
+                "properties": [],
+                "actions": [
+                  {
+                    "uuid": "a1",
+                    "actionId": "give_item",
+                    "params": [
+                      "sword"
+                    ]
+                  }
+                ],
+                "isStartBlock": true
+              },
+              {
+                "uuid": "after",
+                "type": "DIALOG",
+                "label": "After Action",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Item received."
+                }
+              }
+            ],
+            "connections": [
+              {
+                "id": "conn-1",
+                "fromId": "act1",
+                "toId": "after",
+                "fromPort": "then",
+                "toPort": "in"
+              }
+            ]
+          }
+        ]
+      },
+      "sceneId": "scene-auto-action",
+      "locale": "en",
+      "stateBridge": {
+        "actions": {
+          "give_item": "ok"
+        }
+      },
+      "cases": [
+        {
+          "id": "auto-exec-001",
+          "description": "ACTION auto-executes, first visible step is the DIALOG after it",
+          "steps": [
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "after",
+                "dialogueText": "Item received."
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "END_OF_SCENE"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "act1",
+            "after"
+          ],
+          "expectedCleanupCalls": 1
+        }
+      ]
+    },
+    {
+      "id": "multi-track-async",
+      "description": "P2 — Async DIALOG spawns a background track that auto-advances alongside the main track",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": [
+          "en"
+        ],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-async",
+            "label": "Async Scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "main1",
+                "type": "DIALOG",
+                "label": "Main 1",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Main 1"
+                },
+                "isStartBlock": true
+              },
+              {
+                "uuid": "main2",
+                "type": "DIALOG",
+                "label": "Main 2",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Main 2"
+                }
+              },
+              {
+                "uuid": "bg1",
+                "type": "DIALOG",
+                "label": "Background 1",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Background 1"
+                },
+                "nativeProperties": {
+                  "isAsync": true
+                }
+              },
+              {
+                "uuid": "bg2",
+                "type": "DIALOG",
+                "label": "Background 2",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Background 2"
+                }
+              }
+            ],
+            "connections": [
+              {
+                "id": "conn-1",
+                "fromId": "main1",
+                "toId": "main2",
+                "fromPort": "out",
+                "toPort": "in",
+                "fromPortIndex": 0
+              },
+              {
+                "id": "conn-2",
+                "fromId": "main1",
+                "toId": "bg1",
+                "fromPort": "out",
+                "toPort": "in",
+                "fromPortIndex": 1
+              },
+              {
+                "id": "conn-3",
+                "fromId": "bg1",
+                "toId": "bg2",
+                "fromPort": "out",
+                "toPort": "in"
+              }
+            ]
+          }
+        ]
+      },
+      "sceneId": "scene-async",
+      "locale": "en",
+      "stateBridge": {},
+      "cases": [
+        {
+          "id": "multi-track-001",
+          "description": "Main track advances while async track auto-advances in background",
+          "steps": [
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "main1",
+                "dialogueText": "Main 1"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "main2",
+                "dialogueText": "Main 2"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "END_OF_SCENE"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "main1",
+            "main2",
+            "bg1",
+            "bg2"
+          ],
+          "orderIndependent": true
+        }
+      ]
+    },
+    {
+      "id": "full-mixed",
+      "description": "P2 — Complex flow combining ACTION, NOTE, DIALOG, CHOICE, and CONDITION blocks",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": [
+          "en"
+        ],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-mixed",
+            "label": "Mixed Scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "act",
+                "type": "ACTION",
+                "label": "Setup Quest",
+                "properties": [],
+                "actions": [
+                  {
+                    "uuid": "a1",
+                    "actionId": "setup_quest",
+                    "params": []
+                  }
+                ],
+                "isStartBlock": true
+              },
+              {
+                "uuid": "note1",
+                "type": "NOTE",
+                "label": "Designer Note",
+                "properties": [],
+                "note": "Quest setup complete, greet the player"
+              },
+              {
+                "uuid": "greet",
+                "type": "DIALOG",
+                "label": "Greet",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Greetings, adventurer!"
+                }
+              },
+              {
+                "uuid": "choice",
+                "type": "CHOICE",
+                "label": "Accept or Refuse",
+                "properties": [],
+                "choices": [
+                  {
+                    "uuid": "opt-accept",
+                    "structureKey": "accept",
+                    "dialogueText": {
+                      "en": "Accept quest"
+                    }
+                  },
+                  {
+                    "uuid": "opt-refuse",
+                    "structureKey": "refuse",
+                    "dialogueText": {
+                      "en": "Refuse"
+                    }
+                  }
+                ]
+              },
+              {
+                "uuid": "cond",
+                "type": "CONDITION",
+                "label": "Check Worthy",
+                "properties": [],
+                "conditions": [
+                  {
+                    "uuid": "c1",
+                    "key": "player_worthy",
+                    "operator": "=",
+                    "value": "true"
+                  }
+                ]
+              },
+              {
+                "uuid": "success",
+                "type": "DIALOG",
+                "label": "Success",
+                "properties": [],
+                "dialogueText": {
+                  "en": "You are worthy!"
+                }
+              },
+              {
+                "uuid": "fail",
+                "type": "DIALOG",
+                "label": "Fail",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Not worthy enough."
+                }
+              },
+              {
+                "uuid": "refuse-msg",
+                "type": "DIALOG",
+                "label": "Refuse Message",
+                "properties": [],
+                "dialogueText": {
+                  "en": "Very well, perhaps another time."
+                }
+              }
+            ],
+            "connections": [
+              {
+                "id": "conn-1",
+                "fromId": "act",
+                "toId": "note1",
+                "fromPort": "then",
+                "toPort": "in"
+              },
+              {
+                "id": "conn-2",
+                "fromId": "note1",
+                "toId": "greet",
+                "fromPort": "out",
+                "toPort": "in"
+              },
+              {
+                "id": "conn-3",
+                "fromId": "greet",
+                "toId": "choice",
+                "fromPort": "out",
+                "toPort": "in"
+              },
+              {
+                "id": "conn-4",
+                "fromId": "choice",
+                "toId": "cond",
+                "fromPort": "opt-accept",
+                "toPort": "in"
+              },
+              {
+                "id": "conn-5",
+                "fromId": "choice",
+                "toId": "refuse-msg",
+                "fromPort": "opt-refuse",
+                "toPort": "in"
+              },
+              {
+                "id": "conn-6",
+                "fromId": "cond",
+                "toId": "success",
+                "fromPort": "out",
+                "toPort": "in",
+                "fromPortIndex": 0
+              },
+              {
+                "id": "conn-7",
+                "fromId": "cond",
+                "toId": "fail",
+                "fromPort": "out",
+                "toPort": "in",
+                "fromPortIndex": 1
+              }
+            ]
+          }
+        ]
+      },
+      "sceneId": "scene-mixed",
+      "locale": "en",
+      "stateBridge": {
+        "conditions": {
+          "player_worthy": true
+        },
+        "actions": {
+          "setup_quest": "ok"
+        }
+      },
+      "cases": [
+        {
+          "id": "mixed-accept-worthy",
+          "description": "ACTION auto-exec, NOTE skip, accept quest, CONDITION true, reach success",
+          "steps": [
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "greet",
+                "dialogueText": "Greetings, adventurer!"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "CHOICE",
+                "blockUuid": "choice",
+                "visibleChoiceCount": 2
+              },
+              "action": {
+                "type": "selectChoice",
+                "choiceUuid": "opt-accept"
+              }
+            },
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "success",
+                "dialogueText": "You are worthy!"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "END_OF_SCENE"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "act",
+            "greet",
+            "choice",
+            "cond",
+            "success"
+          ]
+        },
+        {
+          "id": "mixed-refuse",
+          "description": "ACTION auto-exec, NOTE skip, refuse quest, reach refuse message",
+          "steps": [
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "greet",
+                "dialogueText": "Greetings, adventurer!"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "CHOICE",
+                "blockUuid": "choice",
+                "visibleChoiceCount": 2
+              },
+              "action": {
+                "type": "selectChoice",
+                "choiceUuid": "opt-refuse"
+              }
+            },
+            {
+              "expect": {
+                "type": "DIALOG",
+                "blockUuid": "refuse-msg",
+                "dialogueText": "Very well, perhaps another time."
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "END_OF_SCENE"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "act",
+            "greet",
+            "choice",
+            "refuse-msg"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "condition-chain-and",
+      "description": "P1 — Chained conditions: (has_sword AND has_shield) OR is_warrior — passes via AND path",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": ["en"],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [{
+          "uuid": "scene-chain",
+          "label": "Chain Conditions",
+          "date": "2025-01-01",
+          "blocks": [
+            { "uuid": "start", "type": "DIALOG", "label": "Start", "properties": [], "isStartBlock": true, "dialogueText": { "en": "Checking equipment..." } },
+            { "uuid": "cond1", "type": "CONDITION", "label": "Equipment Check", "properties": [], "conditions": [
+              { "uuid": "c1", "key": "has_sword", "operator": "=", "value": "true" },
+              { "uuid": "c2", "key": "has_shield", "operator": "=", "value": "true", "chain": "&" },
+              { "uuid": "c3", "key": "is_warrior", "operator": "=", "value": "true", "chain": "|" }
+            ]},
+            { "uuid": "pass", "type": "DIALOG", "label": "Pass", "properties": [], "dialogueText": { "en": "You are ready!" } },
+            { "uuid": "fail", "type": "DIALOG", "label": "Fail", "properties": [], "dialogueText": { "en": "Not ready." } }
+          ],
+          "connections": [
+            { "id": "conn-1", "fromId": "start", "toId": "cond1", "fromPort": "out", "toPort": "in" },
+            { "id": "conn-2", "fromId": "cond1", "toId": "pass", "fromPort": "true-port", "toPort": "in", "fromPortIndex": 0 },
+            { "id": "conn-3", "fromId": "cond1", "toId": "fail", "fromPort": "false-port", "toPort": "in", "fromPortIndex": 1 }
+          ]
+        }]
+      },
+      "sceneId": "scene-chain",
+      "locale": "en",
+      "stateBridge": {
+        "conditions": { "has_sword": true, "has_shield": true, "is_warrior": false }
+      },
+      "cases": [{
+        "id": "chain-and-pass",
+        "description": "has_sword=true AND has_shield=true → condition passes via AND path",
+        "steps": [
+          { "expect": { "type": "DIALOG", "blockUuid": "start", "dialogueText": "Checking equipment..." }, "action": { "type": "next" } },
+          { "expect": { "type": "DIALOG", "blockUuid": "pass", "dialogueText": "You are ready!" }, "action": { "type": "next" } },
+          { "expect": { "type": "END_OF_SCENE" } }
+        ],
+        "expectedVisited": ["start", "cond1", "pass"],
+        "expectedCleanupCalls": 2
+      }]
+    },
+    {
+      "id": "condition-chain-or",
+      "description": "P1 — Chained conditions: (has_sword AND has_shield) OR is_warrior — passes via OR path",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": ["en"],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [{
+          "uuid": "scene-chain",
+          "label": "Chain Conditions",
+          "date": "2025-01-01",
+          "blocks": [
+            { "uuid": "start", "type": "DIALOG", "label": "Start", "properties": [], "isStartBlock": true, "dialogueText": { "en": "Checking equipment..." } },
+            { "uuid": "cond1", "type": "CONDITION", "label": "Equipment Check", "properties": [], "conditions": [
+              { "uuid": "c1", "key": "has_sword", "operator": "=", "value": "true" },
+              { "uuid": "c2", "key": "has_shield", "operator": "=", "value": "true", "chain": "&" },
+              { "uuid": "c3", "key": "is_warrior", "operator": "=", "value": "true", "chain": "|" }
+            ]},
+            { "uuid": "pass", "type": "DIALOG", "label": "Pass", "properties": [], "dialogueText": { "en": "You are ready!" } },
+            { "uuid": "fail", "type": "DIALOG", "label": "Fail", "properties": [], "dialogueText": { "en": "Not ready." } }
+          ],
+          "connections": [
+            { "id": "conn-1", "fromId": "start", "toId": "cond1", "fromPort": "out", "toPort": "in" },
+            { "id": "conn-2", "fromId": "cond1", "toId": "pass", "fromPort": "true-port", "toPort": "in", "fromPortIndex": 0 },
+            { "id": "conn-3", "fromId": "cond1", "toId": "fail", "fromPort": "false-port", "toPort": "in", "fromPortIndex": 1 }
+          ]
+        }]
+      },
+      "sceneId": "scene-chain",
+      "locale": "en",
+      "stateBridge": {
+        "conditions": { "has_sword": false, "has_shield": false, "is_warrior": true }
+      },
+      "cases": [{
+        "id": "chain-or-pass",
+        "description": "is_warrior=true → condition passes via OR path despite AND failing",
+        "steps": [
+          { "expect": { "type": "DIALOG", "blockUuid": "start" }, "action": { "type": "next" } },
+          { "expect": { "type": "DIALOG", "blockUuid": "pass" }, "action": { "type": "next" } },
+          { "expect": { "type": "END_OF_SCENE" } }
+        ],
+        "expectedVisited": ["start", "cond1", "pass"]
+      }]
+    },
+    {
+      "id": "condition-chain-false",
+      "description": "P1 — Chained conditions: (has_sword AND has_shield) OR is_warrior — all fail",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": ["en"],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [{
+          "uuid": "scene-chain",
+          "label": "Chain Conditions",
+          "date": "2025-01-01",
+          "blocks": [
+            { "uuid": "start", "type": "DIALOG", "label": "Start", "properties": [], "isStartBlock": true, "dialogueText": { "en": "Checking equipment..." } },
+            { "uuid": "cond1", "type": "CONDITION", "label": "Equipment Check", "properties": [], "conditions": [
+              { "uuid": "c1", "key": "has_sword", "operator": "=", "value": "true" },
+              { "uuid": "c2", "key": "has_shield", "operator": "=", "value": "true", "chain": "&" },
+              { "uuid": "c3", "key": "is_warrior", "operator": "=", "value": "true", "chain": "|" }
+            ]},
+            { "uuid": "pass", "type": "DIALOG", "label": "Pass", "properties": [], "dialogueText": { "en": "You are ready!" } },
+            { "uuid": "fail", "type": "DIALOG", "label": "Fail", "properties": [], "dialogueText": { "en": "Not ready." } }
+          ],
+          "connections": [
+            { "id": "conn-1", "fromId": "start", "toId": "cond1", "fromPort": "out", "toPort": "in" },
+            { "id": "conn-2", "fromId": "cond1", "toId": "pass", "fromPort": "true-port", "toPort": "in", "fromPortIndex": 0 },
+            { "id": "conn-3", "fromId": "cond1", "toId": "fail", "fromPort": "false-port", "toPort": "in", "fromPortIndex": 1 }
+          ]
+        }]
+      },
+      "sceneId": "scene-chain",
+      "locale": "en",
+      "stateBridge": {
+        "conditions": { "has_sword": true, "has_shield": false, "is_warrior": false }
+      },
+      "cases": [{
+        "id": "chain-all-fail",
+        "description": "has_sword=true but has_shield=false (AND fails) and is_warrior=false (OR fails) → false path",
+        "steps": [
+          { "expect": { "type": "DIALOG", "blockUuid": "start" }, "action": { "type": "next" } },
+          { "expect": { "type": "DIALOG", "blockUuid": "fail", "dialogueText": "Not ready." }, "action": { "type": "next" } },
+          { "expect": { "type": "END_OF_SCENE" } }
+        ],
+        "expectedVisited": ["start", "cond1", "fail"]
+      }]
+    }
+  ]
 }

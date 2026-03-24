@@ -1,4 +1,650 @@
 {
   "version": "1.0",
-  "suites": []
+  "suites": [
+    {
+      "id": "dialog-out",
+      "description": "DIALOG block routes via fromPort 'out' to the next block",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": ["en"],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-1",
+            "label": "dialog-out-scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "b1",
+                "type": "DIALOG",
+                "label": "Block 1",
+                "properties": [],
+                "dialogueText": { "en": "Hello" },
+                "isStartBlock": true
+              },
+              {
+                "uuid": "b2",
+                "type": "DIALOG",
+                "label": "Block 2",
+                "properties": [],
+                "dialogueText": { "en": "Goodbye" }
+              }
+            ],
+            "connections": [
+              {
+                "id": "conn-1",
+                "fromId": "b1",
+                "toId": "b2",
+                "fromPort": "out",
+                "toPort": "in"
+              }
+            ]
+          }
+        ]
+      },
+      "sceneId": "scene-1",
+      "locale": "en",
+      "stateBridge": { "conditions": {}, "dictionaries": {}, "actions": {} },
+      "cases": [
+        {
+          "id": "dialog-out-001",
+          "description": "Two DIALOG blocks connected via 'out' port, advance through both",
+          "steps": [
+            { "expect": { "type": "DIALOG", "blockUuid": "b1" }, "action": { "type": "next" } },
+            { "expect": { "type": "DIALOG", "blockUuid": "b2" }, "action": { "type": "next" } },
+            { "expect": { "type": "END_OF_SCENE" } }
+          ],
+          "expectedVisited": ["b1", "b2"],
+          "expectedCleanupCalls": 2
+        }
+      ]
+    },
+    {
+      "id": "dialog-port-per-character",
+      "description": "DIALOG block with portPerCharacter routes via fromPortIndex matching character index, falls back to 'out'",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": ["en"],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-2",
+            "label": "port-per-character-scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "multi",
+                "type": "DIALOG",
+                "label": "Multi Character",
+                "properties": [],
+                "dialogueText": { "en": "Who speaks?" },
+                "isStartBlock": true,
+                "nativeProperties": { "portPerCharacter": true },
+                "metadata": {
+                  "characters": [
+                    { "name": "Hero" },
+                    { "name": "Boss" }
+                  ]
+                }
+              },
+              {
+                "uuid": "hero-path",
+                "type": "DIALOG",
+                "label": "Hero Path",
+                "properties": [],
+                "dialogueText": { "en": "Hero speaks" }
+              },
+              {
+                "uuid": "boss-path",
+                "type": "DIALOG",
+                "label": "Boss Path",
+                "properties": [],
+                "dialogueText": { "en": "Boss speaks" }
+              },
+              {
+                "uuid": "fallback",
+                "type": "DIALOG",
+                "label": "Fallback Path",
+                "properties": [],
+                "dialogueText": { "en": "Unknown character" }
+              }
+            ],
+            "connections": [
+              {
+                "id": "conn-hero",
+                "fromId": "multi",
+                "toId": "hero-path",
+                "fromPort": "char-hero-uuid",
+                "toPort": "in",
+                "fromPortIndex": 0
+              },
+              {
+                "id": "conn-boss",
+                "fromId": "multi",
+                "toId": "boss-path",
+                "fromPort": "char-boss-uuid",
+                "toPort": "in",
+                "fromPortIndex": 1
+              },
+              {
+                "id": "conn-fallback",
+                "fromId": "multi",
+                "toId": "fallback",
+                "fromPort": "out",
+                "toPort": "in"
+              }
+            ]
+          }
+        ]
+      },
+      "sceneId": "scene-2",
+      "locale": "en",
+      "stateBridge": { "conditions": {}, "dictionaries": {}, "actions": {} },
+      "cases": [
+        {
+          "id": "char-hero",
+          "description": "Resolve character port 'Hero' (index 0) routes to hero-path",
+          "steps": [
+            { "expect": { "type": "DIALOG", "blockUuid": "multi" }, "action": { "type": "resolveCharacterPort", "name": "Hero" } },
+            { "expect": { "type": "DIALOG", "blockUuid": "hero-path" }, "action": { "type": "next" } },
+            { "expect": { "type": "END_OF_SCENE" } }
+          ],
+          "expectedVisited": ["multi", "hero-path"],
+          "expectedCleanupCalls": 2
+        },
+        {
+          "id": "char-boss",
+          "description": "Resolve character port 'Boss' (index 1) routes to boss-path",
+          "steps": [
+            { "expect": { "type": "DIALOG", "blockUuid": "multi" }, "action": { "type": "resolveCharacterPort", "name": "Boss" } },
+            { "expect": { "type": "DIALOG", "blockUuid": "boss-path" }, "action": { "type": "next" } },
+            { "expect": { "type": "END_OF_SCENE" } }
+          ],
+          "expectedVisited": ["multi", "boss-path"],
+          "expectedCleanupCalls": 2
+        },
+        {
+          "id": "char-unknown-fallback",
+          "description": "Resolve unknown character 'Ghost' falls back to 'out' port",
+          "steps": [
+            { "expect": { "type": "DIALOG", "blockUuid": "multi" }, "action": { "type": "resolveCharacterPort", "name": "Ghost" } },
+            { "expect": { "type": "DIALOG", "blockUuid": "fallback" }, "action": { "type": "next" } },
+            { "expect": { "type": "END_OF_SCENE" } }
+          ],
+          "expectedVisited": ["multi", "fallback"],
+          "expectedCleanupCalls": 2
+        }
+      ]
+    },
+    {
+      "id": "choice-port",
+      "description": "CHOICE block routes via selectedChoiceUuid as fromPort",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": ["en"],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-3",
+            "label": "choice-port-scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "greeting",
+                "type": "DIALOG",
+                "label": "Greeting",
+                "properties": [],
+                "dialogueText": { "en": "Pick a path" },
+                "isStartBlock": true
+              },
+              {
+                "uuid": "c1",
+                "type": "CHOICE",
+                "label": "Choice Node",
+                "properties": [],
+                "choices": [
+                  { "uuid": "opt-a", "structureKey": "option_a", "dialogueText": { "en": "Option A" } },
+                  { "uuid": "opt-b", "structureKey": "option_b", "dialogueText": { "en": "Option B" } }
+                ]
+              },
+              {
+                "uuid": "branch-a",
+                "type": "DIALOG",
+                "label": "Branch A",
+                "properties": [],
+                "dialogueText": { "en": "You chose A" }
+              },
+              {
+                "uuid": "branch-b",
+                "type": "DIALOG",
+                "label": "Branch B",
+                "properties": [],
+                "dialogueText": { "en": "You chose B" }
+              }
+            ],
+            "connections": [
+              {
+                "id": "conn-greet-c1",
+                "fromId": "greeting",
+                "toId": "c1",
+                "fromPort": "out",
+                "toPort": "in"
+              },
+              {
+                "id": "conn-c1-a",
+                "fromId": "c1",
+                "toId": "branch-a",
+                "fromPort": "opt-a",
+                "toPort": "in"
+              },
+              {
+                "id": "conn-c1-b",
+                "fromId": "c1",
+                "toId": "branch-b",
+                "fromPort": "opt-b",
+                "toPort": "in"
+              }
+            ]
+          }
+        ]
+      },
+      "sceneId": "scene-3",
+      "locale": "en",
+      "stateBridge": { "conditions": {}, "dictionaries": {}, "actions": {} },
+      "cases": [
+        {
+          "id": "choice-select-a",
+          "description": "Selecting choice opt-a routes to branch-a",
+          "steps": [
+            { "expect": { "type": "DIALOG", "blockUuid": "greeting" }, "action": { "type": "next" } },
+            { "expect": { "type": "CHOICE", "blockUuid": "c1", "visibleChoiceCount": 2 }, "action": { "type": "selectChoice", "choiceUuid": "opt-a" } },
+            { "expect": { "type": "DIALOG", "blockUuid": "branch-a" }, "action": { "type": "next" } },
+            { "expect": { "type": "END_OF_SCENE" } }
+          ],
+          "expectedVisited": ["greeting", "c1", "branch-a"],
+          "expectedCleanupCalls": 3
+        },
+        {
+          "id": "choice-select-b",
+          "description": "Selecting choice opt-b routes to branch-b",
+          "steps": [
+            { "expect": { "type": "DIALOG", "blockUuid": "greeting" }, "action": { "type": "next" } },
+            { "expect": { "type": "CHOICE", "blockUuid": "c1", "visibleChoiceCount": 2 }, "action": { "type": "selectChoice", "choiceUuid": "opt-b" } },
+            { "expect": { "type": "DIALOG", "blockUuid": "branch-b" }, "action": { "type": "next" } },
+            { "expect": { "type": "END_OF_SCENE" } }
+          ],
+          "expectedVisited": ["greeting", "c1", "branch-b"],
+          "expectedCleanupCalls": 3
+        }
+      ]
+    },
+    {
+      "id": "condition-port",
+      "description": "CONDITION block routes via fromPortIndex 0 (true) or 1 (false)",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": ["en"],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-4",
+            "label": "condition-port-scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "cond1",
+                "type": "CONDITION",
+                "label": "Quest Check",
+                "properties": [],
+                "isStartBlock": true,
+                "conditions": [
+                  { "uuid": "vc1", "key": "quest", "operator": "=", "value": "true" }
+                ]
+              },
+              {
+                "uuid": "yes",
+                "type": "DIALOG",
+                "label": "Yes Branch",
+                "properties": [],
+                "dialogueText": { "en": "Correct" }
+              },
+              {
+                "uuid": "no",
+                "type": "DIALOG",
+                "label": "No Branch",
+                "properties": [],
+                "dialogueText": { "en": "Wrong" }
+              }
+            ],
+            "connections": [
+              {
+                "id": "conn-cond-yes",
+                "fromId": "cond1",
+                "toId": "yes",
+                "fromPort": "out",
+                "toPort": "in",
+                "fromPortIndex": 0
+              },
+              {
+                "id": "conn-cond-no",
+                "fromId": "cond1",
+                "toId": "no",
+                "fromPort": "out",
+                "toPort": "in",
+                "fromPortIndex": 1
+              }
+            ]
+          }
+        ]
+      },
+      "sceneId": "scene-4",
+      "locale": "en",
+      "stateBridge": { "conditions": { "quest": true }, "dictionaries": {}, "actions": {} },
+      "cases": [
+        {
+          "id": "cond-true",
+          "description": "Condition resolves true, routes via fromPortIndex 0 to 'yes'",
+          "steps": [
+            { "expect": { "type": "CONDITION", "blockUuid": "cond1" }, "action": { "type": "resolve", "value": true } },
+            { "expect": { "type": "DIALOG", "blockUuid": "yes" }, "action": { "type": "next" } },
+            { "expect": { "type": "END_OF_SCENE" } }
+          ],
+          "expectedVisited": ["cond1", "yes"],
+          "expectedCleanupCalls": 2
+        },
+        {
+          "id": "cond-false",
+          "description": "Condition resolves false, routes via fromPortIndex 1 to 'no'",
+          "steps": [
+            { "expect": { "type": "CONDITION", "blockUuid": "cond1" }, "action": { "type": "resolve", "value": false } },
+            { "expect": { "type": "DIALOG", "blockUuid": "no" }, "action": { "type": "next" } },
+            { "expect": { "type": "END_OF_SCENE" } }
+          ],
+          "expectedVisited": ["cond1", "no"],
+          "expectedCleanupCalls": 2
+        }
+      ]
+    },
+    {
+      "id": "action-then",
+      "description": "ACTION block routes via fromPort 'then' on resolve",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": ["en"],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-5",
+            "label": "action-then-scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "act1",
+                "type": "ACTION",
+                "label": "Do Thing",
+                "properties": [],
+                "isStartBlock": true,
+                "actions": [
+                  { "uuid": "a1", "actionId": "do_thing", "params": [] }
+                ]
+              },
+              {
+                "uuid": "after",
+                "type": "DIALOG",
+                "label": "After Action",
+                "properties": [],
+                "dialogueText": { "en": "Done" }
+              }
+            ],
+            "connections": [
+              {
+                "id": "conn-act-then",
+                "fromId": "act1",
+                "toId": "after",
+                "fromPort": "then",
+                "toPort": "in"
+              }
+            ]
+          }
+        ]
+      },
+      "sceneId": "scene-5",
+      "locale": "en",
+      "stateBridge": { "conditions": {}, "dictionaries": {}, "actions": {} },
+      "cases": [
+        {
+          "id": "action-then-001",
+          "description": "Resolving an action routes via 'then' port",
+          "steps": [
+            { "expect": { "type": "ACTION", "blockUuid": "act1" }, "action": { "type": "resolveAction" } },
+            { "expect": { "type": "DIALOG", "blockUuid": "after" }, "action": { "type": "next" } },
+            { "expect": { "type": "END_OF_SCENE" } }
+          ],
+          "expectedVisited": ["act1", "after"],
+          "expectedCleanupCalls": 2
+        }
+      ]
+    },
+    {
+      "id": "action-catch",
+      "description": "ACTION block routes via 'then' on resolve, 'catch' on reject when both ports are connected",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": ["en"],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-6",
+            "label": "action-catch-scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "act1",
+                "type": "ACTION",
+                "label": "Risky Action",
+                "properties": [],
+                "isStartBlock": true,
+                "actions": [
+                  { "uuid": "a1", "actionId": "risky", "params": [] }
+                ]
+              },
+              {
+                "uuid": "success",
+                "type": "DIALOG",
+                "label": "Success",
+                "properties": [],
+                "dialogueText": { "en": "It worked" }
+              },
+              {
+                "uuid": "failure",
+                "type": "DIALOG",
+                "label": "Failure",
+                "properties": [],
+                "dialogueText": { "en": "It failed" }
+              }
+            ],
+            "connections": [
+              {
+                "id": "conn-act-success",
+                "fromId": "act1",
+                "toId": "success",
+                "fromPort": "then",
+                "toPort": "in",
+                "fromPortIndex": 0
+              },
+              {
+                "id": "conn-act-failure",
+                "fromId": "act1",
+                "toId": "failure",
+                "fromPort": "catch",
+                "toPort": "in",
+                "fromPortIndex": 1
+              }
+            ]
+          }
+        ]
+      },
+      "sceneId": "scene-6",
+      "locale": "en",
+      "stateBridge": { "conditions": {}, "dictionaries": {}, "actions": {} },
+      "cases": [
+        {
+          "id": "action-catch-resolve",
+          "description": "Resolving action routes via 'then' to success",
+          "steps": [
+            { "expect": { "type": "ACTION", "blockUuid": "act1" }, "action": { "type": "resolveAction" } },
+            { "expect": { "type": "DIALOG", "blockUuid": "success" }, "action": { "type": "next" } },
+            { "expect": { "type": "END_OF_SCENE" } }
+          ],
+          "expectedVisited": ["act1", "success"],
+          "expectedCleanupCalls": 2
+        },
+        {
+          "id": "action-catch-reject",
+          "description": "Rejecting action routes via 'catch' to failure",
+          "steps": [
+            { "expect": { "type": "ACTION", "blockUuid": "act1" }, "action": { "type": "rejectAction", "error": "something went wrong" } },
+            { "expect": { "type": "DIALOG", "blockUuid": "failure" }, "action": { "type": "next" } },
+            { "expect": { "type": "END_OF_SCENE" } }
+          ],
+          "expectedVisited": ["act1", "failure"],
+          "expectedCleanupCalls": 2
+        }
+      ]
+    },
+    {
+      "id": "action-catch-fallback",
+      "description": "ACTION block with no 'catch' connection falls back to 'then' on reject",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": ["en"],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-7",
+            "label": "action-catch-fallback-scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "act1",
+                "type": "ACTION",
+                "label": "Fallback Action",
+                "properties": [],
+                "isStartBlock": true,
+                "actions": [
+                  { "uuid": "a1", "actionId": "risky", "params": [] }
+                ]
+              },
+              {
+                "uuid": "success",
+                "type": "DIALOG",
+                "label": "Success",
+                "properties": [],
+                "dialogueText": { "en": "Fallback reached" }
+              }
+            ],
+            "connections": [
+              {
+                "id": "conn-act-then-only",
+                "fromId": "act1",
+                "toId": "success",
+                "fromPort": "then",
+                "toPort": "in"
+              }
+            ]
+          }
+        ]
+      },
+      "sceneId": "scene-7",
+      "locale": "en",
+      "stateBridge": { "conditions": {}, "dictionaries": {}, "actions": {} },
+      "cases": [
+        {
+          "id": "action-catch-fallback-001",
+          "description": "Rejecting action with no catch connection falls back to 'then' port",
+          "steps": [
+            { "expect": { "type": "ACTION", "blockUuid": "act1" }, "action": { "type": "rejectAction", "error": "no catch wired" } },
+            { "expect": { "type": "DIALOG", "blockUuid": "success" }, "action": { "type": "next" } },
+            { "expect": { "type": "END_OF_SCENE" } }
+          ],
+          "expectedVisited": ["act1", "success"],
+          "expectedCleanupCalls": 2
+        }
+      ]
+    },
+    {
+      "id": "dead-end",
+      "description": "DIALOG block with no outgoing connections ends the scene immediately",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": ["en"],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-8",
+            "label": "dead-end-scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "b1",
+                "type": "DIALOG",
+                "label": "Dead End",
+                "properties": [],
+                "dialogueText": { "en": "This is the end" },
+                "isStartBlock": true
+              }
+            ],
+            "connections": []
+          }
+        ]
+      },
+      "sceneId": "scene-8",
+      "locale": "en",
+      "stateBridge": { "conditions": {}, "dictionaries": {}, "actions": {} },
+      "cases": [
+        {
+          "id": "dead-end-001",
+          "description": "A block with no connections ends the scene after next",
+          "steps": [
+            { "expect": { "type": "DIALOG", "blockUuid": "b1" }, "action": { "type": "next" } },
+            { "expect": { "type": "END_OF_SCENE" } }
+          ],
+          "expectedVisited": ["b1"],
+          "expectedCleanupCalls": 1
+        }
+      ]
+    }
+  ]
 }

@@ -1,0 +1,12 @@
+{
+  "name": "@lsde/dialog-engine-csharp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Task runner for the C# LSDE Dialog Engine (requires .NET SDK)",
+  "scripts": {
+    "build": "dotnet build",
+    "test": "dotnet test --verbosity normal",
+    "playground": "dotnet run --project samples/MiniRuntime --",
+    "clean": "dotnet clean"
+  }
+}

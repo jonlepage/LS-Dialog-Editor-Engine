@@ -1,4 +1,358 @@
 {
   "version": "1.0",
-  "suites": []
+  "suites": [
+    {
+      "id": "valid-init",
+      "description": "A minimal valid blueprint with one scene, one start block, and no connections",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": ["en"],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-1",
+            "label": "Test Scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "b1",
+                "type": "DIALOG",
+                "isStartBlock": true,
+                "properties": []
+              }
+            ],
+            "connections": []
+          }
+        ]
+      },
+      "cases": [
+        {
+          "id": "valid-001",
+          "description": "Should pass validation with zero errors",
+          "expectedErrors": [],
+          "expectedWarnings": [],
+          "expectedStats": {
+            "sceneCount": 1,
+            "blockCount": 1,
+            "connectionCount": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "missing-scenes",
+      "description": "Blueprint with an empty scenes array should produce NO_SCENES error",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": ["en"],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": []
+      },
+      "cases": [
+        {
+          "id": "no-scenes-001",
+          "description": "Empty scenes array triggers NO_SCENES error",
+          "expectedErrors": ["NO_SCENES"],
+          "expectedWarnings": []
+        }
+      ]
+    },
+    {
+      "id": "duplicate-start-blocks",
+      "description": "Scene with two blocks both marked as isStartBlock should produce MULTIPLE_START_BLOCKS error",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": ["en"],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-1",
+            "label": "Test Scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "b1",
+                "type": "DIALOG",
+                "isStartBlock": true,
+                "properties": []
+              },
+              {
+                "uuid": "b2",
+                "type": "DIALOG",
+                "isStartBlock": true,
+                "properties": []
+              }
+            ],
+            "connections": []
+          }
+        ]
+      },
+      "cases": [
+        {
+          "id": "dup-start-001",
+          "description": "Two start blocks in the same scene triggers MULTIPLE_START_BLOCKS",
+          "expectedErrors": ["MULTIPLE_START_BLOCKS"],
+          "expectedWarnings": []
+        }
+      ]
+    },
+    {
+      "id": "empty-connections",
+      "description": "Scene with one block and an empty connections array should be valid",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": ["en"],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-1",
+            "label": "Test Scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "b1",
+                "type": "DIALOG",
+                "isStartBlock": true,
+                "properties": []
+              }
+            ],
+            "connections": []
+          }
+        ]
+      },
+      "cases": [
+        {
+          "id": "empty-conn-001",
+          "description": "Empty connections array is perfectly valid",
+          "expectedErrors": [],
+          "expectedWarnings": [],
+          "expectedStats": {
+            "sceneCount": 1,
+            "blockCount": 1,
+            "connectionCount": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "broken-connection-from",
+      "description": "Connection whose fromId references a non-existent block should produce BROKEN_CONNECTION_FROM",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": ["en"],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-1",
+            "label": "Test Scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "b1",
+                "type": "DIALOG",
+                "isStartBlock": true,
+                "properties": []
+              }
+            ],
+            "connections": [
+              {
+                "id": "conn-1",
+                "fromId": "nonexistent",
+                "toId": "b1",
+                "fromPort": "out",
+                "toPort": "in"
+              }
+            ]
+          }
+        ]
+      },
+      "cases": [
+        {
+          "id": "broken-from-001",
+          "description": "Connection with invalid fromId triggers BROKEN_CONNECTION_FROM",
+          "expectedErrors": ["BROKEN_CONNECTION_FROM"],
+          "expectedWarnings": []
+        }
+      ]
+    },
+    {
+      "id": "broken-connection-to",
+      "description": "Connection whose toId references a non-existent block should produce BROKEN_CONNECTION_TO",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": ["en"],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-1",
+            "label": "Test Scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "b1",
+                "type": "DIALOG",
+                "isStartBlock": true,
+                "properties": []
+              }
+            ],
+            "connections": [
+              {
+                "id": "conn-1",
+                "fromId": "b1",
+                "toId": "nonexistent",
+                "fromPort": "out",
+                "toPort": "in"
+              }
+            ]
+          }
+        ]
+      },
+      "cases": [
+        {
+          "id": "broken-to-001",
+          "description": "Connection with invalid toId triggers BROKEN_CONNECTION_TO",
+          "expectedErrors": ["BROKEN_CONNECTION_TO"],
+          "expectedWarnings": []
+        }
+      ]
+    },
+    {
+      "id": "duplicate-block-uuid",
+      "description": "Two blocks in the same scene sharing the same UUID should produce DUPLICATE_BLOCK_UUID",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": ["en"],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-1",
+            "label": "Test Scene",
+            "date": "2025-01-01",
+            "blocks": [
+              {
+                "uuid": "b1",
+                "type": "DIALOG",
+                "isStartBlock": true,
+                "properties": []
+              },
+              {
+                "uuid": "b1",
+                "type": "CONDITION",
+                "properties": []
+              }
+            ],
+            "connections": []
+          }
+        ]
+      },
+      "cases": [
+        {
+          "id": "dup-uuid-001",
+          "description": "Two blocks with the same UUID triggers DUPLICATE_BLOCK_UUID",
+          "expectedErrors": ["DUPLICATE_BLOCK_UUID"],
+          "expectedWarnings": []
+        }
+      ]
+    },
+    {
+      "id": "invalid-entry-block",
+      "description": "Scene with entryBlockId pointing to a non-existent block should produce INVALID_ENTRY_BLOCK",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": ["en"],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [
+          {
+            "uuid": "scene-1",
+            "label": "Test Scene",
+            "date": "2025-01-01",
+            "entryBlockId": "nonexistent",
+            "blocks": [
+              {
+                "uuid": "b1",
+                "type": "DIALOG",
+                "isStartBlock": true,
+                "properties": []
+              }
+            ],
+            "connections": []
+          }
+        ]
+      },
+      "cases": [
+        {
+          "id": "invalid-entry-001",
+          "description": "entryBlockId referencing a missing block triggers INVALID_ENTRY_BLOCK",
+          "expectedErrors": ["INVALID_ENTRY_BLOCK"],
+          "expectedWarnings": []
+        }
+      ]
+    },
+    {
+      "id": "multiple-non-async-fork",
+      "description": "A port forking to multiple non-async targets produces a warning",
+      "blueprint": {
+        "version": "1.0.0",
+        "exportDate": "2025-01-01",
+        "projectName": "test",
+        "primaryLanguage": "en",
+        "locales": ["en"],
+        "dictionaries": [],
+        "signatures": [],
+        "scenes": [{
+          "uuid": "scene-fork",
+          "label": "Fork Scene",
+          "date": "2025-01-01",
+          "blocks": [
+            { "uuid": "b1", "type": "DIALOG", "label": "Start", "properties": [], "isStartBlock": true },
+            { "uuid": "b2", "type": "DIALOG", "label": "Target A", "properties": [] },
+            { "uuid": "b3", "type": "DIALOG", "label": "Target B", "properties": [] }
+          ],
+          "connections": [
+            { "id": "conn-1", "fromId": "b1", "toId": "b2", "fromPort": "out", "toPort": "in" },
+            { "id": "conn-2", "fromId": "b1", "toId": "b3", "fromPort": "out", "toPort": "in" }
+          ]
+        }]
+      },
+      "cases": [{
+        "id": "fork-warning-001",
+        "description": "Two non-async targets on same port produces MULTIPLE_NON_ASYNC_FORK warning",
+        "expectedErrors": [],
+        "expectedWarnings": ["MULTIPLE_NON_ASYNC_FORK"],
+        "expectedStats": { "sceneCount": 1, "blockCount": 3, "connectionCount": 2 }
+      }]
+    }
+  ]
 }
