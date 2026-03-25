@@ -3,6 +3,7 @@
 //              → handler-registry → block-context → scene-handle → engine
 
 export { DialogueEngine } from './engine.js';
+export { LsdeUtils } from './lsde-utils.js';
 
 export type {
 	// Blueprint data types

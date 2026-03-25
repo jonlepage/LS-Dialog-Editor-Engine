@@ -3,7 +3,7 @@ declare const console: { log: (...args: unknown[]) => void };
 // Playground — tests the engine API with a real blueprint.
 // This file is excluded from build (tsconfig.json exclude).
 
-import { DialogueEngine } from "./index.js";
+import { DialogueEngine, LsdeUtils } from "./index.js";
 import type { BlueprintExport, StateBridge } from "./index.js";
 import blueprintJson from "../../blueprints/blueprint.json";
 
@@ -12,7 +12,43 @@ const engine = new DialogueEngine();
 
 // ─── Init ───────────────────────────────────────────────────────────────────
 
-const { errors, warnings, stats } = engine.init({ data: testData });
+// idealement le user va creer les function plus haut plutot que directment dans le le object
+// ex: evaluateCondition:HandleEvaluateCondition, mais pour lexample ca va
+const { errors, warnings, stats } = engine.init({
+	data: testData,
+
+	// non obligatoire, permet de connexter globalement son propre system devaluation des conditions.
+	// non
+	evaluateCondition: (cond) => {
+		const { key, operator, value } = cond;
+		console.log(`   🔗 bridge.eval: ${key} ${operator} ${value} → true`);
+		return true;
+	},
+
+	//
+	// obligatoire, permet dexecuter les actions de son moteur.
+	// utiliser dans le default handler onAction et dois rester accesible au user dans LsdeUtils si il custom handler
+	executeAction: (action, sig) => {
+		const { actionId, params } = action;
+		console.log(
+			`   🔗 bridge.exec: ${sig?.label ?? actionId}(${params.join(", ")})`,
+		);
+	},
+
+	// remove
+	resolveDictionary: (group, key) => `${group}.${key}`,
+
+	// required, required, obligatoire , mais le dev peut juste ajoutez un log au debut
+	// get engine dictionnary ex: if group === 'items' ? $items.get(key) or game.getDictionary(group, key) or something like that selon le engine du dev...
+	onGetDictionary: (group, key) => () =>
+		console.log("get engine disctionary", group, key),
+	onSetDictionary: (group, key, value) => () =>
+		console.log("set engine disctionary", group, key, value),
+
+	// obligatoire , ces l'algo engine qui decidera quel character utilise utilisera le block
+	// si par example le user na pas le personnage dans sa party il peut return undefined , et character dans le context du block sera undefined
+	resolveCharacter: (characters) => characters[0],
+});
 const { sceneCount, blockCount, connectionCount } = stats;
 console.log(`\n🔧 Init — ${errors.length} errors, ${warnings.length} warnings`);
 console.log(
@@ -23,24 +59,30 @@ for (const { code, message } of warnings)
 
 engine.setLocale("en");
 
-// ─── StateBridge ────────────────────────────────────────────────────────────
+// onValidateNextBlock existe aussi par default
+// ces ici que on va evaluer si le prochain block est executable ou non avan onBeforeBlock
+// par default , le handler  fera juste les base logique accesible nativement par son engine et ces utils
+// si le dev veut remplacer, il doit avoir access a des utils pour eviter de tous ecrire la logique native dejas dispo.
+engine.onValidateNextBlock(({ context, nextBlock, fromBlock }) => {
+	const { metadata } = nextBlock;
+	// si nextBlock a une list de characters obligatgoire et que context.character du nextblock est undefined par example avec resolveCharacter
+	// return { valid: false, reason: "missing_character_required" };
+	if (metadata?.characters) {
+		if (context.character === undefined) {
+			return { valid: false, reason: "missing_character_required" };
+		}
+	}
+	return { valid: true };
+});
 
-const bridge: StateBridge = {
-	evaluateCondition: (cond) => {
-		const { key, operator, value } = cond;
-		console.log(`   🔗 bridge.eval: ${key} ${operator} ${value} → true`);
-		return true;
-	},
-	executeAction: (action, sig) => {
-		const { actionId, params } = action;
-		console.log(
-			`   🔗 bridge.exec: ${sig?.label ?? actionId}(${params.join(", ")})`,
-		);
-	},
-	resolveDictionary: (group, key) => `${group}.${key}`,
-	resolveCharacter: (characters) => characters[0],
-};
-engine.setStateBridge(bridge);
+// onInvalidateBlock existe aussi par default et peut etre remplacer par le dev
+engine.onInvalidateBlock(({ scene, reason }) => {
+	console.log(`   ❌ INVALIDATED: ${reason}`);
+	if (reason === "missing_character_required") {
+		// si missing character , le dev decide de cancel, selon son moteur.
+		scene.cancel();
+	}
+});
 
 // ─── Handlers ───────────────────────────────────────────────────────────────
 
@@ -97,9 +139,8 @@ engine.onCondition(({ block, context, next }) => {
 	const { label } = block;
 	const { conditions } = block;
 	const { resolve } = context;
-	const count = conditions?.length ?? 0;
-	const result = count > 0;
-	console.log(`\n🔀 CONDITION  ${label} — ${count} conditions → ${result}`);
+	const result = LsdeUtils.evaluateConditionChain(conditions ?? [], () => true);
+	console.log(`\n🔀 CONDITION  ${label} conditions → ${result}`);
 	resolve(result);
 	next();
 });
@@ -129,17 +170,6 @@ engine.onSceneEnter(({ scene }) => {
 
 engine.onSceneExit(() => {
 	console.log(`🔴 ━━━ Scene Exit ━━━\n`);
-});
-
-engine.onValidateNextBlock(({ nextBlock, fromBlock }) => {
-	if (fromBlock)
-		console.log(`   ✔️  validate: ${fromBlock.label} → ${nextBlock.label}`);
-	return { valid: true };
-});
-
-engine.onInvalidateBlock(({ scene, reason }) => {
-	console.log(`   ❌ INVALIDATED: ${reason}`);
-	scene.cancel();
 });
 
 // ─── Run ────────────────────────────────────────────────────────────────────

@@ -406,6 +406,11 @@ namespace LsdeDialogEngine
         IReadOnlyCollection<string> GetVisitedBlocks();
         bool IsRunning();
         int GetActiveTracks();
+
+        /// <summary>Get the full choice history for this scene. Keys are block UUIDs, values are arrays of selected choice UUIDs.</summary>
+        IReadOnlyDictionary<string, IReadOnlyList<string>> GetChoiceHistory();
+        /// <summary>Get the choice(s) selected at a specific block. Returns null if block never visited as choice.</summary>
+        IReadOnlyList<string>? GetChoice(string blockUuid);
     }
 
     // ─── Port Resolution Types ──────────────────────────────────────────────────

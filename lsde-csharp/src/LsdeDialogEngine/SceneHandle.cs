@@ -229,10 +229,19 @@ namespace LsdeDialogEngine
         private void AutoEvaluateCondition(ConditionBlock block, InternalConditionContext context)
         {
             var bridge = _parentHandle.GetStateBridgeInternal();
-            if (bridge == null) { EndTrack(); return; }
+            var conditions = block.Conditions ?? new List<ExportCondition>();
+            bool hasChoiceConditions = false;
+            foreach (var c in conditions)
+            {
+                if (c.Key.StartsWith("choice:")) { hasChoiceConditions = true; break; }
+            }
+            if (bridge == null && !hasChoiceConditions) { EndTrack(); return; }
+            Func<ExportCondition, bool> bridgeEval = bridge != null
+                ? bridge.EvaluateCondition
+                : (_ => false);
             context.ConditionResult = ConditionEvaluator.EvaluateConditionChain(
-                block.Conditions ?? new List<ExportCondition>(),
-                bridge.EvaluateCondition);
+                conditions,
+                cond => _parentHandle.EvaluateConditionForBlock(cond, bridgeEval));
             _previousCleanup = null;
             AdvanceToNextBlock(block, context);
         }
@@ -282,6 +291,7 @@ namespace LsdeDialogEngine
         private BlueprintBlock? _currentBlock;
         private BlueprintBlock? _previousBlock;
         private readonly HashSet<string> _visited = new HashSet<string>();
+        private readonly Dictionary<string, List<string>> _choiceHistory = new Dictionary<string, List<string>>();
         private Action? _previousCleanup;
         private readonly List<AsyncTrack> _asyncTracks = new List<AsyncTrack>();
 
@@ -389,6 +399,21 @@ namespace LsdeDialogEngine
             return count;
         }
 
+        public IReadOnlyDictionary<string, IReadOnlyList<string>> GetChoiceHistory()
+        {
+            var result = new Dictionary<string, IReadOnlyList<string>>();
+            foreach (var kvp in _choiceHistory)
+            {
+                result[kvp.Key] = kvp.Value.AsReadOnly();
+            }
+            return result;
+        }
+
+        public IReadOnlyList<string>? GetChoice(string blockUuid)
+        {
+            return _choiceHistory.TryGetValue(blockUuid, out var list) ? list.AsReadOnly() : null;
+        }
+
         // ─── Internal API (used by AsyncTrack) ───────────────────────────────
 
         internal SceneGraph GetSceneGraph() => _sceneGraph;
@@ -406,6 +431,42 @@ namespace LsdeDialogEngine
         internal IBaseBlockContext? CreateBlockContext(BlueprintBlock block)
         {
             return CreateContext(block);
+        }
+
+        private void RecordChoice(string blockUuid, string choiceUuid)
+        {
+            if (_choiceHistory.TryGetValue(blockUuid, out var existing))
+            {
+                existing.Add(choiceUuid);
+            }
+            else
+            {
+                _choiceHistory[blockUuid] = new List<string> { choiceUuid };
+            }
+        }
+
+        private bool EvaluateConditionWithHistory(
+            ExportCondition condition,
+            Func<ExportCondition, bool> bridgeEvaluator)
+        {
+            if (condition.Key.StartsWith("choice:"))
+            {
+                var blockUuid = condition.Key.Substring(7);
+                if (!_choiceHistory.TryGetValue(blockUuid, out var history))
+                {
+                    return condition.Operator == "!=";
+                }
+                bool includes = history.Contains(condition.Value);
+                return condition.Operator == "!=" ? !includes : includes;
+            }
+            return bridgeEvaluator(condition);
+        }
+
+        internal bool EvaluateConditionForBlock(
+            ExportCondition condition,
+            Func<ExportCondition, bool> bridgeEvaluator)
+        {
+            return EvaluateConditionWithHistory(condition, bridgeEvaluator);
         }
 
         // ─── Traversal loop ────────────────────────────────────────────────
@@ -640,14 +701,23 @@ namespace LsdeDialogEngine
         private void AutoEvaluateCondition(ConditionBlock block, InternalConditionContext context)
         {
             var bridge = _callbacks.GetStateBridge?.Invoke();
-            if (bridge == null)
+            var conditions = block.Conditions ?? new List<ExportCondition>();
+            bool hasChoiceConditions = false;
+            foreach (var c in conditions)
+            {
+                if (c.Key.StartsWith("choice:")) { hasChoiceConditions = true; break; }
+            }
+            if (bridge == null && !hasChoiceConditions)
             {
                 EndScene();
                 return;
             }
+            Func<ExportCondition, bool> bridgeEval = bridge != null
+                ? bridge.EvaluateCondition
+                : (_ => false);
             context.ConditionResult = ConditionEvaluator.EvaluateConditionChain(
-                block.Conditions ?? new List<ExportCondition>(),
-                bridge.EvaluateCondition);
+                conditions,
+                cond => EvaluateConditionWithHistory(cond, bridgeEval));
             _previousCleanup = null;
             AdvanceToNextBlock(block, context);
         }
@@ -697,10 +767,12 @@ namespace LsdeDialogEngine
                     return BlockContextFactory.CreateDialogContext(db, resolvedCharacter);
                 case ChoiceBlock cb:
                 {
-                    Func<ExportCondition, bool> evaluator = bridge != null
+                    Func<ExportCondition, bool> rawEvaluator = bridge != null
                         ? bridge.EvaluateCondition
                         : (_ => true);
-                    return BlockContextFactory.CreateChoiceContext(cb, evaluator, resolvedCharacter);
+                    Func<ExportCondition, bool> evaluator = cond =>
+                        EvaluateConditionWithHistory(cond, rawEvaluator);
+                    return BlockContextFactory.CreateChoiceContext(cb, evaluator, RecordChoice, resolvedCharacter);
                 }
                 case ConditionBlock _:
                     return BlockContextFactory.CreateConditionContext(resolvedCharacter);

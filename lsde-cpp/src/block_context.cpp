@@ -33,14 +33,22 @@ void InternalDialogContext::preventGlobalHandler() { globalPrevented = true; }
 
 // ─── InternalChoiceContext ───────────────────────────────────────────────────
 
-InternalChoiceContext::InternalChoiceContext(std::vector<ChoiceItem> visibleChoices, const BlockCharacter* resolvedCharacter)
-    : _character(resolvedCharacter), _choices(std::move(visibleChoices)) {}
+InternalChoiceContext::InternalChoiceContext(
+    std::vector<ChoiceItem> visibleChoices,
+    const BlockCharacter* resolvedCharacter,
+    std::string blockUuid,
+    std::function<void(const std::string&, const std::string&)> onChoiceSelected)
+    : _character(resolvedCharacter), _choices(std::move(visibleChoices)),
+      _blockUuid(std::move(blockUuid)), _onChoiceSelected(std::move(onChoiceSelected)) {}
 
 const BlockCharacter* InternalChoiceContext::character() const { return _character; }
 const std::vector<ChoiceItem>& InternalChoiceContext::choices() const { return _choices; }
 
 void InternalChoiceContext::selectChoice(const std::string& choiceUuid) {
     selectedChoiceUuid = choiceUuid;
+    if (_onChoiceSelected) {
+        _onChoiceSelected(_blockUuid, choiceUuid);
+    }
 }
 
 void InternalChoiceContext::preventGlobalHandler() { globalPrevented = true; }
@@ -73,10 +81,11 @@ std::unique_ptr<InternalDialogContext> createDialogContext(const DialogBlock& bl
 std::unique_ptr<InternalChoiceContext> createChoiceContext(
     const ChoiceBlock& block,
     const std::function<bool(const ExportCondition&)>& evaluator,
-    const BlockCharacter* resolvedCharacter)
+    const BlockCharacter* resolvedCharacter,
+    std::function<void(const std::string&, const std::string&)> onChoiceSelected)
 {
     auto visible = filterVisibleChoices(block.choices, evaluator);
-    return std::make_unique<InternalChoiceContext>(std::move(visible), resolvedCharacter);
+    return std::make_unique<InternalChoiceContext>(std::move(visible), resolvedCharacter, block.uuid, std::move(onChoiceSelected));
 }
 
 std::unique_ptr<InternalConditionContext> createConditionContext(const BlockCharacter* resolvedCharacter) {

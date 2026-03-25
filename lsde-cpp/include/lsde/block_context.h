@@ -28,7 +28,11 @@ public:
     bool globalPrevented = false;
     std::optional<std::string> selectedChoiceUuid;
 
-    InternalChoiceContext(std::vector<ChoiceItem> visibleChoices, const BlockCharacter* resolvedCharacter);
+    InternalChoiceContext(
+        std::vector<ChoiceItem> visibleChoices,
+        const BlockCharacter* resolvedCharacter,
+        std::string blockUuid,
+        std::function<void(const std::string&, const std::string&)> onChoiceSelected = {});
     const BlockCharacter* character() const override;
     const std::vector<ChoiceItem>& choices() const override;
     void selectChoice(const std::string& choiceUuid) override;
@@ -37,6 +41,8 @@ public:
 private:
     const BlockCharacter* _character = nullptr;
     std::vector<ChoiceItem> _choices;
+    std::string _blockUuid;
+    std::function<void(const std::string&, const std::string&)> _onChoiceSelected;
 };
 
 class InternalConditionContext : public IConditionContext {
@@ -75,7 +81,8 @@ std::unique_ptr<InternalDialogContext> createDialogContext(const DialogBlock& bl
 std::unique_ptr<InternalChoiceContext> createChoiceContext(
     const ChoiceBlock& block,
     const std::function<bool(const ExportCondition&)>& evaluator,
-    const BlockCharacter* resolvedCharacter);
+    const BlockCharacter* resolvedCharacter,
+    std::function<void(const std::string&, const std::string&)> onChoiceSelected = {});
 
 std::unique_ptr<InternalConditionContext> createConditionContext(const BlockCharacter* resolvedCharacter);
 std::unique_ptr<InternalActionContext> createActionContext(const BlockCharacter* resolvedCharacter);

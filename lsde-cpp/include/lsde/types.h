@@ -400,6 +400,11 @@ public:
     virtual const std::vector<std::string>& getVisitedBlocks() const = 0;
     virtual bool isRunning() const = 0;
     virtual int getActiveTracks() const = 0;
+
+    /** Get the full choice history for this scene. Keys are block UUIDs, values are arrays of selected choice UUIDs. */
+    virtual const std::unordered_map<std::string, std::vector<std::string>>& getChoiceHistory() const = 0;
+    /** Get the choice(s) selected at a specific block. Returns nullptr if block never visited as choice. */
+    virtual const std::vector<std::string>* getChoice(const std::string& blockUuid) const = 0;
 };
 
 // ─── Port Resolution Types ──────────────────────────────────────────────────

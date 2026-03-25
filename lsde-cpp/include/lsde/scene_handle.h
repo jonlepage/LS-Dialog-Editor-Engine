@@ -68,6 +68,8 @@ public:
     const std::vector<std::string>& getVisitedBlocks() const override;
     bool isRunning() const override;
     int getActiveTracks() const override;
+    const std::unordered_map<std::string, std::vector<std::string>>& getChoiceHistory() const override;
+    const std::vector<std::string>* getChoice(const std::string& blockUuid) const override;
 
     // ─── Internal API (used by AsyncTrack) ───────────────────────────
     const SceneGraph& getSceneGraph() const;
@@ -77,6 +79,9 @@ public:
     void addVisited(const std::string& uuid);
     void removeTrack(AsyncTrack* track);
     std::unique_ptr<IBaseBlockContext> createBlockContext(const BlueprintBlock& block);
+    void recordChoice(const std::string& blockUuid, const std::string& choiceUuid);
+    bool evaluateConditionForBlock(const ExportCondition& condition,
+        const std::function<bool(const ExportCondition&)>& bridgeEvaluator);
 
 private:
     void processBlock(const BlueprintBlock& block);
@@ -85,6 +90,8 @@ private:
     void endScene();
     void autoEvaluateCondition(const BlueprintBlock& block, InternalConditionContext* context);
     void autoExecuteAction(const BlueprintBlock& block, InternalActionContext* context);
+    bool evaluateConditionWithHistory(const ExportCondition& condition,
+        const std::function<bool(const ExportCondition&)>& bridgeEvaluator);
     void fireSceneEnter();
     void fireSceneExit();
     std::unique_ptr<IBaseBlockContext> createContext(const BlueprintBlock& block);
@@ -102,6 +109,7 @@ private:
     const BlueprintBlock* _previousBlock = nullptr;
     std::unordered_set<std::string> _visitedSet;
     std::vector<std::string> _visitedOrder;
+    std::unordered_map<std::string, std::vector<std::string>> _choiceHistory;
     CleanupFn _previousCleanup;
     std::vector<std::unique_ptr<AsyncTrack>> _asyncTracks;
     std::unique_ptr<IBaseBlockContext> _ownedContext; // keeps main-track context alive

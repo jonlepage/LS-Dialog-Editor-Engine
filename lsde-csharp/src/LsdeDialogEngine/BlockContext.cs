@@ -41,19 +41,28 @@ namespace LsdeDialogEngine
     {
         internal bool GlobalPrevented;
         internal string? SelectedChoiceUuid;
+        private readonly string _blockUuid;
+        private readonly Action<string, string>? _onChoiceSelected;
 
         public BlockCharacter? Character { get; }
         public IReadOnlyList<ChoiceItem> Choices { get; }
 
-        internal InternalChoiceContext(List<ChoiceItem> visibleChoices, BlockCharacter? resolvedCharacter)
+        internal InternalChoiceContext(
+            string blockUuid,
+            List<ChoiceItem> visibleChoices,
+            BlockCharacter? resolvedCharacter,
+            Action<string, string>? onChoiceSelected)
         {
+            _blockUuid = blockUuid;
             Choices = visibleChoices;
             Character = resolvedCharacter;
+            _onChoiceSelected = onChoiceSelected;
         }
 
         public void SelectChoice(string choiceUuid)
         {
             SelectedChoiceUuid = choiceUuid;
+            _onChoiceSelected?.Invoke(_blockUuid, choiceUuid);
         }
 
         public void PreventGlobalHandler() => GlobalPrevented = true;
@@ -116,11 +125,12 @@ namespace LsdeDialogEngine
         internal static InternalChoiceContext CreateChoiceContext(
             ChoiceBlock block,
             Func<ExportCondition, bool> evaluator,
+            Action<string, string>? onChoiceSelected,
             BlockCharacter? resolvedCharacter)
         {
             var choices = block.Choices ?? new List<ChoiceItem>();
             var visibleChoices = ConditionEvaluator.FilterVisibleChoices(choices, evaluator);
-            return new InternalChoiceContext(visibleChoices, resolvedCharacter);
+            return new InternalChoiceContext(block.Uuid, visibleChoices, resolvedCharacter, onChoiceSelected);
         }
 
         internal static InternalConditionContext CreateConditionContext(BlockCharacter? resolvedCharacter)
