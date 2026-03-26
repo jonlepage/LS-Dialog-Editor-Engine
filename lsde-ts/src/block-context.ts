@@ -1,7 +1,7 @@
 // LSDE Dialog Engine — Context factory per block type
 
 import type {
-	DialogBlock, ChoiceBlock, ChoiceItem,
+	DialogBlock, ChoiceBlock, RuntimeChoiceItem,
 	DialogContext, ChoiceContext, ConditionContext, ActionContext, BlockCharacter,
 } from './types.js';
 
@@ -48,10 +48,11 @@ export function createDialogContext( block: DialogBlock, resolvedCharacter: Bloc
 
 export function createChoiceContext(
 	block: ChoiceBlock,
+	taggedChoices: RuntimeChoiceItem[],
 	onChoiceSelected: ( ( blockUuid: string, choiceUuid: string ) => void ) | undefined,
 	resolvedCharacter: BlockCharacter | undefined,
 ): InternalChoiceContext {
-	const choices: ChoiceItem[] = block.choices ?? [];
+	const choices: RuntimeChoiceItem[] = taggedChoices;
 	const ctx: InternalChoiceContext = {
 		_globalPrevented: false,
 		_selectedChoiceUuid: undefined,

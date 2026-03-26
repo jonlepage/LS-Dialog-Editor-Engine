@@ -8,10 +8,10 @@
 export enum LSDE_SCENES {
 	/**
 	 * ### Scene: New Scene
-	 * 1 ACTION, 1 CHOICE, 1 CONDITION, 5 DIALOG
+	 * 1 ACTION, 2 CHOICE, 1 CONDITION, 3 DIALOG
 	 * Entry: `DIALOG-001` ⭐
 	 * - Emotions: `sad`
-	 * - Characters: `Boo`, `Gigi Jinx `, `Gruht Tyron`, `Lulu Star`, `Salomon Sky`, `Svelt Moon`, `lia`
+	 * - Characters: `Boo`, `Gruht Tyron`, `Svelt Moon`, `lia`
 	 */
 	newScene = '3e0110a5-49bb-46fe-884b-05ce106af4cd',
 }
@@ -26,86 +26,73 @@ export enum LSDE_BLOCKS {
 	/**
 	 * ### 🟧[ACTION] ACTION-001
 	 * - Scene: `New Scene`
-	 * - In: `DIALOG-001`
-	 * - Out: `DIALOG-002`, `DIALOG-005`
-	 * `7908f59d-b97d-40ea-80f1-30c6f762e30d`()
+	 * - In: `CONDITION-001`
+	 * `7908f59d-b97d-40ea-80f1-30c6f762e30d`(a, 2)
 	 * ---
 	 * <image url="./_images/action.webp" />
 	 */
-	newSceneAction001 = 'b1e1cf07-e8d2-42cc-b1ec-7cfb21b6a3aa',
+	newSceneAction001 = 'd72bcf6a-161b-4759-90dd-2ae10a58fdd3',
 	/**
 	 * ### ⬜[CHOICE] CHOICE-001
-	 * - Characters: `Gruht Tyron`, `Gigi Jinx `, `Lulu Star`, `Boo`, `Svelt Moon`, `Salomon Sky`
+	 * - Characters: `lia`
 	 * - Scene: `New Scene`
 	 * - In: `DIALOG-001`
-	 * - Out: `CONDITION-001`, `DIALOG-001`
-	 * - Choices: `choice1`, `choice2`
+	 * - Out: `DIALOG-002`
+	 * - Choices: `C1`, `C2`
 	 * ---
 	 * <image url="./_images/choice.webp" />
 	 */
 	newSceneChoice001 = '014f503a-6688-429d-a5fe-801cf33f2410',
 	/**
+	 * ### ⬜[CHOICE] CHOICE-002
+	 * - Scene: `New Scene`
+	 * - In: `DIALOG-002`
+	 * - Out: `CONDITION-001`
+	 * - Choices: `C1.1`, `C2.1`
+	 * ---
+	 * <image url="./_images/choice.webp" />
+	 */
+	newSceneChoice002 = '2b184947-49f9-4e57-8600-70b46e2cd0ba',
+	/**
 	 * ### 🟪[CONDITION] CONDITION-001
 	 * - Scene: `New Scene`
-	 * - In: `DIALOG-002`, `CHOICE-001`
-	 * - Out: `DIALOG-003`, `DIALOG-004`
-	 * `variable_0` = ``
-	 * `variable_0` = ``
-	 * `variable_0` = ``
+	 * - In: `CHOICE-002`
+	 * - Out: `ACTION-001`, `DIALOG-003`
+	 * `choice:014f503a-6688-429d-a5fe-801cf33f2410` = `a0eee458-6ccc-4a23-bd36-0b3d1f73771e`
+	 * `choice:2b184947-49f9-4e57-8600-70b46e2cd0ba` = `e306346e-6bcc-4564-8b19-e2ed28fabafe`
 	 * ---
 	 * <image url="./_images/cond.webp" />
 	 */
-	newSceneCondition001 = '85f4640b-9c6e-4940-9bc6-b4d12847d5f8',
+	newSceneCondition001 = '4074b6c2-bfc8-44f1-9a29-cda529bf522a',
 	/**
 	 * ### 🟦[DIALOG] DIALOG-001 ⭐
-	 * _"choice2"_
+	 * _"C2"_
 	 * - Characters: `Gruht Tyron` (sad ×2), `Svelt Moon` (sad ×2), `lia` (sad ×2), `Boo` (sad ×2)
 	 * - Scene: `New Scene`
-	 * - In: `CHOICE-001`
-	 * - Out: `CHOICE-001`, `ACTION-001`, `DIALOG-005`
+	 * - Out: `CHOICE-001`
 	 * ---
 	 * <image url="./_images/dialog.webp" />
 	 */
 	newSceneDialog001 = '6462dab3-0eb4-4a2c-a505-407556441156',
 	/**
 	 * ### 🟦[DIALOG] DIALOG-002
-	 * _"text 2"_
-	 * - Characters: `lia`
+	 * _"D2"_
 	 * - Scene: `New Scene`
-	 * - In: `ACTION-001`
-	 * - Out: `CONDITION-001`
+	 * - In: `CHOICE-001`
+	 * - Out: `CHOICE-002`
 	 * ---
 	 * <image url="./_images/dialog.webp" />
 	 */
-	newSceneDialog002 = 'df23757c-a35a-4bcb-8056-e7ad232eff1d',
+	newSceneDialog002 = 'c66437af-54b7-4a75-9efa-713e983c145d',
 	/**
 	 * ### 🟦[DIALOG] DIALOG-003
-	 * _"text 3"_
+	 * _"D5"_
 	 * - Scene: `New Scene`
 	 * - In: `CONDITION-001`
 	 * ---
 	 * <image url="./_images/dialog.webp" />
 	 */
-	newSceneDialog003 = 'bccf5542-80f1-4415-b0c4-24ff4a638aa7',
-	/**
-	 * ### 🟦[DIALOG] DIALOG-004
-	 * _"text 3.2"_
-	 * - Scene: `New Scene`
-	 * - In: `CONDITION-001`, `DIALOG-005`
-	 * ---
-	 * <image url="./_images/dialog.webp" />
-	 */
-	newSceneDialog004 = '0c524a39-6bbe-468f-8876-43c1fbb2a030',
-	/**
-	 * ### 🟦[DIALOG] DIALOG-005
-	 * _"action fail"_
-	 * - Scene: `New Scene`
-	 * - In: `ACTION-001`, `DIALOG-001`
-	 * - Out: `DIALOG-004`
-	 * ---
-	 * <image url="./_images/dialog.webp" />
-	 */
-	newSceneDialog005 = '9b47c43c-4b06-4e37-bec6-2ee2597d4bae',
+	newSceneDialog003 = 'dfc30c4c-a1aa-4e76-81b6-640bf447351b',
 }
 
 /**
@@ -115,19 +102,35 @@ export enum LSDE_BLOCKS {
  */
 export enum LSDE_CHOICES {
 	/**
-	 * ### ⬜[CHOICE_ITEM] choice1
-	 * _"choice1"_
+	 * ### ⬜[CHOICE_ITEM] C1
+	 * _"C1"_
 	 * - Scene: `New Scene`
 	 * - Parent: `CHOICE-001`
 	 */
 	/** @see {@link LSDE_BLOCKS.newSceneChoice001} */
-	newSceneChoice1 = '17e98de3-1690-4ca4-8ea5-8070c15b1fe1',
+	newSceneC1 = '17e98de3-1690-4ca4-8ea5-8070c15b1fe1',
 	/**
-	 * ### ⬜[CHOICE_ITEM] choice2
-	 * _"choice2"_
+	 * ### ⬜[CHOICE_ITEM] C2
+	 * _"C2"_
 	 * - Scene: `New Scene`
 	 * - Parent: `CHOICE-001`
 	 */
 	/** @see {@link LSDE_BLOCKS.newSceneChoice001} */
-	newSceneChoice2 = 'a0eee458-6ccc-4a23-bd36-0b3d1f73771e',
+	newSceneC2 = 'a0eee458-6ccc-4a23-bd36-0b3d1f73771e',
+	/**
+	 * ### ⬜[CHOICE_ITEM] C1.1
+	 * _"C1.1"_
+	 * - Scene: `New Scene`
+	 * - Parent: `CHOICE-002`
+	 */
+	/** @see {@link LSDE_BLOCKS.newSceneChoice002} */
+	newSceneC11 = 'd16d21ea-ecf8-4172-aaa3-668df80e9853',
+	/**
+	 * ### ⬜[CHOICE_ITEM] C2.1
+	 * _"C2.1"_
+	 * - Scene: `New Scene`
+	 * - Parent: `CHOICE-002`
+	 */
+	/** @see {@link LSDE_BLOCKS.newSceneChoice002} */
+	newSceneC21 = 'e306346e-6bcc-4564-8b19-e2ed28fabafe',
 }

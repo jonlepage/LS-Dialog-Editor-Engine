@@ -13,6 +13,7 @@ import type {
 	BlueprintBlock,
 	BlueprintConnection,
 	BlockCharacter,
+	ExportCondition,
 } from "./types.js";
 import { validateBlueprint } from "./validator.js";
 import { BlueprintGraph } from "./graph.js";
@@ -34,6 +35,8 @@ export class DialogueEngine implements IDialogueEngine {
 	private initialized = false;
 	/** Character resolution callback. Default: first character in the list. */
 	private _resolveCharacter: ( characters: BlockCharacter[] ) => BlockCharacter | undefined = ( chars ) => chars[0];
+	/** Choice visibility evaluator. When set, the engine tags each choice with `visible` before calling onChoice. */
+	private _choiceFilter: ( ( condition: ExportCondition ) => boolean ) | null = null;
 
 	init( options: InitOptions ): DiagnosticReport {
 		const report = validateBlueprint( options );
@@ -61,6 +64,10 @@ export class DialogueEngine implements IDialogueEngine {
 
 	onResolveCharacter( fn: ( characters: BlockCharacter[] ) => BlockCharacter | undefined ): void {
 		this._resolveCharacter = fn;
+	}
+
+	setChoiceFilter( evaluator: ( condition: ExportCondition ) => boolean ): void {
+		this._choiceFilter = evaluator;
 	}
 
 	onValidateNextBlock( handler: ValidateNextBlockHandler ): void {
@@ -113,6 +120,7 @@ export class DialogueEngine implements IDialogueEngine {
 			onSceneStarted: ( h ) => this.activeScenes.set( sceneId, h ),
 			onSceneEnded: () => this.activeScenes.delete( sceneId ),
 			getResolveCharacter: () => this._resolveCharacter,
+			getChoiceFilter: () => this._choiceFilter,
 			getLocale: () => this.locale,
 		} );
 

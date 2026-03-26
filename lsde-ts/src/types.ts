@@ -92,6 +92,15 @@ export interface ChoiceItem {
 }
 
 /**
+ * Choice item with runtime visibility tag, set by the engine when `setChoiceFilter()` is configured.
+ * Use `choices.filter(c => c.visible !== false)` to get visible choices.
+ */
+export interface RuntimeChoiceItem extends ChoiceItem {
+	/** `true` = visible, `false` = hidden, `undefined` = no filter installed (treat as visible). */
+	visible?: boolean;
+}
+
+/**
  * LSDE native execution properties controlling how a block is dispatched by the engine.
  *
  * @remarks
@@ -578,11 +587,11 @@ export interface DialogContext extends BaseBlockContext {
 /** Context for CHOICE block handlers. */
 export interface ChoiceContext extends BaseBlockContext {
 	/**
-	 * All choices (unfiltered). Use `LsdeUtils.filterVisibleChoices(choices, evaluator, scene)`
-	 * to filter by visibility conditions. The `scene` parameter handles `choice:` conditions
-	 * automatically via internal choice history — the developer only provides game-state evaluation.
+	 * All choices with optional visibility tags. When `engine.setChoiceFilter()` is configured,
+	 * each choice is tagged `visible: true | false`. Filter with `choices.filter(c => c.visible !== false)`.
+	 * Without a filter, `visible` is `undefined` and all choices pass.
 	 */
-	choices: ChoiceItem[];
+	choices: RuntimeChoiceItem[];
 	/** Select a choice by UUID. The engine follows the matching port. */
 	selectChoice: (choiceUuid: string) => void;
 }
@@ -842,6 +851,16 @@ export interface IDialogueEngine {
 
 	/** Register a global character resolver. Called for every block with `metadata.characters`. */
 	onResolveCharacter(fn: (characters: BlockCharacter[]) => BlockCharacter | undefined): void;
+
+	// ── Choice visibility ────────────────────────────────────────────────
+
+	/**
+	 * Install a condition evaluator for choice visibility tagging.
+	 * When set, the engine evaluates each choice's `visibilityConditions` before calling `onChoice`,
+	 * tagging each choice with `visible: true | false`. The engine handles `choice:` conditions
+	 * internally via choice history — this callback evaluates game-state conditions only.
+	 */
+	setChoiceFilter(evaluator: (condition: ExportCondition) => boolean): void;
 
 	// ── Scene lifecycle ─────────────────────────────────────────────────
 

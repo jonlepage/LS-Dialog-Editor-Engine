@@ -5,7 +5,7 @@ import type {
 	BlockHandler, BaseBlockContext,
 	DialogHandler, ChoiceHandler, ConditionHandler, ActionHandler,
 	SceneLifecycleHandler, CleanupFn,
-	ExportCondition, BlockCharacter,
+	ExportCondition, BlockCharacter, ChoiceItem, RuntimeChoiceItem,
 } from './types.js';
 import { SceneGraph } from './graph.js';
 import { HandlerRegistry, SceneHandlerRegistry, resolveHandler } from './handler-registry.js';
@@ -15,6 +15,7 @@ import {
 	type InternalDialogContext, type InternalChoiceContext, type InternalConditionContext, type InternalActionContext,
 } from './block-context.js';
 import { isDialogBlock, isChoiceBlock, isConditionBlock, isActionBlock } from './utils.js';
+import { evaluateConditionChain } from './condition-evaluator.js';
 
 type InternalContext = InternalDialogContext | InternalChoiceContext | InternalConditionContext | InternalActionContext;
 
@@ -22,6 +23,7 @@ export interface SceneHandleCallbacks {
 	onSceneStarted: ( handle: SceneHandleImpl ) => void;
 	onSceneEnded: ( handle: SceneHandleImpl ) => void;
 	getResolveCharacter: () => ( characters: BlockCharacter[] ) => BlockCharacter | undefined;
+	getChoiceFilter: () => ( ( condition: ExportCondition ) => boolean ) | null;
 	getLocale: () => string;
 }
 
@@ -617,6 +619,24 @@ export class SceneHandleImpl implements SceneHandle {
 		return bridgeEvaluator( condition );
 	}
 
+	private tagChoiceVisibility(
+		choices: ChoiceItem[],
+		filter: ( ( condition: ExportCondition ) => boolean ) | null,
+	): RuntimeChoiceItem[] {
+		if ( !filter ) return choices;
+		return choices.map( choice => ( {
+			...choice,
+			visible: !choice.visibilityConditions?.length
+				? true
+				: evaluateConditionChain( choice.visibilityConditions, ( cond ) => {
+					if ( cond.key.startsWith( 'choice:' ) ) {
+						return this.evaluateConditionWithHistory( cond, () => false );
+					}
+					return filter( cond );
+				} ),
+		} ) );
+	}
+
 	private createContext( block: BlueprintBlock ): InternalContext | null {
 		const characters = block.metadata?.characters ?? [];
 		const resolvedCharacter = this.getResolveCharacterFn()( characters );
@@ -625,7 +645,9 @@ export class SceneHandleImpl implements SceneHandle {
 			return createDialogContext( block, resolvedCharacter );
 		}
 		if ( isChoiceBlock( block ) ) {
-			return createChoiceContext( block, ( blockUuid, choiceUuid ) => {
+			const choiceFilter = this.callbacks.getChoiceFilter();
+			const taggedChoices = this.tagChoiceVisibility( block.choices ?? [], choiceFilter );
+			return createChoiceContext( block, taggedChoices, ( blockUuid, choiceUuid ) => {
 				this.recordChoice( blockUuid, choiceUuid );
 			}, resolvedCharacter );
 		}

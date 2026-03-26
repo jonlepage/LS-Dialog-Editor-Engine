@@ -4,7 +4,7 @@ declare const console: { log: (...args: unknown[]) => void };
 // This file is excluded from build (tsconfig.json exclude).
 
 import { DialogueEngine, LsdeUtils } from "./index.js";
-import type { BlueprintExport } from "./index.js";
+import type { BlueprintExport, RuntimeChoiceItem } from "./index.js";
 import blueprintJson from "../../blueprints/blueprint.json";
 
 const testData = blueprintJson as unknown as BlueprintExport;
@@ -29,6 +29,13 @@ engine.setLocale("en");
 
 engine.onResolveCharacter((characters) => characters[0]);
 
+// Opt-in: install choice visibility filter (playground: all game-state conditions pass)
+engine.setChoiceFilter((cond) => {
+	// Simule un game state où variable_0 = "something_else"
+	if (cond.key === "variable_0") return cond.value === "something_else";
+	return true;
+});
+
 // ─── 4 Required Handlers ────────────────────────────────────────────────────
 
 engine.onDialog(({ block, context, next }) => {
@@ -51,32 +58,54 @@ engine.onDialog(({ block, context, next }) => {
 	return () => console.log(`   🧹 cleanup: ${block.label}`);
 });
 
-engine.onChoice(({ scene, block, context, next }) => {
+engine.onChoice(({ block, context, next }) => {
 	const { choices, selectChoice } = context;
 
-	// Filter visibility: choice: conditions resolved via scene history, game-state = true (playground)
-	const visible = LsdeUtils.filterVisibleChoices(choices, () => true, scene);
+	// choices are tagged with .visible by the engine (setChoiceFilter installed above)
+	const visible = choices.filter((c) => c.visible !== false);
+	const timeout = block.nativeProperties?.timeout;
+	// le moteur de jeux decidera quel visible choix est actif par default
+	const active = (() => visible[0])();
 
 	console.log(
 		`\n❓ CHOICE  ${block.label} — ${visible.length}/${choices.length} choices visible`,
 	);
-
 	for (const choice of visible) {
 		const text = LsdeUtils.getLocalizedText(choice.dialogueText);
+		const isActive = choice === active;
 		console.log(
-			`   👉 ${choice.label ?? choice.uuid.slice(0, 8)}: "${text ?? "—"}"`,
+			`   👉 ${choice.label ?? choice.uuid.slice(0, 8)}: "${text ?? "—"}"${isActive ? " (active)" : ""}`,
 		);
 	}
-	const pick = (function simulatePlayerChoice() {
-		// Simulate player picking the first choice on the 2nd choice block, otherwise no choice
-		return undefined;
-	})();
 
-	if (pick) {
-		console.log(`   ✅ selecting: ${pick.label ?? pick.uuid.slice(0, 8)}`);
-		selectChoice(pick.uuid);
+	// le resolver si on decide de prendre en charge les timeout
+	const resolve = (choice: RuntimeChoiceItem | undefined) => {
+		// Simulate player picking the first choice on the 2nd choice block, otherwise no choice
+		//ui.showChoices(visible, activeIndex, (picked) => resolve(picked));
+		console.log(
+			`   ✅ selecting: ${choice?.label ?? choice?.uuid.slice(0, 8)}`,
+		);
+		if (timer) clearTimeout(timer);
+		if (choice) selectChoice(choice.uuid);
+		next();
+	};
+
+	// Auto-select si timeout
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	if (timeout) {
+		console.log("💌timeout:", timeout);
+		timer = setTimeout(() => {
+			resolve(active); // auto-select le choix actif
+		}, timeout);
+	} else {
+		// si pas de timeout, on va utiliser un waitinput dans le game engine
+		resolve(active);
 	}
-	next();
+
+	return () => {
+		if (timer) clearTimeout(timer);
+		console.log(`   🧹 cleanup: ${block.label}`);
+	};
 });
 
 engine.onCondition(({ scene, block, context, next }) => {
@@ -144,16 +173,18 @@ console.log(`\n🚀 Launching scene: ${sceneName}`);
 const handle = engine.scene(sceneId);
 handle.start();
 
-const visited = Array.from(handle.getVisitedBlocks()).map((uuid) => {
-	for (const { blocks } of testData.scenes) {
-		const b = blocks.find((bl) => bl.uuid === uuid);
-		if (b) return b.label ?? uuid.slice(0, 8);
-	}
-	return uuid.slice(0, 8);
+handle.onExit(() => {
+	const visited = Array.from(handle.getVisitedBlocks()).map((uuid) => {
+		for (const { blocks } of testData.scenes) {
+			const b = blocks.find((bl) => bl.uuid === uuid);
+			if (b) return b.label ?? uuid.slice(0, 8);
+		}
+		return uuid.slice(0, 8);
+	});
+	console.log(`\n📋 Visited: ${visited.join(", ")}`);
+	console.log(
+		`📊 Choice History:`,
+		Object.fromEntries(handle.getChoiceHistory()),
+	);
+	console.log(`🏁 Engine running: ${engine.isRunning()}`);
 });
-console.log(`\n📋 Visited: ${visited.join(", ")}`);
-console.log(
-	`📊 Choice History:`,
-	Object.fromEntries(handle.getChoiceHistory()),
-);
-console.log(`🏁 Engine running: ${engine.isRunning()}`);

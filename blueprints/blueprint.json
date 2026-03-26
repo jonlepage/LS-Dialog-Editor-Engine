@@ -1,6 +1,6 @@
 {
 	"version": "1.0.0",
-	"exportDate": "2026-03-25T18:06:06.086Z",
+	"exportDate": "2026-03-26T15:16:25.206Z",
 	"projectName": "blueprint-with-actors-emotions",
 	"primaryLanguage": "en",
 	"locales": [
@@ -45,19 +45,22 @@
 		{
 			"uuid": "3e0110a5-49bb-46fe-884b-05ce106af4cd",
 			"label": "New Scene",
-			"date": "3/25/2026",
+			"date": "3/26/2026",
 			"entryBlockId": "6462dab3-0eb4-4a2c-a505-407556441156",
 			"blocks": [
 				{
-					"uuid": "b1e1cf07-e8d2-42cc-b1ec-7cfb21b6a3aa",
+					"uuid": "d72bcf6a-161b-4759-90dd-2ae10a58fdd3",
 					"type": "ACTION",
 					"properties": [],
 					"label": "ACTION-001",
 					"actions": [
 						{
-							"uuid": "231f5208-60cd-4284-8268-096919dcb6a5",
+							"uuid": "aee8f7ba-cfe8-4afb-92e7-54b2ddae23f5",
 							"actionId": "7908f59d-b97d-40ea-80f1-30c6f762e30d",
-							"params": []
+							"params": [
+								"a",
+								2
+							]
 						}
 					],
 					"parentLabels": [
@@ -73,7 +76,7 @@
 						{
 							"uuid": "17e98de3-1690-4ca4-8ea5-8070c15b1fe1",
 							"structureKey": "__blueprints__.New Scene.CHOICE-001",
-							"content": "choice1",
+							"content": "C1",
 							"visibilityConditions": [
 								{
 									"uuid": "10a81c04-9bea-4b51-a67e-9965fcc4ce01",
@@ -98,24 +101,25 @@
 								}
 							],
 							"dialogueText": {
-								"en": "choice1",
+								"en": "C1",
 								"fr": ""
 							}
 						},
 						{
 							"uuid": "a0eee458-6ccc-4a23-bd36-0b3d1f73771e",
 							"structureKey": "__blueprints__.New Scene.DIALOG-001",
-							"content": "choice2",
+							"content": "C2",
 							"visibilityConditions": [],
 							"dialogueText": {
-								"en": "choice2",
+								"en": "C2",
 								"fr": ""
 							}
 						}
 					],
 					"nativeProperties": {
-						"isAsync": true,
-						"debug": true
+						"isAsync": false,
+						"timeout": 1000,
+						"debug": false
 					},
 					"parentLabels": [
 						"__blueprints__"
@@ -123,61 +127,69 @@
 					"metadata": {
 						"characters": [
 							{
-								"uuid": "79b2bbb8-953e-476e-91bf-ec93bc2b1cf2",
-								"id": "a5",
-								"name": "Gruht Tyron"
-							},
-							{
-								"uuid": "b81eba00-325c-42dc-bb69-4c7701f552f4",
-								"id": "a7",
-								"name": "Gigi Jinx "
-							},
-							{
-								"uuid": "8ad0f11e-8ec0-45a0-8a00-21b07a644712",
-								"id": "a4",
-								"name": "Lulu Star"
-							},
-							{
-								"uuid": "b8d2fe53-cc5a-4d1b-aa72-02b55b941ff7",
-								"id": "a2",
-								"name": "Boo"
-							},
-							{
-								"uuid": "e96c0d26-1bd8-4cbf-8009-2d1b3de4cdf3",
-								"id": "a3",
-								"name": "Svelt Moon"
-							},
-							{
-								"uuid": "06fc153a-cdf3-4b47-a6ca-edca4883549d",
-								"id": "a6",
-								"name": "Salomon Sky"
+								"uuid": "3504bd0b-b950-4060-880d-a244a0f15992",
+								"id": "a1",
+								"name": "lia"
 							}
 						]
 					}
 				},
 				{
-					"uuid": "85f4640b-9c6e-4940-9bc6-b4d12847d5f8",
+					"uuid": "2b184947-49f9-4e57-8600-70b46e2cd0ba",
+					"type": "CHOICE",
+					"properties": [],
+					"label": "CHOICE-002",
+					"choices": [
+						{
+							"uuid": "d16d21ea-ecf8-4172-aaa3-668df80e9853",
+							"structureKey": "",
+							"content": "C1.1",
+							"visibilityConditions": [
+								{
+									"uuid": "ab48f9fc-7a0d-4d9f-80b6-3467c3b04483",
+									"key": "choice:014f503a-6688-429d-a5fe-801cf33f2410",
+									"chain": "|",
+									"operator": "=",
+									"value": "17e98de3-1690-4ca4-8ea5-8070c15b1fe1"
+								}
+							]
+						},
+						{
+							"uuid": "e306346e-6bcc-4564-8b19-e2ed28fabafe",
+							"structureKey": "",
+							"content": "C2.1",
+							"visibilityConditions": [
+								{
+									"uuid": "36d610af-d5e4-48f8-95a6-0771cb42306b",
+									"key": "choice:014f503a-6688-429d-a5fe-801cf33f2410",
+									"chain": "|",
+									"operator": "=",
+									"value": "a0eee458-6ccc-4a23-bd36-0b3d1f73771e"
+								}
+							]
+						}
+					],
+					"parentLabels": [
+						"__blueprints__"
+					]
+				},
+				{
+					"uuid": "4074b6c2-bfc8-44f1-9a29-cda529bf522a",
 					"type": "CONDITION",
 					"properties": [],
 					"label": "CONDITION-001",
 					"conditions": [
 						{
-							"uuid": "7b2952a9-51a3-41d1-ae7e-0bc5fa0ae1d3",
-							"key": "variable_0",
+							"uuid": "accb5ba5-b824-4898-b0ae-20658bd345b4",
+							"key": "choice:014f503a-6688-429d-a5fe-801cf33f2410",
 							"operator": "=",
-							"value": ""
+							"value": "a0eee458-6ccc-4a23-bd36-0b3d1f73771e"
 						},
 						{
-							"uuid": "c3827395-2f6f-4041-a984-7b7672910c4a",
-							"key": "variable_0",
+							"uuid": "512ddb6a-cd5b-4caf-a2d0-993042a30042",
+							"key": "choice:2b184947-49f9-4e57-8600-70b46e2cd0ba",
 							"operator": "=",
-							"value": ""
-						},
-						{
-							"uuid": "2ed0171d-8ce9-4a91-96e1-a86d61b8522a",
-							"key": "variable_0",
-							"operator": "=",
-							"value": ""
+							"value": "e306346e-6bcc-4564-8b19-e2ed28fabafe"
 						}
 					],
 					"parentLabels": [
@@ -191,12 +203,12 @@
 					"label": "DIALOG-001",
 					"isStartBlock": true,
 					"structureKey": "__blueprints__.New Scene.DIALOG-001",
-					"content": "choice2",
+					"content": "C2",
 					"nativeProperties": {
 						"portPerCharacter": true
 					},
 					"dialogueText": {
-						"en": "choice2",
+						"en": "C2",
 						"fr": ""
 					},
 					"parentLabels": [
@@ -236,70 +248,30 @@
 					}
 				},
 				{
-					"uuid": "df23757c-a35a-4bcb-8056-e7ad232eff1d",
+					"uuid": "c66437af-54b7-4a75-9efa-713e983c145d",
 					"type": "DIALOG",
 					"properties": [],
 					"label": "DIALOG-002",
 					"structureKey": "__blueprints__.New Scene.DIALOG-002",
-					"content": "text 2",
+					"content": "D2",
 					"dialogueText": {
-						"en": "text 2",
+						"en": "D2",
 						"fr": ""
 					},
 					"parentLabels": [
 						"__blueprints__"
 					],
-					"metadata": {
-						"characters": [
-							{
-								"uuid": "3504bd0b-b950-4060-880d-a244a0f15992",
-								"id": "a1",
-								"name": "lia"
-							}
-						]
-					}
+					"metadata": {}
 				},
 				{
-					"uuid": "bccf5542-80f1-4415-b0c4-24ff4a638aa7",
+					"uuid": "dfc30c4c-a1aa-4e76-81b6-640bf447351b",
 					"type": "DIALOG",
 					"properties": [],
 					"label": "DIALOG-003",
 					"structureKey": "__blueprints__.New Scene.DIALOG-003",
-					"content": "text 3",
+					"content": "D5",
 					"dialogueText": {
-						"en": "text 3",
-						"fr": ""
-					},
-					"parentLabels": [
-						"__blueprints__"
-					],
-					"metadata": {}
-				},
-				{
-					"uuid": "0c524a39-6bbe-468f-8876-43c1fbb2a030",
-					"type": "DIALOG",
-					"properties": [],
-					"label": "DIALOG-004",
-					"structureKey": "__blueprints__.New Scene.DIALOG-004",
-					"content": "text 3.2",
-					"dialogueText": {
-						"en": "text 3.2",
-						"fr": ""
-					},
-					"parentLabels": [
-						"__blueprints__"
-					],
-					"metadata": {}
-				},
-				{
-					"uuid": "9b47c43c-4b06-4e37-bec6-2ee2597d4bae",
-					"type": "DIALOG",
-					"properties": [],
-					"label": "DIALOG-005",
-					"structureKey": "__blueprints__.New Scene.DIALOG-005",
-					"content": "action fail",
-					"dialogueText": {
-						"en": "action fail",
+						"en": "D5",
 						"fr": ""
 					},
 					"parentLabels": [
@@ -318,84 +290,44 @@
 					"fromPortIndex": 0
 				},
 				{
-					"id": "4e2f0777-a482-4cd3-8117-d3c3a689c59a",
-					"fromId": "6462dab3-0eb4-4a2c-a505-407556441156",
-					"toId": "b1e1cf07-e8d2-42cc-b1ec-7cfb21b6a3aa",
-					"fromPort": "3504bd0b-b950-4060-880d-a244a0f15992",
-					"toPort": "in",
-					"fromPortIndex": 0
-				},
-				{
-					"id": "5d81bca1-333d-44c7-857b-56aaacb09bcf",
-					"fromId": "b1e1cf07-e8d2-42cc-b1ec-7cfb21b6a3aa",
-					"toId": "df23757c-a35a-4bcb-8056-e7ad232eff1d",
-					"fromPort": "then",
-					"toPort": "in",
-					"fromPortIndex": 0
-				},
-				{
-					"id": "82083bbc-2df0-4da6-8303-742fea193df9",
-					"fromId": "df23757c-a35a-4bcb-8056-e7ad232eff1d",
-					"toId": "85f4640b-9c6e-4940-9bc6-b4d12847d5f8",
-					"fromPort": "out",
-					"toPort": "in",
-					"fromPortIndex": 0
-				},
-				{
-					"id": "befe7da4-e6ba-448b-9dc7-ed4dbcd0eee5",
+					"id": "77b8d53d-722a-4628-b298-ad9fb64bbabf",
 					"fromId": "014f503a-6688-429d-a5fe-801cf33f2410",
-					"toId": "85f4640b-9c6e-4940-9bc6-b4d12847d5f8",
+					"toId": "c66437af-54b7-4a75-9efa-713e983c145d",
 					"fromPort": "a0eee458-6ccc-4a23-bd36-0b3d1f73771e",
 					"toPort": "in",
 					"fromPortIndex": 1
 				},
 				{
-					"id": "9a15e4c0-dede-4817-8fe2-8d78a38d79f0",
-					"fromId": "85f4640b-9c6e-4940-9bc6-b4d12847d5f8",
-					"toId": "bccf5542-80f1-4415-b0c4-24ff4a638aa7",
+					"id": "e993c445-15cd-4511-8ba1-1a86855c734b",
+					"fromId": "c66437af-54b7-4a75-9efa-713e983c145d",
+					"toId": "2b184947-49f9-4e57-8600-70b46e2cd0ba",
+					"fromPort": "out",
+					"toPort": "in",
+					"fromPortIndex": 0
+				},
+				{
+					"id": "107d1986-c380-4637-9b3a-65c1137958ad",
+					"fromId": "2b184947-49f9-4e57-8600-70b46e2cd0ba",
+					"toId": "4074b6c2-bfc8-44f1-9a29-cda529bf522a",
+					"fromPort": "e306346e-6bcc-4564-8b19-e2ed28fabafe",
+					"toPort": "in",
+					"fromPortIndex": 1
+				},
+				{
+					"id": "6d3d9f28-b105-4307-af03-c4ae5b0b30f5",
+					"fromId": "4074b6c2-bfc8-44f1-9a29-cda529bf522a",
+					"toId": "d72bcf6a-161b-4759-90dd-2ae10a58fdd3",
 					"fromPort": "true",
 					"toPort": "in",
 					"fromPortIndex": 0
 				},
 				{
-					"id": "2c003737-094f-427e-a8bd-ebf6481918a8",
-					"fromId": "85f4640b-9c6e-4940-9bc6-b4d12847d5f8",
-					"toId": "0c524a39-6bbe-468f-8876-43c1fbb2a030",
+					"id": "ec761e6f-403b-41f2-88a7-6bc7f2bd181c",
+					"fromId": "4074b6c2-bfc8-44f1-9a29-cda529bf522a",
+					"toId": "dfc30c4c-a1aa-4e76-81b6-640bf447351b",
 					"fromPort": "false",
 					"toPort": "in",
 					"fromPortIndex": 1
-				},
-				{
-					"id": "682b6153-f11e-4310-aea8-b164698df5e2",
-					"fromId": "b1e1cf07-e8d2-42cc-b1ec-7cfb21b6a3aa",
-					"toId": "9b47c43c-4b06-4e37-bec6-2ee2597d4bae",
-					"fromPort": "catch",
-					"toPort": "in",
-					"fromPortIndex": 1
-				},
-				{
-					"id": "3d73cb58-cc50-4891-9b5a-515ce92d85ae",
-					"fromId": "014f503a-6688-429d-a5fe-801cf33f2410",
-					"toId": "6462dab3-0eb4-4a2c-a505-407556441156",
-					"fromPort": "17e98de3-1690-4ca4-8ea5-8070c15b1fe1",
-					"toPort": "in",
-					"fromPortIndex": 0
-				},
-				{
-					"id": "b5e4a07a-33d8-4e2c-9ba3-5f4c3e83c39c",
-					"fromId": "6462dab3-0eb4-4a2c-a505-407556441156",
-					"toId": "9b47c43c-4b06-4e37-bec6-2ee2597d4bae",
-					"fromPort": "b8d2fe53-cc5a-4d1b-aa72-02b55b941ff7",
-					"toPort": "in",
-					"fromPortIndex": 1
-				},
-				{
-					"id": "8d60f9c5-45c6-4d6b-b57b-4df5b7a36a4f",
-					"fromId": "9b47c43c-4b06-4e37-bec6-2ee2597d4bae",
-					"toId": "0c524a39-6bbe-468f-8876-43c1fbb2a030",
-					"fromPort": "out",
-					"toPort": "in",
-					"fromPortIndex": 0
 				}
 			]
 		}
