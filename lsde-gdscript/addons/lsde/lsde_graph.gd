@@ -2,7 +2,7 @@
 class_name LsdeGraph
 extends RefCounted
 
-## Indexed representation of a single scene
+## Indexed representation of a single scene for O(1) lookups.
 class SceneGraph extends RefCounted:
 	var _scene: Dictionary
 	var _blocks_by_uuid: Dictionary = {}
@@ -18,12 +18,15 @@ class SceneGraph extends RefCounted:
 				_connections_by_from_id[from_id] = []
 			_connections_by_from_id[from_id].append(conn)
 
+	## Get a block by UUID, or null if not found.
 	func get_block(uuid: String) -> Variant:
 		return _blocks_by_uuid.get(uuid)
 
+	## Get all outgoing connections from a block.
 	func get_outgoing_connections(block_uuid: String) -> Array:
 		return _connections_by_from_id.get(block_uuid, [])
 
+	## Get the start block (isStartBlock=true or entryBlockId), or null.
 	func get_start_block() -> Variant:
 		for block in _scene.get("blocks", []):
 			if block.get("isStartBlock", false):
@@ -33,10 +36,12 @@ class SceneGraph extends RefCounted:
 			return _blocks_by_uuid.get(entry_id)
 		return null
 
+	## Get the underlying scene Dictionary.
 	func get_scene() -> Dictionary:
 		return _scene
 
-## Indexed representation of an entire blueprint export
+## Indexed representation of an entire blueprint export.
+## Owns the data and builds scene graphs for O(1) lookups.
 var _scene_graphs: Dictionary = {}
 var _signatures_by_id: Dictionary = {}
 var _dictionaries_by_label: Dictionary = {}
@@ -53,20 +58,29 @@ func _init(data: Dictionary) -> void:
 		if label is String and label != "":
 			_dictionaries_by_label[label] = dict
 
+## Get the scene graph for a scene UUID, or null if not found.
 func get_scene_graph(scene_uuid: String) -> Variant:
 	return _scene_graphs.get(scene_uuid)
 
+## Get an action signature by its id, or null if not found.
 func get_signature(action_id: String) -> Variant:
 	return _signatures_by_id.get(action_id)
 
+## Get a dictionary by its label, or null if not found.
 func get_dictionary(group_label: String) -> Variant:
 	return _dictionaries_by_label.get(group_label)
 
+## Get all scene UUIDs.
 func get_all_scene_ids() -> Array:
 	return _scene_graphs.keys()
 
+## Get all connections for a scene.
 func get_scene_connections(scene_uuid: String) -> Array:
 	var sg: Variant = _scene_graphs.get(scene_uuid)
 	if sg:
 		return sg.get_scene().get("connections", [])
 	return []
+
+## Returns the list of available locales from the blueprint.
+func get_locales() -> Array:
+	return _data.get("locales", [])

@@ -1,4 +1,7 @@
 ## LSDE Dialog Engine — SceneHandle + AsyncTrack
+##
+## Manages the main traversal loop, async tracks, two-tier handler resolution
+## (scene Tier 2 + global Tier 1), choice history, and character resolution.
 class_name LsdeSceneHandle
 extends RefCounted
 
@@ -8,16 +11,19 @@ signal scene_exited(handle)
 var _scene_graph: LsdeGraph.SceneGraph
 var _global_registry: LsdeHandlerRegistry
 var _scene_registry: LsdeHandlerRegistry.SceneRegistry
-var _callbacks: Dictionary  # {on_scene_started, on_scene_ended, get_state_bridge, get_locale}
+var _callbacks: Dictionary  # {on_scene_started, on_scene_ended, get_resolve_character, get_choice_filter, get_locale}
 
 var _running: bool = false
 var _cancelled: bool = false
 var _current_block: Variant = null
 var _previous_block: Variant = null
-var _visited: Array = []  # ordered list of visited UUIDs (preserves insertion order)
+var _visited: Array = []  # ordered list of visited UUIDs
 var _visited_set: Dictionary = {}  # fast lookup
+var _choice_history: Dictionary = {}  # {block_uuid: [choice_uuid, ...]}
 var _previous_cleanup: Callable
 var _async_tracks: Array = []
+## Scene-level character resolver override.
+var _resolve_character: Callable
 
 func _init(scene_graph: LsdeGraph.SceneGraph, global_registry: LsdeHandlerRegistry, callbacks: Dictionary) -> void:
 	_scene_graph = scene_graph
@@ -27,9 +33,25 @@ func _init(scene_graph: LsdeGraph.SceneGraph, global_registry: LsdeHandlerRegist
 
 # ─── Public API ───────────────────────────────────────────────────────────
 
+## Start the scene flow from the entry block.
+## Validates that all 4 mandatory handlers are registered — asserts if any are missing.
 func start() -> void:
 	if _running:
 		return
+
+	# Validate mandatory handlers
+	var missing: Array = []
+	if not _scene_registry.dialog_handler.is_valid() and not _global_registry.dialog_handler.is_valid():
+		missing.append("on_dialog")
+	if not _scene_registry.choice_handler.is_valid() and not _global_registry.choice_handler.is_valid():
+		missing.append("on_choice")
+	if not _scene_registry.condition_handler.is_valid() and not _global_registry.condition_handler.is_valid():
+		missing.append("on_condition")
+	if not _scene_registry.action_handler.is_valid() and not _global_registry.action_handler.is_valid():
+		missing.append("on_action")
+	if missing.size() > 0:
+		assert(false, "Cannot start scene — missing required handler(s): %s.\nRegister all 4 handlers before starting:\n  engine.on_dialog(handler)\n  engine.on_choice(handler)\n  engine.on_condition(handler)\n  engine.on_action(handler)" % ", ".join(missing))
+
 	_running = true
 	_cancelled = false
 	if _callbacks.has("on_scene_started"):
@@ -41,6 +63,7 @@ func start() -> void:
 	else:
 		_end_scene()
 
+## Cancel the scene flow. All async tracks are cancelled, cleanup runs, on_scene_exit fires.
 func cancel() -> void:
 	if not _running:
 		return
@@ -57,42 +80,70 @@ func cancel() -> void:
 	if _callbacks.has("on_scene_ended"):
 		_callbacks["on_scene_ended"].call(self)
 
+## Override the global on_scene_enter for this scene.
 func on_enter(handler: Callable) -> void:
 	_scene_registry.enter_handler = handler
 
+## Override the global on_scene_exit for this scene.
 func on_exit(handler: Callable) -> void:
 	_scene_registry.exit_handler = handler
 
+## Override a specific block by UUID. Takes highest priority over type handlers.
 func on_block(block_uuid: String, handler: Callable) -> void:
 	_scene_registry.set_block_handler(block_uuid, handler)
 
+## Override all DIALOG blocks for this scene (Tier 2).
 func on_dialog(handler: Callable) -> void:
 	_scene_registry.dialog_handler = handler
 
+## Override all CHOICE blocks for this scene (Tier 2).
 func on_choice(handler: Callable) -> void:
 	_scene_registry.choice_handler = handler
 
+## Override all CONDITION blocks for this scene (Tier 2).
 func on_condition(handler: Callable) -> void:
 	_scene_registry.condition_handler = handler
 
+## Override all ACTION blocks for this scene (Tier 2).
 func on_action(handler: Callable) -> void:
 	_scene_registry.action_handler = handler
 
+## Get the block currently being executed, or null.
 func get_current_block() -> Variant:
 	return _current_block
 
+## Get UUIDs of all blocks visited so far, in order.
 func get_visited_blocks() -> Array:
 	return _visited
 
+## Check if the scene flow is currently active.
 func is_running() -> bool:
 	return _running
 
+## Get the number of async tracks currently running in parallel.
 func get_active_tracks() -> int:
 	var count: int = 0
 	for track in _async_tracks:
 		if track.is_running():
 			count += 1
 	return count
+
+## Get the full choice history. Keys are block UUIDs, values are arrays of selected choice UUIDs.
+func get_choice_history() -> Dictionary:
+	return _choice_history
+
+## Get the choice(s) selected at a specific block. Returns null if block never visited as choice.
+func get_choice(block_uuid: String) -> Variant:
+	return _choice_history.get(block_uuid)
+
+## Evaluate a condition. Handles choice: conditions via internal choice history.
+## Returns false for non-choice conditions (the engine cannot evaluate game state).
+func evaluate_condition(condition: Dictionary) -> bool:
+	return _evaluate_condition_with_history(condition, func(_c: Dictionary) -> bool: return false)
+
+## Override character resolution for this scene. Defaults to engine-level resolver.
+func on_resolve_character(resolver: Callable) -> void:
+	_resolve_character = resolver
 
 # ─── Internal API (used by AsyncTrack) ────────────────────────────────────
 
@@ -101,11 +152,6 @@ func _get_scene_registry() -> LsdeHandlerRegistry.SceneRegistry:
 
 func _get_global_registry() -> LsdeHandlerRegistry:
 	return _global_registry
-
-func _get_state_bridge() -> Variant:
-	if _callbacks.has("get_state_bridge"):
-		return _callbacks["get_state_bridge"].call()
-	return null
 
 func _add_visited(uuid: String) -> void:
 	if not _visited_set.has(uuid):
@@ -117,8 +163,19 @@ func _remove_track(track: Variant) -> void:
 	if idx >= 0:
 		_async_tracks.remove_at(idx)
 
+## Create the appropriate context for a block.
 func _create_block_context(block: Dictionary) -> Variant:
 	return _create_context(block)
+
+## Record a choice selection in the history.
+func _record_choice(block_uuid: String, choice_uuid: String) -> void:
+	if not _choice_history.has(block_uuid):
+		_choice_history[block_uuid] = []
+	_choice_history[block_uuid].append(choice_uuid)
+
+## Evaluate a condition with choice history support.
+func _evaluate_condition_for_block(condition: Dictionary, fallback_evaluator: Callable) -> bool:
+	return _evaluate_condition_with_history(condition, fallback_evaluator)
 
 # ─── Traversal ────────────────────────────────────────────────────────────
 
@@ -180,16 +237,12 @@ func _execute_block_handler(block: Dictionary) -> void:
 	var scene_handler: Callable = resolved["scene_handler"]
 	var global_handler: Callable = resolved["global_handler"]
 
-	# Auto-behavior
+	# No handler → advance silently (handlers are validated at start())
 	if not scene_handler.is_valid() and not global_handler.is_valid():
-		if block.get("type", "") == "CONDITION":
-			_auto_evaluate_condition(block, context)
-			return
-		if block.get("type", "") == "ACTION":
-			_auto_execute_action(block, context)
-			return
+		_advance_to_next_block(block, context)
+		return
 
-	var state: Array = [false, true]  # [next_called, sync_phase] — Array for ref capture in lambda
+	var state: Array = [false, true]  # [next_called, sync_phase]
 	var scene_cleanup: Callable
 	var global_cleanup: Callable
 
@@ -203,6 +256,7 @@ func _execute_block_handler(block: Dictionary) -> void:
 
 	var args: Dictionary = {"scene": self, "block": block, "context": context, "next": next_fn}
 
+	# Error boundary
 	if scene_handler.is_valid():
 		scene_cleanup = scene_handler.call(args)
 		if not context.global_prevented and global_handler.is_valid():
@@ -288,31 +342,40 @@ func _end_scene() -> void:
 	if _callbacks.has("on_scene_ended"):
 		_callbacks["on_scene_ended"].call(self)
 
-# ─── Auto-behaviors ───────────────────────────────────────────────────────
+# ─── Choice history condition evaluation ──────────────────────────────────
 
-func _auto_evaluate_condition(block: Dictionary, context: LsdeBlockContext.ConditionContext) -> void:
-	var bridge: Variant = _get_state_bridge()
-	if bridge == null:
-		_end_scene()
-		return
-	if block.get("type", "") == "CONDITION":
-		var conditions: Array = block.get("conditions", [])
-		context.condition_result = LsdeConditionEvaluator.evaluate_condition_chain(
-			conditions, Callable(bridge, "evaluate_condition"))
-	_previous_cleanup = Callable()
-	_advance_to_next_block(block, context)
+func _evaluate_condition_with_history(condition: Dictionary, fallback_evaluator: Callable) -> bool:
+	var key: String = condition.get("key", "")
+	if key.begins_with("choice:"):
+		var block_uuid: String = key.substr(7)
+		var history: Variant = _choice_history.get(block_uuid)
+		if history == null:
+			return condition.get("operator", "") == "!="
+		var includes: bool = history.has(condition.get("value", ""))
+		return not includes if condition.get("operator", "") == "!=" else includes
+	return fallback_evaluator.call(condition)
 
-func _auto_execute_action(block: Dictionary, context: LsdeBlockContext.ActionContext) -> void:
-	var bridge: Variant = _get_state_bridge()
-	if bridge == null:
-		_end_scene()
-		return
-	if block.get("type", "") == "ACTION":
-		for action in block.get("actions", []):
-			bridge.execute_action(action, null)
-	context.action_rejected = false
-	_previous_cleanup = Callable()
-	_advance_to_next_block(block, context)
+# ─── Choice visibility tagging ────────────────────────────────────────────
+
+func _tag_choice_visibility(choices: Array, filter: Callable) -> Array:
+	var result: Array = []
+	for choice in choices:
+		var tagged: Dictionary = choice.duplicate()
+		if not filter.is_valid():
+			# No filter → no visible tag (treat as visible by default)
+			result.append(tagged)
+			continue
+		var vis_conds: Array = choice.get("visibilityConditions", [])
+		if vis_conds.size() == 0:
+			tagged["visible"] = true
+		else:
+			tagged["visible"] = LsdeConditionEvaluator.evaluate_condition_chain(vis_conds, func(cond: Dictionary) -> bool:
+				if cond.get("key", "").begins_with("choice:"):
+					return _evaluate_condition_with_history(cond, func(_c: Dictionary) -> bool: return false)
+				return filter.call(cond)
+			)
+		result.append(tagged)
+	return result
 
 # ─── Scene lifecycle ──────────────────────────────────────────────────────
 
@@ -328,20 +391,39 @@ func _fire_scene_exit() -> void:
 		handler.call({"scene": self, "context": {}})
 	scene_exited.emit(self)
 
-# ─── Helpers ──────────────────────────────────────────────────────────────
+# ─── Internal helpers ─────────────────────────────────────────────────────
+
+## Returns the scene-level resolver if set, otherwise the engine-level resolver.
+func _get_resolve_character_fn() -> Callable:
+	if _resolve_character.is_valid():
+		return _resolve_character
+	if _callbacks.has("get_resolve_character"):
+		return _callbacks["get_resolve_character"].call()
+	return func(chars: Array) -> Variant: return chars[0] if chars.size() > 0 else null
 
 func _create_context(block: Dictionary) -> Variant:
+	var characters: Array = []
+	var metadata: Variant = block.get("metadata")
+	if metadata is Dictionary:
+		characters = metadata.get("characters", [])
+	var resolver_fn: Callable = _get_resolve_character_fn()
+	var resolved_character: Variant = resolver_fn.call(characters) if resolver_fn.is_valid() else null
+
 	match block.get("type", ""):
 		"DIALOG":
-			return LsdeBlockContext.create_dialog_context(block)
+			return LsdeBlockContext.create_dialog_context(block, resolved_character)
 		"CHOICE":
-			var bridge: Variant = _get_state_bridge()
-			var evaluator: Callable = Callable(bridge, "evaluate_condition") if bridge != null else func(_c: Dictionary) -> bool: return true
-			return LsdeBlockContext.create_choice_context(block, evaluator)
+			var choice_filter: Callable = Callable()
+			if _callbacks.has("get_choice_filter"):
+				choice_filter = _callbacks["get_choice_filter"].call()
+			var tagged_choices: Array = _tag_choice_visibility(block.get("choices", []), choice_filter)
+			var on_choice_selected: Callable = func(block_uuid: String, choice_uuid: String) -> void:
+				_record_choice(block_uuid, choice_uuid)
+			return LsdeBlockContext.create_choice_context(block, tagged_choices, resolved_character, on_choice_selected)
 		"CONDITION":
-			return LsdeBlockContext.create_condition_context()
+			return LsdeBlockContext.create_condition_context(resolved_character)
 		"ACTION":
-			return LsdeBlockContext.create_action_context()
+			return LsdeBlockContext.create_action_context(resolved_character)
 	return null
 
 static func _combine_cleanups(a: Callable, b: Callable) -> Callable:
@@ -355,6 +437,7 @@ static func _combine_cleanups(a: Callable, b: Callable) -> Callable:
 
 # ─── AsyncTrack ───────────────────────────────────────────────────────────
 
+## Parallel execution branch spawned from async connections.
 class AsyncTrack extends RefCounted:
 	var _running: bool = true
 	var _current_block: Variant = null
@@ -387,6 +470,7 @@ class AsyncTrack extends RefCounted:
 	func is_follow_narrative() -> bool:
 		return _follow_narrative
 
+	## Called by the main track when it advances. Triggers pending follow-narrative advance.
 	func notify_main_advance() -> void:
 		if not _running or not _follow_narrative:
 			return
@@ -426,13 +510,10 @@ class AsyncTrack extends RefCounted:
 		var scene_handler: Callable = resolved["scene_handler"]
 		var global_handler: Callable = resolved["global_handler"]
 
+		# No handler → advance silently (handlers are validated at start())
 		if not scene_handler.is_valid() and not global_handler.is_valid():
-			if block.get("type", "") == "CONDITION":
-				_auto_evaluate_condition(block, context)
-				return
-			if block.get("type", "") == "ACTION":
-				_auto_execute_action(block, context)
-				return
+			_advance_to_next_block(block, context)
+			return
 
 		var state: Array = [false, true]  # [next_called, sync_phase]
 		var scene_cleanup: Callable
@@ -507,26 +588,3 @@ class AsyncTrack extends RefCounted:
 		_running = false
 		_current_block = null
 		_parent._remove_track(self)
-
-	func _auto_evaluate_condition(block: Dictionary, context: Variant) -> void:
-		var bridge: Variant = _parent._get_state_bridge()
-		if bridge == null:
-			_end_track()
-			return
-		if block.get("type", "") == "CONDITION":
-			context.condition_result = LsdeConditionEvaluator.evaluate_condition_chain(
-				block.get("conditions", []), Callable(bridge, "evaluate_condition"))
-		_previous_cleanup = Callable()
-		_advance_to_next_block(block, context)
-
-	func _auto_execute_action(block: Dictionary, context: Variant) -> void:
-		var bridge: Variant = _parent._get_state_bridge()
-		if bridge == null:
-			_end_track()
-			return
-		if block.get("type", "") == "ACTION":
-			for action in block.get("actions", []):
-				bridge.execute_action(action, null)
-		context.action_rejected = false
-		_previous_cleanup = Callable()
-		_advance_to_next_block(block, context)

@@ -2,10 +2,6 @@
 
 This directory contains language-agnostic test specifications that every runtime must pass.
 
-## Format
-
-See `PLAN.md` §9 for the full test case format specification.
-
 ## Files
 
 - `test-cases.json` — Main test suites: input → expected output
@@ -15,6 +11,7 @@ See `PLAN.md` §9 for the full test case format specification.
 ## How to use
 
 Each runtime implements a generic test runner that:
+
 1. Reads the JSON test files
 2. Loads the referenced blueprint from `blueprints/`
 3. Creates a `DialogueEngine` with a StateBridge configured from the test case

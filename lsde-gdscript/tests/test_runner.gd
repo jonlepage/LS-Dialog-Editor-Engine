@@ -22,16 +22,13 @@ func _init() -> void:
 
 func _load_test_file(filename: String) -> Dictionary:
 	var path: String = "res://../../tests/" + filename
-	# Try relative path first, then absolute
 	if not FileAccess.file_exists(path):
 		path = "res://tests/" + filename
 	if not FileAccess.file_exists(path):
-		# Try from project root
 		var base: String = ProjectSettings.globalize_path("res://")
 		path = base.path_join("../../tests/" + filename)
 	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
 	if file == null:
-		# Fallback: try absolute path
 		var abs_path: String = ProjectSettings.globalize_path("res://").get_base_dir().get_base_dir().path_join("tests/" + filename)
 		file = FileAccess.open(abs_path, FileAccess.READ)
 	assert(file != null, "Cannot open test file: " + filename)
@@ -39,34 +36,6 @@ func _load_test_file(filename: String) -> Dictionary:
 	var json: Variant = JSON.parse_string(json_text)
 	assert(json is Dictionary, "Failed to parse: " + filename)
 	return json
-
-class TestStateBridge extends LsdeStateBridge:
-	var _conditions: Dictionary = {}
-	var _dictionaries: Dictionary = {}
-	var _actions: Dictionary = {}
-
-	func _init(config: Variant = null) -> void:
-		if config is Dictionary:
-			_conditions = config.get("conditions", {})
-			_dictionaries = config.get("dictionaries", {})
-			_actions = config.get("actions", {})
-
-	func evaluate_condition(condition: Dictionary) -> bool:
-		var key: String = condition.get("key", "")
-		if _conditions.has(key):
-			return _conditions[key]
-		return true
-
-	func execute_action(action: Dictionary, _signature: Variant = null) -> void:
-		var action_id: String = action.get("actionId", "")
-		if _actions.has(action_id) and _actions[action_id] == "fail":
-			push_error("Action %s failed" % action_id)
-
-	func resolve_dictionary(group_label: String, row_key: String) -> Variant:
-		var key: String = "%s.%s" % [group_label, row_key]
-		if _dictionaries.has(key):
-			return _dictionaries[key]
-		return ""
 
 func _execute_action(action: Variant, context: Variant, next_fn: Callable) -> void:
 	if action == null:
@@ -87,8 +56,8 @@ func _execute_action(action: Variant, context: Variant, next_fn: Callable) -> vo
 			context.reject(action.get("error", "test error"))
 			next_fn.call()
 		"resolveCharacterPort":
-			var name: String = action.get("characterName", action.get("name", ""))
-			context.resolve_character_port(name)
+			var cname: String = action.get("characterName", action.get("name", ""))
+			context.resolve_character_port(cname)
 			next_fn.call()
 
 func _assert_eq(actual: Variant, expected: Variant, msg: String) -> bool:
@@ -126,44 +95,52 @@ func _run_single_flow_test(suite: Dictionary, tc: Dictionary, display_name: Stri
 		return false
 
 	engine.set_locale(suite.get("locale", "en"))
-	engine.set_state_bridge(TestStateBridge.new(suite.get("stateBridge")))
+
+	# Install choice filter if the suite has condition config
+	var bridge_config: Variant = suite.get("stateBridge")
+	if bridge_config is Dictionary and bridge_config.has("conditions"):
+		var conditions: Dictionary = bridge_config["conditions"]
+		engine.set_choice_filter(func(cond: Dictionary) -> bool:
+			var key: String = cond.get("key", "")
+			if conditions.has(key):
+				return conditions[key]
+			return true
+		)
 
 	var steps: Array = tc.get("steps", [])
-	var step_index: Array = [0]  # wrapped in array for closure capture
+	var step_index: Array = [0]
 	var cleanup_calls: Array = [0]
 
-	var step_types: Dictionary = {}
-	for s in steps:
-		step_types[s["expect"]["type"]] = true
+	# All 4 handlers are mandatory — register them all
+	engine.on_dialog(func(args: Dictionary) -> Callable:
+		return _handle_step("DIALOG", args, steps, step_index, cleanup_calls)
+	)
+
+	engine.on_choice(func(args: Dictionary) -> Callable:
+		var step: Variant = steps[step_index[0]] if step_index[0] < steps.size() else null
+		if step != null and step["expect"]["type"] == "CHOICE":
+			var expect: Dictionary = step["expect"]
+			var block: Dictionary = args["block"]
+			if not expect.has("blockUuid") or expect["blockUuid"] == null or expect["blockUuid"] == block.get("uuid", ""):
+				if expect.has("visibleChoiceCount") and expect["visibleChoiceCount"] != null:
+					var visible_count: int = 0
+					for c in args["context"].choices:
+						if c.get("visible") != false:
+							visible_count += 1
+					if visible_count != expect["visibleChoiceCount"]:
+						print("  FAIL: %s — visibleChoiceCount expected %d, got %d" % [display_name, expect["visibleChoiceCount"], visible_count])
+		return _handle_step("CHOICE", args, steps, step_index, cleanup_calls)
+	)
+
+	engine.on_condition(func(args: Dictionary) -> Callable:
+		return _handle_step("CONDITION", args, steps, step_index, cleanup_calls, suite)
+	)
+
+	engine.on_action(func(args: Dictionary) -> Callable:
+		return _handle_step("ACTION", args, steps, step_index, cleanup_calls)
+	)
 
 	var handle: LsdeSceneHandle = engine.scene(suite["sceneId"])
-
-	if step_types.has("DIALOG"):
-		handle.on_dialog(func(args: Dictionary) -> Callable:
-			return _handle_step("DIALOG", args, steps, step_index, cleanup_calls)
-		)
-
-	if step_types.has("CHOICE"):
-		handle.on_choice(func(args: Dictionary) -> Callable:
-			var step: Variant = steps[step_index[0]] if step_index[0] < steps.size() else null
-			if step != null and step["expect"]["type"] == "CHOICE":
-				var expect: Dictionary = step["expect"]
-				if expect.has("visibleChoiceCount"):
-					if args["context"].choices.size() != expect["visibleChoiceCount"]:
-						print("  FAIL: %s — visibleChoiceCount expected %d, got %d" % [display_name, expect["visibleChoiceCount"], args["context"].choices.size()])
-			return _handle_step("CHOICE", args, steps, step_index, cleanup_calls)
-		)
-
-	if step_types.has("CONDITION"):
-		handle.on_condition(func(args: Dictionary) -> Callable:
-			return _handle_step("CONDITION", args, steps, step_index, cleanup_calls)
-		)
-
-	if step_types.has("ACTION"):
-		handle.on_action(func(args: Dictionary) -> Callable:
-			return _handle_step("ACTION", args, steps, step_index, cleanup_calls)
-		)
-
 	handle.start()
 
 	var ok: bool = true
@@ -192,7 +169,7 @@ func _run_single_flow_test(suite: Dictionary, tc: Dictionary, display_name: Stri
 
 	return ok
 
-func _handle_step(block_type: String, args: Dictionary, steps: Array, step_index: Array, cleanup_calls: Array) -> Callable:
+func _handle_step(block_type: String, args: Dictionary, steps: Array, step_index: Array, cleanup_calls: Array, suite: Variant = null) -> Callable:
 	var step: Variant = steps[step_index[0]] if step_index[0] < steps.size() else null
 	var block: Dictionary = args["block"]
 	var context: Variant = args["context"]
@@ -203,12 +180,24 @@ func _handle_step(block_type: String, args: Dictionary, steps: Array, step_index
 		if expect_uuid == null or expect_uuid == block.get("uuid", ""):
 			step_index[0] += 1
 			_execute_action(step.get("action"), context, next_fn)
-		else:
-			next_fn.call()
-	else:
-		next_fn.call()
+			return func() -> void: cleanup_calls[0] += 1
 
-	return func() -> void: cleanup_calls[0] += 1
+	# Not the expected step — auto-advance
+	if block_type == "CONDITION":
+		var cond_block_conditions: Array = block.get("conditions", [])
+		var result: bool = LsdeConditionEvaluator.evaluate_condition_chain(cond_block_conditions, func(cond: Dictionary) -> bool:
+			if suite is Dictionary and suite.has("stateBridge") and suite["stateBridge"] is Dictionary:
+				var conditions: Dictionary = suite["stateBridge"].get("conditions", {})
+				if conditions.has(cond.get("key", "")):
+					return conditions[cond.get("key", "")]
+			return true
+		)
+		context.resolve(result)
+	elif block_type == "ACTION":
+		context.resolve()
+	next_fn.call()
+	# No cleanup for auto-advanced blocks
+	return Callable()
 
 # ─── Validation Tests ─────────────────────────────────────────────────────
 
