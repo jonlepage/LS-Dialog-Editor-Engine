@@ -115,41 +115,8 @@ namespace LsdeDialogEngine.Tests
 
     // ─── TestStateBridge ─────────────────────────────────────────────────────────
 
-    internal class TestStateBridge : IStateBridge
-    {
-        private readonly StateBridgeConfig? _config;
-
-        internal TestStateBridge(StateBridgeConfig? config) => _config = config;
-
-        public bool EvaluateCondition(ExportCondition condition)
-        {
-            if (_config?.Conditions != null && _config.Conditions.TryGetValue(condition.Key, out var val))
-                return val;
-            return true;
-        }
-
-        public void ExecuteAction(ExportAction action, ActionSignature? signature)
-        {
-            if (_config?.Actions != null && _config.Actions.TryGetValue(action.ActionId, out var result))
-            {
-                if (result == "fail")
-                    throw new Exception($"Action {action.ActionId} failed");
-            }
-        }
-
-        public object ResolveDictionary(string groupLabel, string rowKey)
-        {
-            var key = $"{groupLabel}.{rowKey}";
-            if (_config?.Dictionaries != null && _config.Dictionaries.TryGetValue(key, out var val))
-                return val;
-            return "";
-        }
-
-        public BlockCharacter? ResolveCharacter(IReadOnlyList<BlockCharacter> characters)
-        {
-            return characters.Count > 0 ? characters[0] : null;
-        }
-    }
+    // TestStateBridge removed — replaced by handler-based API.
+    // The runner now registers all 4 mandatory handlers directly.
 
     // ─── Mutable test state wrapper (for lambda capture) ─────────────────────────
 
@@ -206,58 +173,54 @@ namespace LsdeDialogEngine.Tests
             Assert.Empty(report.Errors);
 
             engine.SetLocale(suite.Locale ?? "en");
-            engine.SetStateBridge(new TestStateBridge(suite.StateBridge));
+
+            // Install choice filter if the suite has condition config
+            var bridgeConfig = suite.StateBridge;
+            if (bridgeConfig?.Conditions != null)
+            {
+                engine.SetChoiceFilter(cond =>
+                {
+                    if (bridgeConfig.Conditions.TryGetValue(cond.Key, out var val))
+                        return val;
+                    return true;
+                });
+            }
 
             var steps = tc.Steps ?? new List<TestStep>();
             var state = new TestState();
 
-            // Determine which block types appear in steps
-            var stepTypes = new HashSet<string>();
-            foreach (var s in steps) stepTypes.Add(s.Expect.Type);
-
-            // Register handlers for types that appear in steps
-            var handle = engine.Scene(suite.SceneId!);
-
-            if (stepTypes.Contains("DIALOG"))
+            // All 4 handlers are mandatory — register them all
+            engine.OnDialog(args =>
             {
-                handle.OnDialog(args =>
-                {
-                    return HandleStep("DIALOG", args.Block, args.Context, args.Next, steps, state);
-                });
-            }
+                return HandleStep("DIALOG", args.Block, args.Context, args.Next, steps, state);
+            });
 
-            if (stepTypes.Contains("CHOICE"))
+            engine.OnChoice(args =>
             {
-                handle.OnChoice(args =>
+                var step = steps.Count > state.StepIndex ? steps[state.StepIndex] : null;
+                if (step != null && step.Expect.Type == "CHOICE"
+                    && (step.Expect.BlockUuid == null || step.Expect.BlockUuid == args.Block.Uuid))
                 {
-                    var step = steps.Count > state.StepIndex ? steps[state.StepIndex] : null;
-                    if (step != null && step.Expect.Type == "CHOICE"
-                        && (step.Expect.BlockUuid == null || step.Expect.BlockUuid == args.Block.Uuid))
+                    if (step.Expect.VisibleChoiceCount.HasValue)
                     {
-                        if (step.Expect.VisibleChoiceCount.HasValue)
-                        {
-                            Assert.Equal(step.Expect.VisibleChoiceCount.Value, args.Context.Choices.Count);
-                        }
+                        var visibleCount = args.Context.Choices.Count(c => c.Visible != false);
+                        Assert.Equal(step.Expect.VisibleChoiceCount.Value, visibleCount);
                     }
-                    return HandleStep("CHOICE", args.Block, args.Context, args.Next, steps, state);
-                });
-            }
+                }
+                return HandleStep("CHOICE", args.Block, args.Context, args.Next, steps, state);
+            });
 
-            if (stepTypes.Contains("CONDITION"))
+            engine.OnCondition(args =>
             {
-                handle.OnCondition(args =>
-                {
-                    return HandleStep("CONDITION", args.Block, args.Context, args.Next, steps, state);
-                });
-            }
+                return HandleStep("CONDITION", args.Block, args.Context, args.Next, steps, state, suite);
+            });
 
-            if (stepTypes.Contains("ACTION"))
+            engine.OnAction(args =>
             {
-                handle.OnAction(args =>
-                {
-                    return HandleStep("ACTION", args.Block, args.Context, args.Next, steps, state);
-                });
-            }
+                return HandleStep("ACTION", args.Block, args.Context, args.Next, steps, state);
+            });
+
+            var handle = engine.Scene(suite.SceneId!);
 
             handle.Start();
 
@@ -294,7 +257,8 @@ namespace LsdeDialogEngine.Tests
             IBaseBlockContext context,
             Action next,
             List<TestStep> steps,
-            TestState state)
+            TestState state,
+            TestSuite? suite = null)
         {
             var step = steps.Count > state.StepIndex ? steps[state.StepIndex] : null;
 
@@ -303,14 +267,33 @@ namespace LsdeDialogEngine.Tests
             {
                 state.StepIndex++;
                 ExecuteAction(step.Action, context, next);
+                return () => { state.CleanupCalls++; };
             }
             else
             {
                 // Not the expected step — auto-advance (async track or passthrough)
+                if (blockType == "CONDITION" && context is IConditionContext condCtx)
+                {
+                    // Evaluate conditions using suite bridge config
+                    var condBlock = block as ConditionBlock;
+                    var conditions = condBlock?.Conditions ?? new List<ExportCondition>();
+                    var result = ConditionEvaluator.EvaluateConditionChain(conditions, cond =>
+                    {
+                        if (suite?.StateBridge?.Conditions != null
+                            && suite.StateBridge.Conditions.TryGetValue(cond.Key, out var val))
+                            return val;
+                        return true;
+                    });
+                    condCtx.Resolve(result);
+                }
+                else if (blockType == "ACTION" && context is IActionContext actCtx)
+                {
+                    actCtx.Resolve();
+                }
                 next();
+                // No cleanup for auto-advanced blocks
+                return null;
             }
-
-            return () => { state.CleanupCalls++; };
         }
 
         private static void ExecuteAction(StepAction? action, IBaseBlockContext context, Action next)

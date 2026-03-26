@@ -10,10 +10,13 @@ namespace LsdeDialogEngine
     {
         private BlueprintGraph? _graph;
         private readonly HandlerRegistry _globalRegistry = new HandlerRegistry();
-        private IStateBridge? _stateBridge;
         private string _locale = "";
         private readonly Dictionary<string, SceneHandleImpl> _activeScenes = new Dictionary<string, SceneHandleImpl>();
         private bool _initialized;
+        /// <summary>Character resolution callback. Default: first character in the list.</summary>
+        private Func<List<BlockCharacter>, BlockCharacter?> _resolveCharacter = chars => chars.Count > 0 ? chars[0] : null;
+        /// <summary>Choice visibility evaluator. When set, the engine tags each choice with Visible before calling onChoice.</summary>
+        private Func<ExportCondition, bool>? _choiceFilter;
 
         // ─── Initialization ──────────────────────────────────────────────
 
@@ -34,15 +37,31 @@ namespace LsdeDialogEngine
         /// <summary>Set the active locale for text resolution.</summary>
         public void SetLocale(string locale)
         {
+            if (_graph != null)
+            {
+                var validLocales = _graph.GetLocales();
+                if (validLocales.Count > 0 && !validLocales.Contains(locale))
+                {
+                    throw new InvalidOperationException(
+                        $"Invalid locale \"{locale}\". Available locales: {string.Join(", ", validLocales)}");
+                }
+            }
             _locale = locale;
+            LsdeUtils.Locale = locale;
         }
 
-        // ─── StateBridge ─────────────────────────────────────────────────
+        // ─── Character resolution ────────────────────────────────────────
 
-        /// <summary>Set the bridge between the engine and the game state.</summary>
-        public void SetStateBridge(IStateBridge bridge)
+        /// <summary>Set the character resolution callback used to pick which character is active on a block.</summary>
+        public void OnResolveCharacter(Func<List<BlockCharacter>, BlockCharacter?> resolver)
         {
-            _stateBridge = bridge;
+            _resolveCharacter = resolver;
+        }
+
+        /// <summary>Set the choice visibility evaluator. When set, each choice is tagged with Visible before the handler sees it.</summary>
+        public void SetChoiceFilter(Func<ExportCondition, bool> evaluator)
+        {
+            _choiceFilter = evaluator;
         }
 
         // ─── Validation ──────────────────────────────────────────────────
@@ -127,7 +146,8 @@ namespace LsdeDialogEngine
             {
                 OnSceneStarted = h => _activeScenes[sceneId] = h,
                 OnSceneEnded = _ => _activeScenes.Remove(sceneId),
-                GetStateBridge = () => _stateBridge,
+                GetResolveCharacter = () => _resolveCharacter,
+                GetChoiceFilter = () => _choiceFilter,
                 GetLocale = () => _locale,
             });
 

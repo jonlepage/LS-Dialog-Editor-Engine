@@ -1,4 +1,6 @@
 // LSDE Dialog Engine — Playground (C++ port of playground.ts)
+// Loads a blueprint JSON, registers the new handler-based API, runs the first scene.
+// Mirrors the TS playground exactly for cross-language validation.
 
 #include <iostream>
 #include <fstream>
@@ -9,50 +11,19 @@
 #include <lsde/engine.h>
 #include <lsde/scene_handle.h>
 #include <lsde/utils.h>
+#include <lsde/condition_evaluator.h>
 
 // Include JSON deserializer (same as tests)
-// In a real project this would be a shared library
 #include "../../tests/json_deserializer.h"
 #include "../../tests/json_deserializer.cpp"
 
 using namespace lsde;
 
-// ─── ANSI Colors ─────────────────────────────────────────────────────────────
-
-const char* R = "\x1b[0m";
-std::string Red(const std::string& s) { return "\x1b[31m" + s + R; }
-std::string Green(const std::string& s) { return "\x1b[32m" + s + R; }
-std::string Yellow(const std::string& s) { return "\x1b[33m" + s + R; }
-std::string Blue(const std::string& s) { return "\x1b[34m" + s + R; }
-std::string Magenta(const std::string& s) { return "\x1b[35m" + s + R; }
-std::string Cyan(const std::string& s) { return "\x1b[36m" + s + R; }
-std::string White(const std::string& s) { return "\x1b[37m" + s + R; }
-std::string Dim(const std::string& s) { return "\x1b[2m" + s + R; }
-std::string Bold(const std::string& s) { return "\x1b[1m" + s + R; }
-std::string Gray(const std::string& s) { return "\x1b[90m" + s + R; }
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 std::string Label(const BlueprintBlock& b) {
     return b.label.value_or(b.uuid.substr(0, std::min<size_t>(8, b.uuid.size())));
 }
-
-// ─── StateBridge ─────────────────────────────────────────────────────────────
-
-class PlaygroundBridge : public IStateBridge {
-public:
-    bool evaluateCondition(const ExportCondition& c) override {
-        std::cout << Gray("       [bridge] eval: " + c.key + " " + c.op + " " + c.value + " -> true") << "\n";
-        return true;
-    }
-    void executeAction(const ExportAction& a, const ActionSignature* sig) override {
-        std::cout << Gray("       [bridge] exec: " + (sig ? sig->label.value_or(a.actionId) : a.actionId) + "()") << "\n";
-    }
-    PropertyValue resolveDictionary(const std::string& group, const std::string& key) override {
-        return std::string(group + "." + key);
-    }
-    const BlockCharacter* resolveCharacter(const std::vector<BlockCharacter>& characters) override {
-        return characters.empty() ? nullptr : &characters[0];
-    }
-};
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
@@ -62,7 +33,6 @@ int main(int argc, char* argv[]) {
     if (argc > 1) {
         blueprintPath = argv[1];
     } else {
-        // Try to find blueprints/blueprint.json walking up
         std::string dir = ".";
         for (int i = 0; i < 8; i++) {
             std::string candidate = dir + "/blueprints/blueprint.json";
@@ -82,130 +52,214 @@ int main(int argc, char* argv[]) {
     auto j = nlohmann::json::parse(f);
     auto blueprint = j.get<BlueprintExport>();
 
-    std::cout << Dim("Loaded: " + blueprintPath) << "\n";
+    // ─── Init ────────────────────────────────────────────────────────────────
 
-    // Init engine
     DialogueEngine engine;
     auto report = engine.init({blueprint});
 
-    std::cout << Bold(Cyan("Init")) << " Errors: "
-              << (report.errors.empty() ? Green("0") : Red(std::to_string(report.errors.size()))) << "\n";
-    std::cout << Dim("     Stats: " + std::to_string(report.stats.sceneCount) + " scenes, "
-        + std::to_string(report.stats.blockCount) + " blocks, "
-        + std::to_string(report.stats.connectionCount) + " connections") << "\n";
+    std::cout << "\n🔧 Init — " << report.errors.size() << " errors, " << report.warnings.size() << " warnings\n";
+    for (const auto& w : report.warnings)
+        std::cout << "   ⚠️  " << w.code << ": " << w.message << "\n";
+    std::cout << "📊 sceneCount=" << report.stats.sceneCount
+              << ", blockCount=" << report.stats.blockCount
+              << ", connectionCount=" << report.stats.connectionCount << "\n";
 
     if (!report.errors.empty()) {
         for (const auto& e : report.errors)
-            std::cout << Red("  [" + e.code + "] " + e.message) << "\n";
+            std::cout << "   ❌ " << e.code << ": " << e.message << "\n";
         return 1;
     }
 
-    std::string locale = blueprint.primaryLanguage.value_or("en");
-    engine.setLocale(locale);
-    PlaygroundBridge bridge;
-    engine.setStateBridge(&bridge);
+    // on peut changer les locales on the fly
+    engine.setLocale("en");
 
-    int choiceCount = 0;
+    // on ajoute l'algorithme de résolution de personnage
+    engine.onResolveCharacter([](const std::vector<BlockCharacter>& chars) -> const BlockCharacter* {
+        return chars.empty() ? nullptr : &chars[0];
+    });
 
-    // Handlers
-    engine.onDialog([&](ISceneHandle*, const DialogBlock* block, IDialogContext* ctx, std::function<void()> next) -> CleanupFn {
+    // Opt-in: install choice visibility filter (playground: all game-state conditions pass)
+    engine.setChoiceFilter([](const ExportCondition& cond) -> bool {
+        // Simule un game state où variable_0 = "something_else"
+        if (cond.key == "variable_0") return cond.value == "something_else";
+        return true;
+    });
+
+    // ─── 4 Required Handlers ─────────────────────────────────────────────────
+
+    engine.onDialog([](ISceneHandle*, const DialogBlock* block, IDialogContext* ctx, std::function<void()> next) -> CleanupFn {
         auto* ch = ctx->character();
-        auto charStr = ch ? Magenta(ch->name) + " " + Dim("(" + ch->emotion.value_or("?") + ")") : Dim("(no character)");
-        auto it = block->dialogueText.find(locale);
-        auto text = it != block->dialogueText.end() ? it->second : block->content.value_or("—");
-        std::string flagStr;
-        if (block->nativeProperties && block->nativeProperties->portPerCharacter && *block->nativeProperties->portPerCharacter)
-            flagStr += "portPerCharacter";
+        auto text = LsdeUtils::GetLocalizedText(block->dialogueText);
 
-        std::cout << "\n  " << Bold(Blue("DIALOG")) << " " << Cyan(Label(*block)) << " "
-                  << (flagStr.empty() ? "" : Yellow("[" + flagStr + "]")) << "\n";
-        std::cout << "         " << charStr << "\n";
-        std::cout << "         " << White("\"" + text + "\"") << "\n";
+        std::cout << "\n💬 DIALOG  " << Label(*block) << "\n";
+        std::cout << "   🎭 " << (ch ? ch->name : "") << " " << (ch ? ch->id : "")
+                  << " [" << (ch && ch->emotion ? *ch->emotion : "") << "]\n";
+        std::cout << "   📝 \"" << text.value_or("—") << "\"\n";
 
         if (block->nativeProperties && block->nativeProperties->portPerCharacter
             && *block->nativeProperties->portPerCharacter && ch) {
-            std::cout << Dim("         -> resolveCharacterPort: " + ch->name) << "\n";
-            ctx->resolveCharacterPort(ch->name);
+            std::cout << "   🔀 resolveCharacterPort: " << ch->uuid << "\n";
+            ctx->resolveCharacterPort(ch->uuid);
         }
         next();
-        return [block]() { std::cout << Gray("       [cleanup] " + Label(*block)) << "\n"; };
+        return [block]() { std::cout << "   🧹 cleanup: " << Label(*block) << "\n"; };
     });
 
-    engine.onChoice([&](ISceneHandle*, const ChoiceBlock* block, IChoiceContext* ctx, std::function<void()> next) -> CleanupFn {
-        choiceCount++;
-        std::cout << "\n  " << Bold(Yellow("CHOICE")) << " " << Cyan(Label(*block))
-                  << " " << ctx->choices().size() << " visible:\n";
-        for (const auto& c : ctx->choices()) {
-            auto lbl = c.label.value_or(c.uuid.substr(0, 8));
-            auto it = c.dialogueText.find(locale);
-            auto txt = it != c.dialogueText.end() ? it->second : "—";
-            std::cout << "         " << Yellow(">") << " " << lbl << ": " << White("\"" + txt + "\"") << "\n";
+    engine.onChoice([](ISceneHandle*, const ChoiceBlock* block, IChoiceContext* ctx, std::function<void()> next) -> CleanupFn {
+        const auto& choices = ctx->choices();
+
+        // choices are tagged with .visible by the engine (setChoiceFilter installed above)
+        std::vector<const RuntimeChoiceItem*> visible;
+        for (const auto& c : choices) {
+            if (!c.visible.has_value() || c.visible.value()) {
+                visible.push_back(&c);
+            }
         }
-        auto& pick = ctx->choices().size() > 1 && choiceCount > 1 ? ctx->choices()[1] : ctx->choices()[0];
-        std::cout << Dim("         -> selecting: " + pick.label.value_or(pick.uuid.substr(0, 8))) << "\n";
-        ctx->selectChoice(pick.uuid);
-        next();
-        return {};
+        std::optional<double> timeout;
+        if (block->nativeProperties && block->nativeProperties->timeout) {
+            timeout = block->nativeProperties->timeout;
+        }
+        // le moteur de jeux decidera quel visible choix est actif par default
+        const RuntimeChoiceItem* active = visible.empty() ? nullptr : visible[0];
+
+        std::cout << "\n❓ CHOICE  " << Label(*block) << " — " << visible.size() << "/" << choices.size() << " choices visible\n";
+        for (const auto* choice : visible) {
+            auto text = LsdeUtils::GetLocalizedText(choice->dialogueText);
+            bool isActive = (choice == active);
+            auto lbl = choice->label.value_or(choice->uuid.substr(0, std::min<size_t>(8, choice->uuid.size())));
+            std::cout << "   👉 " << lbl << ": \"" << text.value_or("—") << "\"" << (isActive ? " (active)" : "") << "\n";
+        }
+
+        if (timeout.has_value()) {
+            std::cout << "💌timeout: " << timeout.value() << "\n";
+            // In a real game, we'd use a timer. For playground, just auto-select after logging.
+            if (active) {
+                auto lbl = active->label.value_or(active->uuid.substr(0, std::min<size_t>(8, active->uuid.size())));
+                std::cout << "   ✅ selecting: " << lbl << "\n";
+                ctx->selectChoice(active->uuid);
+            }
+            next();
+        } else {
+            // si pas de timeout, on va utiliser un waitinput dans le game engine
+            if (active) {
+                auto lbl = active->label.value_or(active->uuid.substr(0, std::min<size_t>(8, active->uuid.size())));
+                std::cout << "   ✅ selecting: " << lbl << "\n";
+                ctx->selectChoice(active->uuid);
+            }
+            next();
+        }
+
+        return [block]() { std::cout << "   🧹 cleanup: " << Label(*block) << "\n"; };
     });
 
-    engine.onCondition([&](ISceneHandle*, const ConditionBlock* block, IConditionContext* ctx, std::function<void()> next) -> CleanupFn {
-        bool result = !block->conditions.empty();
-        std::cout << "\n  " << Bold(Magenta("CONDITION")) << " " << Cyan(Label(*block))
-                  << " " << block->conditions.size() << " conditions -> "
-                  << (result ? Green("true") : Red("false")) << "\n";
+    engine.onCondition([](ISceneHandle* scene, const ConditionBlock* block, IConditionContext* ctx, std::function<void()> next) -> CleanupFn {
+        const auto& conditions = block->conditions;
+        auto result = LsdeUtils::EvaluateConditionChain(
+            conditions,
+            [scene](const ExportCondition& cond) {
+                return isChoiceCondition(cond) ? scene->evaluateCondition(cond) : true; // playground: all game conditions pass
+            }
+        );
+        for (const auto& cond : conditions)
+            std::cout << "   ❓ condition: " << cond.key << " " << cond.op << " " << cond.value << "\n";
+        std::cout << "\n🔀 CONDITION  " << Label(*block) << " — " << conditions.size() << " conditions → " << (result ? "true" : "false") << "\n";
         ctx->resolve(result);
         next();
         return {};
     });
 
-    engine.onAction([&](ISceneHandle*, const ActionBlock* block, IActionContext* ctx, std::function<void()> next) -> CleanupFn {
-        std::cout << "\n  " << Bold(Green("ACTION")) << " " << Cyan(Label(*block))
-                  << " " << block->actions.size() << " actions\n";
-        for (const auto& a : block->actions)
-            std::cout << "         " << Green(">") << " " << a.actionId << "()\n";
+    engine.onAction([](ISceneHandle*, const ActionBlock* block, IActionContext* ctx, std::function<void()> next) -> CleanupFn {
+        const auto& actions = block->actions;
+        std::cout << "\n⚡ ACTION  " << Label(*block) << " — " << actions.size() << " actions\n";
+        for (const auto& a : actions) {
+            std::string paramsStr;
+            for (size_t i = 0; i < a.params.size(); ++i) {
+                if (i > 0) paramsStr += ", ";
+                std::visit([&paramsStr](auto&& val) {
+                    using T = std::decay_t<decltype(val)>;
+                    if constexpr (std::is_same_v<T, std::string>) paramsStr += val;
+                    else if constexpr (std::is_same_v<T, double>) paramsStr += std::to_string(val);
+                    else if constexpr (std::is_same_v<T, bool>) paramsStr += val ? "true" : "false";
+                }, a.params[i]);
+            }
+            std::cout << "   🎯 " << a.actionId << "(" << paramsStr << ")\n";
+        }
         ctx->resolve();
         next();
-        return [block]() { std::cout << Gray("       [cleanup] " + Label(*block)) << "\n"; };
+        return [block]() { std::cout << "   🧹 cleanup: " << Label(*block) << "\n"; };
     });
 
-    engine.onSceneEnter([](const SceneLifecycleArgs&) {
-        std::cout << "\n" << Bold(Green("--- Scene Enter ---")) << "\n";
+    // ─── Optional Handlers ───────────────────────────────────────────────────
+
+    engine.onBeforeBlock([](const BeforeBlockArgs& args) {
+        if (args.context.nativeProperties && args.context.nativeProperties->delay) {
+            std::cout << "   ⏳ before: " << Label(*args.block) << " delay=" << *args.context.nativeProperties->delay << "s\n";
+        }
+        args.resolve();
     });
+
+    engine.onSceneEnter([](const SceneLifecycleArgs& args) {
+        std::cout << "\n🟢 ━━━ Scene Enter ━━━  running=" << (args.scene->isRunning() ? "true" : "false") << "\n";
+    });
+
     engine.onSceneExit([](const SceneLifecycleArgs&) {
-        std::cout << Bold(Red("--- Scene Exit ---")) << "\n\n";
+        std::cout << "🔴 ━━━ Scene Exit ━━━\n\n";
     });
 
     engine.onValidateNextBlock([](const ValidateNextBlockArgs& args) -> ValidationResult {
         if (args.fromBlock) {
-            std::cout << Gray("       [validate] " + Label(*args.fromBlock) + " -> " + Label(*args.nextBlock)) << "\n";
+            std::cout << "   ✔️  validate: " << Label(*args.fromBlock) << " → " << Label(*args.nextBlock) << "\n";
         }
         return ValidationResult::ok();
     });
 
-    // Launch
+    engine.onInvalidateBlock([](const InvalidateBlockArgs& args) {
+        std::cout << "   ❌ INVALIDATED: " << args.reason << "\n";
+        args.scene->cancel();
+    });
+
+    // ─── Run ─────────────────────────────────────────────────────────────────
+
     if (blueprint.scenes.empty()) { std::cout << "No scenes.\n"; return 0; }
     auto& firstScene = blueprint.scenes[0];
-    std::cout << Dim("\nLaunching scene: " + firstScene.label + " (" + firstScene.uuid.substr(0, 12) + ")") << "\n";
+    std::cout << "\n🚀 Launching scene: " << firstScene.label << "\n";
 
     auto handle = engine.scene(firstScene.uuid);
     handle->start();
 
-    // Summary
-    std::cout << Bold("Visited:") << " ";
+    // ─── Summary ─────────────────────────────────────────────────────────────
+
+    std::cout << "\n📋 Visited: ";
     bool first = true;
     for (const auto& uuid : handle->getVisitedBlocks()) {
         if (!first) std::cout << ", ";
-        // Find label
-        std::string lbl = uuid.substr(0, 8);
+        std::string lbl = uuid.substr(0, std::min<size_t>(8, uuid.size()));
         for (const auto& s : blueprint.scenes) {
             for (const auto& b : s.blocks) {
                 if (b->uuid == uuid) { lbl = b->label.value_or(lbl); break; }
             }
         }
-        std::cout << Cyan(lbl);
+        std::cout << lbl;
         first = false;
     }
-    std::cout << "\n" << Bold("Engine:") << " running=" << (engine.isRunning() ? Green("true") : Dim("false")) << "\n";
+    std::cout << "\n";
+
+    // Choice history
+    std::cout << "📊 Choice History: {";
+    bool firstH = true;
+    for (const auto& [blockUuid, selections] : handle->getChoiceHistory()) {
+        if (!firstH) std::cout << ", ";
+        std::cout << blockUuid << ": [";
+        for (size_t i = 0; i < selections.size(); ++i) {
+            if (i > 0) std::cout << ", ";
+            std::cout << selections[i];
+        }
+        std::cout << "]";
+        firstH = false;
+    }
+    std::cout << "}\n";
+
+    std::cout << "🏁 Engine running: " << (engine.isRunning() ? "true" : "false") << "\n";
 
     return 0;
 }

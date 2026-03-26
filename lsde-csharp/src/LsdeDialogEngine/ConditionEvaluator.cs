@@ -41,10 +41,15 @@ namespace LsdeDialogEngine
         /// <summary>
         /// Filter choices by their visibilityConditions.
         /// Choices with no conditions or passing conditions are kept.
+        ///
+        /// When <paramref name="scene"/> is provided, <c>choice:</c> conditions are resolved
+        /// automatically via the scene's internal choice history — the developer never sees them.
+        /// Non-choice conditions are delegated to the <paramref name="evaluator"/> callback.
         /// </summary>
         public static List<ChoiceItem> FilterVisibleChoices(
             List<ChoiceItem> choices,
-            Func<ExportCondition, bool> evaluator)
+            Func<ExportCondition, bool> evaluator,
+            ISceneHandle? scene = null)
         {
             var result = new List<ChoiceItem>();
             foreach (var choice in choices)
@@ -53,7 +58,14 @@ namespace LsdeDialogEngine
                 {
                     result.Add(choice);
                 }
-                else if (EvaluateConditionChain(choice.VisibilityConditions, evaluator))
+                else if (EvaluateConditionChain(choice.VisibilityConditions, cond =>
+                {
+                    if (scene != null && cond.Key.StartsWith("choice:"))
+                    {
+                        return scene.EvaluateCondition(cond);
+                    }
+                    return evaluator(cond);
+                }))
                 {
                     result.Add(choice);
                 }

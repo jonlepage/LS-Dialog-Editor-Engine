@@ -5,6 +5,7 @@
 #include <lsde/condition_evaluator.h>
 #include <lsde/utils.h>
 #include <algorithm>
+#include <stdexcept>
 
 namespace lsde {
 
@@ -87,15 +88,10 @@ void AsyncTrack::executeBlockHandler(const BlueprintBlock& block) {
         return;
     }
 
+    // No handler → advance silently (handlers are validated at start())
     if (!resolved.sceneHandler && !resolved.globalHandler) {
-        if (block.type == BlockType::Condition) {
-            autoEvaluateCondition(block, dynamic_cast<InternalConditionContext*>(context));
-            return;
-        }
-        if (block.type == BlockType::Action) {
-            autoExecuteAction(block, dynamic_cast<InternalActionContext*>(context));
-            return;
-        }
+        advanceToNextBlock(block, context);
+        return;
     }
 
     bool nextCalled = false;
@@ -116,13 +112,18 @@ void AsyncTrack::executeBlockHandler(const BlueprintBlock& block) {
 
     std::function<void()> nextFn = next;
 
-    if (resolved.sceneHandler) {
-        sceneCleanup = resolved.sceneHandler(&_parent, &block, context, nextFn);
-        if (!getGlobalPreventedImpl(context) && resolved.globalHandler) {
+    try {
+        if (resolved.sceneHandler) {
+            sceneCleanup = resolved.sceneHandler(&_parent, &block, context, nextFn);
+            if (!getGlobalPreventedImpl(context) && resolved.globalHandler) {
+                globalCleanup = resolved.globalHandler(&_parent, &block, context, nextFn);
+            }
+        } else if (resolved.globalHandler) {
             globalCleanup = resolved.globalHandler(&_parent, &block, context, nextFn);
         }
-    } else if (resolved.globalHandler) {
-        globalCleanup = resolved.globalHandler(&_parent, &block, context, nextFn);
+    } catch (...) {
+        endTrack();
+        return;
     }
 
     _previousCleanup = combineCleanupsImpl(std::move(sceneCleanup), std::move(globalCleanup));
@@ -178,40 +179,6 @@ void AsyncTrack::endTrack() {
     _parent.removeTrack(this);
 }
 
-void AsyncTrack::autoEvaluateCondition(const BlueprintBlock& block, InternalConditionContext* context) {
-    auto* bridge = _parent.getStateBridge();
-    if (auto* cb = dynamic_cast<const ConditionBlock*>(&block)) {
-        const auto& conditions = cb->conditions;
-        bool hasChoiceConditions = std::any_of(conditions.begin(), conditions.end(),
-            [](const ExportCondition& c) { return c.key.substr(0, 7) == "choice:"; });
-        if (!bridge && !hasChoiceConditions) { endTrack(); return; }
-        auto evaluator = [this, bridge](const ExportCondition& c) {
-            return _parent.evaluateConditionForBlock(c, bridge
-                ? std::function<bool(const ExportCondition&)>([bridge](const ExportCondition& cond) { return bridge->evaluateCondition(cond); })
-                : std::function<bool(const ExportCondition&)>([](const ExportCondition&) { return false; }));
-        };
-        context->conditionResult = evaluateConditionChain(conditions, evaluator);
-    } else if (!bridge) {
-        endTrack();
-        return;
-    }
-    _previousCleanup = {};
-    advanceToNextBlock(block, context);
-}
-
-void AsyncTrack::autoExecuteAction(const BlueprintBlock& block, InternalActionContext* context) {
-    auto* bridge = _parent.getStateBridge();
-    if (!bridge) { endTrack(); return; }
-    if (auto* ab = dynamic_cast<const ActionBlock*>(&block)) {
-        for (const auto& action : ab->actions) {
-            bridge->executeAction(action, nullptr);
-        }
-    }
-    context->actionRejected = false;
-    _previousCleanup = {};
-    advanceToNextBlock(block, context);
-}
-
 // ─── SceneHandleImpl ─────────────────────────────────────────────────────────
 
 SceneHandleImpl::SceneHandleImpl(const SceneGraph& sg, const HandlerRegistry& gr, SceneHandleCallbacks cb)
@@ -219,6 +186,25 @@ SceneHandleImpl::SceneHandleImpl(const SceneGraph& sg, const HandlerRegistry& gr
 
 void SceneHandleImpl::start() {
     if (_running) return;
+
+    // Validate that all 4 mandatory handlers are registered
+    std::vector<std::string> missing;
+    if (!_sceneRegistry.dialogHandler && !_globalRegistry.dialogHandler) missing.push_back("onDialog");
+    if (!_sceneRegistry.choiceHandler && !_globalRegistry.choiceHandler) missing.push_back("onChoice");
+    if (!_sceneRegistry.conditionHandler && !_globalRegistry.conditionHandler) missing.push_back("onCondition");
+    if (!_sceneRegistry.actionHandler && !_globalRegistry.actionHandler) missing.push_back("onAction");
+    if (!missing.empty()) {
+        std::string msg = "Cannot start scene — missing required handler(s): ";
+        for (size_t i = 0; i < missing.size(); ++i) {
+            if (i > 0) msg += ", ";
+            msg += missing[i];
+        }
+        msg += ".\nRegister all 4 handlers before starting:\n"
+               "  engine.onDialog(handler)\n  engine.onChoice(handler)\n"
+               "  engine.onCondition(handler)\n  engine.onAction(handler)";
+        throw std::runtime_error(msg);
+    }
+
     _running = true;
     _cancelled = false;
     if (_callbacks.onSceneStarted) _callbacks.onSceneStarted(this);
@@ -266,7 +252,6 @@ int SceneHandleImpl::getActiveTracks() const {
 const SceneGraph& SceneHandleImpl::getSceneGraph() const { return _sceneGraph; }
 const SceneHandlerRegistry& SceneHandleImpl::getSceneRegistry() const { return _sceneRegistry; }
 const HandlerRegistry& SceneHandleImpl::getGlobalRegistry() const { return _globalRegistry; }
-IStateBridge* SceneHandleImpl::getStateBridge() const { return _callbacks.getStateBridge ? _callbacks.getStateBridge() : nullptr; }
 void SceneHandleImpl::addVisited(const std::string& uuid) {
     if (_visitedSet.insert(uuid).second) {
         _visitedOrder.push_back(uuid);
@@ -288,8 +273,8 @@ void SceneHandleImpl::recordChoice(const std::string& blockUuid, const std::stri
 }
 
 bool SceneHandleImpl::evaluateConditionForBlock(const ExportCondition& condition,
-    const std::function<bool(const ExportCondition&)>& bridgeEvaluator) {
-    return evaluateConditionWithHistory(condition, bridgeEvaluator);
+    const std::function<bool(const ExportCondition&)>& fallbackEvaluator) {
+    return evaluateConditionWithHistory(condition, fallbackEvaluator);
 }
 
 const std::unordered_map<std::string, std::vector<std::string>>& SceneHandleImpl::getChoiceHistory() const {
@@ -300,6 +285,14 @@ const std::vector<std::string>* SceneHandleImpl::getChoice(const std::string& bl
     auto it = _choiceHistory.find(blockUuid);
     if (it == _choiceHistory.end()) return nullptr;
     return &it->second;
+}
+
+bool SceneHandleImpl::evaluateCondition(const ExportCondition& condition) {
+    return evaluateConditionWithHistory(condition, [](const ExportCondition&) { return false; });
+}
+
+void SceneHandleImpl::onResolveCharacter(std::function<const BlockCharacter*(const std::vector<BlockCharacter>&)> fn) {
+    _resolveCharacter = std::move(fn);
 }
 
 // ─── Traversal ───────────────────────────────────────────────────────────────
@@ -359,15 +352,10 @@ void SceneHandleImpl::executeBlockHandler(const BlueprintBlock& block) {
         return;
     }
 
+    // No handler → advance silently (handlers are validated at start())
     if (!resolved.sceneHandler && !resolved.globalHandler) {
-        if (block.type == BlockType::Condition) {
-            autoEvaluateCondition(block, dynamic_cast<InternalConditionContext*>(context));
-            return;
-        }
-        if (block.type == BlockType::Action) {
-            autoExecuteAction(block, dynamic_cast<InternalActionContext*>(context));
-            return;
-        }
+        advanceToNextBlock(block, context);
+        return;
     }
 
     bool nextCalled = false;
@@ -384,13 +372,18 @@ void SceneHandleImpl::executeBlockHandler(const BlueprintBlock& block) {
 
     std::function<void()> nextFn = next;
 
-    if (resolved.sceneHandler) {
-        sceneCleanup = resolved.sceneHandler(this, blockPtr, context, nextFn);
-        if (!getGlobalPreventedImpl(context) && resolved.globalHandler) {
+    try {
+        if (resolved.sceneHandler) {
+            sceneCleanup = resolved.sceneHandler(this, blockPtr, context, nextFn);
+            if (!getGlobalPreventedImpl(context) && resolved.globalHandler) {
+                globalCleanup = resolved.globalHandler(this, &block, context, nextFn);
+            }
+        } else if (resolved.globalHandler) {
             globalCleanup = resolved.globalHandler(this, &block, context, nextFn);
         }
-    } else if (resolved.globalHandler) {
-        globalCleanup = resolved.globalHandler(this, &block, context, nextFn);
+    } catch (...) {
+        endScene();
+        return;
     }
 
     _previousCleanup = combineCleanupsImpl(std::move(sceneCleanup), std::move(globalCleanup));
@@ -476,47 +469,11 @@ void SceneHandleImpl::endScene() {
     if (_callbacks.onSceneEnded) _callbacks.onSceneEnded(this);
 }
 
-// ─── Auto-behaviors ──────────────────────────────────────────────────────────
-
-void SceneHandleImpl::autoEvaluateCondition(const BlueprintBlock& block, InternalConditionContext* context) {
-    auto* bridge = getStateBridge();
-    if (auto* cb = dynamic_cast<const ConditionBlock*>(&block)) {
-        const auto& conditions = cb->conditions;
-        bool hasChoiceConditions = std::any_of(conditions.begin(), conditions.end(),
-            [](const ExportCondition& c) { return c.key.substr(0, 7) == "choice:"; });
-        if (!bridge && !hasChoiceConditions) { endScene(); return; }
-        auto evaluator = [this, bridge](const ExportCondition& c) {
-            return evaluateConditionWithHistory(c, bridge
-                ? std::function<bool(const ExportCondition&)>([bridge](const ExportCondition& cond) { return bridge->evaluateCondition(cond); })
-                : std::function<bool(const ExportCondition&)>([](const ExportCondition&) { return false; }));
-        };
-        context->conditionResult = evaluateConditionChain(conditions, evaluator);
-    } else if (!bridge) {
-        endScene();
-        return;
-    }
-    _previousCleanup = {};
-    advanceToNextBlock(block, context);
-}
-
-void SceneHandleImpl::autoExecuteAction(const BlueprintBlock& block, InternalActionContext* context) {
-    auto* bridge = getStateBridge();
-    if (!bridge) { endScene(); return; }
-    if (auto* ab = dynamic_cast<const ActionBlock*>(&block)) {
-        for (const auto& action : ab->actions) {
-            bridge->executeAction(action, nullptr);
-        }
-    }
-    context->actionRejected = false;
-    _previousCleanup = {};
-    advanceToNextBlock(block, context);
-}
-
 // ─── Choice history condition evaluation ─────────────────────────────────────
 
 bool SceneHandleImpl::evaluateConditionWithHistory(const ExportCondition& condition,
-    const std::function<bool(const ExportCondition&)>& bridgeEvaluator) {
-    if (condition.key.substr(0, 7) == "choice:") {
+    const std::function<bool(const ExportCondition&)>& fallbackEvaluator) {
+    if (condition.key.size() >= 7 && condition.key.substr(0, 7) == "choice:") {
         std::string blockUuid = condition.key.substr(7);
         auto it = _choiceHistory.find(blockUuid);
         if (it == _choiceHistory.end()) {
@@ -526,7 +483,42 @@ bool SceneHandleImpl::evaluateConditionWithHistory(const ExportCondition& condit
         bool includes = std::find(history.begin(), history.end(), condition.value) != history.end();
         return condition.op == "!=" ? !includes : includes;
     }
-    return bridgeEvaluator(condition);
+    return fallbackEvaluator(condition);
+}
+
+// ─── Choice visibility tagging ───────────────────────────────────────────────
+
+std::vector<RuntimeChoiceItem> SceneHandleImpl::tagChoiceVisibility(
+    const std::vector<ChoiceItem>& choices,
+    const ChoiceFilterFn& filter)
+{
+    std::vector<RuntimeChoiceItem> result;
+    result.reserve(choices.size());
+
+    for (const auto& choice : choices) {
+        RuntimeChoiceItem tagged;
+        // Copy base ChoiceItem fields
+        static_cast<ChoiceItem&>(tagged) = choice;
+
+        if (!filter) {
+            // No filter → visible stays nullopt (undefined)
+            result.push_back(std::move(tagged));
+            continue;
+        }
+
+        if (choice.visibilityConditions.empty()) {
+            tagged.visible = true;
+        } else {
+            tagged.visible = evaluateConditionChain(choice.visibilityConditions, [this, &filter](const ExportCondition& cond) {
+                if (cond.key.size() >= 7 && cond.key.substr(0, 7) == "choice:") {
+                    return evaluateConditionWithHistory(cond, [](const ExportCondition&) { return false; });
+                }
+                return filter(cond);
+            });
+        }
+        result.push_back(std::move(tagged));
+    }
+    return result;
 }
 
 // ─── Scene lifecycle ─────────────────────────────────────────────────────────
@@ -541,31 +533,32 @@ void SceneHandleImpl::fireSceneExit() {
     if (handler) handler({this, {}});
 }
 
-// ─── Internal ────────────────────────────────────────────────────────────────
+// ─── Internal helpers ────────────────────────────────────────────────────────
+
+ResolveCharacterFn SceneHandleImpl::getResolveCharacterFn() const {
+    if (_resolveCharacter) return _resolveCharacter;
+    if (_callbacks.getResolveCharacter) return _callbacks.getResolveCharacter();
+    return [](const std::vector<BlockCharacter>& chars) -> const BlockCharacter* {
+        return chars.empty() ? nullptr : &chars[0];
+    };
+}
 
 std::unique_ptr<IBaseBlockContext> SceneHandleImpl::createContext(const BlueprintBlock& block) {
-    auto* bridge = getStateBridge();
     static const std::vector<BlockCharacter> emptyCharacters;
     const auto& characters = block.metadata ? block.metadata->characters : emptyCharacters;
-    const BlockCharacter* resolvedCharacter = bridge ? bridge->resolveCharacter(characters) : nullptr;
+    auto resolverFn = getResolveCharacterFn();
+    const BlockCharacter* resolvedCharacter = resolverFn ? resolverFn(characters) : nullptr;
 
     if (auto* db = dynamic_cast<const DialogBlock*>(&block)) {
         return createDialogContext(*db, resolvedCharacter);
     }
     if (auto* cb = dynamic_cast<const ChoiceBlock*>(&block)) {
-        std::function<bool(const ExportCondition&)> rawEvaluator;
-        if (bridge) {
-            rawEvaluator = [bridge](const ExportCondition& c) { return bridge->evaluateCondition(c); };
-        } else {
-            rawEvaluator = [](const ExportCondition&) { return true; };
-        }
-        auto evaluator = [this, rawEvaluator](const ExportCondition& c) {
-            return evaluateConditionWithHistory(c, rawEvaluator);
-        };
+        auto choiceFilter = _callbacks.getChoiceFilter ? _callbacks.getChoiceFilter() : ChoiceFilterFn{};
+        auto taggedChoices = tagChoiceVisibility(cb->choices, choiceFilter);
         auto onChoiceSelected = [this](const std::string& blockUuid, const std::string& choiceUuid) {
             recordChoice(blockUuid, choiceUuid);
         };
-        return createChoiceContext(*cb, evaluator, resolvedCharacter, std::move(onChoiceSelected));
+        return createChoiceContext(*cb, std::move(taggedChoices), resolvedCharacter, std::move(onChoiceSelected));
     }
     if (dynamic_cast<const ConditionBlock*>(&block)) {
         return createConditionContext(resolvedCharacter);

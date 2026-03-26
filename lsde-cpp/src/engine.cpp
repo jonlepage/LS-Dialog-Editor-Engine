@@ -3,7 +3,9 @@
 #include <lsde/engine.h>
 #include <lsde/validator.h>
 #include <lsde/scene_handle.h>
+#include <lsde/utils.h>
 #include <stdexcept>
+#include <algorithm>
 
 namespace lsde {
 
@@ -18,8 +20,34 @@ DiagnosticReport DialogueEngine::init(const InitOptions& options) {
     return report;
 }
 
-void DialogueEngine::setLocale(const std::string& locale) { _locale = locale; }
-void DialogueEngine::setStateBridge(IStateBridge* bridge) { _stateBridge = bridge; }
+void DialogueEngine::setLocale(const std::string& locale) {
+    if (_graph) {
+        auto validLocales = _graph->getLocales();
+        if (!validLocales.empty() &&
+            std::find(validLocales.begin(), validLocales.end(), locale) == validLocales.end()) {
+            throw std::runtime_error(
+                "Invalid locale \"" + locale + "\". Available locales: " +
+                [&]() {
+                    std::string result;
+                    for (size_t i = 0; i < validLocales.size(); ++i) {
+                        if (i > 0) result += ", ";
+                        result += validLocales[i];
+                    }
+                    return result;
+                }());
+        }
+    }
+    _locale = locale;
+    LsdeUtils::locale = locale;
+}
+
+void DialogueEngine::onResolveCharacter(std::function<const BlockCharacter*(const std::vector<BlockCharacter>&)> fn) {
+    _resolveCharacter = std::move(fn);
+}
+
+void DialogueEngine::setChoiceFilter(std::function<bool(const ExportCondition&)> evaluator) {
+    _choiceFilter = std::move(evaluator);
+}
 
 void DialogueEngine::onValidateNextBlock(ValidateNextBlockHandler h) { _globalRegistry.validateNextBlockHandler = std::move(h); }
 void DialogueEngine::onInvalidateBlock(InvalidateBlockHandler h) { _globalRegistry.invalidateBlockHandler = std::move(h); }
@@ -46,7 +74,8 @@ std::unique_ptr<ISceneHandle> DialogueEngine::scene(const std::string& sceneId) 
     auto handle = std::make_unique<SceneHandleImpl>(*sg, _globalRegistry, SceneHandleCallbacks{
         [this, sceneId](ISceneHandle* h) { _activeScenes[sceneId] = h; },
         [this, sceneId](ISceneHandle*) { _activeScenes.erase(sceneId); },
-        [this]() -> IStateBridge* { return _stateBridge; },
+        [this]() { return _resolveCharacter; },
+        [this]() -> std::function<bool(const ExportCondition&)> { return _choiceFilter; },
         [this]() -> std::string { return _locale; },
     });
 

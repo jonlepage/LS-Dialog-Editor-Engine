@@ -21,11 +21,21 @@ namespace LsdeDialogEngine
             _characters = block.Metadata?.Characters ?? new List<BlockCharacter>();
         }
 
-        public void ResolveCharacterPort(string characterName)
+        public void ResolveCharacterPort(string characterUuid)
         {
+            // Primary: match by UUID
             for (int i = 0; i < _characters.Count; i++)
             {
-                if (_characters[i].Name == characterName)
+                if (_characters[i].Uuid == characterUuid)
+                {
+                    CharacterPortIndex = i;
+                    return;
+                }
+            }
+            // Fallback: match by name (compat)
+            for (int i = 0; i < _characters.Count; i++)
+            {
+                if (_characters[i].Name == characterUuid)
                 {
                     CharacterPortIndex = i;
                     return;
@@ -45,16 +55,16 @@ namespace LsdeDialogEngine
         private readonly Action<string, string>? _onChoiceSelected;
 
         public BlockCharacter? Character { get; }
-        public IReadOnlyList<ChoiceItem> Choices { get; }
+        public IReadOnlyList<RuntimeChoiceItem> Choices { get; }
 
         internal InternalChoiceContext(
             string blockUuid,
-            List<ChoiceItem> visibleChoices,
+            IReadOnlyList<RuntimeChoiceItem> taggedChoices,
             BlockCharacter? resolvedCharacter,
             Action<string, string>? onChoiceSelected)
         {
             _blockUuid = blockUuid;
-            Choices = visibleChoices;
+            Choices = taggedChoices;
             Character = resolvedCharacter;
             _onChoiceSelected = onChoiceSelected;
         }
@@ -124,13 +134,11 @@ namespace LsdeDialogEngine
 
         internal static InternalChoiceContext CreateChoiceContext(
             ChoiceBlock block,
-            Func<ExportCondition, bool> evaluator,
+            IReadOnlyList<RuntimeChoiceItem> taggedChoices,
             Action<string, string>? onChoiceSelected,
             BlockCharacter? resolvedCharacter)
         {
-            var choices = block.Choices ?? new List<ChoiceItem>();
-            var visibleChoices = ConditionEvaluator.FilterVisibleChoices(choices, evaluator);
-            return new InternalChoiceContext(block.Uuid, visibleChoices, resolvedCharacter, onChoiceSelected);
+            return new InternalChoiceContext(block.Uuid, taggedChoices, resolvedCharacter, onChoiceSelected);
         }
 
         internal static InternalConditionContext CreateConditionContext(BlockCharacter? resolvedCharacter)

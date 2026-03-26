@@ -380,9 +380,9 @@ export class SceneHandleImpl implements SceneHandle {
 
 	/** @internal */ evaluateConditionForBlock(
 		condition: ExportCondition,
-		bridgeEvaluator: ( condition: ExportCondition ) => boolean,
+		fallbackEvaluator: ( condition: ExportCondition ) => boolean,
 	): boolean {
-		return this.evaluateConditionWithHistory( condition, bridgeEvaluator );
+		return this.evaluateConditionWithHistory( condition, fallbackEvaluator );
 	}
 
 	/** @internal */ removeTrack( track: AsyncTrack ): void {
@@ -607,7 +607,7 @@ export class SceneHandleImpl implements SceneHandle {
 
 	private evaluateConditionWithHistory(
 		condition: ExportCondition,
-		bridgeEvaluator: ( condition: ExportCondition ) => boolean,
+		fallbackEvaluator: ( condition: ExportCondition ) => boolean,
 	): boolean {
 		if ( condition.key.startsWith( 'choice:' ) ) {
 			const blockUuid = condition.key.slice( 7 );
@@ -616,7 +616,7 @@ export class SceneHandleImpl implements SceneHandle {
 			const includes = history.includes( condition.value );
 			return condition.operator === '!=' ? !includes : includes;
 		}
-		return bridgeEvaluator( condition );
+		return fallbackEvaluator( condition );
 	}
 
 	private tagChoiceVisibility(

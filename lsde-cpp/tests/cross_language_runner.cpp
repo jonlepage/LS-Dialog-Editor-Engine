@@ -1,4 +1,5 @@
 // Cross-language test runner — reads JSON test specs and executes against the C++ engine.
+// C++ port of cross-language-runner.test.ts
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -7,42 +8,13 @@
 
 #include <lsde/engine.h>
 #include <lsde/scene_handle.h>
+#include <lsde/condition_evaluator.h>
+#include <lsde/utils.h>
 #include "test_models.h"
 #include "json_deserializer.h"
 
 using namespace lsde;
 using namespace lsde::tests;
-
-// ─── TestStateBridge ─────────────────────────────────────────────────────────
-
-class TestStateBridge : public IStateBridge {
-    StateBridgeConfig _config;
-public:
-    explicit TestStateBridge(const std::optional<StateBridgeConfig>& config)
-        : _config(config.value_or(StateBridgeConfig{})) {}
-
-    bool evaluateCondition(const ExportCondition& condition) override {
-        auto it = _config.conditions.find(condition.key);
-        return it != _config.conditions.end() ? it->second : true;
-    }
-
-    void executeAction(const ExportAction& action, const ActionSignature*) override {
-        auto it = _config.actions.find(action.actionId);
-        if (it != _config.actions.end() && it->second == "fail") {
-            throw std::runtime_error("Action " + action.actionId + " failed");
-        }
-    }
-
-    PropertyValue resolveDictionary(const std::string& group, const std::string& key) override {
-        auto k = group + "." + key;
-        auto it = _config.dictionaries.find(k);
-        return it != _config.dictionaries.end() ? PropertyValue{it->second} : PropertyValue{std::string{}};
-    }
-
-    const BlockCharacter* resolveCharacter(const std::vector<BlockCharacter>& characters) override {
-        return characters.empty() ? nullptr : &characters[0];
-    }
-};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -80,7 +52,8 @@ static CleanupFn handleStep(
     IBaseBlockContext* context,
     std::function<void()> next,
     const std::vector<TestStep>& steps,
-    TestState& state)
+    TestState& state,
+    const TestSuite* suite = nullptr)
 {
     const TestStep* step = state.stepIndex < static_cast<int>(steps.size()) ? &steps[state.stepIndex] : nullptr;
 
@@ -88,11 +61,31 @@ static CleanupFn handleStep(
         && (!step->expect.blockUuid || *step->expect.blockUuid == block->uuid)) {
         state.stepIndex++;
         executeStepAction(step->action, context, next);
+        return [&state]() { state.cleanupCalls++; };
     } else {
+        // Not the expected step — auto-advance (async track or passthrough)
+        if (blockType == "CONDITION") {
+            if (auto* condCtx = dynamic_cast<IConditionContext*>(context)) {
+                auto* condBlock = dynamic_cast<const ConditionBlock*>(block);
+                const auto& conditions = condBlock ? condBlock->conditions : std::vector<ExportCondition>{};
+                auto result = evaluateConditionChain(conditions, [&suite](const ExportCondition& cond) {
+                    if (suite && suite->stateBridge) {
+                        auto it = suite->stateBridge->conditions.find(cond.key);
+                        if (it != suite->stateBridge->conditions.end()) return it->second;
+                    }
+                    return true;
+                });
+                condCtx->resolve(result);
+            }
+        } else if (blockType == "ACTION") {
+            if (auto* actCtx = dynamic_cast<IActionContext*>(context)) {
+                actCtx->resolve();
+            }
+        }
         next();
+        // No cleanup for auto-advanced blocks
+        return {};
     }
-
-    return [&state]() { state.cleanupCalls++; };
 }
 
 // ─── Flow Test Param ─────────────────────────────────────────────────────────
@@ -115,48 +108,48 @@ TEST_P(CrossLanguageFlowTest, Run) {
     ASSERT_TRUE(report.errors.empty()) << "Init errors for " << p.displayName;
 
     engine.setLocale(suite.locale.value_or("en"));
-    TestStateBridge bridge(suite.stateBridge);
-    engine.setStateBridge(&bridge);
+
+    // Install choice filter if the suite has condition config
+    if (suite.stateBridge && !suite.stateBridge->conditions.empty()) {
+        auto conditions = suite.stateBridge->conditions;
+        engine.setChoiceFilter([conditions](const ExportCondition& cond) -> bool {
+            auto it = conditions.find(cond.key);
+            return it != conditions.end() ? it->second : true;
+        });
+    }
 
     auto& steps = tc.steps;
     TestState state;
 
-    std::unordered_set<std::string> stepTypes;
-    for (const auto& s : steps) stepTypes.insert(s.expect.type);
+    // All 4 handlers are mandatory — register them all
+    engine.onDialog([&](ISceneHandle*, const DialogBlock* block, IDialogContext* ctx, std::function<void()> next) -> CleanupFn {
+        return handleStep("DIALOG", block, ctx, std::move(next), steps, state);
+    });
+
+    engine.onChoice([&](ISceneHandle*, const ChoiceBlock* block, IChoiceContext* ctx, std::function<void()> next) -> CleanupFn {
+        auto* step = state.stepIndex < static_cast<int>(steps.size()) ? &steps[state.stepIndex] : nullptr;
+        if (step && step->expect.type == "CHOICE"
+            && (!step->expect.blockUuid || *step->expect.blockUuid == block->uuid)) {
+            if (step->expect.visibleChoiceCount) {
+                int visibleCount = 0;
+                for (const auto& c : ctx->choices()) {
+                    if (!c.visible.has_value() || c.visible.value()) visibleCount++;
+                }
+                EXPECT_EQ(*step->expect.visibleChoiceCount, visibleCount);
+            }
+        }
+        return handleStep("CHOICE", block, ctx, std::move(next), steps, state);
+    });
+
+    engine.onCondition([&](ISceneHandle*, const ConditionBlock* block, IConditionContext* ctx, std::function<void()> next) -> CleanupFn {
+        return handleStep("CONDITION", block, ctx, std::move(next), steps, state, &suite);
+    });
+
+    engine.onAction([&](ISceneHandle*, const ActionBlock* block, IActionContext* ctx, std::function<void()> next) -> CleanupFn {
+        return handleStep("ACTION", block, ctx, std::move(next), steps, state);
+    });
 
     auto handle = engine.scene(*suite.sceneId);
-
-    if (stepTypes.count("DIALOG")) {
-        handle->onDialog([&](ISceneHandle*, const DialogBlock* block, IDialogContext* ctx, std::function<void()> next) -> CleanupFn {
-            return handleStep("DIALOG", block, ctx, std::move(next), steps, state);
-        });
-    }
-
-    if (stepTypes.count("CHOICE")) {
-        handle->onChoice([&](ISceneHandle*, const ChoiceBlock* block, IChoiceContext* ctx, std::function<void()> next) -> CleanupFn {
-            auto* step = state.stepIndex < static_cast<int>(steps.size()) ? &steps[state.stepIndex] : nullptr;
-            if (step && step->expect.type == "CHOICE"
-                && (!step->expect.blockUuid || *step->expect.blockUuid == block->uuid)) {
-                if (step->expect.visibleChoiceCount) {
-                    EXPECT_EQ(*step->expect.visibleChoiceCount, static_cast<int>(ctx->choices().size()));
-                }
-            }
-            return handleStep("CHOICE", block, ctx, std::move(next), steps, state);
-        });
-    }
-
-    if (stepTypes.count("CONDITION")) {
-        handle->onCondition([&](ISceneHandle*, const ConditionBlock* block, IConditionContext* ctx, std::function<void()> next) -> CleanupFn {
-            return handleStep("CONDITION", block, ctx, std::move(next), steps, state);
-        });
-    }
-
-    if (stepTypes.count("ACTION")) {
-        handle->onAction([&](ISceneHandle*, const ActionBlock* block, IActionContext* ctx, std::function<void()> next) -> CleanupFn {
-            return handleStep("ACTION", block, ctx, std::move(next), steps, state);
-        });
-    }
-
     handle->start();
 
     EXPECT_FALSE(handle->isRunning());
@@ -204,7 +197,6 @@ TEST_P(CrossLanguageValidationTest, Run) {
                 << "Missing error: " << code;
         }
     } else if (tc.expectedErrors.empty() && tc.expectedStats.has_value()) {
-        // expectedErrors explicitly empty = expect no errors
         EXPECT_TRUE(report.errors.empty());
     }
 

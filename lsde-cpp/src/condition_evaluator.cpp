@@ -29,12 +29,18 @@ bool evaluateConditionChain(
 
 std::vector<ChoiceItem> filterVisibleChoices(
     const std::vector<ChoiceItem>& choices,
-    const std::function<bool(const ExportCondition&)>& evaluator)
+    const std::function<bool(const ExportCondition&)>& evaluator,
+    ISceneHandle* scene)
 {
     std::vector<ChoiceItem> result;
     for (const auto& choice : choices) {
         if (choice.visibilityConditions.empty()
-            || evaluateConditionChain(choice.visibilityConditions, evaluator)) {
+            || evaluateConditionChain(choice.visibilityConditions, [&evaluator, scene](const ExportCondition& cond) {
+                if (scene && cond.key.size() >= 7 && cond.key.substr(0, 7) == "choice:") {
+                    return scene->evaluateCondition(cond);
+                }
+                return evaluator(cond);
+            })) {
             result.push_back(choice);
         }
     }

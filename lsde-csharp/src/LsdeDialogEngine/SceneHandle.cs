@@ -9,7 +9,8 @@ namespace LsdeDialogEngine
     {
         internal Action<SceneHandleImpl>? OnSceneStarted;
         internal Action<SceneHandleImpl>? OnSceneEnded;
-        internal Func<IStateBridge?>? GetStateBridge;
+        internal Func<Func<List<BlockCharacter>, BlockCharacter?>>? GetResolveCharacter;
+        internal Func<Func<ExportCondition, bool>?>? GetChoiceFilter;
         internal Func<string>? GetLocale;
     }
 
@@ -111,19 +112,11 @@ namespace LsdeDialogEngine
                 return;
             }
 
-            // Auto-behavior
+            // No handler -> advance silently (handlers are validated at start())
             if (resolved.SceneHandler == null && resolved.GlobalHandler == null)
             {
-                if (block is ConditionBlock cb)
-                {
-                    AutoEvaluateCondition(cb, (InternalConditionContext)context);
-                    return;
-                }
-                if (block is ActionBlock ab)
-                {
-                    AutoExecuteAction(ab, (InternalActionContext)context);
-                    return;
-                }
+                AdvanceToNextBlock(block, context);
+                return;
             }
 
             bool nextCalled = false;
@@ -146,18 +139,26 @@ namespace LsdeDialogEngine
                 AdvanceToNextBlock(block, context);
             }
 
-            if (resolved.SceneHandler != null)
+            try
             {
-                sceneCleanup = resolved.SceneHandler(_parentHandle, block, context, next);
-                bool globalPrevented = GetGlobalPrevented(context);
-                if (!globalPrevented && resolved.GlobalHandler != null)
+                if (resolved.SceneHandler != null)
+                {
+                    sceneCleanup = resolved.SceneHandler(_parentHandle, block, context, next);
+                    bool globalPrevented = GetGlobalPrevented(context);
+                    if (!globalPrevented && resolved.GlobalHandler != null)
+                    {
+                        globalCleanup = resolved.GlobalHandler(_parentHandle, block, context, next);
+                    }
+                }
+                else if (resolved.GlobalHandler != null)
                 {
                     globalCleanup = resolved.GlobalHandler(_parentHandle, block, context, next);
                 }
             }
-            else if (resolved.GlobalHandler != null)
+            catch
             {
-                globalCleanup = resolved.GlobalHandler(_parentHandle, block, context, next);
+                EndTrack();
+                return;
             }
 
             _previousCleanup = CombineCleanups(sceneCleanup, globalCleanup);
@@ -226,39 +227,6 @@ namespace LsdeDialogEngine
             _parentHandle.RemoveTrack(this);
         }
 
-        private void AutoEvaluateCondition(ConditionBlock block, InternalConditionContext context)
-        {
-            var bridge = _parentHandle.GetStateBridgeInternal();
-            var conditions = block.Conditions ?? new List<ExportCondition>();
-            bool hasChoiceConditions = false;
-            foreach (var c in conditions)
-            {
-                if (c.Key.StartsWith("choice:")) { hasChoiceConditions = true; break; }
-            }
-            if (bridge == null && !hasChoiceConditions) { EndTrack(); return; }
-            Func<ExportCondition, bool> bridgeEval = bridge != null
-                ? bridge.EvaluateCondition
-                : (_ => false);
-            context.ConditionResult = ConditionEvaluator.EvaluateConditionChain(
-                conditions,
-                cond => _parentHandle.EvaluateConditionForBlock(cond, bridgeEval));
-            _previousCleanup = null;
-            AdvanceToNextBlock(block, context);
-        }
-
-        private void AutoExecuteAction(ActionBlock block, InternalActionContext context)
-        {
-            var bridge = _parentHandle.GetStateBridgeInternal();
-            if (bridge == null) { EndTrack(); return; }
-            foreach (var action in block.Actions ?? new List<ExportAction>())
-            {
-                bridge.ExecuteAction(action, null);
-            }
-            context.ActionRejected = false;
-            _previousCleanup = null;
-            AdvanceToNextBlock(block, context);
-        }
-
         private static bool GetGlobalPrevented(IBaseBlockContext context)
         {
             if (context is InternalDialogContext dc) return dc.GlobalPrevented;
@@ -294,6 +262,7 @@ namespace LsdeDialogEngine
         private readonly Dictionary<string, List<string>> _choiceHistory = new Dictionary<string, List<string>>();
         private Action? _previousCleanup;
         private readonly List<AsyncTrack> _asyncTracks = new List<AsyncTrack>();
+        private Func<List<BlockCharacter>, BlockCharacter?>? _resolveCharacter;
 
         internal SceneHandleImpl(
             SceneGraph sceneGraph,
@@ -310,6 +279,20 @@ namespace LsdeDialogEngine
         public void Start()
         {
             if (_running) return;
+
+            var missing = new List<string>();
+            if (_sceneRegistry.DialogHandler == null && _globalRegistry.DialogHandler == null) missing.Add("OnDialog");
+            if (_sceneRegistry.ChoiceHandler == null && _globalRegistry.ChoiceHandler == null) missing.Add("OnChoice");
+            if (_sceneRegistry.ConditionHandler == null && _globalRegistry.ConditionHandler == null) missing.Add("OnCondition");
+            if (_sceneRegistry.ActionHandler == null && _globalRegistry.ActionHandler == null) missing.Add("OnAction");
+            if (missing.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot start scene — missing required handler(s): {string.Join(", ", missing)}.\n" +
+                    "Register all 4 handlers before starting:\n" +
+                    "  engine.OnDialog(handler)\n  engine.OnChoice(handler)\n  engine.OnCondition(handler)\n  engine.OnAction(handler)");
+            }
+
             _running = true;
             _cancelled = false;
             _callbacks.OnSceneStarted?.Invoke(this);
@@ -414,12 +397,24 @@ namespace LsdeDialogEngine
             return _choiceHistory.TryGetValue(blockUuid, out var list) ? list.AsReadOnly() : null;
         }
 
+        /// <summary>Evaluate a condition against the scene's choice history.
+        /// Returns false for non-choice conditions (game-state conditions are not resolved here).</summary>
+        public bool EvaluateCondition(ExportCondition condition)
+        {
+            return EvaluateConditionWithHistory(condition, _ => false);
+        }
+
+        /// <summary>Set a scene-level character resolution override.</summary>
+        public void OnResolveCharacter(Func<List<BlockCharacter>, BlockCharacter?> resolver)
+        {
+            _resolveCharacter = resolver;
+        }
+
         // ─── Internal API (used by AsyncTrack) ───────────────────────────────
 
         internal SceneGraph GetSceneGraph() => _sceneGraph;
         internal SceneHandlerRegistry GetSceneRegistry() => _sceneRegistry;
         internal HandlerRegistry GetGlobalRegistry() => _globalRegistry;
-        internal IStateBridge? GetStateBridgeInternal() => _callbacks.GetStateBridge?.Invoke();
         internal void AddVisited(string uuid) => _visited.Add(uuid);
 
         internal void RemoveTrack(AsyncTrack track)
@@ -447,7 +442,7 @@ namespace LsdeDialogEngine
 
         private bool EvaluateConditionWithHistory(
             ExportCondition condition,
-            Func<ExportCondition, bool> bridgeEvaluator)
+            Func<ExportCondition, bool> fallbackEvaluator)
         {
             if (condition.Key.StartsWith("choice:"))
             {
@@ -459,14 +454,14 @@ namespace LsdeDialogEngine
                 bool includes = history.Contains(condition.Value);
                 return condition.Operator == "!=" ? !includes : includes;
             }
-            return bridgeEvaluator(condition);
+            return fallbackEvaluator(condition);
         }
 
         internal bool EvaluateConditionForBlock(
             ExportCondition condition,
-            Func<ExportCondition, bool> bridgeEvaluator)
+            Func<ExportCondition, bool> fallbackEvaluator)
         {
-            return EvaluateConditionWithHistory(condition, bridgeEvaluator);
+            return EvaluateConditionWithHistory(condition, fallbackEvaluator);
         }
 
         // ─── Traversal loop ────────────────────────────────────────────────
@@ -552,19 +547,11 @@ namespace LsdeDialogEngine
                 return;
             }
 
-            // Auto-behavior: no handlers → auto-evaluate/execute
+            // No handler -> advance silently (handlers are validated at start())
             if (resolved.SceneHandler == null && resolved.GlobalHandler == null)
             {
-                if (block is ConditionBlock cb)
-                {
-                    AutoEvaluateCondition(cb, (InternalConditionContext)context);
-                    return;
-                }
-                if (block is ActionBlock ab)
-                {
-                    AutoExecuteAction(ab, (InternalActionContext)context);
-                    return;
-                }
+                AdvanceToNextBlock(block, context);
+                return;
             }
 
             bool nextCalled = false;
@@ -580,18 +567,26 @@ namespace LsdeDialogEngine
                 AdvanceToNextBlock(block, context);
             }
 
-            if (resolved.SceneHandler != null)
+            try
             {
-                sceneCleanup = resolved.SceneHandler(this, block, context, next);
-                bool globalPrevented = GetGlobalPrevented(context);
-                if (!globalPrevented && resolved.GlobalHandler != null)
+                if (resolved.SceneHandler != null)
+                {
+                    sceneCleanup = resolved.SceneHandler(this, block, context, next);
+                    bool globalPrevented = GetGlobalPrevented(context);
+                    if (!globalPrevented && resolved.GlobalHandler != null)
+                    {
+                        globalCleanup = resolved.GlobalHandler(this, block, context, next);
+                    }
+                }
+                else if (resolved.GlobalHandler != null)
                 {
                     globalCleanup = resolved.GlobalHandler(this, block, context, next);
                 }
             }
-            else if (resolved.GlobalHandler != null)
+            catch
             {
-                globalCleanup = resolved.GlobalHandler(this, block, context, next);
+                EndScene();
+                return;
             }
 
             _previousCleanup = CombineCleanups(sceneCleanup, globalCleanup);
@@ -696,49 +691,6 @@ namespace LsdeDialogEngine
             _callbacks.OnSceneEnded?.Invoke(this);
         }
 
-        // ─── Auto-behaviors ──────────────────────────────────────────────────
-
-        private void AutoEvaluateCondition(ConditionBlock block, InternalConditionContext context)
-        {
-            var bridge = _callbacks.GetStateBridge?.Invoke();
-            var conditions = block.Conditions ?? new List<ExportCondition>();
-            bool hasChoiceConditions = false;
-            foreach (var c in conditions)
-            {
-                if (c.Key.StartsWith("choice:")) { hasChoiceConditions = true; break; }
-            }
-            if (bridge == null && !hasChoiceConditions)
-            {
-                EndScene();
-                return;
-            }
-            Func<ExportCondition, bool> bridgeEval = bridge != null
-                ? bridge.EvaluateCondition
-                : (_ => false);
-            context.ConditionResult = ConditionEvaluator.EvaluateConditionChain(
-                conditions,
-                cond => EvaluateConditionWithHistory(cond, bridgeEval));
-            _previousCleanup = null;
-            AdvanceToNextBlock(block, context);
-        }
-
-        private void AutoExecuteAction(ActionBlock block, InternalActionContext context)
-        {
-            var bridge = _callbacks.GetStateBridge?.Invoke();
-            if (bridge == null)
-            {
-                EndScene();
-                return;
-            }
-            foreach (var action in block.Actions ?? new List<ExportAction>())
-            {
-                bridge.ExecuteAction(action, null);
-            }
-            context.ActionRejected = false;
-            _previousCleanup = null;
-            AdvanceToNextBlock(block, context);
-        }
-
         // ─── Scene lifecycle ─────────────────────────────────────────────────
 
         private void FireSceneEnter()
@@ -755,11 +707,74 @@ namespace LsdeDialogEngine
 
         // ─── Internal helpers ────────────────────────────────────────────────
 
+        private Func<List<BlockCharacter>, BlockCharacter?> GetResolveCharacterFn()
+        {
+            return _resolveCharacter
+                ?? _callbacks.GetResolveCharacter?.Invoke()
+                ?? (chars => chars.Count > 0 ? chars[0] : null);
+        }
+
+        private RuntimeChoiceItem[] TagChoiceVisibility(
+            List<ChoiceItem> choices,
+            Func<ExportCondition, bool>? filter)
+        {
+            if (filter == null)
+            {
+                // No filter installed — return choices as-is (no Visible tag)
+                var items = new RuntimeChoiceItem[choices.Count];
+                for (int i = 0; i < choices.Count; i++)
+                {
+                    var c = choices[i];
+                    items[i] = new RuntimeChoiceItem
+                    {
+                        Uuid = c.Uuid,
+                        StructureKey = c.StructureKey,
+                        Label = c.Label,
+                        DialogueText = c.DialogueText,
+                        VisibilityConditions = c.VisibilityConditions,
+                        Visible = null,
+                    };
+                }
+                return items;
+            }
+
+            var result = new RuntimeChoiceItem[choices.Count];
+            for (int i = 0; i < choices.Count; i++)
+            {
+                var choice = choices[i];
+                bool visible;
+                if (choice.VisibilityConditions == null || choice.VisibilityConditions.Count == 0)
+                {
+                    visible = true;
+                }
+                else
+                {
+                    visible = ConditionEvaluator.EvaluateConditionChain(choice.VisibilityConditions, cond =>
+                    {
+                        if (cond.Key.StartsWith("choice:"))
+                        {
+                            return EvaluateConditionWithHistory(cond, _ => false);
+                        }
+                        return filter(cond);
+                    });
+                }
+                result[i] = new RuntimeChoiceItem
+                {
+                    Uuid = choice.Uuid,
+                    StructureKey = choice.StructureKey,
+                    Label = choice.Label,
+                    DialogueText = choice.DialogueText,
+                    VisibilityConditions = choice.VisibilityConditions,
+                    Visible = visible,
+                };
+            }
+            return result;
+        }
+
         private IBaseBlockContext? CreateContext(BlueprintBlock block)
         {
-            var bridge = _callbacks.GetStateBridge?.Invoke();
             var characters = block.Metadata?.Characters ?? new List<BlockCharacter>();
-            var resolvedCharacter = bridge?.ResolveCharacter(characters);
+            var resolvedCharacter = GetResolveCharacterFn()(characters);
 
             switch (block)
             {
@@ -767,12 +782,9 @@ namespace LsdeDialogEngine
                     return BlockContextFactory.CreateDialogContext(db, resolvedCharacter);
                 case ChoiceBlock cb:
                 {
-                    Func<ExportCondition, bool> rawEvaluator = bridge != null
-                        ? bridge.EvaluateCondition
-                        : (_ => true);
-                    Func<ExportCondition, bool> evaluator = cond =>
-                        EvaluateConditionWithHistory(cond, rawEvaluator);
-                    return BlockContextFactory.CreateChoiceContext(cb, evaluator, RecordChoice, resolvedCharacter);
+                    var choiceFilter = _callbacks.GetChoiceFilter?.Invoke();
+                    var taggedChoices = TagChoiceVisibility(cb.Choices ?? new List<ChoiceItem>(), choiceFilter);
+                    return BlockContextFactory.CreateChoiceContext(cb, taggedChoices, RecordChoice, resolvedCharacter);
                 }
                 case ConditionBlock _:
                     return BlockContextFactory.CreateConditionContext(resolvedCharacter);

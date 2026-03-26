@@ -1,42 +1,32 @@
 // LSDE Dialog Engine — Playground (C# port of playground.ts)
-// Loads a blueprint JSON, registers colorful console handlers, runs the first scene.
+// Loads a blueprint JSON, registers the new handler-based API, runs the first scene.
+// Mirrors the TS playground exactly for cross-language validation.
 
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using LsdeDialogEngine;
-
-// ─── ANSI Color Helpers ──────────────────────────────────────────────────────
-
-const string R = "\x1b[0m";
-string Red(string s) => $"\x1b[31m{s}{R}";
-string Green(string s) => $"\x1b[32m{s}{R}";
-string Yellow(string s) => $"\x1b[33m{s}{R}";
-string Blue(string s) => $"\x1b[34m{s}{R}";
-string Magenta(string s) => $"\x1b[35m{s}{R}";
-string Cyan(string s) => $"\x1b[36m{s}{R}";
-string White(string s) => $"\x1b[37m{s}{R}";
-string Dim(string s) => $"\x1b[2m{s}{R}";
-string Bold(string s) => $"\x1b[1m{s}{R}";
-string Gray(string s) => $"\x1b[90m{s}{R}";
-
-string Label(BlueprintBlock block) => block.Label ?? block.Uuid[..Math.Min(8, block.Uuid.Length)];
 
 // ─── JSON Options ────────────────────────────────────────────────────────────
 
 var jsonOptions = new JsonSerializerOptions
 {
     PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    Converters = { new JsonStringEnumConverter() },
+    Converters =
+    {
+        new JsonStringEnumConverter(),
+        new BlueprintBlockConverter(),
+        new BlockPropertyValueConverter(),
+    },
 };
 
 // ─── Load Blueprint ──────────────────────────────────────────────────────────
 
 string? blueprintPath = args.Length > 0 ? args[0] : null;
 
-// If no argument, try to find blueprints/blueprint.json (same as TS playground)
 if (blueprintPath == null)
 {
     var dir = AppContext.BaseDirectory;
@@ -57,248 +47,282 @@ if (blueprintPath == null)
 
 if (blueprintPath == null || !File.Exists(blueprintPath))
 {
-    Console.WriteLine("Usage: npm run playground -- <blueprint.json>");
-    Console.WriteLine("  Without arguments, auto-loads test-cases.json from the tests/ directory.");
+    Console.WriteLine("Usage: MiniRuntime <blueprint.json>");
     return;
 }
 
 var raw = File.ReadAllText(blueprintPath);
 var blueprint = JsonSerializer.Deserialize<BlueprintExport>(raw, jsonOptions);
-
 if (blueprint == null)
 {
-    Console.WriteLine(Red("ERROR: Failed to deserialize blueprint."));
+    Console.WriteLine("ERROR: Failed to deserialize blueprint.");
     return;
 }
 
-Console.WriteLine(Dim($"Loaded: {Path.GetFileName(blueprintPath)}"));
-
-// ─── Init Engine ─────────────────────────────────────────────────────────────
+// ─── Init ───────────────────────────────────────────────────────────────────
 
 var engine = new DialogueEngine();
 var report = engine.Init(new InitOptions { Data = blueprint });
+var stats = report.Stats;
 
+Console.WriteLine($"\n🔧 Init — {report.Errors.Count} errors, {report.Warnings.Count} warnings");
+foreach (var w in report.Warnings)
+    Console.WriteLine($"   ⚠️  {w.Code}: {w.Message}");
 Console.WriteLine(
-    $"{Bold(Cyan("Init"))} Errors: {(report.Errors.Count == 0 ? Green("0") : Red(report.Errors.Count.ToString()))}"
-);
-Console.WriteLine(
-    Dim(
-        $"     Stats: {report.Stats.SceneCount} scenes, {report.Stats.BlockCount} blocks, {report.Stats.ConnectionCount} connections"
-    )
+    $"📊 sceneCount={stats.SceneCount}, blockCount={stats.BlockCount}, connectionCount={stats.ConnectionCount}"
 );
 
 if (report.Errors.Count > 0)
 {
     foreach (var e in report.Errors)
-        Console.WriteLine(Red($"  [{e.Code}] {e.Message}"));
+        Console.WriteLine($"   ❌ {e.Code}: {e.Message}");
     return;
 }
-if (report.Warnings.Count > 0)
+
+// on peut changer les locales on the fly
+engine.SetLocale("en");
+
+// on ajoute l'algorithme de résolution de personnage
+engine.OnResolveCharacter(characters => characters.Count > 0 ? characters[0] : null);
+
+// Opt-in: install choice visibility filter (playground: all game-state conditions pass)
+engine.SetChoiceFilter(cond =>
 {
-    foreach (var w in report.Warnings)
-        Console.WriteLine(Yellow($"  [{w.Code}] {w.Message}"));
-}
-
-var locale = blueprint.PrimaryLanguage ?? "en";
-engine.SetLocale(locale);
-
-// ─── StateBridge ─────────────────────────────────────────────────────────────
-
-engine.SetStateBridge(new PlaygroundStateBridge(Gray));
-
-// ─── Handlers ────────────────────────────────────────────────────────────────
-
-engine.OnBeforeBlock(beforeArgs =>
-{
-    var delay = beforeArgs.Block.NativeProperties?.Delay;
-    if (delay.HasValue)
-        Console.WriteLine(Gray($"       [before] {Label(beforeArgs.Block)} delay={delay}s"));
-    beforeArgs.Resolve();
+    // Simule un game state où variable_0 = "something_else"
+    if (cond.Key == "variable_0")
+        return cond.Value == "something_else";
+    return true;
 });
 
-int choiceCount = 0;
+// ─── 4 Required Handlers ────────────────────────────────────────────────────
 
-engine.OnDialog(dialogArgs =>
+engine.OnDialog(args =>
 {
-    var block = dialogArgs.Block;
-    var ctx = dialogArgs.Context;
-    var ch = ctx.Character;
-    var charStr =
-        ch != null ? $"{Magenta(ch.Name)} {Dim($"({ch.Emotion ?? "?"})")}" : Dim("(no character)");
-    var text =
-        block.DialogueText != null && block.DialogueText.ContainsKey(locale)
-            ? block.DialogueText[locale]
-            : block.Content ?? "—";
-    var flags = new List<string>();
-    if (block.NativeProperties?.PortPerCharacter == true)
-        flags.Add("portPerCharacter");
-    if (block.NativeProperties?.IsAsync == true)
-        flags.Add("async");
-    if (block.NativeProperties?.Debug == true)
-        flags.Add("debug");
-    var flagStr = flags.Count > 0 ? Yellow($"[{string.Join(", ", flags)}]") : "";
+    var block = (DialogBlock)args.Block;
+    var ctx = args.Context;
+    var character = ctx.Character;
+    var text = LsdeUtils.GetLocalizedText(block.DialogueText);
 
-    Console.WriteLine($"\n  {Bold(Blue("DIALOG"))} {Cyan(Label(block))} {flagStr}");
-    Console.WriteLine($"         {charStr}");
-    Console.WriteLine($"         {White($"\"{text}\"")}");
+    Console.WriteLine($"\n💬 DIALOG  {block.Label}");
+    Console.WriteLine($"   🎭 {character?.Name} {character?.Id} [{character?.Emotion ?? ""}]");
+    Console.WriteLine($"   📝 \"{text ?? "—"}\"");
 
-    if (block.NativeProperties?.PortPerCharacter == true && ch != null)
+    if (block.NativeProperties?.PortPerCharacter == true && character != null)
     {
-        Console.WriteLine(Dim($"         -> resolveCharacterPort: {ch.Name}"));
-        ctx.ResolveCharacterPort(ch.Name);
+        Console.WriteLine($"   🔀 resolveCharacterPort: {character.Uuid}");
+        ctx.ResolveCharacterPort(character.Uuid);
     }
-    dialogArgs.Next();
+    args.Next();
 
-    return () => Console.WriteLine(Gray($"       [cleanup] {Label(block)}"));
+    return () => Console.WriteLine($"   🧹 cleanup: {block.Label}");
 });
 
-engine.OnChoice(choiceArgs =>
+engine.OnChoice(args =>
 {
-    var block = choiceArgs.Block;
-    var ctx = choiceArgs.Context;
-    choiceCount++;
+    var block = args.Block;
+    var ctx = args.Context;
+    var choices = ctx.Choices;
+
+    // choices are tagged with .Visible by the engine (SetChoiceFilter installed above)
+    var visible = choices.Where(c => c.Visible != false).ToList();
+    var timeout = block.NativeProperties?.Timeout;
+    // le moteur de jeux decidera quel visible choix est actif par default
+    var active = visible.Count > 0 ? visible[0] : null;
+
     Console.WriteLine(
-        $"\n  {Bold(Yellow("CHOICE"))} {Cyan(Label(block))} {ctx.Choices.Count} visible:"
+        $"\n❓ CHOICE  {block.Label} — {visible.Count}/{choices.Count} choices visible"
     );
-    foreach (var c in ctx.Choices)
+    foreach (var choice in visible)
     {
-        var choiceLabel = c.Label ?? c.Uuid[..Math.Min(8, c.Uuid.Length)];
-        var choiceText =
-            c.DialogueText != null && c.DialogueText.ContainsKey(locale)
-                ? c.DialogueText[locale]
-                : "—";
-        Console.WriteLine($"         {Yellow(">")} {choiceLabel}: {White($"\"{choiceText}\"")}");
+        var text = LsdeUtils.GetLocalizedText(choice.DialogueText);
+        var isActive = choice == active;
+        var label = choice.Label ?? choice.Uuid[..Math.Min(8, choice.Uuid.Length)];
+        Console.WriteLine($"   👉 {label}: \"{text ?? "—"}\"{(isActive ? " (active)" : "")}");
     }
-    // Pick choice[1] on 2nd visit to avoid infinite loop, else choice[0]
-    var pick = ctx.Choices.Count > 1 && choiceCount > 1 ? ctx.Choices[1] : ctx.Choices[0];
-    Console.WriteLine(
-        Dim($"         -> selecting: {pick.Label ?? pick.Uuid[..Math.Min(8, pick.Uuid.Length)]}")
+
+    if (timeout.HasValue)
+    {
+        Console.WriteLine($"💌timeout: {timeout.Value}");
+        // In a real game, we'd use a timer. For playground, just auto-select after logging.
+        if (active != null)
+        {
+            var lbl = active.Label ?? active.Uuid[..Math.Min(8, active.Uuid.Length)];
+            Console.WriteLine($"   ✅ selecting: {lbl}");
+            ctx.SelectChoice(active.Uuid);
+        }
+        args.Next();
+    }
+    else
+    {
+        // si pas de timeout, on va utiliser un waitinput dans le game engine
+        if (active != null)
+        {
+            var lbl = active.Label ?? active.Uuid[..Math.Min(8, active.Uuid.Length)];
+            Console.WriteLine($"   ✅ selecting: {lbl}");
+            ctx.SelectChoice(active.Uuid);
+        }
+        args.Next();
+    }
+
+    return () => Console.WriteLine($"   🧹 cleanup: {block.Label}");
+});
+
+engine.OnCondition(args =>
+{
+    var block = (ConditionBlock)args.Block;
+    var scene = args.Scene;
+    var conditions = block.Conditions ?? new List<ExportCondition>();
+    var result = LsdeUtils.EvaluateConditionChain(
+        conditions,
+        cond => LsdeUtils.IsChoiceCondition(cond) ? scene.EvaluateCondition(cond) : true // playground: all game conditions pass
     );
-    ctx.SelectChoice(pick.Uuid);
-    choiceArgs.Next();
+    foreach (var cond in conditions)
+        Console.WriteLine($"   ❓ condition: {cond.Key} {cond.Operator} {cond.Value}");
+    Console.WriteLine($"\n🔀 CONDITION  {block.Label} — {conditions.Count} conditions → {result}");
+    args.Context.Resolve(result);
+    args.Next();
     return null;
 });
 
-engine.OnCondition(condArgs =>
+engine.OnAction(args =>
 {
-    var block = condArgs.Block;
-    var conds = block.Conditions ?? new List<ExportCondition>();
-    var result = conds.Count > 0;
-    Console.WriteLine(
-        $"\n  {Bold(Magenta("CONDITION"))} {Cyan(Label(block))} {conds.Count} conditions -> {(result ? Green("true") : Red("false"))}"
-    );
-    condArgs.Context.Resolve(result);
-    condArgs.Next();
-    return null;
-});
-
-engine.OnAction(actionArgs =>
-{
-    var block = actionArgs.Block;
+    var block = (ActionBlock)args.Block;
     var actions = block.Actions ?? new List<ExportAction>();
-    Console.WriteLine($"\n  {Bold(Green("ACTION"))} {Cyan(Label(block))} {actions.Count} actions");
+    Console.WriteLine($"\n⚡ ACTION  {block.Label} — {actions.Count} actions");
     foreach (var a in actions)
-        Console.WriteLine($"         {Green(">")} {a.ActionId}({string.Join(", ", a.Params)})");
-    actionArgs.Context.Resolve();
-    actionArgs.Next();
-    return () => Console.WriteLine(Gray($"       [cleanup] {Label(block)}"));
+        Console.WriteLine($"   🎯 {a.ActionId}({string.Join(", ", a.Params)})");
+    args.Context.Resolve();
+    args.Next();
+
+    return () => Console.WriteLine($"   🧹 cleanup: {block.Label}");
 });
 
-engine.OnSceneEnter(_ => Console.WriteLine($"\n{Bold(Green("--- Scene Enter ---"))}"));
+// ─── Optional Handlers ──────────────────────────────────────────────────────
 
-engine.OnSceneExit(_ => Console.WriteLine($"{Bold(Red("--- Scene Exit ---"))}\n"));
-
-engine.OnValidateNextBlock(valArgs =>
+engine.OnBeforeBlock(args =>
 {
-    if (valArgs.FromBlock != null)
-        Console.WriteLine(
-            Gray($"       [validate] {Label(valArgs.FromBlock)} -> {Label(valArgs.NextBlock)}")
-        );
+    var delay = args.Block.NativeProperties?.Delay;
+    if (delay.HasValue)
+        Console.WriteLine($"   ⏳ before: {args.Block.Label} delay={delay}s");
+    args.Resolve();
+});
+
+engine.OnSceneEnter(args =>
+    Console.WriteLine($"\n🟢 ━━━ Scene Enter ━━━  running={args.Scene.IsRunning()}")
+);
+
+engine.OnSceneExit(_ => Console.WriteLine("🔴 ━━━ Scene Exit ━━━\n"));
+
+engine.OnValidateNextBlock(args =>
+{
+    if (args.FromBlock != null)
+        Console.WriteLine($"   ✔️  validate: {args.FromBlock.Label} → {args.NextBlock.Label}");
     return ValidationResult.Ok();
 });
 
-engine.OnInvalidateBlock(invArgs =>
+engine.OnInvalidateBlock(args =>
 {
-    Console.WriteLine(Red($"  INVALIDATED: {invArgs.Reason}"));
-    invArgs.Scene.Cancel();
+    Console.WriteLine($"   ❌ INVALIDATED: {args.Reason}");
+    args.Scene.Cancel();
 });
 
-// ─── Launch ──────────────────────────────────────────────────────────────────
+// ─── Run ────────────────────────────────────────────────────────────────────
 
-var sceneId = blueprint.Scenes.Count > 0 ? blueprint.Scenes[0].Uuid : null;
-if (sceneId == null)
-{
-    Console.WriteLine("No scenes found.");
-    return;
-}
-
-var sceneName = blueprint.Scenes[0].Label;
-Console.WriteLine(
-    Dim($"\nLaunching scene: {sceneName} ({sceneId[..Math.Min(12, sceneId.Length)]})")
-);
+var sceneId = blueprint.Scenes.Count > 0 ? blueprint.Scenes[0].Uuid : "";
+var sceneName = blueprint.Scenes.Count > 0 ? blueprint.Scenes[0].Label : sceneId;
+Console.WriteLine($"\n🚀 Launching scene: {sceneName}");
 
 var handle = engine.Scene(sceneId);
 handle.Start();
 
-// Visited summary
+// ─── Summary ────────────────────────────────────────────────────────────────
+
 var visitedLabels = new List<string>();
 foreach (var uuid in handle.GetVisitedBlocks())
 {
     string? found = null;
     foreach (var scene in blueprint.Scenes)
     {
-        foreach (var b in scene.Blocks)
+        var b = scene.Blocks.FirstOrDefault(bl => bl.Uuid == uuid);
+        if (b != null)
         {
-            if (b.Uuid == uuid)
-            {
-                found = b.Label ?? uuid[..Math.Min(8, uuid.Length)];
-                break;
-            }
-        }
-        if (found != null)
+            found = b.Label ?? uuid[..Math.Min(8, uuid.Length)];
             break;
+        }
     }
-    visitedLabels.Add(Cyan(found ?? uuid[..Math.Min(8, uuid.Length)]));
+    visitedLabels.Add(found ?? uuid[..Math.Min(8, uuid.Length)]);
 }
-Console.WriteLine($"{Bold("Visited:")} {string.Join(", ", visitedLabels)}");
-Console.WriteLine(
-    $"{Bold("Engine:")} running={(!engine.IsRunning() ? Dim("false") : Green("true"))}"
-);
+Console.WriteLine($"\n📋 Visited: {string.Join(", ", visitedLabels)}");
 
-// ─── Helper types ────────────────────────────────────────────────────────────
+// Choice history
+var historyEntries = new List<string>();
+foreach (var kvp in handle.GetChoiceHistory())
+    historyEntries.Add($"{kvp.Key}: [{string.Join(", ", kvp.Value)}]");
+Console.WriteLine($"📊 Choice History: {{{string.Join(", ", historyEntries)}}}");
+Console.WriteLine($"🏁 Engine running: {engine.IsRunning()}");
 
-class PlaygroundStateBridge : IStateBridge
+// ─── JSON Converters ────────────────────────────────────────────────────────
+
+class BlueprintBlockConverter : JsonConverter<BlueprintBlock>
 {
-    private readonly Func<string, string> _gray;
+    public override bool CanConvert(Type typeToConvert) => typeToConvert == typeof(BlueprintBlock);
 
-    public PlaygroundStateBridge(Func<string, string> gray) => _gray = gray;
-
-    public bool EvaluateCondition(ExportCondition condition)
+    public override BlueprintBlock Read(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options
+    )
     {
-        Console.WriteLine(
-            _gray(
-                $"       [bridge] eval: {condition.Key} {condition.Operator} {condition.Value} -> true"
-            )
-        );
-        return true;
+        using var doc = JsonDocument.ParseValue(ref reader);
+        var root = doc.RootElement;
+        if (!root.TryGetProperty("type", out var typeProp))
+            throw new JsonException("BlueprintBlock missing 'type' field");
+        var typeStr = typeProp.GetString();
+        var json = root.GetRawText();
+        return typeStr switch
+        {
+            "DIALOG" => JsonSerializer.Deserialize<DialogBlock>(json, options)!,
+            "CHOICE" => JsonSerializer.Deserialize<ChoiceBlock>(json, options)!,
+            "CONDITION" => JsonSerializer.Deserialize<ConditionBlock>(json, options)!,
+            "ACTION" => JsonSerializer.Deserialize<ActionBlock>(json, options)!,
+            "NOTE" => JsonSerializer.Deserialize<NoteBlock>(json, options)!,
+            _ => throw new JsonException($"Unknown block type: {typeStr}"),
+        };
     }
 
-    public void ExecuteAction(ExportAction action, ActionSignature? signature)
+    public override void Write(
+        Utf8JsonWriter writer,
+        BlueprintBlock value,
+        JsonSerializerOptions options
+    ) => JsonSerializer.Serialize(writer, value, value.GetType(), options);
+}
+
+class BlockPropertyValueConverter : JsonConverter<object>
+{
+    public override bool CanConvert(Type typeToConvert) => typeToConvert == typeof(object);
+
+    public override object? Read(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options
+    )
     {
-        Console.WriteLine(
-            _gray(
-                $"       [bridge] exec: {signature?.Label ?? action.ActionId}({string.Join(", ", action.Params)})"
-            )
-        );
+        return reader.TokenType switch
+        {
+            JsonTokenType.String => reader.GetString(),
+            JsonTokenType.Number => reader.TryGetInt64(out var l)
+                ? (object)(double)l
+                : reader.GetDouble(),
+            JsonTokenType.True => true,
+            JsonTokenType.False => false,
+            JsonTokenType.Null => null,
+            _ => throw new JsonException($"Unexpected token {reader.TokenType}"),
+        };
     }
 
-    public object ResolveDictionary(string groupLabel, string rowKey)
-    {
-        return $"{groupLabel}.{rowKey}";
-    }
-
-    public BlockCharacter? ResolveCharacter(IReadOnlyList<BlockCharacter> characters)
-    {
-        return characters.Count > 0 ? characters[0] : null;
-    }
+    public override void Write(
+        Utf8JsonWriter writer,
+        object value,
+        JsonSerializerOptions options
+    ) => JsonSerializer.Serialize(writer, value, options);
 }

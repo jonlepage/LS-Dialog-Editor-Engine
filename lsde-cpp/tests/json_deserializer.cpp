@@ -48,6 +48,7 @@ void from_json(const nlohmann::json& j, ExportCondition& v) {
 
 void from_json(const nlohmann::json& j, ExportAction& v) {
     j.at("uuid").get_to(v.uuid);
+    if (j.contains("signatureUuid") && !j["signatureUuid"].is_null()) v.signatureUuid = j["signatureUuid"].get<std::string>();
     j.at("actionId").get_to(v.actionId);
     if (j.contains("params") && j["params"].is_array()) {
         for (const auto& p : j["params"]) v.params.push_back(parsePropertyValue(p));

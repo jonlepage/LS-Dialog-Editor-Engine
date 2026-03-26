@@ -78,12 +78,14 @@ namespace LsdeDialogEngine
         private readonly Dictionary<string, SceneGraph> _sceneGraphs;
         private readonly Dictionary<string, ActionSignature> _signaturesById;
         private readonly Dictionary<string, LsdeDictionary> _dictionariesByLabel;
+        private readonly List<string> _locales;
 
         public BlueprintGraph(BlueprintExport data)
         {
             _sceneGraphs = new Dictionary<string, SceneGraph>();
             _signaturesById = new Dictionary<string, ActionSignature>();
             _dictionariesByLabel = new Dictionary<string, LsdeDictionary>();
+            _locales = data.Locales ?? new List<string>();
 
             foreach (var scene in data.Scenes)
             {
@@ -141,5 +143,7 @@ namespace LsdeDialogEngine
                 return sg.GetScene().Connections;
             return new List<BlueprintConnection>();
         }
+
+        public List<string> GetLocales() => _locales;
     }
 }

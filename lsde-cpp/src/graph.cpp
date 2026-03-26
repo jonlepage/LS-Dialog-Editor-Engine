@@ -91,4 +91,8 @@ std::vector<const BlueprintConnection*> BlueprintGraph::getSceneConnections(cons
     return result;
 }
 
+std::vector<std::string> BlueprintGraph::getLocales() const {
+    return _data.locales;
+}
+
 } // namespace lsde
