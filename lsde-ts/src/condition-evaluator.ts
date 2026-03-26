@@ -34,15 +34,25 @@ export function evaluateConditionChain(
 /**
  * Filter choices by their visibilityConditions.
  * Choices with no conditions or passing conditions are kept.
+ *
+ * When `scene` is provided, `choice:` conditions are resolved automatically
+ * via the scene's internal choice history — the developer never sees them.
+ * Non-choice conditions are delegated to the `evaluator` callback.
  */
 export function filterVisibleChoices(
 	choices: ChoiceItem[],
 	evaluator: ( condition: ExportCondition ) => boolean,
+	scene?: { evaluateCondition( condition: ExportCondition ): boolean },
 ): ChoiceItem[] {
 	return choices.filter( choice => {
 		if ( !choice.visibilityConditions || choice.visibilityConditions.length === 0 ) {
 			return true;
 		}
-		return evaluateConditionChain( choice.visibilityConditions, evaluator );
+		return evaluateConditionChain( choice.visibilityConditions, ( cond ) => {
+			if ( scene && cond.key.startsWith( 'choice:' ) ) {
+				return scene.evaluateCondition( cond );
+			}
+			return evaluator( cond );
+		} );
 	} );
 }

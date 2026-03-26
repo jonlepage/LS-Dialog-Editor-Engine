@@ -42,7 +42,7 @@ export type lsdeActionId = 'signatureID1';
  * Union of all block types present in this export.
  * Use for type-safe block type comparisons.
  */
-export type blockType = 'ACTION' | 'CHOICE' | 'CONDITION' | 'DIALOG';
+export type blockType = 'DIALOG' | 'CHOICE' | 'CONDITION' | 'ACTION' | 'NOTE';
 
 /**
  * Union of all locale codes included in this export.
@@ -222,13 +222,12 @@ export interface NativeProperties {
  * Characters represent the speakers or participants in a dialogue exchange.
  */
 export interface BlockCharacter {
+	/** UUID of the character variable in the project. */
+	uuid: string;
+	/** Short identifier (tag) assigned in Character Configuration. */
+	id: string;
 	/** Character display name as defined in the project's character variables. */
 	name: string;
-	/**
-	 * Base64-encoded portrait image or URL for the character.
-	 * Only included when "Images in documentation" export option is enabled.
-	 */
-	image?: string;
 	/**
 	 * Emotion label assigned to this character in this dialogue block.
 	 * Represents the character's emotional state during this dialogue.

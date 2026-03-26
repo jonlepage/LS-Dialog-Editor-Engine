@@ -1,10 +1,9 @@
 // LSDE Dialog Engine — Context factory per block type
 
 import type {
-	DialogBlock, ChoiceBlock, ExportCondition, ChoiceItem,
+	DialogBlock, ChoiceBlock, ChoiceItem,
 	DialogContext, ChoiceContext, ConditionContext, ActionContext, BlockCharacter,
 } from './types.js';
-import { filterVisibleChoices } from './condition-evaluator.js';
 
 // ─── Internal extended types (engine-internal state) ─────────────────────────
 
@@ -36,8 +35,8 @@ export function createDialogContext( block: DialogBlock, resolvedCharacter: Bloc
 		_globalPrevented: false,
 		_characterPortIndex: undefined,
 		character: resolvedCharacter,
-		resolveCharacterPort( name: string ) {
-			const index = characters.findIndex( c => c.name === name );
+		resolveCharacterPort( characterUuid: string ) {
+			const index = characters.findIndex( c => c.uuid === characterUuid );
 			ctx._characterPortIndex = index >= 0 ? index : undefined;
 		},
 		preventGlobalHandler() {
@@ -49,16 +48,15 @@ export function createDialogContext( block: DialogBlock, resolvedCharacter: Bloc
 
 export function createChoiceContext(
 	block: ChoiceBlock,
-	evaluator: ( condition: ExportCondition ) => boolean,
 	onChoiceSelected: ( ( blockUuid: string, choiceUuid: string ) => void ) | undefined,
 	resolvedCharacter: BlockCharacter | undefined,
 ): InternalChoiceContext {
-	const visibleChoices: ChoiceItem[] = filterVisibleChoices( block.choices ?? [], evaluator );
+	const choices: ChoiceItem[] = block.choices ?? [];
 	const ctx: InternalChoiceContext = {
 		_globalPrevented: false,
 		_selectedChoiceUuid: undefined,
 		character: resolvedCharacter,
-		choices: visibleChoices,
+		choices,
 		selectChoice( choiceUuid: string ) {
 			ctx._selectedChoiceUuid = choiceUuid;
 			if ( onChoiceSelected ) {

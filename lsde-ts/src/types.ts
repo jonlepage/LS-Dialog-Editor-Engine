@@ -48,24 +48,22 @@ export interface BlockProperty {
  *
  * This means `A AND B OR C` evaluates as `(A AND B) OR C`, not `A AND (B OR C)`.
  *
- * The engine passes each condition to {@link StateBridge.evaluateCondition} individually.
- * The StateBridge is responsible for interpreting `key`, `operator`, and `value` against
- * your game state — the engine only handles the chaining logic.
+ * The developer is responsible for interpreting `key`, `operator`, and `value` against
+ * the game state via the `onCondition` handler — the engine only handles the chaining logic.
  *
  * @see {@link ConditionBlock} for condition blocks
  * @see {@link ChoiceItem.visibilityConditions} for choice filtering
- * @see {@link StateBridge.evaluateCondition} for evaluation callback
  */
 export interface ExportCondition {
 	/** Unique identifier for this condition instance. */
 	uuid: string;
-	/** State key to evaluate (e.g. "has_item", "player_level"). Resolved by `StateBridge.evaluateCondition()`. */
+	/** State key to evaluate (e.g. "has_item", "player_level"). Interpreted by the `onCondition` handler. */
 	key: string;
 	/** Logical chaining with the previous condition: `'|'` (OR) or `'&'` (AND). Defaults to AND if omitted. Ignored on the first condition in a chain. */
 	chain?: '|' | '&';
-	/** Comparison operator (e.g. "==", "!=", ">", "<", ">=", "<="). Interpretation is up to `StateBridge.evaluateCondition()`. */
+	/** Comparison operator (e.g. "==", "!=", ">", "<", ">=", "<="). Interpretation is up to the `onCondition` handler. */
 	operator: string;
-	/** Value to compare against. Always a string — the StateBridge is responsible for type coercion. */
+	/** Value to compare against. Always a string — the developer is responsible for type coercion. */
 	value: string;
 }
 
@@ -112,7 +110,7 @@ export interface ChoiceItem {
  *   `resolve()` after the delay.
  *
  * - **portPerCharacter**: Creates one output port per character in `metadata.characters`.
- *   The DIALOG handler must call `context.resolveCharacterPort(name)` to pick which port
+ *   The DIALOG handler must call `context.resolveCharacterPort(character.uuid)` to pick which port
  *   to follow.
  *
  * @see {@link DialogBlock} for portPerCharacter usage
@@ -135,15 +133,17 @@ export interface NativeProperties {
 	followNarrative?: boolean;
 }
 
-/** Character (actor) assigned to a dialogue block. */
+/** Character (actor) assigned to a block. */
 export interface BlockCharacter {
-	/** Character display name. */
+	/** Internal UUID used by the dialog engine. */
+	uuid: string;
+	/** Game-side character identifier. Use this to look up the character in your game engine. */
+	id: string;
+	/** Display name for debugging and editor preview. Not intended for in-game display. */
 	name: string;
-	/** Optional portrait/avatar image path. */
-	image?: string;
-	/** Emotion label for the character in this block (e.g. "happy", "angry"). */
+	/** Emotion label for the character in this block (e.g. "happy", "angry", "sad"). */
 	emotion?: string;
-	/** Emotion intensity from 0 (neutral) to 1 (maximum). */
+	/** Emotion intensity (e.g. 0 = neutral, higher = stronger). */
 	emotionIntensity?: number;
 }
 
@@ -219,9 +219,9 @@ export interface BlueprintBlockBase {
  * Dialog block — displays text spoken by a character.
  *
  * @remarks
- * The character is resolved by {@link StateBridge.resolveCharacter} and exposed as `context.character` in the handler.
+ * The character is resolved by the `onResolveCharacter` callback and exposed as `context.character` in the handler.
  * When `nativeProperties.portPerCharacter` is enabled, each character gets a dedicated output port
- * and the handler must call `context.resolveCharacterPort(name)` to select which port to follow.
+ * and the handler must call `context.resolveCharacterPort(character.uuid)` to select which port to follow.
  *
  * If no `onDialog` handler is registered, the engine silently advances to the next block.
  *
@@ -253,9 +253,8 @@ export interface DialogBlock extends BlueprintBlockBase {
  * Choice block — presents selectable options to the player.
  *
  * @remarks
- * Before the handler is called, the engine filters `choices` through their `visibilityConditions`
- * using {@link StateBridge.evaluateCondition}. The handler receives only visible choices via
- * `context.choices`.
+ * The `context.choices` array contains all choices (unfiltered). Visibility filtering based on
+ * `visibilityConditions` is the responsibility of the developer.
  *
  * The handler must call `context.selectChoice(uuid)` to pick a choice. The engine then follows
  * the connection whose `fromPort` matches the selected choice UUID.
@@ -289,16 +288,15 @@ export interface ChoiceBlock extends BlueprintBlockBase {
  * Condition block — evaluates logic to branch the dialogue flow.
  *
  * @remarks
- * If no `onCondition` handler is registered, the engine automatically evaluates the `conditions`
- * array using {@link StateBridge.evaluateCondition}. Conditions are chained left-to-right with
- * no operator precedence: `'&'` = AND, `'|'` = OR. An empty array evaluates to `true`.
+ * The developer MUST handle evaluation in the `onCondition` handler. Conditions are chained
+ * left-to-right with no operator precedence: `'&'` = AND, `'|'` = OR. An empty array
+ * evaluates to `true`.
  *
  * The result maps to output ports: `true` follows port index 0, `false` follows port index 1.
- * When using a handler, call `context.resolve(result)` to set the branch direction.
+ * Call `context.resolve(result)` to set the branch direction.
  *
  * @example
  * ```ts
- * // Custom handler — overrides StateBridge auto-evaluation
  * engine.onCondition(({ block, context, next }) => {
  *   const result = myCustomEvaluator(block.conditions ?? []);
  *   context.resolve(result); // true → port 0, false → port 1
@@ -308,7 +306,6 @@ export interface ChoiceBlock extends BlueprintBlockBase {
  *
  * @see {@link ExportCondition} for condition structure and chaining rules
  * @see {@link ConditionContext} for handler context
- * @see {@link StateBridge.evaluateCondition} for automatic evaluation
  */
 export interface ConditionBlock extends BlueprintBlockBase {
 	type: 'CONDITION';
@@ -322,12 +319,10 @@ export interface ConditionBlock extends BlueprintBlockBase {
  * Action block — triggers game state changes.
  *
  * @remarks
- * If no `onAction` handler is registered, the engine automatically executes each action in the
- * `actions` array using {@link StateBridge.executeAction}, passing the matching
- * {@link ActionSignature} when available.
+ * The developer MUST handle execution in the `onAction` handler.
  *
- * The block has two output ports: `"then"` (success) and `"catch"` (failure). When using a
- * handler, call `context.resolve()` for success or `context.reject(error)` for failure. If no
+ * The block has two output ports: `"then"` (success) and `"catch"` (failure).
+ * Call `context.resolve()` for success or `context.reject(error)` for failure. If no
  * `"catch"` connection exists, rejection falls back to the `"then"` port.
  *
  * @example
@@ -348,7 +343,6 @@ export interface ConditionBlock extends BlueprintBlockBase {
  * @see {@link ExportAction} for action structure
  * @see {@link ActionSignature} for reusable action type definitions
  * @see {@link ActionContext} for handler context
- * @see {@link StateBridge.executeAction} for automatic execution
  */
 export interface ActionBlock extends BlueprintBlockBase {
 	type: 'ACTION';
@@ -554,67 +548,6 @@ export interface InitOptions {
 	check?: CheckOptions;
 }
 
-/**
- * Bridge between the dialogue engine and your game state.
- *
- * @remarks
- * The StateBridge connects blueprint-driven conditions, actions, and dictionary lookups to
- * your game's runtime state. It complements the handler system — handlers (`onDialog`,
- * `onChoice`, etc.) control UI and game flow, while the StateBridge provides data-level
- * evaluation and execution.
- *
- * The engine calls StateBridge methods **automatically** in these situations:
- *
- * | Situation | Method called |
- * |-----------|---------------|
- * | CONDITION block without `onCondition` handler | `evaluateCondition()` |
- * | Choice `visibilityConditions` filtering | `evaluateCondition()` (always, even with an `onCondition` handler) |
- * | ACTION block without `onAction` handler | `executeAction()` |
- * | Dictionary parameter resolution | `resolveDictionary()` |
- *
- * If you register an `onCondition` handler, it replaces auto-evaluation for **CONDITION blocks
- * only**. Choice visibility filtering still calls `evaluateCondition()` regardless.
- * Similarly, an `onAction` handler replaces auto-execution for ACTION blocks only.
- *
- * @example
- * ```ts
- * const bridge: StateBridge = {
- *   evaluateCondition: (cond) => {
- *     const val = gameState.get(cond.key);
- *     switch (cond.operator) {
- *       case '==': return val === cond.value;
- *       case '!=': return val !== cond.value;
- *       default:   return false;
- *     }
- *   },
- *   executeAction: (action, signature) => {
- *     gameActions.dispatch(action.actionId, action.params);
- *   },
- *   resolveDictionary: (group, key) => {
- *     return gameData.dictionaries[group]?.[key] ?? key;
- *   },
- *   resolveCharacter: (characters) => {
- *     return characters.find(c => party.includes(c.name));
- *   },
- * };
- * engine.setStateBridge(bridge);
- * ```
- *
- * @see {@link ExportCondition} for condition structure
- * @see {@link ExportAction} for action structure
- * @see {@link ActionSignature} for action type definitions
- */
-export interface StateBridge {
-	/** Evaluate a single condition against your game state. Return `true` if the condition passes. Called for CONDITION blocks (auto-evaluation) and choice visibility filtering. */
-	evaluateCondition: (condition: ExportCondition) => boolean;
-	/** Execute a game action. Called for ACTION blocks when no `onAction` handler is registered. The matching `signature` is provided when available in the blueprint. */
-	executeAction: (action: ExportAction, signature?: ActionSignature) => void;
-	/** Resolve a dictionary value by group label and row key. Used when evaluating condition values or action parameters that reference dictionaries. */
-	resolveDictionary: (groupLabel: string, rowKey: string) => string | number | boolean;
-	/** Resolve which character to use for a block. Called for every block with the characters from `metadata.characters` (may be empty). Return the chosen character or `undefined` if none applies. */
-	resolveCharacter: (characters: BlockCharacter[]) => BlockCharacter | undefined;
-}
-
 /** Result of block validation. */
 export interface ValidationResult {
 	/** Whether the block passed validation. When `false`, the `onInvalidateBlock` handler is called. */
@@ -630,7 +563,7 @@ export type CleanupFn = () => void;
 
 /** Base context available to all block handlers. */
 export interface BaseBlockContext {
-	/** Character resolved by {@link StateBridge.resolveCharacter} for this block, or `undefined` if none. */
+	/** Character resolved by the `onResolveCharacter` callback for this block, or `undefined` if none. */
 	character: BlockCharacter | undefined;
 	/** Prevent the global (Tier 1) handler from executing after this scene handler. */
 	preventGlobalHandler: () => void;
@@ -639,12 +572,16 @@ export interface BaseBlockContext {
 /** Context for DIALOG block handlers. */
 export interface DialogContext extends BaseBlockContext {
 	/** When portPerCharacter is enabled, specify which character port to follow. */
-	resolveCharacterPort: (characterName: string) => void;
+	resolveCharacterPort: (characterUuid: string) => void;
 }
 
 /** Context for CHOICE block handlers. */
 export interface ChoiceContext extends BaseBlockContext {
-	/** Visible choices (already filtered by visibilityConditions via StateBridge). */
+	/**
+	 * All choices (unfiltered). Use `LsdeUtils.filterVisibleChoices(choices, evaluator, scene)`
+	 * to filter by visibility conditions. The `scene` parameter handles `choice:` conditions
+	 * automatically via internal choice history — the developer only provides game-state evaluation.
+	 */
 	choices: ChoiceItem[];
 	/** Select a choice by UUID. The engine follows the matching port. */
 	selectChoice: (choiceUuid: string) => void;
@@ -852,6 +789,11 @@ export interface SceneHandle {
 	getChoiceHistory(): ReadonlyMap<string, readonly string[]>;
 	/** Get the choice(s) selected at a specific block. Returns undefined if block never visited as choice. */
 	getChoice( blockUuid: string ): readonly string[] | undefined;
+
+	/** Evaluate a condition. Handles `choice:` conditions via internal choice history. Returns `false` for non-choice conditions. */
+	evaluateCondition(condition: ExportCondition): boolean;
+	/** Override character resolution for this scene. Defaults to engine-level resolver. */
+	onResolveCharacter(fn: (characters: BlockCharacter[]) => BlockCharacter | undefined): void;
 }
 
 // ─── DialogueEngine Interface ────────────────────────────────────────────────
@@ -864,7 +806,6 @@ export interface SceneHandle {
  * global handler registration, and scene creation. Use {@link SceneHandle} for per-scene control.
  *
  * @see {@link SceneHandle} for per-scene runtime control
- * @see {@link StateBridge} for game state integration
  */
 export interface IDialogueEngine {
 	// ── Initialization ──────────────────────────────────────────────────
@@ -873,8 +814,6 @@ export interface IDialogueEngine {
 	init(options: InitOptions): DiagnosticReport;
 	/** Set the active locale for text resolution. */
 	setLocale(locale: string): void;
-	/** Set the bridge between the engine and the game state. */
-	setStateBridge(bridge: StateBridge): void;
 
 	// ── Validation handlers ─────────────────────────────────────────────
 
@@ -892,12 +831,17 @@ export interface IDialogueEngine {
 
 	/** Register a global handler for DIALOG blocks. May return a cleanup function. */
 	onDialog(handler: DialogHandler): void;
-	/** Register a global handler for CHOICE blocks. Choices are pre-filtered by visibilityConditions. */
+	/** Register a global handler for CHOICE blocks. All choices are provided unfiltered. */
 	onChoice(handler: ChoiceHandler): void;
-	/** Register a global handler for CONDITION blocks. If absent, the engine auto-evaluates via StateBridge. */
+	/** Register a global handler for CONDITION blocks. The developer MUST handle evaluation in this handler. */
 	onCondition(handler: ConditionHandler): void;
-	/** Register a global handler for ACTION blocks. If absent, the engine auto-executes via StateBridge. */
+	/** Register a global handler for ACTION blocks. The developer MUST handle execution in this handler. */
 	onAction(handler: ActionHandler): void;
+
+	// ── Character resolution ────────────────────────────────────────────
+
+	/** Register a global character resolver. Called for every block with `metadata.characters`. */
+	onResolveCharacter(fn: (characters: BlockCharacter[]) => BlockCharacter | undefined): void;
 
 	// ── Scene lifecycle ─────────────────────────────────────────────────
 

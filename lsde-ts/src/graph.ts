@@ -76,11 +76,13 @@ export class BlueprintGraph {
 	private readonly sceneGraphs: Map<string, SceneGraph>;
 	private readonly signaturesById: Map<string, ActionSignature>;
 	private readonly dictionariesByLabel: Map<string, Dictionary>;
+	private readonly _locales: string[];
 
 	constructor( data: BlueprintExport ) {
 		this.sceneGraphs = new Map();
 		this.signaturesById = new Map();
 		this.dictionariesByLabel = new Map();
+		this._locales = data.locales ?? [];
 
 		for ( const scene of data.scenes ) {
 			this.sceneGraphs.set( scene.uuid, new SceneGraph( scene ) );
@@ -120,5 +122,9 @@ export class BlueprintGraph {
 	getSceneConnections( sceneUuid: string ): BlueprintConnection[] {
 		const sg = this.sceneGraphs.get( sceneUuid );
 		return sg ? sg.getScene().connections : [];
+	}
+
+	getLocales(): string[] {
+		return this._locales;
 	}
 }

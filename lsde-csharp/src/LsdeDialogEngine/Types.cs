@@ -76,12 +76,18 @@ namespace LsdeDialogEngine
         public bool? FollowNarrative { get; set; }
     }
 
-    /// <summary>Character (actor) assigned to a dialogue block.</summary>
+    /// <summary>Character (actor) assigned to a block.</summary>
     public class BlockCharacter
     {
+        /// <summary>Internal UUID used by the dialog engine.</summary>
+        public string Uuid { get; set; } = "";
+        /// <summary>Game-side character identifier. Use this to look up the character in your game engine.</summary>
+        public string Id { get; set; } = "";
+        /// <summary>Display name for debugging and editor preview.</summary>
         public string Name { get; set; } = "";
-        public string? Image { get; set; }
+        /// <summary>Emotion label (e.g. "happy", "angry", "sad").</summary>
         public string? Emotion { get; set; }
+        /// <summary>Emotion intensity (e.g. 0 = neutral, higher = stronger).</summary>
         public double? EmotionIntensity { get; set; }
     }
 

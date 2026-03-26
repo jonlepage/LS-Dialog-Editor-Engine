@@ -77,8 +77,9 @@ void from_json(const nlohmann::json& j, NativeProperties& v) {
 }
 
 void from_json(const nlohmann::json& j, BlockCharacter& v) {
+    j.at("uuid").get_to(v.uuid);
+    j.at("id").get_to(v.id);
     j.at("name").get_to(v.name);
-    if (j.contains("image") && !j["image"].is_null()) v.image = j["image"].get<std::string>();
     if (j.contains("emotion") && !j["emotion"].is_null()) v.emotion = j["emotion"].get<std::string>();
     if (j.contains("emotionIntensity") && !j["emotionIntensity"].is_null()) v.emotionIntensity = j["emotionIntensity"].get<double>();
 }

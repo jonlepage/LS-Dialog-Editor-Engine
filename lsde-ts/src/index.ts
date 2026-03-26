@@ -17,7 +17,6 @@ export type {
 	// Engine types
 	DiagnosticReport, DiagnosticEntry, DiagnosticStats,
 	InitOptions, CheckOptions,
-	StateBridge,
 	ValidationResult, CleanupFn,
 
 	// Context types

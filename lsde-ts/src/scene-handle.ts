@@ -4,13 +4,12 @@ import type {
 	BlueprintBlock, SceneHandle,
 	BlockHandler, BaseBlockContext,
 	DialogHandler, ChoiceHandler, ConditionHandler, ActionHandler,
-	SceneLifecycleHandler, StateBridge, CleanupFn,
-	ExportCondition,
+	SceneLifecycleHandler, CleanupFn,
+	ExportCondition, BlockCharacter,
 } from './types.js';
 import { SceneGraph } from './graph.js';
 import { HandlerRegistry, SceneHandlerRegistry, resolveHandler } from './handler-registry.js';
 import { resolvePort } from './port-resolver.js';
-import { evaluateConditionChain } from './condition-evaluator.js';
 import {
 	createDialogContext, createChoiceContext, createConditionContext, createActionContext,
 	type InternalDialogContext, type InternalChoiceContext, type InternalConditionContext, type InternalActionContext,
@@ -22,7 +21,7 @@ type InternalContext = InternalDialogContext | InternalChoiceContext | InternalC
 export interface SceneHandleCallbacks {
 	onSceneStarted: ( handle: SceneHandleImpl ) => void;
 	onSceneEnded: ( handle: SceneHandleImpl ) => void;
-	getStateBridge: () => StateBridge | null;
+	getResolveCharacter: () => ( characters: BlockCharacter[] ) => BlockCharacter | undefined;
 	getLocale: () => string;
 }
 
@@ -69,12 +68,10 @@ class AsyncTrack {
 		if ( !this.running || !this.followNarrative ) return;
 
 		if ( this.pendingAdvance ) {
-			// next() was already called — execute the pending advance
 			const advance = this.pendingAdvance;
 			this.pendingAdvance = null;
 			advance();
 		} else {
-			// next() hasn't been called yet — force-advance (skip current block)
 			this.forceAdvance();
 		}
 	}
@@ -84,7 +81,6 @@ class AsyncTrack {
 	private processBlock( block: BlueprintBlock ): void {
 		if ( !this.running ) return;
 
-		// Skip NOTE blocks
 		if ( block.type === 'NOTE' ) {
 			const connections = this.sceneGraph.getOutgoingConnections( block.uuid );
 			if ( connections.length > 0 ) {
@@ -100,8 +96,6 @@ class AsyncTrack {
 
 		this.currentBlock = block;
 		this.parentHandle.addVisited( block.uuid );
-
-		// Skip onBeforeBlock for async tracks — go straight to handler
 		this.executeBlockHandler( block );
 	}
 
@@ -120,16 +114,10 @@ class AsyncTrack {
 			return;
 		}
 
-		// Auto-behavior
+		// No handler → advance silently (handlers are validated at start())
 		if ( !sceneHandler && !globalHandler ) {
-			if ( isConditionBlock( block ) ) {
-				this.autoEvaluateCondition( block, context as InternalConditionContext );
-				return;
-			}
-			if ( isActionBlock( block ) ) {
-				this.autoExecuteAction( block, context as InternalActionContext );
-				return;
-			}
+			this.advanceToNextBlock( block, context );
+			return;
 		}
 
 		let nextCalled = false;
@@ -142,7 +130,6 @@ class AsyncTrack {
 			nextCalled = true;
 
 			if ( this.followNarrative ) {
-				// Don't advance yet — wait for notifyMainAdvance
 				this.pendingAdvance = () => this.advanceToNextBlock( block, context );
 				return;
 			}
@@ -153,13 +140,18 @@ class AsyncTrack {
 
 		const handlerArgs = { scene: this.parentHandle as SceneHandle, block, context, next };
 
-		if ( sceneHandler ) {
-			sceneCleanup = sceneHandler( handlerArgs );
-			if ( !context._globalPrevented && globalHandler ) {
+		try {
+			if ( sceneHandler ) {
+				sceneCleanup = sceneHandler( handlerArgs );
+				if ( !context._globalPrevented && globalHandler ) {
+					globalCleanup = globalHandler( handlerArgs );
+				}
+			} else if ( globalHandler ) {
 				globalCleanup = globalHandler( handlerArgs );
 			}
-		} else if ( globalHandler ) {
-			globalCleanup = globalHandler( handlerArgs );
+		} catch ( _err ) {
+			this.endTrack();
+			return;
 		}
 
 		this.previousCleanup = this.combineCleanups( sceneCleanup, globalCleanup );
@@ -183,7 +175,6 @@ class AsyncTrack {
 			characterPortIndex: context && '_characterPortIndex' in context ? context._characterPortIndex : undefined,
 		} );
 
-		// Async tracks follow the first connection only (no nested forking)
 		const conn = resolution.connections[0];
 		if ( conn ) {
 			const nextBlock = this.sceneGraph.getBlock( conn.toId );
@@ -201,7 +192,6 @@ class AsyncTrack {
 
 	private forceAdvance(): void {
 		if ( !this.running || !this.currentBlock ) return;
-		// Force cleanup and advance even if next() wasn't called
 		const block = this.currentBlock;
 		if ( this.previousCleanup ) {
 			this.previousCleanup();
@@ -218,36 +208,6 @@ class AsyncTrack {
 		this.running = false;
 		this.currentBlock = null;
 		this.parentHandle.removeTrack( this );
-	}
-
-	private autoEvaluateCondition( block: BlueprintBlock, context: InternalConditionContext ): void {
-		const bridge = this.parentHandle.getStateBridge();
-		if ( isConditionBlock( block ) ) {
-			const conditions = block.conditions ?? [];
-			const hasChoiceConditions = conditions.some( c => c.key.startsWith( 'choice:' ) );
-			if ( !bridge && !hasChoiceConditions ) { this.endTrack(); return; }
-			const evaluator = ( condition: ExportCondition ) =>
-				this.parentHandle.evaluateConditionForBlock( condition, bridge ? bridge.evaluateCondition : () => false );
-			context._conditionResult = evaluateConditionChain( conditions, evaluator );
-		} else if ( !bridge ) {
-			this.endTrack();
-			return;
-		}
-		this.previousCleanup = null;
-		this.advanceToNextBlock( block, context );
-	}
-
-	private autoExecuteAction( block: BlueprintBlock, context: InternalActionContext ): void {
-		const bridge = this.parentHandle.getStateBridge();
-		if ( !bridge ) { this.endTrack(); return; }
-		if ( isActionBlock( block ) ) {
-			for ( const action of block.actions ?? [] ) {
-				bridge.executeAction( action );
-			}
-		}
-		context._actionRejected = false;
-		this.previousCleanup = null;
-		this.advanceToNextBlock( block, context );
 	}
 
 	private combineCleanups( a: CleanupFn | void, b: CleanupFn | void ): CleanupFn | null {
@@ -276,6 +236,7 @@ export class SceneHandleImpl implements SceneHandle {
 	private readonly choiceHistory = new Map<string, string[]>();
 	private previousCleanup: CleanupFn | null = null;
 	private readonly asyncTracks: AsyncTrack[] = [];
+	private _resolveCharacter: ( ( characters: BlockCharacter[] ) => BlockCharacter | undefined ) | null = null;
 
 	constructor(
 		sceneGraph: SceneGraph,
@@ -291,6 +252,20 @@ export class SceneHandleImpl implements SceneHandle {
 
 	start(): void {
 		if ( this.running ) return;
+
+		const missing: string[] = [];
+		if ( !this.sceneRegistry.dialogHandler && !this.globalRegistry.dialogHandler ) missing.push( 'onDialog' );
+		if ( !this.sceneRegistry.choiceHandler && !this.globalRegistry.choiceHandler ) missing.push( 'onChoice' );
+		if ( !this.sceneRegistry.conditionHandler && !this.globalRegistry.conditionHandler ) missing.push( 'onCondition' );
+		if ( !this.sceneRegistry.actionHandler && !this.globalRegistry.actionHandler ) missing.push( 'onAction' );
+		if ( missing.length > 0 ) {
+			throw new Error(
+				`Cannot start scene — missing required handler(s): ${ missing.join( ', ' ) }.\n` +
+				'Register all 4 handlers before starting:\n' +
+				'  engine.onDialog(handler)\n  engine.onChoice(handler)\n  engine.onCondition(handler)\n  engine.onAction(handler)',
+			);
+		}
+
 		this.running = true;
 		this.cancelled = false;
 		this.callbacks.onSceneStarted( this );
@@ -308,12 +283,10 @@ export class SceneHandleImpl implements SceneHandle {
 	cancel(): void {
 		if ( !this.running ) return;
 		this.cancelled = true;
-		// Cancel all async tracks
 		for ( const track of this.asyncTracks ) {
 			track.cancel();
 		}
 		this.asyncTracks.length = 0;
-		// Cleanup main track
 		if ( this.previousCleanup ) {
 			this.previousCleanup();
 			this.previousCleanup = null;
@@ -380,11 +353,18 @@ export class SceneHandleImpl implements SceneHandle {
 		return this.choiceHistory.get( blockUuid );
 	}
 
+	evaluateCondition( condition: ExportCondition ): boolean {
+		return this.evaluateConditionWithHistory( condition, () => false );
+	}
+
+	onResolveCharacter( fn: ( characters: BlockCharacter[] ) => BlockCharacter | undefined ): void {
+		this._resolveCharacter = fn;
+	}
+
 	// ─── Internal API (used by AsyncTrack) ───────────────────────────────
 
 	/** @internal */ getSceneRegistry(): SceneHandlerRegistry { return this.sceneRegistry; }
 	/** @internal */ getGlobalRegistry(): HandlerRegistry { return this.globalRegistry; }
-	/** @internal */ getStateBridge(): StateBridge | null { return this.callbacks.getStateBridge(); }
 	/** @internal */ addVisited( uuid: string ): void { this.visited.add( uuid ); }
 
 	/** @internal */ recordChoice( blockUuid: string, choiceUuid: string ): void {
@@ -484,16 +464,10 @@ export class SceneHandleImpl implements SceneHandle {
 			return;
 		}
 
-		// Auto-behavior: no handlers → auto-evaluate/execute
+		// No handler → advance silently (handlers are validated at start())
 		if ( !sceneHandler && !globalHandler ) {
-			if ( isConditionBlock( block ) ) {
-				this.autoEvaluateCondition( block, context as InternalConditionContext );
-				return;
-			}
-			if ( isActionBlock( block ) ) {
-				this.autoExecuteAction( block, context as InternalActionContext );
-				return;
-			}
+			this.advanceToNextBlock( block, context );
+			return;
 		}
 
 		let nextCalled = false;
@@ -510,13 +484,18 @@ export class SceneHandleImpl implements SceneHandle {
 
 		const handlerArgs = { scene: this as SceneHandle, block, context, next };
 
-		if ( sceneHandler ) {
-			sceneCleanup = sceneHandler( handlerArgs );
-			if ( !context._globalPrevented && globalHandler ) {
+		try {
+			if ( sceneHandler ) {
+				sceneCleanup = sceneHandler( handlerArgs );
+				if ( !context._globalPrevented && globalHandler ) {
+					globalCleanup = globalHandler( handlerArgs );
+				}
+			} else if ( globalHandler ) {
 				globalCleanup = globalHandler( handlerArgs );
 			}
-		} else if ( globalHandler ) {
-			globalCleanup = globalHandler( handlerArgs );
+		} catch ( err ) {
+			this.endScene();
+			return;
 		}
 
 		// Store combined cleanup BEFORE any advance runs
@@ -534,7 +513,6 @@ export class SceneHandleImpl implements SceneHandle {
 
 		this.previousBlock = block;
 
-		// Step 8: Port resolution — returns ALL matching connections
 		const connections = this.sceneGraph.getOutgoingConnections( block.uuid );
 		const resolution = resolvePort( {
 			block,
@@ -547,7 +525,6 @@ export class SceneHandleImpl implements SceneHandle {
 
 		const allConnections = resolution.connections;
 
-		// Separate: first non-async target = main track, rest = async tracks
 		let mainConnection = null as typeof allConnections[number] | null;
 		const asyncConnections: typeof allConnections = [];
 
@@ -562,7 +539,6 @@ export class SceneHandleImpl implements SceneHandle {
 			}
 		}
 
-		// Spawn async tracks
 		for ( const conn of asyncConnections ) {
 			const targetBlock = this.sceneGraph.getBlock( conn.toId );
 			if ( targetBlock ) {
@@ -570,14 +546,12 @@ export class SceneHandleImpl implements SceneHandle {
 			}
 		}
 
-		// Notify existing follow-narrative tracks
 		for ( const track of this.asyncTracks ) {
 			if ( track.isFollowNarrative() ) {
 				track.notifyMainAdvance();
 			}
 		}
 
-		// Step 9: Continue main track
 		if ( mainConnection ) {
 			const nextBlock = this.sceneGraph.getBlock( mainConnection.toId );
 			if ( nextBlock ) {
@@ -589,17 +563,14 @@ export class SceneHandleImpl implements SceneHandle {
 			}
 		}
 
-		// Step 10: Dead end — scene complete
 		this.endScene();
 	}
 
 	private endScene(): void {
-		// Cancel all async tracks
 		for ( const track of this.asyncTracks ) {
 			track.cancel();
 		}
 		this.asyncTracks.length = 0;
-		// Call cleanup of the last block
 		if ( this.previousCleanup ) {
 			this.previousCleanup();
 			this.previousCleanup = null;
@@ -608,44 +579,6 @@ export class SceneHandleImpl implements SceneHandle {
 		this.currentBlock = null;
 		this.fireSceneExit();
 		this.callbacks.onSceneEnded( this );
-	}
-
-	// ─── Auto-behaviors ──────────────────────────────────────────────────
-
-	private autoEvaluateCondition( block: BlueprintBlock, context: InternalConditionContext ): void {
-		const bridge = this.callbacks.getStateBridge();
-		if ( isConditionBlock( block ) ) {
-			const conditions = block.conditions ?? [];
-			const hasChoiceConditions = conditions.some( c => c.key.startsWith( 'choice:' ) );
-			if ( !bridge && !hasChoiceConditions ) {
-				this.endScene();
-				return;
-			}
-			const evaluator = ( condition: ExportCondition ) =>
-				this.evaluateConditionWithHistory( condition, bridge ? bridge.evaluateCondition : () => false );
-			context._conditionResult = evaluateConditionChain( conditions, evaluator );
-		} else if ( !bridge ) {
-			this.endScene();
-			return;
-		}
-		this.previousCleanup = null;
-		this.advanceToNextBlock( block, context );
-	}
-
-	private autoExecuteAction( block: BlueprintBlock, context: InternalActionContext ): void {
-		const bridge = this.callbacks.getStateBridge();
-		if ( !bridge ) {
-			this.endScene();
-			return;
-		}
-		if ( isActionBlock( block ) ) {
-			for ( const action of block.actions ?? [] ) {
-				bridge.executeAction( action );
-			}
-		}
-		context._actionRejected = false;
-		this.previousCleanup = null;
-		this.advanceToNextBlock( block, context );
 	}
 
 	// ─── Scene lifecycle ─────────────────────────────────────────────────
@@ -666,6 +599,10 @@ export class SceneHandleImpl implements SceneHandle {
 
 	// ─── Internal helpers ────────────────────────────────────────────────
 
+	private getResolveCharacterFn(): ( characters: BlockCharacter[] ) => BlockCharacter | undefined {
+		return this._resolveCharacter ?? this.callbacks.getResolveCharacter();
+	}
+
 	private evaluateConditionWithHistory(
 		condition: ExportCondition,
 		bridgeEvaluator: ( condition: ExportCondition ) => boolean,
@@ -681,18 +618,14 @@ export class SceneHandleImpl implements SceneHandle {
 	}
 
 	private createContext( block: BlueprintBlock ): InternalContext | null {
-		const bridge = this.callbacks.getStateBridge();
 		const characters = block.metadata?.characters ?? [];
-		const resolvedCharacter = bridge?.resolveCharacter( characters );
+		const resolvedCharacter = this.getResolveCharacterFn()( characters );
 
 		if ( isDialogBlock( block ) ) {
 			return createDialogContext( block, resolvedCharacter );
 		}
 		if ( isChoiceBlock( block ) ) {
-			const rawEvaluator = bridge ? bridge.evaluateCondition : () => true;
-			const evaluator = ( condition: ExportCondition ) =>
-				this.evaluateConditionWithHistory( condition, rawEvaluator );
-			return createChoiceContext( block, evaluator, ( blockUuid, choiceUuid ) => {
+			return createChoiceContext( block, ( blockUuid, choiceUuid ) => {
 				this.recordChoice( blockUuid, choiceUuid );
 			}, resolvedCharacter );
 		}

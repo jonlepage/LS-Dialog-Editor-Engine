@@ -84,11 +84,17 @@ struct NativeProperties {
     std::optional<bool> followNarrative;
 };
 
-/// Character (actor) assigned to a dialogue block.
+/// Character (actor) assigned to a block.
 struct BlockCharacter {
+    /// Internal UUID used by the dialog engine.
+    std::string uuid;
+    /// Game-side character identifier.
+    std::string id;
+    /// Display name for debugging and editor preview.
     std::string name;
-    std::optional<std::string> image;
+    /// Emotion label (e.g. "happy", "angry", "sad").
     std::optional<std::string> emotion;
+    /// Emotion intensity (e.g. 0 = neutral, higher = stronger).
     std::optional<double> emotionIntensity;
 };
 

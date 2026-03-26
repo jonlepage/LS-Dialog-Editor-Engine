@@ -7,6 +7,9 @@ import { evaluateConditionChain, filterVisibleChoices } from './condition-evalua
 /** Public utility class exposing common helpers for game developers integrating the LSDE engine. */
 export class LsdeUtils {
 
+	/** Current locale set by `engine.setLocale()`. Used as default by `getLocalizedText()`. */
+	static locale: string | null = null;
+
 	// ─── Type Guards ─────────────────────────────────────────────────────────────
 
 	/** Returns `true` if the block is a {@link DialogBlock}. */
@@ -30,10 +33,18 @@ export class LsdeUtils {
 	/**
 	 * Looks up a localized text value from a `dialogueText` map.
 	 * Works with both `DialogBlock.dialogueText` and `ChoiceItem.dialogueText`.
-	 * @returns The localized string, or `undefined` if the locale is not found.
+	 * Uses the engine locale (set via `engine.setLocale()`) by default.
+	 * @param dialogueText - The localized text map.
+	 * @param locale - Optional locale override. If omitted, uses `LsdeUtils.locale`.
+	 * @returns The localized string, or `undefined` if the key is not found.
+	 * @throws If no locale is set (neither via parameter nor `engine.setLocale()`).
 	 */
-	static getLocalizedText( dialogueText: Record<string, string> | undefined, locale: string ): string | undefined {
-		return dialogueText?.[locale];
+	static getLocalizedText( dialogueText: Record<string, string> | undefined, locale?: string ): string | undefined {
+		const resolvedLocale = locale ?? LsdeUtils.locale;
+		if ( !resolvedLocale ) {
+			throw new Error( 'No locale set. Call engine.setLocale() first or pass a locale parameter.' );
+		}
+		return dialogueText?.[resolvedLocale];
 	}
 
 	// ─── Condition Helpers ───────────────────────────────────────────────────────
