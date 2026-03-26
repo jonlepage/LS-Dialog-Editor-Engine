@@ -1,11 +1,11 @@
 /**
  * Critical edge case tests for DialogueEngine.
- * Covers: double-init, double-start, handler throw, 0 visible choices,
- * two simultaneous scenes, re-init, scene after stop.
+ * Covers: missing handlers, double-init, double-start, handler throw,
+ * 0 visible choices, two simultaneous scenes, re-init, scene after stop.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { DialogueEngine } from './engine.js';
-import type { BlueprintExport, BlueprintScene, StateBridge } from './types.js';
+import type { BlueprintExport, BlueprintScene } from './types.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -30,14 +30,44 @@ function makeExport( scenes: BlueprintScene[] ): BlueprintExport {
 	return { version: '1.0.0', exportDate: '2025-01-01', locales: ['en'], scenes };
 }
 
-function makeBridge(): StateBridge {
-	return {
-		evaluateCondition: () => true,
-		executeAction: vi.fn(),
-		resolveDictionary: () => '',
-		resolveCharacter: ( chars ) => chars[0],
-	};
+function registerAllHandlers( engine: DialogueEngine ) {
+	engine.onDialog( ( { next } ) => { next(); } );
+	engine.onChoice( ( { context, next } ) => {
+		if ( context.choices.length > 0 ) context.selectChoice( context.choices[0]!.uuid );
+		next();
+	} );
+	engine.onCondition( ( { context, next } ) => { context.resolve( true ); next(); } );
+	engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
 }
+
+// ─── Scene without handlers ──────────────────────────────────────────────────
+
+describe( 'engine — scene without handlers', () => {
+
+	it( 'start() throws when no handlers are registered', () => {
+		const engine = new DialogueEngine();
+		engine.init( { data: makeExport( [scene( 's1' )] ) } );
+
+		expect( () => engine.scene( 's1' ).start() ).toThrow( 'missing required handler' );
+	} );
+
+	it( 'start() throws when only some handlers are registered', () => {
+		const engine = new DialogueEngine();
+		engine.init( { data: makeExport( [scene( 's1' )] ) } );
+		engine.onDialog( ( { next } ) => next() );
+
+		expect( () => engine.scene( 's1' ).start() ).toThrow( 'missing required handler' );
+	} );
+
+	it( 'start() succeeds when all 4 handlers are registered', () => {
+		const engine = new DialogueEngine();
+		engine.init( { data: makeExport( [scene( 's1' )] ) } );
+		registerAllHandlers( engine );
+
+		expect( () => engine.scene( 's1' ).start() ).not.toThrow();
+	} );
+
+} );
 
 // ─── Double init ─────────────────────────────────────────────────────────────
 
@@ -82,6 +112,7 @@ describe( 'engine — double start', () => {
 		const calls: string[] = [];
 		const engine = new DialogueEngine();
 		engine.init( { data: makeExport( [scene( 's1' )] ) } );
+		registerAllHandlers( engine );
 		engine.onDialog( ( { block } ) => {
 			calls.push( block.uuid );
 			// Don't call next — stay active
@@ -119,6 +150,7 @@ describe( 'engine — cancel edge cases', () => {
 		const exitSpy = vi.fn();
 		const engine = new DialogueEngine();
 		engine.init( { data: makeExport( [scene( 's1' )] ) } );
+		registerAllHandlers( engine );
 		engine.onSceneExit( exitSpy );
 		engine.onDialog( () => {} ); // stay active
 
@@ -136,14 +168,18 @@ describe( 'engine — cancel edge cases', () => {
 
 describe( 'engine — handler that throws', () => {
 
-	it( 'exception in onDialog propagates (does not silently swallow)', () => {
+	it( 'exception in onDialog ends scene gracefully', () => {
 		const engine = new DialogueEngine();
 		engine.init( { data: makeExport( [scene( 's1' )] ) } );
+		registerAllHandlers( engine );
 		engine.onDialog( () => {
 			throw new Error( 'handler crashed' );
 		} );
 
-		expect( () => engine.scene( 's1' ).start() ).toThrow( 'handler crashed' );
+		const handle = engine.scene( 's1' );
+		handle.start();
+		// Handler exception is caught — scene ends without propagating
+		expect( handle.isRunning() ).toBe( false );
 	} );
 
 	it( 'exception in cleanup propagates', () => {
@@ -154,6 +190,7 @@ describe( 'engine — handler that throws', () => {
 		};
 		const engine = new DialogueEngine();
 		engine.init( { data: makeExport( [s] ) } );
+		registerAllHandlers( engine );
 
 		let first = true;
 		engine.onDialog( ( { next } ) => {
@@ -194,10 +231,11 @@ describe( 'engine — zero visible choices', () => {
 
 		const engine = new DialogueEngine();
 		engine.init( { data: makeExport( [s] ) } );
-		engine.setStateBridge( { ...makeBridge(), evaluateCondition: () => false } );
+		registerAllHandlers( engine );
+		engine.setChoiceFilter( () => false );
 		engine.onDialog( ( { next } ) => next() );
 		engine.onChoice( ( { context, next } ) => {
-			receivedChoices = [...context.choices];
+			receivedChoices = [...context.choices.filter( c => c.visible )];
 			next(); // advance with no selection — dead end
 		} );
 
@@ -226,6 +264,7 @@ describe( 'engine — two simultaneous scenes', () => {
 
 		const engine = new DialogueEngine();
 		engine.init( { data: makeExport( [s1, s2] ) } );
+		registerAllHandlers( engine );
 		engine.onDialog( ( { block } ) => {
 			calls.push( block.uuid );
 			// Don't call next — keep both alive
@@ -255,6 +294,7 @@ describe( 'engine — two simultaneous scenes', () => {
 	it( 'stop() cancels both scenes', () => {
 		const engine = new DialogueEngine();
 		engine.init( { data: makeExport( [scene( 's1' ), scene( 's2' )] ) } );
+		registerAllHandlers( engine );
 		engine.onDialog( () => {} ); // stay active
 
 		engine.scene( 's1' ).start();
@@ -276,6 +316,7 @@ describe( 'engine — scene after stop', () => {
 		const visited: string[] = [];
 		const engine = new DialogueEngine();
 		engine.init( { data: makeExport( [scene( 's1' )] ) } );
+		registerAllHandlers( engine );
 		engine.onDialog( ( { block, next } ) => {
 			visited.push( block.uuid );
 			next();
@@ -293,6 +334,7 @@ describe( 'engine — scene after stop', () => {
 	it( 'can restart after explicit stop()', () => {
 		const engine = new DialogueEngine();
 		engine.init( { data: makeExport( [scene( 's1' )] ) } );
+		registerAllHandlers( engine );
 		engine.onDialog( () => {} ); // stay active
 
 		const h1 = engine.scene( 's1' );

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DialogueEngine } from './engine.js';
-import type { BlueprintExport, BlueprintScene, BlueprintBlock, StateBridge } from './types.js';
+import type { BlueprintExport, BlueprintScene, BlueprintBlock } from './types.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -14,7 +14,7 @@ function dialog( uuid: string, opts: { start?: boolean; async?: boolean; follow?
 		isStartBlock: opts.start,
 		nativeProperties: ( opts.async || opts.follow ) ? { isAsync: true, followNarrative: opts.follow } : undefined,
 		dialogueText: opts.text ? { en: opts.text } : undefined,
-		metadata: opts.chars ? { characters: opts.chars.map( name => ( { name } ) ) } : undefined,
+		metadata: opts.chars ? { characters: opts.chars.map( name => ( { uuid: `${ name }-uuid`, id: name.toLowerCase(), name } ) ) } : undefined,
 	} as BlueprintBlock;
 }
 
@@ -22,20 +22,20 @@ function conn( fromId: string, toId: string, fromPort = 'out', fromPortIndex?: n
 	return { id: `${ fromId }-${ toId }`, fromId, toId, fromPort, toPort: 'in', fromPortIndex };
 }
 
-function makeBridge( overrides: Partial<StateBridge> = {} ): StateBridge {
-	return {
-		evaluateCondition: () => true,
-		executeAction: vi.fn(),
-		resolveDictionary: () => '',
-		resolveCharacter: ( chars ) => chars[0],
-		...overrides,
-	};
+function registerAllHandlers( engine: DialogueEngine ) {
+	engine.onDialog( ( { next } ) => { next(); } );
+	engine.onChoice( ( { context, next } ) => {
+		if ( context.choices.length > 0 ) context.selectChoice( context.choices[0]!.uuid );
+		next();
+	} );
+	engine.onCondition( ( { context, next } ) => { context.resolve( true ); next(); } );
+	engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
 }
 
-function setupEngine( scene: BlueprintScene, bridge?: StateBridge ) {
+function setupEngine( scene: BlueprintScene ) {
 	const engine = new DialogueEngine();
 	engine.init( { data: makeExport( [scene] ) } );
-	engine.setStateBridge( bridge ?? makeBridge() );
+	registerAllHandlers( engine );
 	return engine;
 }
 
@@ -405,7 +405,7 @@ describe( 'multitrack — mixed scenarios', () => {
 				{
 					uuid: 'multi', type: 'DIALOG', properties: [], isStartBlock: true,
 					nativeProperties: { portPerCharacter: true },
-					metadata: { characters: [{ name: 'Hero' }, { name: 'Sidekick' }] },
+					metadata: { characters: [{ uuid: 'hero-uuid', id: 'hero', name: 'Hero' }, { uuid: 'sidekick-uuid', id: 'sidekick', name: 'Sidekick' }] },
 				} as BlueprintBlock,
 				dialog( 'hero-line', { text: 'Hero talks' } ),
 				dialog( 'sidekick-bg', { async: true, text: 'Sidekick whispers', chars: ['Sidekick'] } ),
@@ -420,7 +420,7 @@ describe( 'multitrack — mixed scenarios', () => {
 		engine.onDialog( ( { block, context, next } ) => {
 			calls.push( block.uuid );
 			if ( block.uuid === 'multi' && 'resolveCharacterPort' in context ) {
-				context.resolveCharacterPort( 'Hero' ); // portIndex 0
+				context.resolveCharacterPort( 'hero-uuid' ); // portIndex 0
 			}
 			next();
 		} );
@@ -455,17 +455,18 @@ describe( 'multitrack — mixed scenarios', () => {
 			],
 		};
 
-		const bridge = makeBridge( {
-			evaluateCondition: () => true,
-			executeAction: ( action ) => { executed.push( action.actionId ); },
-		} );
-		const engine = setupEngine( scene, bridge );
+		const engine = setupEngine( scene );
 		engine.onDialog( ( { block, next } ) => { calls.push( block.uuid ); next(); } );
-		// No onCondition/onAction → auto
+		engine.onCondition( ( { context, next } ) => { context.resolve( true ); next(); } );
+		engine.onAction( ( { block, context, next } ) => {
+			for ( const a of block.actions ?? [] ) executed.push( a.actionId );
+			context.resolve();
+			next();
+		} );
 
 		engine.scene( 's1' ).start();
 
-		// main1 → forks to bg-cond (async, auto-eval true) → bg-act (auto-exec) → bg-end
+		// main1 → forks to bg-cond (async, condition true) → bg-act → bg-end
 		expect( calls ).toContain( 'main1' );
 		expect( calls ).toContain( 'bg-end' );
 		expect( executed ).toContain( 'bg_effect' );

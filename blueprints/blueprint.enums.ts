@@ -27,7 +27,7 @@ export enum LSDE_BLOCKS {
 	 * ### 🟧[ACTION] ACTION-001
 	 * - Scene: `New Scene`
 	 * - In: `CONDITION-001`
-	 * `7908f59d-b97d-40ea-80f1-30c6f762e30d`(a, 2)
+	 * `signatureID1`(a, 2)
 	 * ---
 	 * <image url="./_images/action.webp" />
 	 */

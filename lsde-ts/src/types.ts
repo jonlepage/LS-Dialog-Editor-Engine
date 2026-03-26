@@ -71,7 +71,9 @@ export interface ExportCondition {
 export interface ExportAction {
 	/** Unique identifier for this action instance. */
 	uuid: string;
-	/** Action type identifier matching an `ActionSignature.id` (e.g. "set_flag", "play_sound"). */
+	/** UUID of the `ActionSignature` this action references. */
+	signatureUuid?: string;
+	/** Action type identifier matching an `ActionSignature.id` (e.g. "set_flag", "play_sound"). The dev maps this to game-side functions. */
 	actionId: string;
 	/** Ordered parameter values for the action, as defined by the matching `ActionSignature.params`. */
 	params: (string | number | boolean)[];
@@ -262,8 +264,11 @@ export interface DialogBlock extends BlueprintBlockBase {
  * Choice block — presents selectable options to the player.
  *
  * @remarks
- * The `context.choices` array contains all choices (unfiltered). Visibility filtering based on
- * `visibilityConditions` is the responsibility of the developer.
+ * The `context.choices` array contains ALL choices — none are filtered out.
+ * When {@link IDialogueEngine.setChoiceFilter | setChoiceFilter()} is configured, the engine
+ * evaluates each choice's `visibilityConditions` and tags every {@link RuntimeChoiceItem} with
+ * `visible: true | false`. The developer filters with `choices.filter(c => c.visible !== false)`.
+ * Without a filter, `visible` is `undefined` and all choices pass.
  *
  * The handler must call `context.selectChoice(uuid)` to pick a choice. The engine then follows
  * the connection whose `fromPort` matches the selected choice UUID.
@@ -840,7 +845,7 @@ export interface IDialogueEngine {
 
 	/** Register a global handler for DIALOG blocks. May return a cleanup function. */
 	onDialog(handler: DialogHandler): void;
-	/** Register a global handler for CHOICE blocks. All choices are provided unfiltered. */
+	/** Register a global handler for CHOICE blocks. All choices are provided, tagged with `visible` when `setChoiceFilter()` is configured. */
 	onChoice(handler: ChoiceHandler): void;
 	/** Register a global handler for CONDITION blocks. The developer MUST handle evaluation in this handler. */
 	onCondition(handler: ConditionHandler): void;

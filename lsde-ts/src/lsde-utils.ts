@@ -79,6 +79,9 @@ export class LsdeUtils {
 	 * Choices without `visibilityConditions` are always visible.
 	 * @param choices - The full list of choices.
 	 * @param evaluator - A callback that evaluates a single condition.
+	 * @param scene - Optional {@link SceneHandle}. When provided, `choice:` conditions are
+	 *   resolved automatically via the scene's internal choice history and the developer
+	 *   never sees them — only non-choice conditions are delegated to the `evaluator` callback.
 	 */
 	static filterVisibleChoices = filterVisibleChoices;
 }

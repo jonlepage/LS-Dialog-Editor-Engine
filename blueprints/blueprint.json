@@ -1,6 +1,6 @@
 {
 	"version": "1.0.0",
-	"exportDate": "2026-03-26T15:16:25.206Z",
+	"exportDate": "2026-03-26T15:55:45.943Z",
 	"projectName": "blueprint-with-actors-emotions",
 	"primaryLanguage": "en",
 	"locales": [
@@ -56,7 +56,8 @@
 					"actions": [
 						{
 							"uuid": "aee8f7ba-cfe8-4afb-92e7-54b2ddae23f5",
-							"actionId": "7908f59d-b97d-40ea-80f1-30c6f762e30d",
+							"signatureUuid": "7908f59d-b97d-40ea-80f1-30c6f762e30d",
+							"actionId": "signatureID1",
 							"params": [
 								"a",
 								2

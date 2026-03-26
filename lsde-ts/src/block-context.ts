@@ -36,7 +36,10 @@ export function createDialogContext( block: DialogBlock, resolvedCharacter: Bloc
 		_characterPortIndex: undefined,
 		character: resolvedCharacter,
 		resolveCharacterPort( characterUuid: string ) {
-			const index = characters.findIndex( c => c.uuid === characterUuid );
+			let index = characters.findIndex( c => c.uuid === characterUuid );
+			if ( index < 0 ) {
+				index = characters.findIndex( c => c.name === characterUuid );
+			}
 			ctx._characterPortIndex = index >= 0 ? index : undefined;
 		},
 		preventGlobalHandler() {

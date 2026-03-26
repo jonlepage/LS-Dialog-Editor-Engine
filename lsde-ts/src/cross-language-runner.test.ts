@@ -7,9 +7,10 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DialogueEngine } from './engine.js';
 import type {
-	BlueprintExport, StateBridge, ExportCondition, ExportAction, ActionSignature,
+	BlueprintExport, ConditionBlock,
 	DialogContext, ChoiceContext, ConditionContext, ActionContext,
 } from './types.js';
+import { evaluateConditionChain } from './condition-evaluator.js';
 
 // ─── JSON Schema Types ──────────────────────────────────────────────────────
 
@@ -18,20 +19,20 @@ interface TestFile {
 	suites: TestSuite[];
 }
 
+interface TestSuiteBridge {
+	conditions?: Record<string, boolean>;
+	dictionaries?: Record<string, string>;
+	actions?: Record<string, string>;
+}
+
 interface TestSuite {
 	id: string;
 	description: string;
 	blueprint: BlueprintExport;
 	sceneId?: string;
 	locale?: string;
-	stateBridge?: StateBridgeConfig;
+	stateBridge?: TestSuiteBridge;
 	cases: TestCase[];
-}
-
-interface StateBridgeConfig {
-	conditions?: Record<string, boolean>;
-	dictionaries?: Record<string, string>;
-	actions?: Record<string, string>; // "ok" = resolve, "fail" = reject
 }
 
 interface TestCase {
@@ -76,19 +77,6 @@ const testsDir = resolve( __dirname, '../../tests' );
 function loadTestFile( filename: string ): TestFile {
 	const raw = readFileSync( resolve( testsDir, filename ), 'utf-8' );
 	return JSON.parse( raw ) as TestFile;
-}
-
-function buildStateBridge( config?: StateBridgeConfig ): StateBridge {
-	return {
-		evaluateCondition: ( c: ExportCondition ) => config?.conditions?.[c.key] ?? true,
-		executeAction: ( a: ExportAction, _sig?: ActionSignature ) => {
-			const result = config?.actions?.[a.actionId];
-			if ( result === 'fail' ) throw new Error( `Action ${ a.actionId } failed` );
-		},
-		resolveDictionary: ( group: string, key: string ) =>
-			config?.dictionaries?.[`${ group }.${ key }`] ?? '',
-		resolveCharacter: ( chars ) => chars[0],
-	};
 }
 
 type NextFn = () => void;
@@ -141,20 +129,26 @@ function runFlowTests( filename: string ): void {
 					expect( report.errors ).toHaveLength( 0 );
 
 					engine.setLocale( suite.locale ?? 'en' );
-					engine.setStateBridge( buildStateBridge( suite.stateBridge ) );
+
+					// Install choice visibility filter from stateBridge conditions
+					const bridgeConditions = suite.stateBridge?.conditions ?? {};
+					engine.setChoiceFilter( ( cond ) => {
+						if ( cond.key in bridgeConditions ) {
+							const actual = String( bridgeConditions[cond.key] );
+							return cond.operator === '!=' ? actual !== cond.value : actual === cond.value;
+						}
+						return true;
+					} );
 
 					const steps = tc.steps ?? [];
 					let stepIndex = 0;
 					let cleanupCalls = 0;
 
-					// Determine which block types appear in steps (for manual handling)
-					const stepTypes = new Set( steps.map( s => s.expect.type ) );
-
 					// Handler that consumes steps in order — only asserts on main track steps.
 					// Async track blocks also hit this handler but fall through to auto-advance.
 					const makeHandler = <C extends DialogContext | ChoiceContext | ConditionContext | ActionContext>(
 						blockType: string,
-					) => ( { block, context, next }: { block: { uuid: string; type: string }; context: C; next: NextFn } ) => {
+					) => ( { block, context, next }: { block: { uuid: string; type: string; conditions?: ConditionBlock['conditions'] }; context: C; next: NextFn } ) => {
 						const step = steps[stepIndex];
 
 						// Check if this block matches the next expected step
@@ -162,24 +156,39 @@ function runFlowTests( filename: string ): void {
 							( !step.expect.blockUuid || step.expect.blockUuid === block.uuid ) ) {
 
 							if ( step.expect.visibleChoiceCount !== undefined && 'choices' in context ) {
-								expect( ( context as ChoiceContext ).choices ).toHaveLength( step.expect.visibleChoiceCount );
+								expect( ( context as ChoiceContext ).choices.filter( c => c.visible !== false ) ).toHaveLength( step.expect.visibleChoiceCount );
 							}
 
 							stepIndex++;
 							executeAction( step.action, context, next );
+							return () => { cleanupCalls++; };
 						} else {
 							// Not the expected step — auto-advance (async track or passthrough)
+							if ( 'resolve' in context && blockType === 'CONDITION' ) {
+								// Evaluate conditions from the block definition using stateBridge data
+								const conditions = block.conditions ?? [];
+								const result = evaluateConditionChain( conditions, ( cond ) => {
+									if ( cond.key in bridgeConditions ) {
+										const actual = String( bridgeConditions[cond.key] );
+										return cond.operator === '!=' ? actual !== cond.value : actual === cond.value;
+									}
+									return true;
+								} );
+								( context as ConditionContext ).resolve( result );
+							}
+							if ( 'resolve' in context && blockType === 'ACTION' ) {
+								( context as ActionContext ).resolve();
+							}
 							next();
+							// No cleanup for auto-advanced blocks
 						}
-
-						return () => { cleanupCalls++; };
 					};
 
-					// Register handlers for types that appear in steps
-					if ( stepTypes.has( 'DIALOG' ) ) engine.onDialog( makeHandler( 'DIALOG' ) );
-					if ( stepTypes.has( 'CHOICE' ) ) engine.onChoice( makeHandler( 'CHOICE' ) );
-					if ( stepTypes.has( 'CONDITION' ) ) engine.onCondition( makeHandler( 'CONDITION' ) );
-					if ( stepTypes.has( 'ACTION' ) ) engine.onAction( makeHandler( 'ACTION' ) );
+					// All 4 handlers are mandatory
+					engine.onDialog( makeHandler( 'DIALOG' ) );
+					engine.onChoice( makeHandler( 'CHOICE' ) );
+					engine.onCondition( makeHandler( 'CONDITION' ) );
+					engine.onAction( makeHandler( 'ACTION' ) );
 
 					const handle = engine.scene( suite.sceneId! );
 					handle.start();

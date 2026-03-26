@@ -161,7 +161,7 @@ describe( 'validateBlueprint', () => {
 			const scene = makeScene( {
 				blocks: [{
 					uuid: 'b1', type: 'DIALOG', properties: [],
-					metadata: { characters: [{ name: 'Gruht' }, { name: 'UnknownNPC' }] },
+					metadata: { characters: [{ uuid: 'gruht-uuid', id: 'gruht', name: 'Gruht' }, { uuid: 'unknown-npc-uuid', id: 'unknown-npc', name: 'UnknownNPC' }] },
 				}],
 			} );
 			const data = makeExport( { scenes: [scene] } );

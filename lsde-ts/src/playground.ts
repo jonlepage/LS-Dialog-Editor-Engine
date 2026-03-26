@@ -130,8 +130,10 @@ engine.onAction(({ block, context, next }) => {
 	console.log(`\n⚡ ACTION  ${block.label} — ${actions.length} actions`);
 	for (const { actionId, params } of actions) {
 		console.log(`   🎯 ${actionId}(${params.join(", ")})`);
+		// dev will probabli use switch case for better handling and mapping to game functions
 	}
 	context.resolve();
+	// context.reject();
 	next();
 
 	return () => console.log(`   🧹 cleanup: ${block.label}`);

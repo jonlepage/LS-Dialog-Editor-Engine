@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DialogueEngine } from './engine.js';
-import type { BlueprintExport, BlueprintScene, StateBridge } from './types.js';
+import type { BlueprintExport, BlueprintScene, RuntimeChoiceItem } from './types.js';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -24,13 +24,15 @@ function makeExport( scenes: BlueprintScene[] = [linearScene()] ): BlueprintExpo
 	};
 }
 
-function makeBridge(): StateBridge {
-	return {
-		evaluateCondition: () => true,
-		executeAction: vi.fn(),
-		resolveDictionary: () => '',
-		resolveCharacter: ( chars ) => chars[0],
-	};
+/** Registers the 4 mandatory handlers with minimal pass-through behavior. */
+function registerAllHandlers( engine: DialogueEngine ): void {
+	engine.onDialog( ( { next } ) => { next(); } );
+	engine.onChoice( ( { context, next } ) => {
+		if ( context.choices.length > 0 ) context.selectChoice( context.choices[0]!.uuid );
+		next();
+	} );
+	engine.onCondition( ( { context, next } ) => { context.resolve( true ); next(); } );
+	engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
@@ -84,8 +86,9 @@ describe( 'DialogueEngine', () => {
 			const engine = new DialogueEngine();
 			engine.init( { data: makeExport() } );
 			engine.setLocale( 'en' );
-			engine.setStateBridge( makeBridge() );
+			registerAllHandlers( engine );
 
+			// Override the default onDialog to track visited blocks
 			engine.onDialog( ( { block, next } ) => {
 				visited.push( block.uuid );
 				next();
@@ -102,6 +105,7 @@ describe( 'DialogueEngine', () => {
 		it( 'tracks active scenes', () => {
 			const engine = new DialogueEngine();
 			engine.init( { data: makeExport() } );
+			registerAllHandlers( engine );
 
 			let capturedRunning = false;
 			engine.onDialog( ( { next } ) => {
@@ -121,6 +125,7 @@ describe( 'DialogueEngine', () => {
 		it( 'stop() cancels all active scenes', () => {
 			const engine = new DialogueEngine();
 			engine.init( { data: makeExport() } );
+			registerAllHandlers( engine );
 
 			engine.onDialog( () => {
 				// Don't call next — stay active
@@ -137,12 +142,26 @@ describe( 'DialogueEngine', () => {
 
 	} );
 
+	describe( 'start() validation', () => {
+
+		it( 'start() throws if required handler is missing', () => {
+			const engine = new DialogueEngine();
+			engine.init( { data: makeExport() } );
+			engine.onDialog( ( { next } ) => { next(); } );
+			// Missing onChoice, onCondition, onAction
+			const handle = engine.scene( 'scene-1' );
+			expect( () => handle.start() ).toThrow( /missing required handler/i );
+		} );
+
+	} );
+
 	describe( 'handler priority integration', () => {
 
 		it( 'scene handler + global handler both fire', () => {
 			const calls: string[] = [];
 			const engine = new DialogueEngine();
 			engine.init( { data: makeExport() } );
+			registerAllHandlers( engine );
 
 			engine.onDialog( ( { next } ) => {
 				calls.push( 'global' );
@@ -166,6 +185,7 @@ describe( 'DialogueEngine', () => {
 			const calls: string[] = [];
 			const engine = new DialogueEngine();
 			engine.init( { data: makeExport() } );
+			registerAllHandlers( engine );
 
 			engine.onDialog( ( { next } ) => {
 				calls.push( 'global' );
@@ -190,9 +210,9 @@ describe( 'DialogueEngine', () => {
 
 	} );
 
-	describe( 'auto-behavior', () => {
+	describe( 'condition handler', () => {
 
-		it( 'auto-evaluates conditions when no handler', () => {
+		it( 'onCondition handler controls branching', () => {
 			const condScene: BlueprintScene = {
 				uuid: 'scene-cond', label: 'Cond', date: '2025-01-01',
 				blocks: [
@@ -210,22 +230,30 @@ describe( 'DialogueEngine', () => {
 			const visited: string[] = [];
 			const engine = new DialogueEngine();
 			engine.init( { data: makeExport( [condScene] ) } );
-			engine.setStateBridge( {
-				evaluateCondition: () => false, // → false branch
-				executeAction: vi.fn(),
-				resolveDictionary: () => '',
-				resolveCharacter: ( chars ) => chars[0],
-			} );
+
 			engine.onDialog( ( { block, next } ) => {
 				visited.push( block.uuid );
 				next();
 			} );
+			engine.onChoice( ( { context, next } ) => {
+				if ( context.choices.length > 0 ) context.selectChoice( context.choices[0]!.uuid );
+				next();
+			} );
+			engine.onCondition( ( { context, next } ) => {
+				context.resolve( false ); // → false branch
+				next();
+			} );
+			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
 
 			engine.scene( 'scene-cond' ).start();
 			expect( visited ).toEqual( ['no'] );
 		} );
 
-		it( 'auto-executes actions when no handler', () => {
+	} );
+
+	describe( 'action handler', () => {
+
+		it( 'onAction handler executes actions', () => {
 			const executed: string[] = [];
 			const actScene: BlueprintScene = {
 				uuid: 'scene-act', label: 'Act', date: '2025-01-01',
@@ -235,19 +263,26 @@ describe( 'DialogueEngine', () => {
 					{ uuid: 'after', type: 'DIALOG', properties: [] },
 				],
 				connections: [
-					{ id: 'c1', fromId: 'act1', toId: 'after', fromPort: 'out', toPort: 'in' },
+					{ id: 'c1', fromId: 'act1', toId: 'after', fromPort: 'then', toPort: 'in' },
 				],
 			};
 
 			const engine = new DialogueEngine();
 			engine.init( { data: makeExport( [actScene] ) } );
-			engine.setStateBridge( {
-				evaluateCondition: () => true,
-				executeAction: ( action ) => { executed.push( action.actionId ); },
-				resolveDictionary: () => '',
-				resolveCharacter: ( chars ) => chars[0],
-			} );
+
 			engine.onDialog( ( { next } ) => next() );
+			engine.onChoice( ( { context, next } ) => {
+				if ( context.choices.length > 0 ) context.selectChoice( context.choices[0]!.uuid );
+				next();
+			} );
+			engine.onCondition( ( { context, next } ) => { context.resolve( true ); next(); } );
+			engine.onAction( ( { block, context, next } ) => {
+				for ( const action of block.actions ?? [] ) {
+					executed.push( action.actionId );
+				}
+				context.resolve();
+				next();
+			} );
 
 			engine.scene( 'scene-act' ).start();
 			expect( executed ).toEqual( ['give_item'] );
@@ -284,12 +319,6 @@ describe( 'DialogueEngine', () => {
 			const visited: string[] = [];
 			const engine = new DialogueEngine();
 			engine.init( { data: makeExport( [choiceScene] ) } );
-			engine.setStateBridge( {
-				evaluateCondition: () => true,
-				executeAction: vi.fn(),
-				resolveDictionary: () => '',
-				resolveCharacter: ( chars ) => chars[0],
-			} );
 
 			engine.onDialog( ( { block, next } ) => {
 				visited.push( block.uuid );
@@ -300,31 +329,40 @@ describe( 'DialogueEngine', () => {
 				context.selectChoice( context.choices[0]!.uuid );
 				next();
 			} );
+			engine.onCondition( ( { context, next } ) => { context.resolve( true ); next(); } );
+			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
 
 			engine.scene( 'scene-choice' ).start();
 			expect( visited ).toEqual( ['greeting', 'shop'] );
 		} );
 
-		it( 'visibility conditions filter choices before handler', () => {
-			let visibleCount = 0;
+		it( 'setChoiceFilter tags choices with visible', () => {
+			let receivedChoices: RuntimeChoiceItem[] = [];
 			const engine = new DialogueEngine();
 			engine.init( { data: makeExport( [choiceScene] ) } );
-			engine.setStateBridge( {
-				evaluateCondition: () => false, // can_leave = false → opt-leave hidden
-				executeAction: vi.fn(),
-				resolveDictionary: () => '',
-				resolveCharacter: ( chars ) => chars[0],
-			} );
+
+			// Install a choice filter that makes can_leave = false
+			engine.setChoiceFilter( () => false );
 
 			engine.onDialog( ( { next } ) => next() );
 			engine.onChoice( ( { context, next } ) => {
-				visibleCount = context.choices.length;
+				receivedChoices = context.choices as RuntimeChoiceItem[];
+				// Select the first choice regardless of visibility
 				context.selectChoice( context.choices[0]!.uuid );
 				next();
 			} );
+			engine.onCondition( ( { context, next } ) => { context.resolve( true ); next(); } );
+			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
 
 			engine.scene( 'scene-choice' ).start();
-			expect( visibleCount ).toBe( 1 ); // only "Buy" visible
+
+			// opt-buy has no visibilityConditions → visible: true
+			// opt-leave has visibilityConditions and filter returns false → visible: false
+			expect( receivedChoices ).toHaveLength( 2 );
+			const buyChoice = receivedChoices.find( c => c.uuid === 'opt-buy' );
+			const leaveChoice = receivedChoices.find( c => c.uuid === 'opt-leave' );
+			expect( buyChoice?.visible ).toBe( true );
+			expect( leaveChoice?.visible ).toBe( false );
 		} );
 
 	} );
@@ -338,8 +376,8 @@ describe( 'DialogueEngine', () => {
 					nativeProperties: { portPerCharacter: true },
 					dialogueText: { en: 'Who speaks?' },
 					metadata: { characters: [
-						{ name: 'Hero', emotion: 'neutral' },
-						{ name: 'Boss', emotion: 'angry' },
+						{ uuid: 'hero-uuid', id: 'hero', name: 'Hero', emotion: 'neutral' },
+						{ uuid: 'boss-uuid', id: 'boss', name: 'Boss', emotion: 'angry' },
 					] } },
 				{ uuid: 'hero-path', type: 'DIALOG', properties: [], dialogueText: { en: 'Hero speaks.' } },
 				{ uuid: 'boss-path', type: 'DIALOG', properties: [], dialogueText: { en: 'Boss roars.' } },
@@ -356,11 +394,12 @@ describe( 'DialogueEngine', () => {
 			const visited: string[] = [];
 			const engine = new DialogueEngine();
 			engine.init( { data: makeExport( [charScene] ) } );
+			registerAllHandlers( engine );
 
 			engine.onDialog( ( { block, context, next } ) => {
 				visited.push( block.uuid );
 				if ( block.uuid === 'multi' && 'resolveCharacterPort' in context ) {
-					context.resolveCharacterPort( 'Boss' );
+					context.resolveCharacterPort( 'boss-uuid' );
 				}
 				next();
 			} );
@@ -373,6 +412,7 @@ describe( 'DialogueEngine', () => {
 			const visited: string[] = [];
 			const engine = new DialogueEngine();
 			engine.init( { data: makeExport( [charScene] ) } );
+			registerAllHandlers( engine );
 
 			engine.onDialog( ( { block, context, next } ) => {
 				visited.push( block.uuid );
@@ -384,6 +424,32 @@ describe( 'DialogueEngine', () => {
 
 			engine.scene( 'scene-char' ).start();
 			expect( visited ).toEqual( ['multi', 'fallback'] );
+		} );
+
+		it( 'onResolveCharacter replaces default character resolution', () => {
+			const engine = new DialogueEngine();
+			engine.init( { data: makeExport( [charScene] ) } );
+			registerAllHandlers( engine );
+
+			let resolvedCharName: string | undefined;
+			engine.onResolveCharacter( ( characters ) => {
+				// Pick the second character instead of the default first
+				return characters[1];
+			} );
+
+			engine.onDialog( ( { block, context, next } ) => {
+				if ( block.uuid === 'multi' && 'character' in context ) {
+					const char = context.character as { uuid: string; name: string } | undefined;
+					resolvedCharName = char?.name;
+					if ( 'resolveCharacterPort' in context && char ) {
+						context.resolveCharacterPort( char.uuid );
+					}
+				}
+				next();
+			} );
+
+			engine.scene( 'scene-char' ).start();
+			expect( resolvedCharName ).toBe( 'Boss' );
 		} );
 
 	} );
@@ -417,6 +483,11 @@ describe( 'DialogueEngine', () => {
 				visited.push( block.uuid );
 				next();
 			} );
+			engine.onChoice( ( { context, next } ) => {
+				if ( context.choices.length > 0 ) context.selectChoice( context.choices[0]!.uuid );
+				next();
+			} );
+			engine.onCondition( ( { context, next } ) => { context.resolve( true ); next(); } );
 
 			engine.scene( 'scene-catch' ).start();
 			expect( visited ).toEqual( ['failure'] );
@@ -449,6 +520,11 @@ describe( 'DialogueEngine', () => {
 				visited.push( block.uuid );
 				next();
 			} );
+			engine.onChoice( ( { context, next } ) => {
+				if ( context.choices.length > 0 ) context.selectChoice( context.choices[0]!.uuid );
+				next();
+			} );
+			engine.onCondition( ( { context, next } ) => { context.resolve( true ); next(); } );
 
 			engine.scene( 'scene-ok' ).start();
 			expect( visited ).toEqual( ['success'] );
@@ -496,6 +572,8 @@ describe( 'DialogueEngine', () => {
 				}
 				next();
 			} );
+			engine.onCondition( ( { context, next } ) => { context.resolve( true ); next(); } );
+			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
 
 			engine.scene( 'scene-loop' ).start();
 			// start → ask → (again) → start → ask → (again) → start → ask → (done) → end
@@ -515,13 +593,13 @@ describe( 'DialogueEngine', () => {
 				blocks: [
 					{ uuid: 'main1', type: 'DIALOG', properties: [], isStartBlock: true,
 						dialogueText: { en: 'Hero speaks' },
-						metadata: { characters: [{ name: 'Hero' }] } },
+						metadata: { characters: [{ uuid: 'hero-uuid', id: 'hero', name: 'Hero' }] } },
 					{ uuid: 'main2', type: 'DIALOG', properties: [],
 						dialogueText: { en: 'Hero continues' } },
 					{ uuid: 'bg1', type: 'DIALOG', properties: [],
 						nativeProperties: { isAsync: true },
 						dialogueText: { en: 'NPC mumbles in background' },
-						metadata: { characters: [{ name: 'NPC' }] } },
+						metadata: { characters: [{ uuid: 'npc-uuid', id: 'npc', name: 'NPC' }] } },
 					{ uuid: 'bg2', type: 'DIALOG', properties: [],
 						dialogueText: { en: 'NPC finishes mumbling' } },
 					{ uuid: 'follow1', type: 'DIALOG', properties: [],
@@ -545,6 +623,7 @@ describe( 'DialogueEngine', () => {
 
 			const engine = new DialogueEngine();
 			engine.init( { data: makeExport( [multiScene] ) } );
+			registerAllHandlers( engine );
 
 			engine.onDialog( ( { block, next } ) => {
 				calls.push( block.uuid );
@@ -586,6 +665,7 @@ describe( 'DialogueEngine', () => {
 			engine.init( { data: makeExport( [simpleMulti] ) } );
 			engine.onSceneEnter( enterSpy );
 			engine.onSceneExit( exitSpy );
+			registerAllHandlers( engine );
 			engine.onDialog( ( { next } ) => next() );
 
 			engine.scene( 'scene-hooks' ).start();
@@ -611,7 +691,7 @@ describe( 'DialogueEngine', () => {
 					// Then dialog
 					{ uuid: 'greet', type: 'DIALOG', properties: [],
 						dialogueText: { en: 'Greetings, adventurer!' },
-						metadata: { characters: [{ name: 'Elder' }] } },
+						metadata: { characters: [{ uuid: 'elder-uuid', id: 'elder', name: 'Elder' }] } },
 					// Then choice
 					{ uuid: 'choice', type: 'CHOICE', properties: [],
 						choices: [
@@ -643,12 +723,6 @@ describe( 'DialogueEngine', () => {
 
 			const engine = new DialogueEngine();
 			engine.init( { data: makeExport( [fullScene] ) } );
-			engine.setStateBridge( {
-				evaluateCondition: ( c ) => c.key === 'player_level', // returns true
-				executeAction: ( action ) => { executed.push( action.actionId ); },
-				resolveDictionary: () => '',
-				resolveCharacter: ( chars ) => chars[0],
-			} );
 
 			engine.onDialog( ( { block, next } ) => {
 				visited.push( block.uuid );
@@ -658,11 +732,22 @@ describe( 'DialogueEngine', () => {
 				context.selectChoice( 'opt-accept' );
 				next();
 			} );
-			// No onAction/onCondition → auto-behavior
+			engine.onCondition( ( { context, next } ) => {
+				// Simulate: player_level > 5 → true
+				context.resolve( true );
+				next();
+			} );
+			engine.onAction( ( { block, context, next } ) => {
+				for ( const action of block.actions ?? [] ) {
+					executed.push( action.actionId );
+				}
+				context.resolve();
+				next();
+			} );
 
 			engine.scene( 'scene-full' ).start();
 
-			// act (auto) → NOTE (skip) → greet → choice (accept) → cond (auto, true) → success
+			// act (handler) → NOTE (skip) → greet → choice (accept) → cond (handler, true) → success
 			expect( executed ).toEqual( ['setup_quest'] );
 			expect( visited ).toEqual( ['greet', 'success'] );
 		} );

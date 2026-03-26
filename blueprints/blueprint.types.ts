@@ -123,12 +123,11 @@ export interface ExportCondition {
  * or invoke any custom behavior in your engine.
  */
 export interface ExportAction {
-	/** Unique identifier for this action. */
+	/** Unique identifier for this action instance. */
 	uuid: string;
-	/**
-	 * Action type identifier referencing your engine's action system.
-	 * Map this to your game's action handlers or event system.
-	 */
+	/** UUID of the signature definition in the project. */
+	signatureUuid: string;
+	/** Human-readable signature ID for mapping to your engine's action handlers. */
 	actionId: string;
 	/**
 	 * Ordered list of parameters for the action.

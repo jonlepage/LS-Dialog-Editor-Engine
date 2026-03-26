@@ -2,10 +2,10 @@ import { describe, it, expect, vi } from 'vitest';
 import {
 	createDialogContext, createChoiceContext, createConditionContext, createActionContext,
 } from './block-context.js';
-import type { DialogBlock, ChoiceBlock, BlockCharacter } from './types.js';
+import type { DialogBlock, ChoiceBlock, BlockCharacter, RuntimeChoiceItem } from './types.js';
 
 const baseProps = { uuid: 'b1', properties: [] as never[] };
-const hero: BlockCharacter = { name: 'Hero', emotion: 'happy', emotionIntensity: 2 };
+const hero: BlockCharacter = { uuid: 'hero-uuid', id: 'hero', name: 'Hero', emotion: 'happy', emotionIntensity: 2 };
 
 describe( 'createDialogContext', () => {
 
@@ -27,7 +27,7 @@ describe( 'createDialogContext', () => {
 	it( 'resolveCharacterPort stores the character index from metadata', () => {
 		const block: DialogBlock = {
 			...baseProps, type: 'DIALOG',
-			metadata: { characters: [{ name: 'Hero' }, { name: 'Boss' }, { name: 'NPC' }] },
+			metadata: { characters: [{ uuid: 'hero-uuid', id: 'hero', name: 'Hero' }, { uuid: 'boss-uuid', id: 'boss', name: 'Boss' }, { uuid: 'npc-uuid', id: 'npc', name: 'NPC' }] },
 		};
 		const ctx = createDialogContext( block, hero );
 		ctx.resolveCharacterPort( 'Boss' );
@@ -37,7 +37,7 @@ describe( 'createDialogContext', () => {
 	it( 'resolveCharacterPort sets undefined for unknown character', () => {
 		const block: DialogBlock = {
 			...baseProps, type: 'DIALOG',
-			metadata: { characters: [{ name: 'Hero' }] },
+			metadata: { characters: [{ uuid: 'hero-uuid', id: 'hero', name: 'Hero' }] },
 		};
 		const ctx = createDialogContext( block, hero );
 		ctx.resolveCharacterPort( 'Ghost' );
@@ -56,32 +56,23 @@ describe( 'createDialogContext', () => {
 
 describe( 'createChoiceContext', () => {
 
-	const alwaysTrue = () => true;
-	const alwaysFalse = () => false;
-
-	it( 'filters choices by visibility conditions', () => {
+	it( 'exposes pre-tagged choices as-is', () => {
 		const block: ChoiceBlock = {
 			...baseProps, type: 'CHOICE',
 			choices: [
 				{ uuid: 'c1', structureKey: 'c1' },
-				{ uuid: 'c2', structureKey: 'c2', visibilityConditions: [{ uuid: 'v1', key: 'x', operator: '=', value: 'y' }] },
-			],
-		};
-		const ctx = createChoiceContext( block, alwaysFalse, undefined, undefined );
-		expect( ctx.choices ).toHaveLength( 1 );
-		expect( ctx.choices[0]!.uuid ).toBe( 'c1' );
-	} );
-
-	it( 'keeps all choices when all conditions pass', () => {
-		const block: ChoiceBlock = {
-			...baseProps, type: 'CHOICE',
-			choices: [
-				{ uuid: 'c1', structureKey: 'c1', visibilityConditions: [{ uuid: 'v1', key: 'x', operator: '=', value: 'y' }] },
 				{ uuid: 'c2', structureKey: 'c2' },
 			],
 		};
-		const ctx = createChoiceContext( block, alwaysTrue, undefined, undefined );
+		const tagged: RuntimeChoiceItem[] = [
+			{ uuid: 'c1', structureKey: 'c1', visible: true },
+			{ uuid: 'c2', structureKey: 'c2', visible: false },
+		];
+		const ctx = createChoiceContext( block, tagged, undefined, undefined );
 		expect( ctx.choices ).toHaveLength( 2 );
+		expect( ctx.choices[0]!.uuid ).toBe( 'c1' );
+		expect( ( ctx.choices[0] as RuntimeChoiceItem ).visible ).toBe( true );
+		expect( ( ctx.choices[1] as RuntimeChoiceItem ).visible ).toBe( false );
 	} );
 
 	it( 'selectChoice stores the UUID', () => {
@@ -89,7 +80,8 @@ describe( 'createChoiceContext', () => {
 			...baseProps, type: 'CHOICE',
 			choices: [{ uuid: 'c1', structureKey: 'c1' }],
 		};
-		const ctx = createChoiceContext( block, alwaysTrue, undefined, undefined );
+		const tagged: RuntimeChoiceItem[] = [{ uuid: 'c1', structureKey: 'c1' }];
+		const ctx = createChoiceContext( block, tagged, undefined, undefined );
 		ctx.selectChoice( 'c1' );
 		expect( ctx._selectedChoiceUuid ).toBe( 'c1' );
 	} );
@@ -99,8 +91,9 @@ describe( 'createChoiceContext', () => {
 			...baseProps, type: 'CHOICE',
 			choices: [{ uuid: 'c1', structureKey: 'c1' }],
 		};
+		const tagged: RuntimeChoiceItem[] = [{ uuid: 'c1', structureKey: 'c1' }];
 		const spy = vi.fn();
-		const ctx = createChoiceContext( block, alwaysTrue, spy, undefined );
+		const ctx = createChoiceContext( block, tagged, spy, undefined );
 		ctx.selectChoice( 'c1' );
 		expect( spy ).toHaveBeenCalledOnce();
 		expect( spy ).toHaveBeenCalledWith( 'b1', 'c1' );
@@ -111,7 +104,8 @@ describe( 'createChoiceContext', () => {
 			...baseProps, type: 'CHOICE',
 			choices: [{ uuid: 'c1', structureKey: 'c1' }],
 		};
-		const ctx = createChoiceContext( block, alwaysTrue, undefined, hero );
+		const tagged: RuntimeChoiceItem[] = [{ uuid: 'c1', structureKey: 'c1' }];
+		const ctx = createChoiceContext( block, tagged, undefined, hero );
 		expect( ctx.character?.name ).toBe( 'Hero' );
 	} );
 

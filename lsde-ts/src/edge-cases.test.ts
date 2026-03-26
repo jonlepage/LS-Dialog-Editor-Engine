@@ -1,7 +1,7 @@
 /**
  * Edge case tests across all modules.
  * Covers: next() double-call, NOTE-only scene, selectChoice invalid UUID,
- * resolve() double-call, onBeforeBlock no resolve, StateBridge missing,
+ * resolve() double-call, onBeforeBlock no resolve,
  * entryBlockId → NOTE, condition long chain, handler overwrite.
  */
 import { describe, it, expect, vi } from 'vitest';
@@ -9,7 +9,7 @@ import { DialogueEngine } from './engine.js';
 import { SceneHandleImpl, type SceneHandleCallbacks } from './scene-handle.js';
 import { SceneGraph } from './graph.js';
 import { HandlerRegistry } from './handler-registry.js';
-import type { BlueprintExport, BlueprintScene, BlueprintBlock, StateBridge } from './types.js';
+import type { BlueprintExport, BlueprintScene, BlueprintBlock } from './types.js';
 import { evaluateConditionChain } from './condition-evaluator.js';
 import type { ExportCondition } from './types.js';
 
@@ -31,13 +31,36 @@ function makeExport( scenes: BlueprintScene[] ): BlueprintExport {
 	return { version: '1.0.0', exportDate: '2025-01-01', locales: ['en'], scenes };
 }
 
-function makeCallbacks( bridge?: StateBridge ): SceneHandleCallbacks {
+function makeCallbacks(): SceneHandleCallbacks {
 	return {
 		onSceneStarted: vi.fn(),
 		onSceneEnded: vi.fn(),
-		getStateBridge: () => bridge ?? null,
+		getResolveCharacter: () => ( chars ) => chars[0],
+		getChoiceFilter: () => null,
 		getLocale: () => 'en',
 	};
+}
+
+/** Populate a HandlerRegistry with the 4 mandatory handlers (for SceneHandleImpl direct tests). */
+function fillRequiredHandlers( reg: HandlerRegistry ): void {
+	reg.dialogHandler ??= ( { next } ) => { next(); };
+	reg.choiceHandler ??= ( { context, next } ) => {
+		if ( context.choices.length > 0 ) context.selectChoice( context.choices[0]!.uuid );
+		next();
+	};
+	reg.conditionHandler ??= ( { context, next } ) => { context.resolve( true ); next(); };
+	reg.actionHandler ??= ( { context, next } ) => { context.resolve(); next(); };
+}
+
+/** Register all 4 mandatory handlers on a DialogueEngine (for engine-level tests). */
+function registerAllHandlers( engine: DialogueEngine ): void {
+	engine.onDialog( ( { next } ) => { next(); } );
+	engine.onChoice( ( { context, next } ) => {
+		if ( context.choices.length > 0 ) context.selectChoice( context.choices[0]!.uuid );
+		next();
+	} );
+	engine.onCondition( ( { context, next } ) => { context.resolve( true ); next(); } );
+	engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
 }
 
 // ─── next() called twice ─────────────────────────────────────────────────────
@@ -56,6 +79,7 @@ describe( 'edge — next() called twice', () => {
 			next();
 			next(); // second call — should be ignored
 		};
+		fillRequiredHandlers( global );
 
 		new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() ).start();
 		expect( visited ).toEqual( ['b1', 'b2', 'b3'] );
@@ -75,6 +99,7 @@ describe( 'edge — NOTE-only scene', () => {
 			connections: [],
 		} );
 		const global = new HandlerRegistry();
+		fillRequiredHandlers( global );
 		const cbs = makeCallbacks();
 
 		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, cbs );
@@ -96,6 +121,7 @@ describe( 'edge — NOTE-only scene', () => {
 		} );
 		const global = new HandlerRegistry();
 		global.dialogHandler = ( { block, next } ) => { visited.push( block.uuid ); next(); };
+		fillRequiredHandlers( global );
 
 		new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() ).start();
 		expect( visited ).toEqual( ['real'] );
@@ -129,6 +155,7 @@ describe( 'edge — selectChoice with invalid UUID', () => {
 
 		const engine = new DialogueEngine();
 		engine.init( { data: makeExport( [s] ) } );
+		registerAllHandlers( engine );
 		engine.onDialog( ( { block, next } ) => { visited.push( block.uuid ); next(); } );
 		engine.onChoice( ( { context, next } ) => {
 			context.selectChoice( 'INVALID-UUID' ); // doesn't match any connection
@@ -164,6 +191,7 @@ describe( 'edge — condition resolve() called twice', () => {
 
 		const engine = new DialogueEngine();
 		engine.init( { data: makeExport( [s] ) } );
+		registerAllHandlers( engine );
 		engine.onCondition( ( { context, next } ) => {
 			context.resolve( true );
 			context.resolve( false ); // override — should follow false branch
@@ -190,6 +218,7 @@ describe( 'edge — onBeforeBlock without resolve', () => {
 
 		const engine = new DialogueEngine();
 		engine.init( { data: makeExport( [scene] ) } );
+		registerAllHandlers( engine );
 		engine.onBeforeBlock( ( { } ) => {
 			// Intentionally never call resolve()
 		} );
@@ -201,58 +230,6 @@ describe( 'edge — onBeforeBlock without resolve', () => {
 		// Flow is stuck — handler never fires
 		expect( visited ).toHaveLength( 0 );
 		expect( handle.isRunning() ).toBe( true ); // still running, waiting for resolve
-	} );
-
-} );
-
-// ─── Auto-eval without StateBridge ───────────────────────────────────────────
-
-describe( 'edge — auto-eval without StateBridge', () => {
-
-	it( 'condition auto-eval without bridge ends scene', () => {
-		const s: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
-			blocks: [
-				{ uuid: 'cond1', type: 'CONDITION' as const, properties: [], isStartBlock: true,
-					conditions: [{ uuid: 'c1', key: 'x', operator: '=', value: 'y' }] },
-				dialog( 'yes' ),
-			],
-			connections: [
-				{ id: 'ct', fromId: 'cond1', toId: 'yes', fromPort: 'true', toPort: 'in', fromPortIndex: 0 },
-			],
-		};
-
-		const engine = new DialogueEngine();
-		engine.init( { data: makeExport( [s] ) } );
-		// No setStateBridge, no onCondition handler
-		engine.onDialog( ( { next } ) => next() );
-
-		const handle = engine.scene( 's1' );
-		handle.start();
-
-		// No bridge → endScene
-		expect( handle.isRunning() ).toBe( false );
-	} );
-
-	it( 'action auto-exec without bridge ends scene', () => {
-		const s: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
-			blocks: [
-				{ uuid: 'act1', type: 'ACTION' as const, properties: [], isStartBlock: true,
-					actions: [{ uuid: 'a1', actionId: 'x', params: [] }] },
-				dialog( 'after' ),
-			],
-			connections: [conn( 'act1', 'after', 'then' )],
-		};
-
-		const engine = new DialogueEngine();
-		engine.init( { data: makeExport( [s] ) } );
-		engine.onDialog( ( { next } ) => next() );
-
-		const handle = engine.scene( 's1' );
-		handle.start();
-
-		expect( handle.isRunning() ).toBe( false );
 	} );
 
 } );
@@ -273,6 +250,7 @@ describe( 'edge — entryBlockId is a NOTE', () => {
 		} );
 		const global = new HandlerRegistry();
 		global.dialogHandler = ( { block, next } ) => { visited.push( block.uuid ); next(); };
+		fillRequiredHandlers( global );
 
 		new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() ).start();
 		expect( visited ).toEqual( ['real'] );
@@ -328,6 +306,7 @@ describe( 'edge — handler overwrite', () => {
 			blocks: [dialog( 'b1', { start: true } )],
 		} )] ) } );
 
+		registerAllHandlers( engine );
 		engine.onDialog( ( { next } ) => { calls.push( 'first' ); next(); } );
 		engine.onDialog( ( { next } ) => { calls.push( 'second' ); next(); } ); // overwrite
 
