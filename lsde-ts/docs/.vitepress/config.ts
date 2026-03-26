@@ -26,8 +26,9 @@ export default defineConfig({
 					items: [
 						{ text: 'Blueprints & Scenes', link: '/guide/blueprints' },
 						{ text: 'Block Types', link: '/guide/block-types' },
-						{ text: 'StateBridge', link: '/guide/state-bridge' },
+						{ text: 'Choice Visibility', link: '/guide/choice-visibility' },
 						{ text: 'Handlers & Lifecycle', link: '/guide/handlers' },
+						{ text: 'Game Engine Integration', link: '/guide/integration' },
 					],
 				},
 			],

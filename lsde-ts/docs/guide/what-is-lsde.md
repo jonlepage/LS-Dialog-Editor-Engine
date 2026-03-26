@@ -12,9 +12,6 @@
 | **C#** | C# (.NET Standard 2.1) | Unity, Godot Mono, .NET | [lsde-csharp](https://github.com/jonlepage/LS-Dialog-Editor-Engine/tree/master/lsde-csharp) |
 | **C++** | C++17 | Unreal Engine, custom engines | [lsde-cpp](https://github.com/jonlepage/LS-Dialog-Editor-Engine/tree/master/lsde-cpp) |
 | **GDScript** | GDScript | Godot 4 | [lsde-gdscript](https://github.com/jonlepage/LS-Dialog-Editor-Engine/tree/master/lsde-gdscript) |
-| **Rust** | Rust | Native, WebAssembly | _Coming soon_ |
-| **Lua** | Lua | Defold, LOVE | _Coming soon_ |
-| **Python** | Python | Tooling, prototyping | _Coming soon_ |
 
 All runtimes share the same blueprint format and pass a common cross-language test suite (42 test cases).
 
@@ -25,7 +22,7 @@ Every runtime follows the same **callback-driven graph dispatcher** pattern:
 1. **Blueprint** — A JSON file exported from LSDE, containing scenes, blocks and connections.
 2. **Engine** — Validates the blueprint, builds the internal graph and dispatches blocks to your handlers.
 3. **Handlers** — Your functions that react to each block type (dialog, choice, condition, action).
-4. **StateBridge** — The bridge between the engine and your game state.
+4. **Your Game** — Conditions, actions, and character resolution are handled by your handler callbacks.
 
 ```
 Blueprint JSON → engine.init() → engine.scene(id).start()

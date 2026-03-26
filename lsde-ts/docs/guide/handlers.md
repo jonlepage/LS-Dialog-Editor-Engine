@@ -1,5 +1,55 @@
 # Handlers & Lifecycle
 
+## Required Handlers
+
+The engine is a graph traversal machine — it walks nodes and dispatches them to your code. The 4 content handlers are required because without them the engine has no output:
+
+- `onDialog` — React to dialogue text
+- `onChoice` — Present choices to the player
+- `onCondition` — Evaluate conditions to branch the flow
+- `onAction` — Execute game-side effects
+
+When you call `handle.start()`, the engine validates that all 4 are registered (either at engine level or scene level). If any are missing, it throws a descriptive error listing the missing handlers.
+
+::: code-group
+```ts [TypeScript]
+engine.onDialog(handler);
+engine.onChoice(handler);
+engine.onCondition(handler);
+engine.onAction(handler);
+
+const handle = engine.scene(sceneId);
+handle.start(); // ✓ All 4 registered — scene starts
+```
+```csharp [C#]
+engine.OnDialog(handler);
+engine.OnChoice(handler);
+engine.OnCondition(handler);
+engine.OnAction(handler);
+
+var handle = engine.Scene(sceneId);
+handle.Start(); // ✓ All 4 registered — scene starts
+```
+```cpp [C++]
+engine.onDialog(handler);
+engine.onChoice(handler);
+engine.onCondition(handler);
+engine.onAction(handler);
+
+auto handle = engine.scene(sceneId);
+handle->start(); // ✓ All 4 registered — scene starts
+```
+```gdscript [GDScript]
+engine.on_dialog(handler)
+engine.on_choice(handler)
+engine.on_condition(handler)
+engine.on_action(handler)
+
+var handle = engine.scene(scene_id)
+handle.start() # ✓ All 4 registered — scene starts
+```
+:::
+
 ## Two-Tier Handler System
 
 The engine uses a two-level handler system:
@@ -11,7 +61,8 @@ When a block is dispatched:
 1. The scene handler (Tier 2) is called first, if it exists.
 2. The global handler (Tier 1) is then called, **unless** the scene handler called `context.preventGlobalHandler()`.
 
-```ts
+::: code-group
+```ts [TypeScript]
 // Tier 1 — global
 engine.onDialog(({ block, context, next }) => {
   console.log('Global dialog handler');
@@ -22,20 +73,66 @@ engine.onDialog(({ block, context, next }) => {
 const handle = engine.scene(sceneId);
 handle.onDialog(({ block, context, next }) => {
   console.log('Scene-specific dialog handler');
-  context.preventGlobalHandler(); // Skip the global handler
+  context.preventGlobalHandler();
   next();
 });
 handle.start();
 ```
+```csharp [C#]
+// Tier 1 — global
+engine.OnDialog(args => {
+    Console.WriteLine("Global dialog handler");
+    args.Next();
+    return null;
+});
 
-## Full Lifecycle
+// Tier 2 — scene-specific
+var handle = engine.Scene(sceneId);
+handle.OnDialog(args => {
+    Console.WriteLine("Scene-specific dialog handler");
+    args.Context.PreventGlobalHandler();
+    args.Next();
+    return null;
+});
+handle.Start();
+```
+```cpp [C++]
+// Tier 1 — global
+engine.onDialog([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
+    std::cout << "Global dialog handler\n";
+    next();
+    return {};
+});
 
-### Execution Order for Each Block
+// Tier 2 — scene-specific
+auto handle = engine.scene(sceneId);
+handle->onDialog([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
+    std::cout << "Scene-specific dialog handler\n";
+    ctx->preventGlobalHandler();
+    next();
+    return {};
+});
+handle->start();
+```
+```gdscript [GDScript]
+# Tier 1 — global
+engine.on_dialog(func(args):
+    print("Global dialog handler")
+    args["next"].call()
+    return Callable()
+)
 
-1. `onValidateNextBlock` — Validation before execution
-2. **Previous block cleanup** — The cleanup function returned by the *previous* block's handler is executed here, when entering the new block
-3. `onBeforeBlock` — Pre-processing (must call `resolve()` to continue)
-4. Type handler (Tier 2 then Tier 1)
+# Tier 2 — scene-specific
+var handle = engine.scene(scene_id)
+handle.on_dialog(func(args):
+    print("Scene-specific dialog handler")
+    args["context"].prevent_global_handler()
+    args["next"].call()
+    return Callable()
+)
+handle.start()
+```
+:::
 
 ::: info Handler Priority
 When a block is dispatched, the engine resolves the handler in this priority order:
@@ -45,6 +142,76 @@ When a block is dispatched, the engine resolves the handler in this priority ord
 
 If a scene handler (Tier 2) exists, the global handler (Tier 1) is also called **after**, unless `context.preventGlobalHandler()` was called.
 :::
+
+## Character Resolution
+
+The engine resolves a character for every block that has `metadata.characters`. The default returns the first character in the list.
+
+::: code-group
+```ts [TypeScript]
+// Engine-level — applies to all scenes
+engine.onResolveCharacter((characters) => {
+  return party.getActiveLeader(characters);
+});
+
+// Scene-level override
+const handle = engine.scene(sceneId);
+handle.onResolveCharacter((characters) => {
+  return battle.getActiveUnit(characters);
+});
+```
+```csharp [C#]
+engine.OnResolveCharacter(chars => party.GetActiveLeader(chars));
+
+var handle = engine.Scene(sceneId);
+handle.OnResolveCharacter(chars => battle.GetActiveUnit(chars));
+```
+```cpp [C++]
+engine.onResolveCharacter([](const auto& chars) {
+    return party.getActiveLeader(chars);
+});
+
+auto handle = engine.scene(sceneId);
+handle->onResolveCharacter([](const auto& chars) {
+    return battle.getActiveUnit(chars);
+});
+```
+```gdscript [GDScript]
+engine.on_resolve_character(func(chars):
+    return party.get_active_leader(chars)
+)
+
+var handle = engine.scene(scene_id)
+handle.on_resolve_character(func(chars):
+    return battle.get_active_unit(chars)
+)
+```
+:::
+
+The resolved character is available as `context.character` in all handlers.
+
+## Choice History
+
+The engine tracks every choice the player makes during a scene. This history is used internally for `choice:` condition evaluation, and is also available to your code:
+
+```ts
+handle.onExit(({ scene }) => {
+  // Map of blockUuid → [choiceUuid, ...]
+  const history = scene.getChoiceHistory();
+
+  // Get choices for a specific block
+  const picks = scene.getChoice('block-uuid-123'); // string[] | undefined
+});
+```
+
+## Full Lifecycle
+
+### Execution Order for Each Block
+
+1. `onValidateNextBlock` — Validation before execution
+2. **Previous block cleanup** — The cleanup function returned by the *previous* block's handler
+3. `onBeforeBlock` — Pre-processing (must call `resolve()` to continue)
+4. Type handler (Tier 2 then Tier 1)
 
 ### Scene Events
 
@@ -117,15 +284,15 @@ handle.onBlock('block-uuid-123', ({ block, context, next }) => {
 });
 ```
 
-## Blocks Without Handlers
+## Error Boundaries
 
-| Type | Behavior without handler |
-|------|--------------------------|
-| **DIALOG** | The block is visited then the engine silently advances to the next block. |
-| **CHOICE** | The block is visited then the engine silently advances. No choice is selected — the flow may end. |
-| **CONDITION** | The engine auto-evaluates via `StateBridge.evaluateCondition()` and follows the corresponding port. |
-| **ACTION** | The engine auto-executes via `StateBridge.executeAction()` for each action in the block. |
-| **NOTE** | Never executed — NOTE blocks are always skipped by the engine. |
+Every handler call is wrapped in a try/catch. If a handler throws:
+
+- The error does not corrupt engine state
+- For the main track: the scene ends cleanly
+- For async tracks: only the affected track is terminated — other tracks and the main flow continue
+
+This is cross-language compatible (try/catch in TS, C#, C++, GDScript).
 
 ## cancel()
 
