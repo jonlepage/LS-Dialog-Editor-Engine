@@ -8,7 +8,7 @@
 
     <!-- NuGet package metadata -->
     <PackageId>LsdeDialogEngine</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Authors>LepaSoft</Authors>
     <Description>LSDE Dialog Engine — C# runtime for loading and executing LSDE dialogue blueprints</Description>
     <PackageProjectUrl>https://github.com/jonlepage/LS-Dialog-Editor-Engine</PackageProjectUrl>
