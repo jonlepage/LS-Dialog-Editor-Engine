@@ -133,8 +133,6 @@ var is_async: bool = block.get("nativeProperties", {}).get("isAsync", false)
 
 42 shared JSON tests across all runtimes: **42/42 passing**.
 
-See [PLAN.md](../PLAN.md) for the complete specification.
-
 ---
 
 ## License

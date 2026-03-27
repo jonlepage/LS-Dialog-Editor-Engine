@@ -136,8 +136,6 @@ This runtime shares 42 JSON-based test specifications with all other ports:
 - `tests/test-port-routing.json` — Port resolution for all block types
 - `tests/test-init-validation.json` — Blueprint validation error/warning codes
 
-See [PLAN.md](../PLAN.md) for the complete specification.
-
 ---
 
 ## License

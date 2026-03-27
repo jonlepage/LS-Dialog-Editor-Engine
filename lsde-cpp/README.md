@@ -122,8 +122,6 @@ Handlers return `CleanupFn` (`std::function<void()>`) — a cleanup callback, or
 
 42 shared JSON tests across all runtimes: **40/42 passing** (2 order-dependent tests differ due to `unordered_set` iteration order).
 
-See [PLAN.md](../PLAN.md) for the complete specification.
-
 ---
 
 ## License

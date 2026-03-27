@@ -118,8 +118,6 @@ Handlers return `Action?` — a cleanup callback invoked when leaving the block,
 
 42 shared JSON tests across all runtimes: **42/42 passing**.
 
-See [PLAN.md](../PLAN.md) for the complete specification.
-
 ---
 
 ## License
