@@ -3,7 +3,7 @@
 	"plugin": ["typedoc-plugin-markdown", "typedoc-vitepress-theme"],
 	"entryPoints": ["src/index.ts"],
 	"out": "docs/api-ref",
-	"exclude": ["**/*.test.ts"],
+	"exclude": ["**/*.test.ts", "**/playground*.ts"],
 	"name": "LSDE Dialog Engine",
 	"readme": "none",
 	"docsRoot": "docs"

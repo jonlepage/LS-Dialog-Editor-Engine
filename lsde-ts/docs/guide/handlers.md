@@ -332,3 +332,53 @@ When `followNarrative = true` on an async block:
 - The async track **waits** for the main flow to advance
 - If `next()` has already been called in the handler, the pending advance executes
 - If `next()` has **not** been called, the block is **force-advanced** (skipped)
+
+### What Works in Async Tracks (and What Doesn't)
+
+Async tracks are great for things that happen *alongside* the main conversation — ambient effects, parallel animations, companion reactions. But they have limits.
+
+**DO — fire-and-forget side effects:**
+| Use case | Why it works |
+|---|---|
+| NPC ambient dialogue ("barks") | Dialog blocks on an async track — NPCs comment, react, or banter while the main conversation continues. Great for making the world feel alive. |
+| NPC companion reactions | A party member reacts to what the player just said — async dialog synced with followNarrative |
+| Play ambient sounds or music | Action block, no player interaction needed |
+| Trigger camera movements | Action block, runs in parallel |
+| Parallel animations | followNarrative syncs to main track pacing |
+
+**DON'T — player interaction or game logic branching:**
+| Use case | Why it breaks |
+|---|---|
+| CHOICE block in async track | The player is already interacting with the main track — who answers the async choice? |
+| CONDITION block in followNarrative | If force-advanced, the condition resolves with `null` → port resolver returns nothing → track silently ends |
+| Critical game state changes | If the async track is cancelled (scene ends), your action never executes |
+
+::: warning Choices in async tracks
+A CHOICE block in an async track implies the player should make a selection while already engaged with the main dialogue. The only valid scenario is an AI-driven "choice" (e.g., a companion NPC auto-selects based on personality). If your async track hits a CHOICE block without a scene-level handler that auto-selects, the flow will stall or end silently.
+:::
+
+### Multiple Scenes in Parallel
+
+The engine supports running multiple scenes simultaneously. Each `SceneHandle` has its own state, visited blocks, and async tracks. Global handlers (Tier 1) are shared — use the `scene` argument to know which scene is calling:
+
+```ts
+engine.onDialog(({ scene, block, context, next }) => {
+  // scene tells you WHO is calling
+  if (scene === mainDialogue) {
+    showMainUI(block);
+  } else if (scene === tutorialOverlay) {
+    showTutorialBubble(block);
+  }
+  next();
+});
+
+// Start two scenes at once
+const mainDialogue = engine.scene('main-quest');
+const tutorialOverlay = engine.scene('tutorial-hints');
+mainDialogue.start();
+tutorialOverlay.start();
+```
+
+::: tip Routing by scene
+If you have many concurrent scenes, consider registering scene-level (Tier 2) handlers on each handle instead of routing in the global handler. Cleaner separation, no `if/else` chains.
+:::

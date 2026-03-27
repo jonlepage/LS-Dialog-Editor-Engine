@@ -14,8 +14,9 @@
     "test:watch": "vitest",
     "lint": "tsc --noEmit",
     "docs:api": "typedoc",
-    "docs:dev": "typedoc && vitepress dev docs",
-    "docs": "typedoc && vitepress build docs",
+    "docs:llm": "node scripts/generate-llm-guide.js",
+    "docs:dev": "node scripts/generate-llm-guide.js && vitepress dev docs",
+    "docs": "typedoc && node scripts/generate-llm-guide.js && vitepress build docs",
     "docs:preview": "vitepress preview docs",
     "playground": "tsx src/playground.ts"
   },
