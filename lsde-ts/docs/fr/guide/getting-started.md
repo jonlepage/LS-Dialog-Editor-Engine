@@ -8,15 +8,23 @@ npm install @lsde/dialog-engine
 ```
 ```bash [C#]
 dotnet add package LsdeDialogEngine
-# Ou ajouter le projet source directement à la solution
 ```
 ```bash [C++]
-# Ajouter lsde-cpp/ au projet CMake
-add_subdirectory(lsde-cpp)
+# Ajouter en git submodule
+git submodule add https://github.com/jonlepage/LS-Dialog-Editor-Engine.git deps/lsde
+
+# CMakeLists.txt
+add_subdirectory(deps/lsde/lsde-cpp)
 target_link_libraries(your_target PRIVATE lsde)
 ```
 ```bash [GDScript]
-# Copier addons/lsde/ dans le dossier addons/ du projet Godot
+# Cloner le repository
+git clone https://github.com/jonlepage/LS-Dialog-Editor-Engine.git
+
+# Copier l'addon dans le projet Godot
+mkdir -p addons
+cp -r LS-Dialog-Editor-Engine/lsde-gdscript/addons/lsde addons/lsde
+rm -rf LS-Dialog-Editor-Engine
 ```
 :::
 

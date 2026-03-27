@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "publish:patch": "cd lsde-ts && bash scripts/publish.sh patch",
+    "publish:minor": "cd lsde-ts && bash scripts/publish.sh minor",
+    "publish:major": "cd lsde-ts && bash scripts/publish.sh major"
   },
   "keywords": [],
   "author": "",

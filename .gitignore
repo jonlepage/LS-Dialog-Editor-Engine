@@ -57,6 +57,12 @@ lsde-ts/docs/api-ref/
 lsde-ts/docs/.vitepress/dist
 lsde-ts/docs/.vitepress/cache
 
+# Publish artifacts
+*.nupkg
+*.tgz
+.npmrc
+lsde-ts/scripts/README.md
+
 # misc
 .env
 .env.local

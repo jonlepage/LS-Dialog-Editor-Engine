@@ -18,7 +18,10 @@
     "docs:dev": "node scripts/generate-llm-guide.js && vitepress dev docs",
     "docs": "typedoc && node scripts/generate-llm-guide.js && vitepress build docs",
     "docs:preview": "vitepress preview docs",
-    "playground": "tsx src/playground.ts"
+    "playground": "tsx src/playground.ts",
+    "publish:patch": "bash scripts/publish.sh patch",
+    "publish:minor": "bash scripts/publish.sh minor",
+    "publish:major": "bash scripts/publish.sh major"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
