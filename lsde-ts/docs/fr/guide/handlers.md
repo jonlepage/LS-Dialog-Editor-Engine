@@ -1,4 +1,4 @@
-# Handlers & Lifecycle
+# Handlers & cycle de vie
 
 ## Handlers required
 

@@ -194,15 +194,32 @@ The resolved character is available as `context.character` in all handlers.
 
 The engine tracks every choice the player makes during a scene. This history is used internally for `choice:` condition evaluation, and is also available to handler code:
 
-```ts
+::: code-group
+```ts [TypeScript]
 handle.onExit(({ scene }) => {
-  // Map of blockUuid → [choiceUuid, ...]
-  const history = scene.getChoiceHistory();
-
-  // Get choices for a specific block
+  const history = scene.getChoiceHistory();       // Map of blockUuid → [choiceUuid, ...]
   const picks = scene.getChoice('block-uuid-123'); // string[] | undefined
 });
 ```
+```csharp [C#]
+handle.OnExit(args => {
+    var history = args.Scene.GetChoiceHistory();
+    var picks = args.Scene.GetChoice("block-uuid-123"); // List<string>?
+});
+```
+```cpp [C++]
+handle->onExit([](auto* scene, auto*) {
+    auto history = scene->getChoiceHistory();
+    auto picks = scene->getChoice("block-uuid-123"); // std::vector<std::string>*
+});
+```
+```gdscript [GDScript]
+handle.on_exit(func(args):
+    var history = args["scene"].get_choice_history()
+    var picks = args["scene"].get_choice("block-uuid-123") # Array or null
+)
+```
+:::
 
 ## Full Lifecycle
 
@@ -215,7 +232,8 @@ handle.onExit(({ scene }) => {
 
 ### Scene Events
 
-```ts
+::: code-group
+```ts [TypeScript]
 engine.onSceneEnter(({ scene, context }) => {
   // Called when handle.start() is executed
 });
@@ -224,28 +242,88 @@ engine.onSceneExit(({ scene, context }) => {
   // Called when the scene ends (naturally or via cancel)
 });
 ```
+```csharp [C#]
+engine.OnSceneEnter(args => {
+    // Called when handle.Start() is executed
+});
+
+engine.OnSceneExit(args => {
+    // Called when the scene ends (naturally or via cancel)
+});
+```
+```cpp [C++]
+engine.onSceneEnter([](auto* scene, auto*) {
+    // Called when handle->start() is executed
+});
+
+engine.onSceneExit([](auto* scene, auto*) {
+    // Called when the scene ends (naturally or via cancel)
+});
+```
+```gdscript [GDScript]
+engine.on_scene_enter(func(args):
+    pass # Called when handle.start() is executed
+)
+
+engine.on_scene_exit(func(args):
+    pass # Called when the scene ends (naturally or via cancel)
+)
+```
+:::
 
 ## onValidateNextBlock
 
 Intercepts each block transition for validation:
 
-```ts
+::: code-group
+```ts [TypeScript]
 engine.onValidateNextBlock(({ nextBlock, fromBlock, port }) => {
-  // Return { valid: false, reason: '...' } to block
   return { valid: true };
 });
 
 engine.onInvalidateBlock(({ scene, reason }) => {
   console.error('Invalid block:', reason);
-  scene.cancel(); // Stop the scene
+  scene.cancel();
 });
 ```
+```csharp [C#]
+engine.OnValidateNextBlock(args => {
+    return new ValidationResult { Valid = true };
+});
+
+engine.OnInvalidateBlock(args => {
+    Console.Error.WriteLine($"Invalid block: {args.Reason}");
+    args.Scene.Cancel();
+});
+```
+```cpp [C++]
+engine.onValidateNextBlock([](const auto& args) {
+    return ValidationResult{true};
+});
+
+engine.onInvalidateBlock([](auto* scene, const auto& reason) {
+    std::cerr << "Invalid block: " << reason << "\n";
+    scene->cancel();
+});
+```
+```gdscript [GDScript]
+engine.on_validate_next_block(func(args):
+    return {"valid": true}
+)
+
+engine.on_invalidate_block(func(args):
+    printerr("Invalid block: %s" % args["reason"])
+    args["scene"].cancel()
+)
+```
+:::
 
 ## onBeforeBlock
 
 Called before each block. **Must call `resolve()`** to continue:
 
-```ts
+::: code-group
+```ts [TypeScript]
 engine.onBeforeBlock(({ block, resolve }) => {
   const delay = block.nativeProperties?.delay;
   if (delay) {
@@ -255,34 +333,110 @@ engine.onBeforeBlock(({ block, resolve }) => {
   }
 });
 ```
+```csharp [C#]
+engine.OnBeforeBlock(args => {
+    var delay = args.Block.NativeProperties?.Delay;
+    if (delay.HasValue)
+        Task.Delay((int)(delay.Value * 1000)).ContinueWith(_ => args.Resolve());
+    else
+        args.Resolve();
+    return null;
+});
+```
+```cpp [C++]
+engine.onBeforeBlock([](auto* block, auto resolve) {
+    auto delay = block->nativeProperties ? block->nativeProperties->delay : std::nullopt;
+    if (delay.has_value()) {
+        scheduleTimer(delay.value() * 1000, [resolve]() { resolve(); });
+    } else {
+        resolve();
+    }
+});
+```
+```gdscript [GDScript]
+engine.on_before_block(func(args):
+    var delay = args["block"].get("nativeProperties", {}).get("delay", 0)
+    if delay > 0:
+        await get_tree().create_timer(delay).timeout
+    args["resolve"].call()
+)
+```
+:::
 
 ## Cleanup Functions
 
 A handler can return a cleanup function, called when leaving the block:
 
-```ts
+::: code-group
+```ts [TypeScript]
 engine.onDialog(({ block, next }) => {
   const element = showDialogUI(block);
   next();
 
   return () => {
-    // Called when the next block takes over
-    element.remove();
+    element.remove(); // Called when the next block takes over
   };
 });
 ```
+```csharp [C#]
+engine.OnDialog(args => {
+    var element = ShowDialogUI(args.Block);
+    args.Next();
+
+    return () => element.SetActive(false);
+});
+```
+```cpp [C++]
+engine.onDialog([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
+    auto* element = showDialogUI(block);
+    next();
+
+    return [element]() { element->remove(); };
+});
+```
+```gdscript [GDScript]
+engine.on_dialog(func(args):
+    var element = show_dialog_ui(args["block"])
+    args["next"].call()
+
+    return func(): element.queue_free()
+)
+```
+:::
 
 ## Block Override
 
 A `SceneHandle` can also override a specific block by UUID:
 
-```ts
+::: code-group
+```ts [TypeScript]
 const handle = engine.scene(sceneId);
 handle.onBlock('block-uuid-123', ({ block, context, next }) => {
-  // Handler specific to this block only
   next();
 });
 ```
+```csharp [C#]
+var handle = engine.Scene(sceneId);
+handle.OnBlock("block-uuid-123", args => {
+    args.Next();
+    return null;
+});
+```
+```cpp [C++]
+auto handle = engine.scene(sceneId);
+handle->onBlock("block-uuid-123", [](auto*, auto*, auto*, auto next) -> CleanupFn {
+    next();
+    return {};
+});
+```
+```gdscript [GDScript]
+var handle = engine.scene(scene_id)
+handle.on_block("block-uuid-123", func(args):
+    args["next"].call()
+    return Callable()
+)
+```
+:::
 
 ## Error Boundaries
 
@@ -303,12 +457,32 @@ Calling `scene.cancel()` triggers this sequence:
 3. The `onSceneExit` handler is called
 4. The scene is marked as finished
 
-```ts
+::: code-group
+```ts [TypeScript]
 engine.onInvalidateBlock(({ scene, reason }) => {
   console.error('Validation failed:', reason);
-  scene.cancel(); // Cleanup + onSceneExit are called
+  scene.cancel();
 });
 ```
+```csharp [C#]
+engine.OnInvalidateBlock(args => {
+    Console.Error.WriteLine($"Validation failed: {args.Reason}");
+    args.Scene.Cancel();
+});
+```
+```cpp [C++]
+engine.onInvalidateBlock([](auto* scene, const auto& reason) {
+    std::cerr << "Validation failed: " << reason << "\n";
+    scene->cancel();
+});
+```
+```gdscript [GDScript]
+engine.on_invalidate_block(func(args):
+    printerr("Validation failed: %s" % args["reason"])
+    args["scene"].cancel()
+)
+```
+:::
 
 ## Async Tracks
 
@@ -361,23 +535,59 @@ A CHOICE block in an async track implies the player should make a selection whil
 
 The engine supports running multiple scenes simultaneously. Each `SceneHandle` has its own state, visited blocks, and async tracks. Global handlers (Tier 1) are shared — use the `scene` argument to know which scene is calling:
 
-```ts
+::: code-group
+```ts [TypeScript]
 engine.onDialog(({ scene, block, context, next }) => {
-  // scene tells you WHO is calling
-  if (scene === mainDialogue) {
-    showMainUI(block);
-  } else if (scene === tutorialOverlay) {
-    showTutorialBubble(block);
-  }
+  if (scene === mainDialogue) showMainUI(block);
+  else if (scene === tutorialOverlay) showTutorialBubble(block);
   next();
 });
 
-// Start two scenes at once
 const mainDialogue = engine.scene('main-quest');
 const tutorialOverlay = engine.scene('tutorial-hints');
 mainDialogue.start();
 tutorialOverlay.start();
 ```
+```csharp [C#]
+engine.OnDialog(args => {
+    if (args.Scene == mainDialogue) ShowMainUI(args.Block);
+    else if (args.Scene == tutorialOverlay) ShowTutorialBubble(args.Block);
+    args.Next();
+    return null;
+});
+
+var mainDialogue = engine.Scene("main-quest");
+var tutorialOverlay = engine.Scene("tutorial-hints");
+mainDialogue.Start();
+tutorialOverlay.Start();
+```
+```cpp [C++]
+engine.onDialog([&](auto* scene, auto* block, auto*, auto next) -> CleanupFn {
+    if (scene == mainDialogue) showMainUI(block);
+    else if (scene == tutorialOverlay) showTutorialBubble(block);
+    next();
+    return {};
+});
+
+auto mainDialogue = engine.scene("main-quest");
+auto tutorialOverlay = engine.scene("tutorial-hints");
+mainDialogue->start();
+tutorialOverlay->start();
+```
+```gdscript [GDScript]
+engine.on_dialog(func(args):
+    if args["scene"] == main_dialogue: show_main_ui(args["block"])
+    elif args["scene"] == tutorial_overlay: show_tutorial_bubble(args["block"])
+    args["next"].call()
+    return Callable()
+)
+
+var main_dialogue = engine.scene("main-quest")
+var tutorial_overlay = engine.scene("tutorial-hints")
+main_dialogue.start()
+tutorial_overlay.start()
+```
+:::
 
 ::: tip Routing by scene
 For many concurrent scenes, consider registering scene-level (Tier 2) handlers on each handle instead of routing in the global handler. Cleaner separation, no `if/else` chains.

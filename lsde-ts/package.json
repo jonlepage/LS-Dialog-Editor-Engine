@@ -1,12 +1,23 @@
 {
   "name": "@lsde/dialog-engine",
   "version": "0.1.0",
-  "description": "LSDE Dialog Engine — TypeScript reference implementation",
+  "description": "Callback-driven dialogue graph engine — load LSDE blueprints and dispatch dialog, choice, condition and action blocks to handler callbacks",
+  "sideEffects": false,
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -33,5 +44,13 @@
     "vitepress": "^1.6.4",
     "vitest": "^2.0.0"
   },
-  "license": "SEE LICENSE IN ../LICENSE"
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jonlepage/LS-Dialog-Editor-Engine.git",
+    "directory": "lsde-ts"
+  },
+  "homepage": "https://jonlepage.github.io/LS-Dialog-Editor-Engine/",
+  "bugs": "https://github.com/jonlepage/LS-Dialog-Editor-Engine/issues",
+  "keywords": ["dialogue", "dialog", "engine", "game", "blueprint", "lsde", "LSDE", "visual-novel", "rpg", "interactive-fiction", "i18n", "gamedev", "game-engine", "unity", "runtime", "game-development", "godot", "dispatcher", "rpgmaker", "dialogflow"],
+  "license": "LicenseRef-Proprietary"
 }

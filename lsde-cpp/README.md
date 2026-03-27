@@ -1,4 +1,4 @@
-![LSDE Dialog Engine — C++](banner.png)
+![LSDE Dialog Engine — C++](https://raw.githubusercontent.com/jonlepage/LS-Dialog-Editor-Engine/master/lsde-cpp/banner.png)
 
 # LSDE Dialog Engine — C++
 

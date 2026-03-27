@@ -24,7 +24,7 @@ engine.onDialog(({ block, context, next }) => {
   const char = context.character;
 
   const el = document.getElementById('dialog')!;
-  el.innerHTML = `<strong>${char?.name ?? ''}</strong>: ${text ?? ''}`;
+  el.textContent = `${char?.name ?? ''}: ${text ?? ''}`;
   el.style.display = 'block';
 
   // Player clicks → flow continues. Your pace, your rules.

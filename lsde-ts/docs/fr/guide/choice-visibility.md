@@ -1,4 +1,4 @@
-# Choice Visibility
+# Visibilité des choix
 
 ## Aperçu
 

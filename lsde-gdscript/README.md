@@ -1,4 +1,4 @@
-![LSDE Dialog Engine — GDScript](banner.png)
+![LSDE Dialog Engine — GDScript](https://raw.githubusercontent.com/jonlepage/LS-Dialog-Editor-Engine/master/lsde-gdscript/banner.png)
 
 # LSDE Dialog Engine — GDScript
 

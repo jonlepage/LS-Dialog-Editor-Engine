@@ -1,4 +1,4 @@
-![LSDE Dialog Engine — TypeScript](banner.png)
+![LSDE Dialog Engine — TypeScript](https://raw.githubusercontent.com/jonlepage/LS-Dialog-Editor-Engine/master/lsde-ts/banner.png)
 
 # LSDE Dialog Engine — TypeScript
 

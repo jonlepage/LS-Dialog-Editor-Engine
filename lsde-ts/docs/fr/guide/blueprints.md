@@ -1,4 +1,4 @@
-# Blueprints & Scenes
+# Blueprints & Scènes
 
 ## Structure du blueprint
 
