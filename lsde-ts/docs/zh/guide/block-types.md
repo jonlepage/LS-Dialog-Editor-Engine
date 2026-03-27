@@ -2,7 +2,7 @@
 
 engine 支持 5 种 block 类型。每种类型都有专用的 handler 和特定类型的 context。
 
-所有 4 个内容 block handler（`onDialog`、`onChoice`、`onCondition`、`onAction`）都是**必需的** — engine 在你调用 `start()` 时会验证它们是否已注册。
+所有 4 个内容 block handler（`onDialog`、`onChoice`、`onCondition`、`onAction`）都是**必需的** — engine 在调用 `start()` 时会验证它们是否已注册。
 
 ## DIALOG
 

@@ -2,14 +2,14 @@
 
 ## Handlers required
 
-Le engine est une machine de traversée de graphe — il walk les nodes et les dispatch à ton code. Les 4 handlers de contenu sont required parce que sans eux le engine n'a aucun output :
+Le engine est une machine de traversée de graphe — il walk les nodes et les dispatch au code des handlers. Les 4 handlers de contenu sont required parce que sans eux le engine n'a aucun output :
 
 - `onDialog` — Réagir au texte de dialogue
 - `onChoice` — Présenter des choix au joueur
 - `onCondition` — Évaluer des conditions pour brancher le flow
 - `onAction` — Exécuter des effets côté jeu
 
-Quand tu call `handle.start()`, le engine valide que les 4 sont enregistrés (soit au niveau du engine ou de la scene). S'il en manque, il throw une erreur descriptive qui liste les handlers manquants.
+À l'appel de `handle.start()`, le engine valide que les 4 sont enregistrés (soit au niveau du engine ou de la scene). S'il en manque, il throw une erreur descriptive qui liste les handlers manquants.
 
 ::: code-group
 ```ts [TypeScript]
@@ -192,7 +192,7 @@ Le personnage résolu est disponible via `context.character` dans tous les handl
 
 ## Historique des choix
 
-Le engine track chaque choix que le joueur fait pendant une scene. Cet historique est utilisé en interne pour l'évaluation des conditions `choice:`, et est aussi disponible pour ton code :
+Le engine track chaque choix que le joueur fait pendant une scene. Cet historique est utilisé en interne pour l'évaluation des conditions `choice:`, et est aussi disponible pour le code appelant :
 
 ```ts
 handle.onExit(({ scene }) => {
@@ -243,7 +243,7 @@ engine.onInvalidateBlock(({ scene, reason }) => {
 
 ## onBeforeBlock
 
-Callé avant chaque block. **Doit call `resolve()`** pour continuer :
+Appelé avant chaque block. **`resolve()` doit être appelé** pour continuer :
 
 ```ts
 engine.onBeforeBlock(({ block, resolve }) => {
@@ -258,7 +258,7 @@ engine.onBeforeBlock(({ block, resolve }) => {
 
 ## Fonctions de cleanup
 
-Un handler peut retourner une fonction de cleanup, callée quand on quitte le block :
+Un handler peut retourner une fonction de cleanup, appelée quand le block est quitté :
 
 ```ts
 engine.onDialog(({ block, next }) => {
@@ -296,7 +296,7 @@ C'est compatible cross-language (try/catch en TS, C#, C++, GDScript).
 
 ## cancel()
 
-Caller `scene.cancel()` trigger cette séquence :
+Appeler `scene.cancel()` trigger cette séquence :
 
 1. Tous les **async tracks** sont cancelled
 2. La **fonction de cleanup** du block courant est exécutée
@@ -335,7 +335,7 @@ Quand `followNarrative = true` sur un block async :
 
 ### Ce qui fonctionne dans les async tracks (et ce qui fonctionne pas)
 
-Les async tracks sont parfaits pour des choses qui se passent *en parallèle* de la conversation principale — effets ambient, animations parallèles, réactions de compagnons. Mais y'a des limites.
+Les async tracks sont parfaits pour des choses qui se passent *en parallèle* de la conversation principale — effets ambient, animations parallèles, réactions de compagnons. Mais il y a des limites.
 
 **DO — effets fire-and-forget :**
 | Cas d'utilisation | Pourquoi ça marche |
@@ -351,10 +351,10 @@ Les async tracks sont parfaits pour des choses qui se passent *en parallèle* de
 |---|---|
 | Block CHOICE dans un async track | Le joueur est déjà en interaction avec le main track — qui répond au choice async? |
 | Block CONDITION dans followNarrative | Si force-advanced, la condition résout avec `null` → le port resolver retourne rien → le track finit en silence |
-| Changements critiques de game state | Si le async track est cancelled (la scene finit), ton action s'exécute jamais |
+| Changements critiques de game state | Si le async track est cancelled (la scene finit), l'action ne s'exécute jamais |
 
 ::: warning Choices dans les async tracks
-Un block CHOICE dans un async track implique que le joueur devrait faire une sélection pendant qu'il est déjà engagé avec le dialogue principal. Le seul scénario valide c'est un "choix" piloté par l'IA (ex. un compagnon NPC auto-sélectionne basé sur sa personnalité). Si ton async track hit un block CHOICE sans scene-level handler qui auto-sélectionne, le flow va stall ou finir en silence.
+Un block CHOICE dans un async track implique que le joueur devrait faire une sélection pendant qu'il est déjà engagé avec le dialogue principal. Le seul scénario valide c'est un "choix" piloté par l'IA (ex. un compagnon NPC auto-sélectionne basé sur sa personnalité). Si un async track hit un block CHOICE sans scene-level handler qui auto-sélectionne, le flow va stall ou finir en silence.
 :::
 
 ### Plusieurs scenes en parallèle
@@ -380,5 +380,5 @@ tutorialOverlay.start();
 ```
 
 ::: tip Routing par scene
-Si t'as plusieurs scenes concurrentes, considère enregistrer des handlers scene-level (Tier 2) sur chaque handle au lieu de router dans le handler global. Meilleure séparation, pas de chaînes `if/else`.
+Avec plusieurs scenes concurrentes, il est préférable d'enregistrer des handlers scene-level (Tier 2) sur chaque handle au lieu de router dans le handler global. Meilleure séparation, pas de chaînes `if/else`.
 :::

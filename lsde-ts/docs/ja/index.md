@@ -19,7 +19,7 @@ features:
   - title: マルチランタイム
     details: TypeScript、C#、C++、GDScript で利用可能。同じ blueprint フォーマット、同じテストスイート、ネイティブ統合。
   - title: Callback 駆動型
-    details: 内部レンダーループなし。engine が block を handler にディスパッチし、フローの制御はあなた次第。
+    details: 内部レンダーループなし。engine が block を handler にディスパッチし、フローの制御はホストアプリケーション側で行います。
   - title: ゼロマジック
     details: engine は純粋なグラフ走査マシン。4つの handler が各 block に意味を与えます — 隠れたフォールバックも自動評価もありません。
 ---

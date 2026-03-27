@@ -2,7 +2,7 @@
 
 Le engine supporte 5 types de blocks. Chacun a un handler dédié et un context spécifique au type.
 
-Les 4 handlers de blocks de contenu (`onDialog`, `onChoice`, `onCondition`, `onAction`) sont **required** — le engine valide leur présence quand tu call `start()`.
+Les 4 handlers de blocks de contenu (`onDialog`, `onChoice`, `onCondition`, `onAction`) sont **required** — le engine valide leur présence à l'appel de `start()`.
 
 ## DIALOG
 
@@ -130,7 +130,7 @@ Voir [Choice Visibility](/fr/guide/choice-visibility) pour le système complet d
 
 ## CONDITION
 
-Évalue de la logique pour brancher le flow. Le handler **doit** call `resolve(result)` — `true` suit le port index 0, `false` suit le port index 1.
+Évalue de la logique pour brancher le flow. Le handler **doit** appeler `resolve(result)` — `true` suit le port index 0, `false` suit le port index 1.
 
 ::: code-group
 ```ts [TypeScript]
@@ -195,7 +195,7 @@ Les conditions avec des clés qui commencent par `choice:` font référence à u
 
 ## ACTION
 
-Trigger des changements de game state. Call `resolve()` pour le succès ou `reject(error)` pour un échec.
+Trigger des changements de game state. Appeler `resolve()` pour le succès ou `reject(error)` pour un échec.
 
 ::: code-group
 ```ts [TypeScript]

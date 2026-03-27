@@ -2,7 +2,7 @@
 
 The engine supports 5 block types. Each has a dedicated handler and a type-specific context.
 
-All 4 content block handlers (`onDialog`, `onChoice`, `onCondition`, `onAction`) are **required** — the engine validates their presence when you call `start()`.
+All 4 content block handlers (`onDialog`, `onChoice`, `onCondition`, `onAction`) are **required** — the engine validates their presence when `start()` is called.
 
 ## DIALOG
 

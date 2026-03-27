@@ -1,34 +1,34 @@
-﻿LSDE Dialog Engine — Full Guide [English] (plain text, auto-generated)
+﻿LSDE Dialog Engine — Full Guide [Chinese] (plain text, auto-generated)
 ============================================================
 Concatenates all guide sections for LLM consumption.
-Source: lsde-ts/docs/guide/*.md
+Source: lsde-ts/docs/zh/guide/*.md
 ============================================================
 
-# What is LSDEDE?
+# 什么是 LSDEDE？
 
-**LSDE** (LS Dialog Editor) is a free tool for game and software developers that combines visual dialogue graph editing, AI-powered translation, voice generation, i18n code integration, and project diagnostics. It exports dialogue graphs as JSON blueprints containing scenes, blocks, connections, dictionaries, and action signatures. More info: [lepasoft.com/en/software/ls-dialog-editor](https://lepasoft.com/en/software/ls-dialog-editor).
+**LSDE**（LS Dialog Editor）是一款面向游戏和软件开发者的免费工具，集成了可视化对话图编辑、AI翻译、语音生成、i18n代码集成和项目诊断等功能。更多信息请参阅 [lepasoft.com/zh/software/ls-dialog-editor](https://lepasoft.com/zh/software/ls-dialog-editor)。LSDE 将对话图导出为 JSON blueprint，其中包含 scene、block、connection、dictionary 和 action signature。
 
-**LSDEDE** (LSDE Dialog Engine) is the multi-runtime engine that loads and executes these blueprints. It is available in multiple languages for native integration into any game engine or framework.
+**LSDEDE**（LSDE Dialog Engine）是加载并执行这些 blueprint 的多运行时 engine。它提供多种语言版本，可原生集成到各种游戏引擎或框架中。
 
-## Available Runtimes
+## 可用运行时
 
-| Runtime | Language | Target | Source |
-|---------|----------|--------|--------|
-| **TypeScript** | TypeScript / JavaScript | Reference implementation | [lsde-ts](https://github.com/jonlepage/LS-Dialog-Editor-Engine/tree/master/lsde-ts) |
+| 运行时 | 语言 | 目标 | 源码 |
+|---------|------|------|------|
+| **TypeScript** | TypeScript / JavaScript | 参考实现 | [lsde-ts](https://github.com/jonlepage/LS-Dialog-Editor-Engine/tree/master/lsde-ts) |
 | **C#** | C# (.NET Standard 2.1) | Unity, Godot Mono, .NET | [lsde-csharp](https://github.com/jonlepage/LS-Dialog-Editor-Engine/tree/master/lsde-csharp) |
-| **C++** | C++17 | Unreal Engine, custom engines | [lsde-cpp](https://github.com/jonlepage/LS-Dialog-Editor-Engine/tree/master/lsde-cpp) |
+| **C++** | C++17 | Unreal Engine, 自定义引擎 | [lsde-cpp](https://github.com/jonlepage/LS-Dialog-Editor-Engine/tree/master/lsde-cpp) |
 | **GDScript** | GDScript | Godot 4 | [lsde-gdscript](https://github.com/jonlepage/LS-Dialog-Editor-Engine/tree/master/lsde-gdscript) |
 
-All runtimes share the same blueprint format and pass a common cross-language test suite (42 test cases).
+所有运行时共享相同的 blueprint 格式，并通过一套通用的跨语言测试套件（42 个测试用例）。
 
-## Architecture
+## 架构
 
-Every runtime follows the same **callback-driven graph dispatcher** pattern:
+每个运行时都遵循相同的**回调驱动图调度器**模式：
 
-1. **Blueprint** — A JSON file exported from LSDE, containing scenes, blocks and connections.
-2. **Engine** — Validates the blueprint, builds the internal graph and dispatches blocks to registered handlers.
-3. **Handlers** — Functions that react to each block type (dialog, choice, condition, action).
-4. **Host Application** — Conditions, actions, and character resolution are implemented by handler callbacks.
+1. **Blueprint** — 从 LSDE 导出的 JSON 文件，包含 scene、block 和 connection。
+2. **Engine** — 验证 blueprint，构建内部图，并将 block 分发给已注册的 handler。
+3. **Handler** — 由开发者编写的函数，用于响应每种 block 类型（dialog、choice、condition、action）。
+4. **宿主应用程序** — condition、action 和角色解析由 handler callback 处理。
 
 ```
   Blueprint (JSON)
@@ -42,19 +42,19 @@ Every runtime follows the same **callback-driven graph dispatcher** pattern:
      Handlers ────────────┘
 ```
 
-## Design Principles
+## 设计原则
 
-- **Zero-dependency** — No runtime dependencies in any language.
-- **Framework-agnostic** — Works with any game engine or UI framework.
-- **Callback-driven** — No internal render loop. The host application calls `next()` when ready.
-- **Two-tier handlers** — Global (engine-level) and scene-level handlers with `preventGlobalHandler()`.
-- **Cross-language conformance** — All runtimes produce identical output for the same blueprint.
+- **零依赖** — 任何语言版本都没有运行时依赖。
+- **框架无关** — 可与任何游戏引擎或 UI 框架配合使用。
+- **回调驱动** — 没有内部渲染循环。在准备好时调用 `next()` 即可。
+- **双层 handler** — 全局（engine 级别）和 scene 级别 handler，支持 `preventGlobalHandler()`。
+- **跨语言一致性** — 所有运行时对相同的 blueprint 产生相同的输出。
 
 ================================================================================
 
-# Getting Started
+# 快速入门
 
-## Installation
+## 安装
 
 
 ```bash [TypeScript]
@@ -73,9 +73,9 @@ target_link_libraries(your_target PRIVATE lsde)
 # Copy addons/lsde/ into your Godot project's addons/ folder
 ```
 
-## Minimal Usage
+## 基本用法
 
-The engine is a graph traversal machine — it dispatches blocks to registered handlers, which give them meaning. Without handlers, the engine has no output.
+engine 是一个图遍历机器 — 它将 block 分发给已注册的 handler，由 handler 赋予其意义。没有 handler 的话，engine 不会产生任何输出。
 
 
 ```ts [TypeScript]
@@ -303,19 +303,19 @@ handle.start()
 ```
 
 > TIP:
-The engine is a pure graph traversal machine — it walks the nodes and calls handler code. Without handlers, blocks would be visited silently with no output. The `start()` validation catches this early so there is never a scene that runs but does nothing.
+engine 是一个纯粹的图遍历机器 — 它遍历节点并调用已注册的 handler。没有 handler 的话，block 会被静默访问而没有任何输出。`start()` 的验证机制会提前捕获这个问题，避免出现运行但无任何输出的 scene。
 
-## Blueprint Validation
+## Blueprint 验证
 
-`engine.init()` returns a diagnostic report containing:
+`engine.init()` 返回一个诊断报告，包含：
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `errors` | `DiagnosticEntry[]` | Blocking errors — the engine does not initialize |
-| `warnings` | `DiagnosticEntry[]` | Non-blocking warnings |
-| `stats` | `DiagnosticStats` | Counts: scenes, blocks, connections |
+| 字段 | 类型 | 描述 |
+|------|------|------|
+| `errors` | `DiagnosticEntry[]` | 阻断性错误 — engine 不会初始化 |
+| `warnings` | `DiagnosticEntry[]` | 非阻断性警告 |
+| `stats` | `DiagnosticStats` | 计数：scene、block、connection |
 
-The `check` option can also be provided to cross-validate against the host application's capabilities:
+还可以提供 `check` 选项，与宿主应用程序的功能进行交叉验证：
 
 
 ```ts [TypeScript]
@@ -354,19 +354,19 @@ engine.init({
 })
 ```
 
-## What's Next
+## 下一步
 
-- [Block Types](/guide/block-types) — Detailed reference for each block type and handler
-- [Choice Visibility](/guide/choice-visibility) — Opt-in tagging and filtering
-- [Handlers & Lifecycle](/guide/handlers) — Two-tier system, cleanup, async tracks
+- [Block 类型](/zh/guide/block-types) — 每种 block 类型和 handler 的详细参考
+- [Choice 可见性](/zh/guide/choice-visibility) — 可选的标记和过滤系统
+- [Handler 与生命周期](/zh/guide/handlers) — 双层系统、清理函数、异步轨道
 
 ================================================================================
 
-# Blueprints & Scenes
+# Blueprint 与 Scene
 
-## Blueprint Structure
+## Blueprint 结构
 
-A `BlueprintExport` is the JSON file exported from the LS-Dialog editor. It contains all the data the engine needs.
+`BlueprintExport` 是从 LS-Dialog 编辑器导出的 JSON 文件。它包含 engine 所需的全部数据。
 
 ```ts
 interface BlueprintExport {
@@ -381,9 +381,9 @@ interface BlueprintExport {
 }
 ```
 
-## Scenes
+## Scene
 
-Each scene is an independent subgraph with an entry point:
+每个 scene 是一个独立的子图，拥有一个入口点：
 
 ```ts
 interface BlueprintScene {
@@ -397,9 +397,9 @@ interface BlueprintScene {
 }
 ```
 
-## Connections
+## Connection
 
-Connections link output ports of a block to input ports of the next:
+Connection 将一个 block 的输出 port 连接到下一个 block 的输入 port：
 
 ```ts
 interface BlueprintConnection {
@@ -412,9 +412,9 @@ interface BlueprintConnection {
 }
 ```
 
-## Dictionaries
+## Dictionary
 
-Dictionaries define named value sets used by conditions and action parameters:
+Dictionary 定义了 condition 和 action 参数所使用的命名值集合：
 
 ```ts
 interface Dictionary {
@@ -425,9 +425,9 @@ interface Dictionary {
 }
 ```
 
-## Action Signatures
+## Action Signature
 
-Signatures describe reusable action types with their parameters:
+Signature 描述了可复用的 action 类型及其参数：
 
 ```ts
 interface ActionSignature {
@@ -440,15 +440,15 @@ interface ActionSignature {
 
 ================================================================================
 
-# Block Types
+# Block 类型
 
-The engine supports 5 block types. Each has a dedicated handler and a type-specific context.
+engine 支持 5 种 block 类型。每种类型都有专用的 handler 和特定类型的 context。
 
-All 4 content block handlers (`onDialog`, `onChoice`, `onCondition`, `onAction`) are **required** — the engine validates their presence when `start()` is called.
+所有 4 个内容 block handler（`onDialog`、`onChoice`、`onCondition`、`onAction`）都是**必需的** — engine 在调用 `start()` 时会验证它们是否已注册。
 
 ## DIALOG
 
-Displays text spoken by a character. The character is resolved by the `onResolveCharacter` callback.
+显示角色所说的文本。角色由 `onResolveCharacter` callback 解析。
 
 
 ```ts [TypeScript]
@@ -508,11 +508,11 @@ engine.on_dialog(func(args):
 )
 ```
 
-`resolveCharacterPort()` matches by character **UUID first**, then by **name** as fallback.
+`resolveCharacterPort()` 先按角色 **UUID** 匹配，然后以**名称**作为回退。
 
 ## CHOICE
 
-Presents selectable options to the player. When [`setChoiceFilter()`](/guide/choice-visibility) is configured, each choice is tagged with `visible: true | false`.
+向玩家呈现可选选项。当配置了 [`setChoiceFilter()`](/zh/guide/choice-visibility) 时，每个 choice 会被标记为 `visible: true | false`。
 
 
 ```ts [TypeScript]
@@ -566,11 +566,11 @@ engine.on_choice(func(args):
 )
 ```
 
-See [Choice Visibility](/guide/choice-visibility) for the full opt-in tagging system.
+参见 [Choice 可见性](/zh/guide/choice-visibility) 了解完整的可选标记系统。
 
 ## CONDITION
 
-Evaluates logic to branch the flow. The handler **must** call `resolve(result)` — `true` follows port index 0, `false` follows port index 1.
+评估逻辑以分支流程。handler **必须**调用 `resolve(result)` — `true` 走 port index 0，`false` 走 port index 1。
 
 
 ```ts [TypeScript]
@@ -629,11 +629,11 @@ engine.on_condition(func(args):
 ```
 
 > TIP:
-Conditions with keys starting with `choice:` reference a previous player selection. Use `scene.evaluateCondition(cond)` to resolve them — the engine checks its internal choice history automatically.
+以 `choice:` 开头的 key 的 condition 引用了之前的玩家选择。使用 `scene.evaluateCondition(cond)` 来解析它们 — engine 会自动检查其内部的选择历史记录。
 
 ## ACTION
 
-Triggers game state changes. Call `resolve()` for success or `reject(error)` for failure.
+触发游戏状态变更。调用 `resolve()` 表示成功，或调用 `reject(error)` 表示失败。
 
 
 ```ts [TypeScript]
@@ -677,46 +677,46 @@ engine.on_action(func(args):
 
 ## NOTE
 
-Documentation block for the designer. Never executed — automatically skipped during traversal.
+设计师使用的文档 block。不会被执行 — 在遍历过程中自动跳过。
 
-## Common Properties
+## 通用属性
 
-All blocks share these base fields:
+所有 block 共享以下基础字段：
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `uuid` | `string` | Unique identifier |
-| `type` | `BlockType` | Discriminant type |
-| `label` | `string?` | Human-readable name |
-| `properties` | `BlockProperty[]` | Key-value properties |
-| `userProperties` | `Record?` | Free-form user properties |
-| `nativeProperties` | `NativeProperties?` | Execution properties (async, delay, etc.) |
-| `metadata` | `BlockMetadata?` | Display metadata (characters, tags, color) |
-| `isStartBlock` | `boolean?` | Marks the entry block |
+| 字段 | 类型 | 描述 |
+|------|------|------|
+| `uuid` | `string` | 唯一标识符 |
+| `type` | `BlockType` | 判别类型 |
+| `label` | `string?` | 人类可读的名称 |
+| `properties` | `BlockProperty[]` | 键值属性 |
+| `userProperties` | `Record?` | 自由格式的用户属性 |
+| `nativeProperties` | `NativeProperties?` | 执行属性（async、delay 等） |
+| `metadata` | `BlockMetadata?` | 显示元数据（角色、标签、颜色） |
+| `isStartBlock` | `boolean?` | 标记入口 block |
 
 ### NativeProperties
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `isAsync` | `boolean?` | Execute on a parallel async track |
-| `delay` | `number?` | Delay before execution (consumed by `onBeforeBlock`) |
-| `timeout` | `number?` | Execution timeout |
-| `portPerCharacter` | `boolean?` | One output port per character in metadata |
-| `followNarrative` | `boolean?` | Async track follows main narrative pace |
+| 字段 | 类型 | 描述 |
+|------|------|------|
+| `isAsync` | `boolean?` | 在并行异步轨道上执行 |
+| `delay` | `number?` | 执行前的延迟（由 `onBeforeBlock` 消费） |
+| `timeout` | `number?` | 执行超时时间 |
+| `portPerCharacter` | `boolean?` | metadata 中每个角色对应一个输出 port |
+| `followNarrative` | `boolean?` | 异步轨道跟随主叙事节奏 |
 
 ================================================================================
 
-# Choice Visibility
+# Choice 可见性
 
-## Overview
+## 概述
 
-When a CHOICE block is dispatched, `context.choices` always contains **all** choices defined in the blueprint — none are pre-filtered. The engine never removes choices from the array.
+当 CHOICE block 被分发时，`context.choices` 始终包含 blueprint 中定义的**所有** choice — 不会有任何被预先过滤。engine 永远不会从数组中移除 choice。
 
-If visibility filtering is needed (e.g., hiding choices based on game state or previous selections), the engine provides an **opt-in tagging** system. A filter is installed once, and the engine tags each choice with `visible: true | false` before the `onChoice` handler sees it.
+如果需要可见性过滤（例如，根据游戏状态或之前的选择来隐藏 choice），engine 提供了一个**可选的标记**系统。安装一次 filter 后，engine 会在 `onChoice` handler 接收数据之前，为每个 choice 标记 `visible: true | false`。
 
-## Setup
+## 设置
 
-Register a choice filter on the engine — once, before starting any scene:
+在 engine 上注册一个 choice filter — 在启动任何 scene 之前注册一次：
 
 
 ```ts [TypeScript]
@@ -742,15 +742,15 @@ engine.set_choice_filter(func(cond):
 )
 ```
 
-When installed, the engine evaluates each choice's `visibilityConditions` **before** calling `onChoice`:
+安装后，engine 在调用 `onChoice` **之前**评估每个 choice 的 `visibilityConditions`：
 
-- **`choice:` conditions** (referencing previous player selections) are resolved automatically by the engine via its internal choice history — the callback never sees them.
-- **Game-state conditions** (everything else) are delegated to the callback.
-- Chaining with `&` (AND) and `|` (OR) works correctly across both types.
+- **`choice:` condition**（引用之前的玩家选择）由 engine 通过其内部选择历史自动解析 — callback 永远不会接收到它们。
+- **游戏状态 condition**（其他所有情况）委托给已注册的 callback。
+- 使用 `&`（AND）和 `|`（OR）的链式组合在两种类型之间都能正确工作。
 
-## Filtering in onChoice
+## 在 onChoice 中过滤
 
-In the handler, filter with one line:
+在 handler 中，用一行代码进行过滤：
 
 
 ```ts [TypeScript]
@@ -800,19 +800,19 @@ engine.on_choice(func(args):
 )
 ```
 
-### Why `visible !== false` and not `=== true`?
+### 为什么用 `visible !== false` 而不是 `=== true`？
 
-When **no filter is installed**, `visible` is `undefined`. Since `undefined !== false` evaluates to `true`, all choices pass — backward compatible by default. When a filter **is installed**, choices are tagged `true` or `false` explicitly.
+当**未安装 filter** 时，`visible` 是 `undefined`。由于 `undefined !== false` 求值为 `true`，所有 choice 都会通过 — 默认向后兼容。当 filter **已安装**时，choice 会被显式标记为 `true` 或 `false`。
 
-| `visible` value | Meaning | `!== false` |
+| `visible` 值 | 含义 | `!== false` |
 |---|---|---|
-| `true` | Filter installed, choice passes | `true` |
-| `false` | Filter installed, choice hidden | `false` |
-| `undefined` | No filter installed | `true` |
+| `true` | 已安装 filter，choice 通过 | `true` |
+| `false` | 已安装 filter，choice 隐藏 | `false` |
+| `undefined` | 未安装 filter | `true` |
 
 ## RuntimeChoiceItem
 
-When a filter is installed, each choice in `context.choices` is a `RuntimeChoiceItem` — an extension of `ChoiceItem` with the `visible` tag:
+安装 filter 后，`context.choices` 中的每个 choice 都是 `RuntimeChoiceItem` — 它是 `ChoiceItem` 的扩展，增加了 `visible` 标记：
 
 ```ts
 interface RuntimeChoiceItem extends ChoiceItem {
@@ -820,11 +820,11 @@ interface RuntimeChoiceItem extends ChoiceItem {
 }
 ```
 
-Without a filter, choices are still `RuntimeChoiceItem` but `visible` remains `undefined`.
+未安装 filter 时，choice 仍然是 `RuntimeChoiceItem`，但 `visible` 保持为 `undefined`。
 
-## Examples
+## 示例
 
-### Standard — show visible choices
+### 标准用法 — 显示可见的 choice
 
 ```ts
 engine.onChoice(({ context, next }) => {
@@ -836,7 +836,7 @@ engine.onChoice(({ context, next }) => {
 });
 ```
 
-### Timed choice — auto-select on timeout
+### 限时选择 — 超时自动选择
 
 ```ts
 engine.onChoice(({ block, context, next }) => {
@@ -860,7 +860,7 @@ engine.onChoice(({ block, context, next }) => {
 });
 ```
 
-### Hidden choices displayed greyed out
+### 隐藏的 choice 显示为灰色
 
 ```ts
 engine.onChoice(({ context, next }) => {
@@ -875,7 +875,7 @@ engine.onChoice(({ context, next }) => {
 });
 ```
 
-### Tutorial — ignore visibility entirely
+### 教程模式 — 完全忽略可见性
 
 ```ts
 tutorial.onChoice(({ context, next }) => {
@@ -885,9 +885,9 @@ tutorial.onChoice(({ context, next }) => {
 });
 ```
 
-## Sharing the Evaluator
+## 共享求值器
 
-Most games evaluate conditions in one place — an inventory system, a flag manager, a quest tracker. The **same evaluator function** can be shared between `setChoiceFilter` and `onCondition` so the logic stays in one place:
+宿主应用程序可能在一个地方评估 condition — 背包系统、标记管理器、任务追踪器。可以在 `setChoiceFilter` 和 `onCondition` 之间共享**同一个求值函数**，使逻辑集中在一处：
 
 
 ```ts [TypeScript]
@@ -969,11 +969,11 @@ engine.on_condition(func(args):
 ```
 
 > TIP:
-Without this pattern, the same `gameState.check(...)` logic ends up in two places. When the game state API changes, one gets fixed and the other is forgotten. One function, two registrations, zero drift.
+如果不使用此模式，最终会在两个地方编写相同的 `gameState.check(...)` 逻辑。当游戏状态 API 发生变化时，容易修复一处而遗漏另一处。一个函数，两次注册，零偏差。
 
-## Advanced: Manual Filtering
+## 高级用法：手动过滤
 
-If a global filter is not desired, `LsdeUtils` provides a low-level utility:
+如果不需要安装全局 filter，`LsdeUtils` 提供了一个底层工具函数：
 
 ```ts
 import { LsdeUtils } from '@lsde/dialog-engine';
@@ -985,22 +985,22 @@ const visible = LsdeUtils.filterVisibleChoices(
 );
 ```
 
-The `scene` parameter enables automatic `choice:` condition resolution. Without it, all conditions are delegated to the evaluator callback.
+`scene` 参数启用自动的 `choice:` condition 解析。如果不提供，所有 condition 都将委托给求值器 callback。
 
 ================================================================================
 
-# Handlers & Lifecycle
+# Handler 与生命周期
 
-## Required Handlers
+## 必需的 Handler
 
-The engine is a graph traversal machine — it walks nodes and dispatches them to handler code. The 4 content handlers are required because without them the engine has no output:
+engine 是一个图遍历机器 — 它遍历节点并将其分发给已注册的 handler。4 个内容 handler 是必需的，因为没有它们 engine 就没有输出：
 
-- `onDialog` — React to dialogue text
-- `onChoice` — Present choices to the player
-- `onCondition` — Evaluate conditions to branch the flow
-- `onAction` — Execute game-side effects
+- `onDialog` — 响应对话文本
+- `onChoice` — 向玩家呈现选项
+- `onCondition` — 评估 condition 以分支流程
+- `onAction` — 执行游戏副作用
 
-When `handle.start()` is called, the engine validates that all 4 are registered (either at engine level or scene level). If any are missing, it throws a descriptive error listing the missing handlers.
+调用 `handle.start()` 时，engine 会验证所有 4 个 handler 是否已注册（在 engine 级别或 scene 级别）。如果有缺失，会抛出一个描述性错误，列出缺失的 handler。
 
 
 ```ts [TypeScript]
@@ -1040,16 +1040,16 @@ var handle = engine.scene(scene_id)
 handle.start() # ✓ All 4 registered — scene starts
 ```
 
-## Two-Tier Handler System
+## 双层 Handler 系统
 
-The engine uses a two-level handler system:
+engine 使用两级 handler 系统：
 
-1. **Tier 1 — Global (engine-level)**: registered on `DialogueEngine` via `onDialog()`, `onChoice()`, etc.
-2. **Tier 2 — Scene-level**: registered on a `SceneHandle` via `handle.onDialog()`, etc.
+1. **第 1 层 — 全局（engine 级别）**：通过 `onDialog()`、`onChoice()` 等注册在 `DialogueEngine` 上。
+2. **第 2 层 — Scene 级别**：通过 `handle.onDialog()` 等注册在 `SceneHandle` 上。
 
-When a block is dispatched:
-1. The scene handler (Tier 2) is called first, if it exists.
-2. The global handler (Tier 1) is then called, **unless** the scene handler called `context.preventGlobalHandler()`.
+当一个 block 被分发时：
+1. 如果存在 scene handler（第 2 层），则首先调用它。
+2. 然后调用全局 handler（第 1 层），**除非** scene handler 调用了 `context.preventGlobalHandler()`。
 
 
 ```ts [TypeScript]
@@ -1124,16 +1124,16 @@ handle.start()
 ```
 
 > INFO:
-When a block is dispatched, the engine resolves the handler in this priority order:
-1. `handle.onBlock(uuid)` — block-specific override by UUID
-2. `handle.onDialog()` / `handle.onChoice()` / ... — type override for the scene
-3. `engine.onDialog()` / `engine.onChoice()` / ... — global handler
+当一个 block 被分发时，engine 按以下优先级解析 handler：
+1. `handle.onBlock(uuid)` — 按 UUID 指定的 block 级别覆盖
+2. `handle.onDialog()` / `handle.onChoice()` / ... — scene 的类型覆盖
+3. `engine.onDialog()` / `engine.onChoice()` / ... — 全局 handler
 
-If a scene handler (Tier 2) exists, the global handler (Tier 1) is also called **after**, unless `context.preventGlobalHandler()` was called.
+如果存在 scene handler（第 2 层），全局 handler（第 1 层）也会在**之后**被调用，除非调用了 `context.preventGlobalHandler()`。
 
-## Character Resolution
+## 角色解析
 
-The engine resolves a character for every block that has `metadata.characters`. The default returns the first character in the list.
+engine 会为每个具有 `metadata.characters` 的 block 解析角色。默认返回列表中的第一个角色。
 
 
 ```ts [TypeScript]
@@ -1175,11 +1175,11 @@ handle.on_resolve_character(func(chars):
 )
 ```
 
-The resolved character is available as `context.character` in all handlers.
+解析后的角色可通过所有 handler 中的 `context.character` 获取。
 
-## Choice History
+## 选择历史
 
-The engine tracks every choice the player makes during a scene. This history is used internally for `choice:` condition evaluation, and is also available to handler code:
+engine 跟踪玩家在 scene 中做出的每个选择。此历史记录在内部用于 `choice:` condition 评估，同时也可供外部代码使用：
 
 ```ts
 handle.onExit(({ scene }) => {
@@ -1191,16 +1191,16 @@ handle.onExit(({ scene }) => {
 });
 ```
 
-## Full Lifecycle
+## 完整生命周期
 
-### Execution Order for Each Block
+### 每个 Block 的执行顺序
 
-1. `onValidateNextBlock` — Validation before execution
-2. **Previous block cleanup** — The cleanup function returned by the *previous* block's handler
-3. `onBeforeBlock` — Pre-processing (must call `resolve()` to continue)
-4. Type handler (Tier 2 then Tier 1)
+1. `onValidateNextBlock` — 执行前的验证
+2. **上一个 block 的清理** — *上一个* block 的 handler 返回的清理函数
+3. `onBeforeBlock` — 预处理（必须调用 `resolve()` 才能继续）
+4. 类型 handler（先第 2 层，再第 1 层）
 
-### Scene Events
+### Scene 事件
 
 ```ts
 engine.onSceneEnter(({ scene, context }) => {
@@ -1214,7 +1214,7 @@ engine.onSceneExit(({ scene, context }) => {
 
 ## onValidateNextBlock
 
-Intercepts each block transition for validation:
+拦截每次 block 转换进行验证：
 
 ```ts
 engine.onValidateNextBlock(({ nextBlock, fromBlock, port }) => {
@@ -1230,7 +1230,7 @@ engine.onInvalidateBlock(({ scene, reason }) => {
 
 ## onBeforeBlock
 
-Called before each block. **Must call `resolve()`** to continue:
+在每个 block 之前调用。**必须调用 `resolve()`** 才能继续：
 
 ```ts
 engine.onBeforeBlock(({ block, resolve }) => {
@@ -1243,9 +1243,9 @@ engine.onBeforeBlock(({ block, resolve }) => {
 });
 ```
 
-## Cleanup Functions
+## 清理函数
 
-A handler can return a cleanup function, called when leaving the block:
+handler 可以返回一个清理函数，在离开 block 时调用：
 
 ```ts
 engine.onDialog(({ block, next }) => {
@@ -1259,9 +1259,9 @@ engine.onDialog(({ block, next }) => {
 });
 ```
 
-## Block Override
+## Block 覆盖
 
-A `SceneHandle` can also override a specific block by UUID:
+`SceneHandle` 还可以按 UUID 覆盖特定的 block：
 
 ```ts
 const handle = engine.scene(sceneId);
@@ -1271,24 +1271,24 @@ handle.onBlock('block-uuid-123', ({ block, context, next }) => {
 });
 ```
 
-## Error Boundaries
+## 错误边界
 
-Every handler call is wrapped in a try/catch. If a handler throws:
+每个 handler 调用都包裹在 try/catch 中。如果 handler 抛出异常：
 
-- The error does not corrupt engine state
-- For the main track: the scene ends cleanly
-- For async tracks: only the affected track is terminated — other tracks and the main flow continue
+- 错误不会破坏 engine 状态
+- 对于主轨道：scene 会干净地结束
+- 对于异步轨道：只有受影响的轨道被终止 — 其他轨道和主流程继续运行
 
-This is cross-language compatible (try/catch in TS, C#, C++, GDScript).
+这是跨语言兼容的（TS、C#、C++、GDScript 中的 try/catch）。
 
 ## cancel()
 
-Calling `scene.cancel()` triggers this sequence:
+调用 `scene.cancel()` 会触发以下序列：
 
-1. All **async tracks** are cancelled
-2. The **cleanup function** of the current block is executed
-3. The `onSceneExit` handler is called
-4. The scene is marked as finished
+1. 所有**异步轨道**被取消
+2. 当前 block 的**清理函数**被执行
+3. `onSceneExit` handler 被调用
+4. scene 被标记为已完成
 
 ```ts
 engine.onInvalidateBlock(({ scene, reason }) => {
@@ -1297,55 +1297,55 @@ engine.onInvalidateBlock(({ scene, reason }) => {
 });
 ```
 
-## Async Tracks
+## 异步轨道
 
-When a block has `nativeProperties.isAsync = true`, the engine creates a **parallel track** that runs independently of the main flow.
+当一个 block 的 `nativeProperties.isAsync = true` 时，engine 会创建一个与主流程独立运行的**并行轨道**。
 
-### How Tracks are Created
+### 轨道的创建方式
 
-During port resolution, if multiple outgoing connections exist:
-- The **first non-async connection** becomes the continuation of the main flow
-- The **other connections** (to blocks with `isAsync`) become parallel tracks
+在 port 解析过程中，如果存在多个传出 connection：
+- **第一个非异步 connection** 成为主流程的延续
+- **其他 connection**（指向 `isAsync` block 的）成为并行轨道
 
-### Differences from the Main Flow
+### 与主流程的区别
 
-- `onBeforeBlock` is **skipped** on async tracks — the type handler is called directly
-- Each async track follows only **one connection** (no multi-path branching)
-- Tracks are automatically cancelled when the scene ends
+- 异步轨道**跳过** `onBeforeBlock` — 直接调用类型 handler
+- 每个异步轨道只跟随**一个 connection**（不支持多路径分支）
+- scene 结束时轨道会自动取消
 
 ### followNarrative
 
-When `followNarrative = true` on an async block:
-- The async track **waits** for the main flow to advance
-- If `next()` has already been called in the handler, the pending advance executes
-- If `next()` has **not** been called, the block is **force-advanced** (skipped)
+当异步 block 上的 `followNarrative = true` 时：
+- 异步轨道**等待**主流程前进
+- 如果 handler 中已经调用了 `next()`，挂起的前进会执行
+- 如果 `next()` **未被**调用，block 会被**强制前进**（跳过）
 
-### What Works in Async Tracks (and What Doesn't)
+### 异步轨道的适用场景（以及不适用的场景）
 
-Async tracks are great for things that happen *alongside* the main conversation — ambient effects, parallel animations, companion reactions. But they have limits.
+异步轨道非常适合与主对话*同时*发生的事情 — 环境效果、并行动画、同伴反应。但它们有局限性。
 
-**DO — fire-and-forget side effects:**
-| Use case | Why it works |
+**适合 — 即发即忘的副作用：**
+| 用例 | 为什么可行 |
 |---|---|
-| NPC ambient dialogue ("barks") | Dialog blocks on an async track — NPCs comment, react, or banter while the main conversation continues. Great for making the world feel alive. |
-| NPC companion reactions | A party member reacts to what the player just said — async dialog synced with followNarrative |
-| Play ambient sounds or music | Action block, no player interaction needed |
-| Trigger camera movements | Action block, runs in parallel |
-| Parallel animations | followNarrative syncs to main track pacing |
+| NPC 环境对话（"插嘴"） | 异步轨道上的 dialog block — NPC 在主对话继续时发表评论、做出反应或闲聊。非常适合让世界更有生气。 |
+| NPC 同伴反应 | 队友对玩家刚说的话做出反应 — 使用 followNarrative 同步的异步 dialog |
+| 播放环境音效或音乐 | Action block，不需要玩家交互 |
+| 触发镜头移动 | Action block，并行运行 |
+| 并行动画 | followNarrative 与主轨道节奏同步 |
 
-**DON'T — player interaction or game logic branching:**
-| Use case | Why it breaks |
+**不适合 — 玩家交互或游戏逻辑分支：**
+| 用例 | 为什么会出问题 |
 |---|---|
-| CHOICE block in async track | The player is already interacting with the main track — who answers the async choice? |
-| CONDITION block in followNarrative | If force-advanced, the condition resolves with `null` → port resolver returns nothing → track silently ends |
-| Critical game state changes | If the async track is cancelled (scene ends), the action never executes |
+| 异步轨道中的 CHOICE block | 玩家已经在与主轨道交互 — 谁来回答异步的选择？ |
+| followNarrative 中的 CONDITION block | 如果被强制前进，condition 以 `null` 解析 → port 解析器返回空 → 轨道静默结束 |
+| 关键的游戏状态变更 | 如果异步轨道被取消（scene 结束），action 永远不会执行 |
 
 > WARNING:
-A CHOICE block in an async track implies the player should make a selection while already engaged with the main dialogue. The only valid scenario is an AI-driven "choice" (e.g., a companion NPC auto-selects based on personality). If an async track hits a CHOICE block without a scene-level handler that auto-selects, the flow will stall or end silently.
+异步轨道中的 CHOICE block 意味着玩家需要在已经参与主对话的同时做出选择。唯一合理的场景是 AI 驱动的"选择"（例如，同伴 NPC 根据性格自动选择）。如果异步轨道遇到一个 CHOICE block 而没有自动选择的 scene 级 handler，流程将停滞或静默结束。
 
-### Multiple Scenes in Parallel
+### 多个 Scene 并行运行
 
-The engine supports running multiple scenes simultaneously. Each `SceneHandle` has its own state, visited blocks, and async tracks. Global handlers (Tier 1) are shared — use the `scene` argument to know which scene is calling:
+engine 支持同时运行多个 scene。每个 `SceneHandle` 拥有自己的状态、已访问的 block 和异步轨道。全局 handler（第 1 层）是共享的 — 使用 `scene` 参数来判断是哪个 scene 在调用：
 
 ```ts
 engine.onDialog(({ scene, block, context, next }) => {
@@ -1366,27 +1366,27 @@ tutorialOverlay.start();
 ```
 
 > TIP:
-For many concurrent scenes, consider registering scene-level (Tier 2) handlers on each handle instead of routing in the global handler. Cleaner separation, no `if/else` chains.
+如果有多个并发 scene，建议在每个 handle 上注册 scene 级（第 2 层）handler，而不是在全局 handler 中进行路由。更清晰的分离，没有 `if/else` 链。
 
 ================================================================================
 
-# Game Engine Integration
+# 游戏引擎集成
 
-The LSDE engine is a pure graph traversal machine — it walks nodes and calls registered handlers. **The handlers are the bridge between the engine and the host application.** This page shows how to wire them into real game engines.
+LSDE engine 是一个纯粹的图遍历机器 — 它遍历节点并调用已注册的 handler。**handler 是 engine 和游戏之间的桥梁。** 本页展示如何将它们接入真实的游戏引擎。
 
-## The Pattern
+## 模式
 
-Every integration follows the same 3-step dance:
+每次集成都遵循相同的 3 步流程：
 
-1. **Initialize** — feed the engine the blueprint JSON
-2. **Connect** — plug the 4 handlers into the game systems (UI, state, audio...)
-3. **Start** — the engine calls the handlers, the host application takes it from there
+1. **初始化** — 将 blueprint JSON 输入 engine
+2. **连接** — 将 4 个 handler 接入游戏系统（UI、状态、音频...）
+3. **启动** — engine 调用 handler，由 handler 驱动游戏逻辑
 
-The engine never touches the UI, game state, or audio. It only reports *what* happened. The reaction is up to the host application. Think of it as a director reading stage directions — the game is the cast, crew, and stage.
+engine 永远不会触碰 UI、状态或音频。它只通知*发生了什么*，由 handler 决定*如何响应*。可以将其理解为一个导演在读舞台指示 — 游戏就是演员、工作人员和舞台。
 
-## Showing Dialogue
+## 显示对话
 
-The simplest handler — display text and wait for the player to continue.
+最简单的 handler — 显示文本并等待玩家继续。
 
 
 ```ts [TypeScript]
@@ -1462,11 +1462,11 @@ engine.on_dialog(func(args):
 ```
 
 > TIP:
-Call `next()` instantly for rapid-fire dialogue, or store it and call later — after an animation, a timer, a player click... whatever fits the game. The engine waits patiently.
+立即调用 `next()` 可以实现快速对话推进，或者保存它稍后调用 — 在动画结束后、计时器结束后、玩家点击后... 任何适合游戏的方式。engine 会耐心等待。
 
-## Presenting Choices
+## 呈现选项
 
-Spawn UI elements dynamically, let the player pick, and tell the engine what was selected.
+动态生成 UI 元素，让玩家选择，然后告诉 engine 选了什么。
 
 
 ```ts [TypeScript]
@@ -1561,9 +1561,9 @@ engine.on_choice(func(args):
 )
 ```
 
-## Evaluating Conditions
+## 评估 Condition
 
-The game state, the rules. The engine just needs a `true` or `false`.
+游戏状态逻辑完全由宿主应用程序控制。engine 只需要一个 `true` 或 `false`。
 
 
 ```ts [TypeScript]
@@ -1620,9 +1620,9 @@ engine.on_condition(func(args):
 )
 ```
 
-## Executing Actions
+## 执行 Action
 
-This is where the game comes alive — play sounds, give items, set flags, trigger cutscenes.
+这是游戏真正活起来的地方 — 播放音效、给予物品、设置标记、触发过场动画。
 
 
 ```ts [TypeScript]
@@ -1681,23 +1681,23 @@ engine.on_action(func(args):
 )
 ```
 
-## What Connects Where
+## 各 Handler 的对应关系
 
-| Handler | What the engine reports | What the host application does |
+| Handler | engine 通知的内容 | 对应的处理方式 |
 |---|---|---|
-| `onDialog` | "Show this text from this character" | Display UI, play voice, wait for input |
-| `onChoice` | "Here are the options (tagged visible/hidden)" | Spawn buttons, handle selection |
-| `onCondition` | "Evaluate these conditions" | Check game state, return true/false |
-| `onAction` | "Execute these effects" | Set flags, give items, play sounds |
-| `onResolveCharacter` | "Which character is active?" | Party system, battle formation |
-| `setChoiceFilter` | "Is this condition true for visibility?" | Check inventory, flags, quest state |
-| `onBeforeBlock` | "Block is about to execute" | Handle delays, transitions, fade-ins |
+| `onDialog` | "显示这个角色的这段文本" | 显示 UI、播放语音、等待输入 |
+| `onChoice` | "这些是选项（标记了可见/隐藏）" | 生成按钮、处理选择 |
+| `onCondition` | "评估这些 condition" | 检查游戏状态，返回 true/false |
+| `onAction` | "执行这些效果" | 设置标记、给予物品、播放音效 |
+| `onResolveCharacter` | "哪个角色是活跃的？" | 队伍系统、战斗阵型 |
+| `setChoiceFilter` | "这个 condition 对可见性来说为真吗？" | 检查背包、标记、任务状态 |
+| `onBeforeBlock` | "Block 即将执行" | 处理延迟、过渡、淡入效果 |
 
-## Pro Tips
+## 实用技巧
 
-- **`next()` is a remote control.** Call it instantly for rapid-fire dialogue, or hold it until an animation finishes. The engine waits — it has no concept of time.
-- **Cleanup functions are free housekeeping.** Return one from any handler and the engine calls it when moving to the next block. Perfect for hiding UI, stopping audio, or freeing spawned nodes.
-- **`onBeforeBlock` handles delays.** The engine does not enforce `delay` — the `onBeforeBlock` handler reads `nativeProperties.delay` and calls `resolve()` after a timer. Full control.
-- **Async tracks are parallel storylines.** If a cutscene needs dialogue and camera movement at the same time, mark blocks as `isAsync` in the editor. Each track runs independently.
+- **`next()` 是流程控制器。** 立即调用实现快速对话推进，或者保存它直到动画结束。engine 会等待 — 它没有时间概念。
+- **清理函数是免费的管家服务。** 从任何 handler 返回一个清理函数，engine 在移动到下一个 block 时会调用它。非常适合隐藏 UI、停止音频或释放生成的节点。
+- **`onBeforeBlock` 处理延迟。** engine 不强制执行 `delay` — 这由 `onBeforeBlock` handler 读取 `nativeProperties.delay` 并在计时器后调用 `resolve()` 来实现。完全由 handler 控制。
+- **异步轨道是并行故事线。** 如果过场动画需要同时进行对话和镜头移动，在编辑器中将 block 标记为 `isAsync`。每条轨道独立运行。
 
 ================================================================================

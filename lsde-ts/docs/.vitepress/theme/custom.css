@@ -36,6 +36,12 @@
   scrollbar-color: var(--vp-c-divider) var(--vp-c-bg-soft);
 }
 
+/* Hide language switcher on API reference pages */
+.is-api-ref .VPNavBarTranslations,
+.is-api-ref .VPNavScreenTranslations {
+  display: none !important;
+}
+
 /* VPSwitch (dark mode toggle) — rectangle, not pill */
 .VPSwitch {
   border-radius: 1px !important;

@@ -4,7 +4,7 @@
 
 当 CHOICE block 被分发时，`context.choices` 始终包含 blueprint 中定义的**所有** choice — 不会有任何被预先过滤。engine 永远不会从数组中移除 choice。
 
-如果你需要可见性过滤（例如，根据游戏状态或之前的选择来隐藏 choice），engine 提供了一个**可选的标记**系统。你安装一次 filter，engine 就会在你的 `onChoice` handler 看到之前，为每个 choice 标记 `visible: true | false`。
+如果需要可见性过滤（例如，根据游戏状态或之前的选择来隐藏 choice），engine 提供了一个**可选的标记**系统。安装一次 filter 后，engine 会在 `onChoice` handler 接收数据之前，为每个 choice 标记 `visible: true | false`。
 
 ## 设置
 
@@ -37,13 +37,13 @@ engine.set_choice_filter(func(cond):
 
 安装后，engine 在调用 `onChoice` **之前**评估每个 choice 的 `visibilityConditions`：
 
-- **`choice:` condition**（引用之前的玩家选择）由 engine 通过其内部选择历史自动解析 — 你的 callback 永远不会接收到它们。
-- **游戏状态 condition**（其他所有情况）委托给你的 callback。
+- **`choice:` condition**（引用之前的玩家选择）由 engine 通过其内部选择历史自动解析 — callback 永远不会接收到它们。
+- **游戏状态 condition**（其他所有情况）委托给已注册的 callback。
 - 使用 `&`（AND）和 `|`（OR）的链式组合在两种类型之间都能正确工作。
 
 ## 在 onChoice 中过滤
 
-在你的 handler 中，用一行代码进行过滤：
+在 handler 中，用一行代码进行过滤：
 
 ::: code-group
 ```ts [TypeScript]
@@ -181,7 +181,7 @@ tutorial.onChoice(({ context, next }) => {
 
 ## 共享求值器
 
-你的游戏可能在一个地方评估 condition — 背包系统、标记管理器、任务追踪器。你可以在 `setChoiceFilter` 和 `onCondition` 之间共享**同一个求值函数**，使逻辑集中在一处：
+宿主应用程序可能在一个地方评估 condition — 背包系统、标记管理器、任务追踪器。可以在 `setChoiceFilter` 和 `onCondition` 之间共享**同一个求值函数**，使逻辑集中在一处：
 
 ::: code-group
 ```ts [TypeScript]
@@ -264,12 +264,12 @@ engine.on_condition(func(args):
 :::
 
 ::: tip 为什么要共享？
-如果不使用此模式，你最终会在两个地方编写相同的 `gameState.check(...)` 逻辑。当你的游戏状态 API 发生变化时，你会修复一处而忘记另一处。一个函数，两次注册，零偏差。
+如果不使用此模式，最终会在两个地方编写相同的 `gameState.check(...)` 逻辑。当游戏状态 API 发生变化时，容易修复一处而遗漏另一处。一个函数，两次注册，零偏差。
 :::
 
 ## 高级用法：手动过滤
 
-如果你不想安装全局 filter，`LsdeUtils` 提供了一个底层工具函数：
+如果不需要安装全局 filter，`LsdeUtils` 提供了一个底层工具函数：
 
 ```ts
 import { LsdeUtils } from '@lsde/dialog-engine';
@@ -281,4 +281,4 @@ const visible = LsdeUtils.filterVisibleChoices(
 );
 ```
 
-`scene` 参数启用自动的 `choice:` condition 解析。如果不提供，所有 condition 都将委托给你的求值器 callback。
+`scene` 参数启用自动的 `choice:` condition 解析。如果不提供，所有 condition 都将委托给求值器 callback。

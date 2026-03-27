@@ -22,7 +22,7 @@ target_link_libraries(your_target PRIVATE lsde)
 
 ## Minimal Usage
 
-The engine is a graph traversal machine — it dispatches blocks to your handlers and you give them meaning. Without handlers, the engine has no output.
+The engine is a graph traversal machine — it dispatches blocks to registered handlers, which give them meaning. Without handlers, the engine has no output.
 
 ::: code-group
 ```ts [TypeScript]
@@ -251,7 +251,7 @@ handle.start()
 :::
 
 ::: tip Why are the 4 handlers required?
-The engine is a pure graph traversal machine — it walks the nodes and calls your code. Without handlers, blocks would be visited silently with no output. The `start()` validation catches this early so you never get a scene that runs but does nothing.
+The engine is a pure graph traversal machine — it walks the nodes and calls handler code. Without handlers, blocks would be visited silently with no output. The `start()` validation catches this early so there is never a scene that runs but does nothing.
 :::
 
 ## Blueprint Validation
@@ -264,7 +264,7 @@ The engine is a pure graph traversal machine — it walks the nodes and calls yo
 | `warnings` | `DiagnosticEntry[]` | Non-blocking warnings |
 | `stats` | `DiagnosticStats` | Counts: scenes, blocks, connections |
 
-You can also provide `check` to cross-validate against your game's capabilities:
+The `check` option can also be provided to cross-validate against the host application's capabilities:
 
 ::: code-group
 ```ts [TypeScript]

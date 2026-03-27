@@ -2,14 +2,14 @@
 
 ## Required Handlers
 
-The engine is a graph traversal machine — it walks nodes and dispatches them to your code. The 4 content handlers are required because without them the engine has no output:
+The engine is a graph traversal machine — it walks nodes and dispatches them to handler code. The 4 content handlers are required because without them the engine has no output:
 
 - `onDialog` — React to dialogue text
 - `onChoice` — Present choices to the player
 - `onCondition` — Evaluate conditions to branch the flow
 - `onAction` — Execute game-side effects
 
-When you call `handle.start()`, the engine validates that all 4 are registered (either at engine level or scene level). If any are missing, it throws a descriptive error listing the missing handlers.
+When `handle.start()` is called, the engine validates that all 4 are registered (either at engine level or scene level). If any are missing, it throws a descriptive error listing the missing handlers.
 
 ::: code-group
 ```ts [TypeScript]
@@ -192,7 +192,7 @@ The resolved character is available as `context.character` in all handlers.
 
 ## Choice History
 
-The engine tracks every choice the player makes during a scene. This history is used internally for `choice:` condition evaluation, and is also available to your code:
+The engine tracks every choice the player makes during a scene. This history is used internally for `choice:` condition evaluation, and is also available to handler code:
 
 ```ts
 handle.onExit(({ scene }) => {
@@ -351,10 +351,10 @@ Async tracks are great for things that happen *alongside* the main conversation 
 |---|---|
 | CHOICE block in async track | The player is already interacting with the main track — who answers the async choice? |
 | CONDITION block in followNarrative | If force-advanced, the condition resolves with `null` → port resolver returns nothing → track silently ends |
-| Critical game state changes | If the async track is cancelled (scene ends), your action never executes |
+| Critical game state changes | If the async track is cancelled (scene ends), the action never executes |
 
 ::: warning Choices in async tracks
-A CHOICE block in an async track implies the player should make a selection while already engaged with the main dialogue. The only valid scenario is an AI-driven "choice" (e.g., a companion NPC auto-selects based on personality). If your async track hits a CHOICE block without a scene-level handler that auto-selects, the flow will stall or end silently.
+A CHOICE block in an async track implies the player should make a selection while already engaged with the main dialogue. The only valid scenario is an AI-driven "choice" (e.g., a companion NPC auto-selects based on personality). If an async track hits a CHOICE block without a scene-level handler that auto-selects, the flow will stall or end silently.
 :::
 
 ### Multiple Scenes in Parallel
@@ -380,5 +380,5 @@ tutorialOverlay.start();
 ```
 
 ::: tip Routing by scene
-If you have many concurrent scenes, consider registering scene-level (Tier 2) handlers on each handle instead of routing in the global handler. Cleaner separation, no `if/else` chains.
+For many concurrent scenes, consider registering scene-level (Tier 2) handlers on each handle instead of routing in the global handler. Cleaner separation, no `if/else` chains.
 :::

@@ -37,8 +37,8 @@ engine.set_choice_filter(func(cond):
 
 インストールされると、engine は `onChoice` を呼び出す**前に**各 choice の `visibilityConditions` を評価します：
 
-- **`choice:` condition**（以前のプレイヤー選択を参照）は、engine の内部 choice 履歴によって自動的に解決されます — あなたの callback には渡されません。
-- **ゲームステート condition**（その他すべて）は、あなたの callback に委任されます。
+- **`choice:` condition**（以前のプレイヤー選択を参照）は、engine の内部 choice 履歴によって自動的に解決されます — 登録された callback には渡されません。
+- **ゲームステート condition**（その他すべて）は、登録された callback に委任されます。
 - `&`（AND）と `|`（OR）によるチェーンは、両方のタイプにまたがって正しく動作します。
 
 ## onChoice でのフィルタリング
@@ -181,7 +181,7 @@ tutorial.onChoice(({ context, next }) => {
 
 ## エバリュエーターの共有
 
-ゲームでは、おそらく condition の評価を1か所で行っているでしょう — インベントリシステム、フラグマネージャー、クエストトラッカーなど。`setChoiceFilter` と `onCondition` で**同じエバリュエーター関数**を共有することで、ロジックを1か所にまとめることができます：
+一般的に、condition の評価はインベントリシステム、フラグマネージャー、クエストトラッカーなど1か所で行われます。`setChoiceFilter` と `onCondition` で**同じエバリュエーター関数**を共有することで、ロジックを1か所にまとめることができます：
 
 ::: code-group
 ```ts [TypeScript]
@@ -264,7 +264,7 @@ engine.on_condition(func(args):
 :::
 
 ::: tip なぜ共有するのか？
-このパターンを使わないと、同じ `gameState.check(...)` ロジックを2か所に書くことになります。ゲームステート API が変更された場合、一方を修正してもう一方を忘れてしまうでしょう。1つの関数、2つの登録、ドリフトはゼロです。
+このパターンを使わないと、同じ `gameState.check(...)` ロジックを2か所に書くことになります。ゲームステート API が変更された場合、一方のみ修正してもう一方を見落とすリスクがあります。1つの関数、2つの登録、ドリフトはゼロです。
 :::
 
 ## 上級: 手動フィルタリング
@@ -281,4 +281,4 @@ const visible = LsdeUtils.filterVisibleChoices(
 );
 ```
 
-`scene` パラメーターを指定すると、`choice:` condition の自動解決が有効になります。指定しない場合、すべての condition はあなたのエバリュエーター callback に委任されます。
+`scene` パラメーターを指定すると、`choice:` condition の自動解決が有効になります。指定しない場合、すべての condition は登録されたエバリュエーター callback に委任されます。

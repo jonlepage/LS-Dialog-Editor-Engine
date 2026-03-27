@@ -19,9 +19,9 @@ features:
   - title: Multi-Runtime
     details: Available in TypeScript, C#, C++, and GDScript. Same blueprint format, same test suite, native integration.
   - title: Callback-driven
-    details: No internal render loop. The engine dispatches blocks to your handlers and you control the flow.
+    details: No internal render loop. The engine dispatches blocks to registered handlers; the host application controls the flow.
   - title: Zero Magic
-    details: The engine is a pure graph traversal machine. Your 4 handlers give meaning to each block — no hidden fallbacks, no auto-evaluation.
+    details: The engine is a pure graph traversal machine. The 4 handlers give meaning to each block — no hidden fallbacks, no auto-evaluation.
 ---
 
 ## Runtimes

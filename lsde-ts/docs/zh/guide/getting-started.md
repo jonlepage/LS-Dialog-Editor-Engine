@@ -22,7 +22,7 @@ target_link_libraries(your_target PRIVATE lsde)
 
 ## 基本用法
 
-engine 是一个图遍历机器 — 它将 block 分发给你的 handler，由你赋予它们意义。没有 handler 的话，engine 不会产生任何输出。
+engine 是一个图遍历机器 — 它将 block 分发给已注册的 handler，由 handler 赋予其意义。没有 handler 的话，engine 不会产生任何输出。
 
 ::: code-group
 ```ts [TypeScript]
@@ -251,7 +251,7 @@ handle.start()
 :::
 
 ::: tip 为什么 4 个 handler 是必需的？
-engine 是一个纯粹的图遍历机器 — 它遍历节点并调用你的代码。没有 handler 的话，block 会被静默访问而没有任何输出。`start()` 的验证机制会提前捕获这个问题，确保你不会遇到一个运行但什么都不做的 scene。
+engine 是一个纯粹的图遍历机器 — 它遍历节点并调用已注册的 handler。没有 handler 的话，block 会被静默访问而没有任何输出。`start()` 的验证机制会提前捕获这个问题，避免出现运行但无任何输出的 scene。
 :::
 
 ## Blueprint 验证
@@ -264,7 +264,7 @@ engine 是一个纯粹的图遍历机器 — 它遍历节点并调用你的代�
 | `warnings` | `DiagnosticEntry[]` | 非阻断性警告 |
 | `stats` | `DiagnosticStats` | 计数：scene、block、connection |
 
-你还可以提供 `check` 选项，与你的游戏功能进行交叉验证：
+还可以提供 `check` 选项，与宿主应用程序的功能进行交叉验证：
 
 ::: code-group
 ```ts [TypeScript]

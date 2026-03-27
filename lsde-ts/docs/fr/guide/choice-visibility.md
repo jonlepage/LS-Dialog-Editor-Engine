@@ -4,7 +4,7 @@
 
 Quand un block CHOICE est dispatché, `context.choices` contient toujours **tous** les choix définis dans le blueprint — rien n'est pré-filtré. Le engine n'enlève jamais de choix du array.
 
-Si t'as besoin de filtrage de visibilité (ex. cacher des choix basés sur le game state ou des sélections précédentes), le engine fournit un système de **tagging opt-in**. Tu installes un filter une fois, et le engine tag chaque choix avec `visible: true | false` avant que ton handler `onChoice` le voit.
+Pour du filtrage de visibilité (ex. cacher des choix basés sur le game state ou des sélections précédentes), le engine fournit un système de **tagging opt-in**. Un filter est installé une seule fois, et le engine tag chaque choix avec `visible: true | false` avant que le handler `onChoice` le reçoive.
 
 ## Setup
 
@@ -35,15 +35,15 @@ engine.set_choice_filter(func(cond):
 ```
 :::
 
-Quand le filter est installé, le engine évalue les `visibilityConditions` de chaque choix **avant** de call `onChoice` :
+Quand le filter est installé, le engine évalue les `visibilityConditions` de chaque choix **avant** d'appeler `onChoice` :
 
-- **Conditions `choice:`** (qui référencent des sélections précédentes du joueur) sont résolues automatiquement par le engine via son historique de choix interne — ton callback les voit jamais.
-- **Conditions de game-state** (tout le reste) sont déléguées à ton callback.
+- **Conditions `choice:`** (qui référencent des sélections précédentes du joueur) sont résolues automatiquement par le engine via son historique de choix interne — le callback ne les reçoit jamais.
+- **Conditions de game-state** (tout le reste) sont déléguées au callback.
 - Le chaining avec `&` (AND) et `|` (OR) fonctionne correctement entre les deux types.
 
 ## Filtrage dans onChoice
 
-Dans ton handler, filtre avec une seule ligne :
+Dans le handler, le filtrage se fait avec une seule ligne :
 
 ::: code-group
 ```ts [TypeScript]
@@ -179,9 +179,9 @@ tutorial.onChoice(({ context, next }) => {
 });
 ```
 
-## Partager ton évaluateur
+## Partager l'évaluateur
 
-Ton jeu évalue probablement les conditions à un seul endroit — un système d'inventaire, un flag manager, un quest tracker. Tu peux partager la **même fonction d'évaluation** entre `setChoiceFilter` et `onCondition` pour que la logique reste au même endroit :
+Le jeu évalue probablement les conditions à un seul endroit — un système d'inventaire, un flag manager, un quest tracker. Il est possible de partager la **même fonction d'évaluation** entre `setChoiceFilter` et `onCondition` pour que la logique reste au même endroit :
 
 ::: code-group
 ```ts [TypeScript]
@@ -264,12 +264,12 @@ engine.on_condition(func(args):
 :::
 
 ::: tip Pourquoi partager?
-Sans ce pattern, tu vas finir par écrire la même logique `gameState.check(...)` à deux places. Quand ton API de game state change, tu vas fixer un côté pis oublier l'autre. Une seule fonction, deux registrations, zéro drift.
+Sans ce pattern, la même logique `gameState.check(...)` se retrouve à deux places. Quand l'API de game state change, un seul côté est corrigé et l'autre est oublié. Une seule fonction, deux registrations, zéro drift.
 :::
 
 ## Avancé : Filtrage manuel
 
-Si tu préfères pas installer un filter global, `LsdeUtils` fournit un utilitaire low-level :
+Si un filter global n'est pas souhaité, `LsdeUtils` fournit un utilitaire low-level :
 
 ```ts
 import { LsdeUtils } from '@lsde/dialog-engine';
@@ -281,4 +281,4 @@ const visible = LsdeUtils.filterVisibleChoices(
 );
 ```
 
-Le paramètre `scene` active la résolution automatique des conditions `choice:`. Sans ça, toutes les conditions sont déléguées à ton evaluator callback.
+Le paramètre `scene` active la résolution automatique des conditions `choice:`. Sans celui-ci, toutes les conditions sont déléguées au evaluator callback.

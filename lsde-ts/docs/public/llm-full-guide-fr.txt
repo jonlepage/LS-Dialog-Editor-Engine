@@ -1,34 +1,34 @@
-﻿LSDE Dialog Engine — Full Guide [English] (plain text, auto-generated)
+﻿LSDE Dialog Engine — Full Guide [French] (plain text, auto-generated)
 ============================================================
 Concatenates all guide sections for LLM consumption.
-Source: lsde-ts/docs/guide/*.md
+Source: lsde-ts/docs/fr/guide/*.md
 ============================================================
 
-# What is LSDEDE?
+# C'est quoi LSDEDE?
 
-**LSDE** (LS Dialog Editor) is a free tool for game and software developers that combines visual dialogue graph editing, AI-powered translation, voice generation, i18n code integration, and project diagnostics. It exports dialogue graphs as JSON blueprints containing scenes, blocks, connections, dictionaries, and action signatures. More info: [lepasoft.com/en/software/ls-dialog-editor](https://lepasoft.com/en/software/ls-dialog-editor).
+**LSDE** (LS Dialog Editor) est un outil gratuit pour les développeurs de jeux et de logiciels qui combine l'édition visuelle de graphes de dialogue, la traduction assistée par IA, la génération de voix, l'intégration i18n au code, et les diagnostics de projet. Plus d'info : [lepasoft.com/fr/software/ls-dialog-editor](https://lepasoft.com/fr/software/ls-dialog-editor). LSDE exporte les graphes de dialogue en blueprints JSON contenant des scenes, blocks, connections, dictionaries et action signatures.
 
-**LSDEDE** (LSDE Dialog Engine) is the multi-runtime engine that loads and executes these blueprints. It is available in multiple languages for native integration into any game engine or framework.
+**LSDEDE** (LSDE Dialog Engine) est le engine multi-runtime qui load et exécute ces blueprints. Il est disponible en plusieurs langages pour une intégration native dans n'importe quel game engine ou framework.
 
-## Available Runtimes
+## Runtimes disponibles
 
-| Runtime | Language | Target | Source |
-|---------|----------|--------|--------|
-| **TypeScript** | TypeScript / JavaScript | Reference implementation | [lsde-ts](https://github.com/jonlepage/LS-Dialog-Editor-Engine/tree/master/lsde-ts) |
+| Runtime | Langage | Cible | Source |
+|---------|---------|-------|--------|
+| **TypeScript** | TypeScript / JavaScript | Implémentation de référence | [lsde-ts](https://github.com/jonlepage/LS-Dialog-Editor-Engine/tree/master/lsde-ts) |
 | **C#** | C# (.NET Standard 2.1) | Unity, Godot Mono, .NET | [lsde-csharp](https://github.com/jonlepage/LS-Dialog-Editor-Engine/tree/master/lsde-csharp) |
-| **C++** | C++17 | Unreal Engine, custom engines | [lsde-cpp](https://github.com/jonlepage/LS-Dialog-Editor-Engine/tree/master/lsde-cpp) |
+| **C++** | C++17 | Unreal Engine, engines custom | [lsde-cpp](https://github.com/jonlepage/LS-Dialog-Editor-Engine/tree/master/lsde-cpp) |
 | **GDScript** | GDScript | Godot 4 | [lsde-gdscript](https://github.com/jonlepage/LS-Dialog-Editor-Engine/tree/master/lsde-gdscript) |
 
-All runtimes share the same blueprint format and pass a common cross-language test suite (42 test cases).
+Tous les runtimes partagent le même format de blueprint et passent une suite de tests cross-language commune (42 cas de test).
 
 ## Architecture
 
-Every runtime follows the same **callback-driven graph dispatcher** pattern:
+Chaque runtime suit le même pattern de **callback-driven graph dispatcher** :
 
-1. **Blueprint** — A JSON file exported from LSDE, containing scenes, blocks and connections.
-2. **Engine** — Validates the blueprint, builds the internal graph and dispatches blocks to registered handlers.
-3. **Handlers** — Functions that react to each block type (dialog, choice, condition, action).
-4. **Host Application** — Conditions, actions, and character resolution are implemented by handler callbacks.
+1. **Blueprint** — Un fichier JSON exporté de LSDE, contenant les scenes, blocks et connections.
+2. **Engine** — Valide le blueprint, build le graphe interne et dispatch les blocks aux handlers enregistrés.
+3. **Handlers** — Les fonctions qui réagissent à chaque type de block (dialog, choice, condition, action).
+4. **Le jeu** — Les conditions, actions et la résolution de personnages sont gérées par les handler callbacks.
 
 ```
   Blueprint (JSON)
@@ -42,17 +42,17 @@ Every runtime follows the same **callback-driven graph dispatcher** pattern:
      Handlers ────────────┘
 ```
 
-## Design Principles
+## Principes de design
 
-- **Zero-dependency** — No runtime dependencies in any language.
-- **Framework-agnostic** — Works with any game engine or UI framework.
-- **Callback-driven** — No internal render loop. The host application calls `next()` when ready.
-- **Two-tier handlers** — Global (engine-level) and scene-level handlers with `preventGlobalHandler()`.
-- **Cross-language conformance** — All runtimes produce identical output for the same blueprint.
+- **Zero-dependency** — Aucune dépendance runtime dans aucun langage.
+- **Framework-agnostic** — Fonctionne avec n'importe quel game engine ou UI framework.
+- **Callback-driven** — Pas de render loop interne. `next()` est appelé quand le code est prêt à continuer.
+- **Two-tier handlers** — Handlers globaux (engine-level) et scene-level avec `preventGlobalHandler()`.
+- **Conformité cross-language** — Tous les runtimes produisent un output identique pour le même blueprint.
 
 ================================================================================
 
-# Getting Started
+# Pour commencer
 
 ## Installation
 
@@ -62,20 +62,20 @@ npm install @lsde/dialog-engine
 ```
 ```bash [C#]
 dotnet add package LsdeDialogEngine
-# Or add the source project directly to your solution
+# Ou ajouter le projet source directement à la solution
 ```
 ```bash [C++]
-# Add lsde-cpp/ to your CMake project
+# Ajouter lsde-cpp/ au projet CMake
 add_subdirectory(lsde-cpp)
 target_link_libraries(your_target PRIVATE lsde)
 ```
 ```bash [GDScript]
-# Copy addons/lsde/ into your Godot project's addons/ folder
+# Copier addons/lsde/ dans le dossier addons/ du projet Godot
 ```
 
-## Minimal Usage
+## Usage minimal
 
-The engine is a graph traversal machine — it dispatches blocks to registered handlers, which give them meaning. Without handlers, the engine has no output.
+Le engine est une machine de traversée de graphe — il dispatch les blocks aux handlers enregistrés qui leur donnent un sens. Sans handlers, le engine n'a aucun output.
 
 
 ```ts [TypeScript]
@@ -303,19 +303,19 @@ handle.start()
 ```
 
 > TIP:
-The engine is a pure graph traversal machine — it walks the nodes and calls handler code. Without handlers, blocks would be visited silently with no output. The `start()` validation catches this early so there is never a scene that runs but does nothing.
+Le engine est une pure machine de traversée de graphe — il walk les nodes et call le code des handlers. Sans handlers, les blocks seraient visités en silence sans aucun output. La validation au `start()` catch ça early pour éviter qu'une scene run sans produire aucun résultat.
 
-## Blueprint Validation
+## Validation du blueprint
 
-`engine.init()` returns a diagnostic report containing:
+`engine.init()` retourne un rapport de diagnostic contenant :
 
-| Field | Type | Description |
+| Champ | Type | Description |
 |-------|------|-------------|
-| `errors` | `DiagnosticEntry[]` | Blocking errors — the engine does not initialize |
-| `warnings` | `DiagnosticEntry[]` | Non-blocking warnings |
-| `stats` | `DiagnosticStats` | Counts: scenes, blocks, connections |
+| `errors` | `DiagnosticEntry[]` | Erreurs bloquantes — le engine ne s'initialise pas |
+| `warnings` | `DiagnosticEntry[]` | Warnings non-bloquants |
+| `stats` | `DiagnosticStats` | Compteurs : scenes, blocks, connections |
 
-The `check` option can also be provided to cross-validate against the host application's capabilities:
+Il est aussi possible de fournir `check` pour cross-valider avec les capabilities du jeu :
 
 
 ```ts [TypeScript]
@@ -354,19 +354,19 @@ engine.init({
 })
 ```
 
-## What's Next
+## La suite
 
-- [Block Types](/guide/block-types) — Detailed reference for each block type and handler
-- [Choice Visibility](/guide/choice-visibility) — Opt-in tagging and filtering
-- [Handlers & Lifecycle](/guide/handlers) — Two-tier system, cleanup, async tracks
+- [Types de blocks](/fr/guide/block-types) — Référence détaillée pour chaque type de block et son handler
+- [Choice Visibility](/fr/guide/choice-visibility) — Système opt-in de tagging et filtrage
+- [Handlers & Lifecycle](/fr/guide/handlers) — Système two-tier, cleanup, async tracks
 
 ================================================================================
 
 # Blueprints & Scenes
 
-## Blueprint Structure
+## Structure du blueprint
 
-A `BlueprintExport` is the JSON file exported from the LS-Dialog editor. It contains all the data the engine needs.
+Un `BlueprintExport` est le fichier JSON exporté de l'éditeur LS-Dialog. Il contient toutes les données dont le engine a besoin.
 
 ```ts
 interface BlueprintExport {
@@ -383,7 +383,7 @@ interface BlueprintExport {
 
 ## Scenes
 
-Each scene is an independent subgraph with an entry point:
+Chaque scene est un sous-graphe indépendant avec un point d'entrée :
 
 ```ts
 interface BlueprintScene {
@@ -399,7 +399,7 @@ interface BlueprintScene {
 
 ## Connections
 
-Connections link output ports of a block to input ports of the next:
+Les connections lient les output ports d'un block aux input ports du suivant :
 
 ```ts
 interface BlueprintConnection {
@@ -414,7 +414,7 @@ interface BlueprintConnection {
 
 ## Dictionaries
 
-Dictionaries define named value sets used by conditions and action parameters:
+Les dictionaries définissent des ensembles de valeurs nommés utilisés par les conditions et les paramètres d'action :
 
 ```ts
 interface Dictionary {
@@ -427,7 +427,7 @@ interface Dictionary {
 
 ## Action Signatures
 
-Signatures describe reusable action types with their parameters:
+Les signatures décrivent des types d'action réutilisables avec leurs paramètres :
 
 ```ts
 interface ActionSignature {
@@ -440,15 +440,15 @@ interface ActionSignature {
 
 ================================================================================
 
-# Block Types
+# Types de blocks
 
-The engine supports 5 block types. Each has a dedicated handler and a type-specific context.
+Le engine supporte 5 types de blocks. Chacun a un handler dédié et un context spécifique au type.
 
-All 4 content block handlers (`onDialog`, `onChoice`, `onCondition`, `onAction`) are **required** — the engine validates their presence when `start()` is called.
+Les 4 handlers de blocks de contenu (`onDialog`, `onChoice`, `onCondition`, `onAction`) sont **required** — le engine valide leur présence à l'appel de `start()`.
 
 ## DIALOG
 
-Displays text spoken by a character. The character is resolved by the `onResolveCharacter` callback.
+Affiche du texte dit par un personnage. Le personnage est résolu par le callback `onResolveCharacter`.
 
 
 ```ts [TypeScript]
@@ -508,11 +508,11 @@ engine.on_dialog(func(args):
 )
 ```
 
-`resolveCharacterPort()` matches by character **UUID first**, then by **name** as fallback.
+`resolveCharacterPort()` match par **UUID du personnage en premier**, puis par **nom** comme fallback.
 
 ## CHOICE
 
-Presents selectable options to the player. When [`setChoiceFilter()`](/guide/choice-visibility) is configured, each choice is tagged with `visible: true | false`.
+Présente des options sélectionnables au joueur. Quand [`setChoiceFilter()`](/fr/guide/choice-visibility) est configuré, chaque choice est taggé avec `visible: true | false`.
 
 
 ```ts [TypeScript]
@@ -566,11 +566,11 @@ engine.on_choice(func(args):
 )
 ```
 
-See [Choice Visibility](/guide/choice-visibility) for the full opt-in tagging system.
+Voir [Choice Visibility](/fr/guide/choice-visibility) pour le système complet de tagging opt-in.
 
 ## CONDITION
 
-Evaluates logic to branch the flow. The handler **must** call `resolve(result)` — `true` follows port index 0, `false` follows port index 1.
+Évalue de la logique pour brancher le flow. Le handler **doit** appeler `resolve(result)` — `true` suit le port index 0, `false` suit le port index 1.
 
 
 ```ts [TypeScript]
@@ -629,11 +629,11 @@ engine.on_condition(func(args):
 ```
 
 > TIP:
-Conditions with keys starting with `choice:` reference a previous player selection. Use `scene.evaluateCondition(cond)` to resolve them — the engine checks its internal choice history automatically.
+Les conditions avec des clés qui commencent par `choice:` font référence à une sélection précédente du joueur. Utilise `scene.evaluateCondition(cond)` pour les résoudre — le engine check son historique de choix interne automatiquement.
 
 ## ACTION
 
-Triggers game state changes. Call `resolve()` for success or `reject(error)` for failure.
+Trigger des changements de game state. Appeler `resolve()` pour le succès ou `reject(error)` pour un échec.
 
 
 ```ts [TypeScript]
@@ -677,46 +677,46 @@ engine.on_action(func(args):
 
 ## NOTE
 
-Documentation block for the designer. Never executed — automatically skipped during traversal.
+Block de documentation pour le designer. Jamais exécuté — automatiquement skippé pendant la traversée.
 
-## Common Properties
+## Propriétés communes
 
-All blocks share these base fields:
+Tous les blocks partagent ces champs de base :
 
-| Field | Type | Description |
+| Champ | Type | Description |
 |-------|------|-------------|
-| `uuid` | `string` | Unique identifier |
-| `type` | `BlockType` | Discriminant type |
-| `label` | `string?` | Human-readable name |
-| `properties` | `BlockProperty[]` | Key-value properties |
-| `userProperties` | `Record?` | Free-form user properties |
-| `nativeProperties` | `NativeProperties?` | Execution properties (async, delay, etc.) |
-| `metadata` | `BlockMetadata?` | Display metadata (characters, tags, color) |
-| `isStartBlock` | `boolean?` | Marks the entry block |
+| `uuid` | `string` | Identifiant unique |
+| `type` | `BlockType` | Type discriminant |
+| `label` | `string?` | Nom lisible par un humain |
+| `properties` | `BlockProperty[]` | Propriétés clé-valeur |
+| `userProperties` | `Record?` | Propriétés utilisateur libres |
+| `nativeProperties` | `NativeProperties?` | Propriétés d'exécution (async, delay, etc.) |
+| `metadata` | `BlockMetadata?` | Metadata d'affichage (personnages, tags, couleur) |
+| `isStartBlock` | `boolean?` | Marque le block d'entrée |
 
 ### NativeProperties
 
-| Field | Type | Description |
+| Champ | Type | Description |
 |-------|------|-------------|
-| `isAsync` | `boolean?` | Execute on a parallel async track |
-| `delay` | `number?` | Delay before execution (consumed by `onBeforeBlock`) |
-| `timeout` | `number?` | Execution timeout |
-| `portPerCharacter` | `boolean?` | One output port per character in metadata |
-| `followNarrative` | `boolean?` | Async track follows main narrative pace |
+| `isAsync` | `boolean?` | Exécuter sur un track async parallèle |
+| `delay` | `number?` | Délai avant exécution (consommé par `onBeforeBlock`) |
+| `timeout` | `number?` | Timeout d'exécution |
+| `portPerCharacter` | `boolean?` | Un output port par personnage dans les metadata |
+| `followNarrative` | `boolean?` | Le track async suit le pace du narratif principal |
 
 ================================================================================
 
 # Choice Visibility
 
-## Overview
+## Aperçu
 
-When a CHOICE block is dispatched, `context.choices` always contains **all** choices defined in the blueprint — none are pre-filtered. The engine never removes choices from the array.
+Quand un block CHOICE est dispatché, `context.choices` contient toujours **tous** les choix définis dans le blueprint — rien n'est pré-filtré. Le engine n'enlève jamais de choix du array.
 
-If visibility filtering is needed (e.g., hiding choices based on game state or previous selections), the engine provides an **opt-in tagging** system. A filter is installed once, and the engine tags each choice with `visible: true | false` before the `onChoice` handler sees it.
+Pour du filtrage de visibilité (ex. cacher des choix basés sur le game state ou des sélections précédentes), le engine fournit un système de **tagging opt-in**. Un filter est installé une seule fois, et le engine tag chaque choix avec `visible: true | false` avant que le handler `onChoice` le reçoive.
 
 ## Setup
 
-Register a choice filter on the engine — once, before starting any scene:
+Enregistre un choice filter sur le engine — une seule fois, avant de starter n'importe quelle scene :
 
 
 ```ts [TypeScript]
@@ -742,15 +742,15 @@ engine.set_choice_filter(func(cond):
 )
 ```
 
-When installed, the engine evaluates each choice's `visibilityConditions` **before** calling `onChoice`:
+Quand le filter est installé, le engine évalue les `visibilityConditions` de chaque choix **avant** d'appeler `onChoice` :
 
-- **`choice:` conditions** (referencing previous player selections) are resolved automatically by the engine via its internal choice history — the callback never sees them.
-- **Game-state conditions** (everything else) are delegated to the callback.
-- Chaining with `&` (AND) and `|` (OR) works correctly across both types.
+- **Conditions `choice:`** (qui référencent des sélections précédentes du joueur) sont résolues automatiquement par le engine via son historique de choix interne — le callback ne les reçoit jamais.
+- **Conditions de game-state** (tout le reste) sont déléguées au callback.
+- Le chaining avec `&` (AND) et `|` (OR) fonctionne correctement entre les deux types.
 
-## Filtering in onChoice
+## Filtrage dans onChoice
 
-In the handler, filter with one line:
+Dans le handler, le filtrage se fait avec une seule ligne :
 
 
 ```ts [TypeScript]
@@ -800,19 +800,19 @@ engine.on_choice(func(args):
 )
 ```
 
-### Why `visible !== false` and not `=== true`?
+### Pourquoi `visible !== false` et pas `=== true`?
 
-When **no filter is installed**, `visible` is `undefined`. Since `undefined !== false` evaluates to `true`, all choices pass — backward compatible by default. When a filter **is installed**, choices are tagged `true` or `false` explicitly.
+Quand **aucun filter n'est installé**, `visible` est `undefined`. Comme `undefined !== false` donne `true`, tous les choix passent — rétrocompatible par défaut. Quand un filter **est installé**, les choix sont taggés `true` ou `false` explicitement.
 
-| `visible` value | Meaning | `!== false` |
+| Valeur de `visible` | Signification | `!== false` |
 |---|---|---|
-| `true` | Filter installed, choice passes | `true` |
-| `false` | Filter installed, choice hidden | `false` |
-| `undefined` | No filter installed | `true` |
+| `true` | Filter installé, le choix passe | `true` |
+| `false` | Filter installé, choix caché | `false` |
+| `undefined` | Pas de filter installé | `true` |
 
 ## RuntimeChoiceItem
 
-When a filter is installed, each choice in `context.choices` is a `RuntimeChoiceItem` — an extension of `ChoiceItem` with the `visible` tag:
+Quand un filter est installé, chaque choix dans `context.choices` est un `RuntimeChoiceItem` — une extension de `ChoiceItem` avec le tag `visible` :
 
 ```ts
 interface RuntimeChoiceItem extends ChoiceItem {
@@ -820,11 +820,11 @@ interface RuntimeChoiceItem extends ChoiceItem {
 }
 ```
 
-Without a filter, choices are still `RuntimeChoiceItem` but `visible` remains `undefined`.
+Sans filter, les choix sont toujours des `RuntimeChoiceItem` mais `visible` reste `undefined`.
 
-## Examples
+## Exemples
 
-### Standard — show visible choices
+### Standard — afficher les choix visibles
 
 ```ts
 engine.onChoice(({ context, next }) => {
@@ -836,7 +836,7 @@ engine.onChoice(({ context, next }) => {
 });
 ```
 
-### Timed choice — auto-select on timeout
+### Choix minuté — auto-select au timeout
 
 ```ts
 engine.onChoice(({ block, context, next }) => {
@@ -860,7 +860,7 @@ engine.onChoice(({ block, context, next }) => {
 });
 ```
 
-### Hidden choices displayed greyed out
+### Choix cachés affichés en grisé
 
 ```ts
 engine.onChoice(({ context, next }) => {
@@ -875,7 +875,7 @@ engine.onChoice(({ context, next }) => {
 });
 ```
 
-### Tutorial — ignore visibility entirely
+### Tutorial — ignorer complètement la visibilité
 
 ```ts
 tutorial.onChoice(({ context, next }) => {
@@ -885,9 +885,9 @@ tutorial.onChoice(({ context, next }) => {
 });
 ```
 
-## Sharing the Evaluator
+## Partager l'évaluateur
 
-Most games evaluate conditions in one place — an inventory system, a flag manager, a quest tracker. The **same evaluator function** can be shared between `setChoiceFilter` and `onCondition` so the logic stays in one place:
+Le jeu évalue probablement les conditions à un seul endroit — un système d'inventaire, un flag manager, un quest tracker. Il est possible de partager la **même fonction d'évaluation** entre `setChoiceFilter` et `onCondition` pour que la logique reste au même endroit :
 
 
 ```ts [TypeScript]
@@ -969,11 +969,11 @@ engine.on_condition(func(args):
 ```
 
 > TIP:
-Without this pattern, the same `gameState.check(...)` logic ends up in two places. When the game state API changes, one gets fixed and the other is forgotten. One function, two registrations, zero drift.
+Sans ce pattern, la même logique `gameState.check(...)` se retrouve à deux places. Quand l'API de game state change, un seul côté est corrigé et l'autre est oublié. Une seule fonction, deux registrations, zéro drift.
 
-## Advanced: Manual Filtering
+## Avancé : Filtrage manuel
 
-If a global filter is not desired, `LsdeUtils` provides a low-level utility:
+Si un filter global n'est pas souhaité, `LsdeUtils` fournit un utilitaire low-level :
 
 ```ts
 import { LsdeUtils } from '@lsde/dialog-engine';
@@ -985,22 +985,22 @@ const visible = LsdeUtils.filterVisibleChoices(
 );
 ```
 
-The `scene` parameter enables automatic `choice:` condition resolution. Without it, all conditions are delegated to the evaluator callback.
+Le paramètre `scene` active la résolution automatique des conditions `choice:`. Sans celui-ci, toutes les conditions sont déléguées au evaluator callback.
 
 ================================================================================
 
 # Handlers & Lifecycle
 
-## Required Handlers
+## Handlers required
 
-The engine is a graph traversal machine — it walks nodes and dispatches them to handler code. The 4 content handlers are required because without them the engine has no output:
+Le engine est une machine de traversée de graphe — il walk les nodes et les dispatch au code des handlers. Les 4 handlers de contenu sont required parce que sans eux le engine n'a aucun output :
 
-- `onDialog` — React to dialogue text
-- `onChoice` — Present choices to the player
-- `onCondition` — Evaluate conditions to branch the flow
-- `onAction` — Execute game-side effects
+- `onDialog` — Réagir au texte de dialogue
+- `onChoice` — Présenter des choix au joueur
+- `onCondition` — Évaluer des conditions pour brancher le flow
+- `onAction` — Exécuter des effets côté jeu
 
-When `handle.start()` is called, the engine validates that all 4 are registered (either at engine level or scene level). If any are missing, it throws a descriptive error listing the missing handlers.
+À l'appel de `handle.start()`, le engine valide que les 4 sont enregistrés (soit au niveau du engine ou de la scene). S'il en manque, il throw une erreur descriptive qui liste les handlers manquants.
 
 
 ```ts [TypeScript]
@@ -1040,16 +1040,16 @@ var handle = engine.scene(scene_id)
 handle.start() # ✓ All 4 registered — scene starts
 ```
 
-## Two-Tier Handler System
+## Système de handlers two-tier
 
-The engine uses a two-level handler system:
+Le engine utilise un système de handlers à deux niveaux :
 
-1. **Tier 1 — Global (engine-level)**: registered on `DialogueEngine` via `onDialog()`, `onChoice()`, etc.
-2. **Tier 2 — Scene-level**: registered on a `SceneHandle` via `handle.onDialog()`, etc.
+1. **Tier 1 — Global (engine-level)** : enregistré sur `DialogueEngine` via `onDialog()`, `onChoice()`, etc.
+2. **Tier 2 — Scene-level** : enregistré sur un `SceneHandle` via `handle.onDialog()`, etc.
 
-When a block is dispatched:
-1. The scene handler (Tier 2) is called first, if it exists.
-2. The global handler (Tier 1) is then called, **unless** the scene handler called `context.preventGlobalHandler()`.
+Quand un block est dispatché :
+1. Le scene handler (Tier 2) est callé en premier, s'il existe.
+2. Le global handler (Tier 1) est ensuite callé, **sauf si** le scene handler a callé `context.preventGlobalHandler()`.
 
 
 ```ts [TypeScript]
@@ -1124,16 +1124,16 @@ handle.start()
 ```
 
 > INFO:
-When a block is dispatched, the engine resolves the handler in this priority order:
-1. `handle.onBlock(uuid)` — block-specific override by UUID
-2. `handle.onDialog()` / `handle.onChoice()` / ... — type override for the scene
-3. `engine.onDialog()` / `engine.onChoice()` / ... — global handler
+Quand un block est dispatché, le engine résout le handler dans cet ordre de priorité :
+1. `handle.onBlock(uuid)` — override spécifique à un block par UUID
+2. `handle.onDialog()` / `handle.onChoice()` / ... — override de type pour la scene
+3. `engine.onDialog()` / `engine.onChoice()` / ... — handler global
 
-If a scene handler (Tier 2) exists, the global handler (Tier 1) is also called **after**, unless `context.preventGlobalHandler()` was called.
+Si un scene handler (Tier 2) existe, le global handler (Tier 1) est aussi callé **après**, sauf si `context.preventGlobalHandler()` a été callé.
 
-## Character Resolution
+## Résolution de personnage
 
-The engine resolves a character for every block that has `metadata.characters`. The default returns the first character in the list.
+Le engine résout un personnage pour chaque block qui a `metadata.characters`. Le défaut retourne le premier personnage de la liste.
 
 
 ```ts [TypeScript]
@@ -1175,11 +1175,11 @@ handle.on_resolve_character(func(chars):
 )
 ```
 
-The resolved character is available as `context.character` in all handlers.
+Le personnage résolu est disponible via `context.character` dans tous les handlers.
 
-## Choice History
+## Historique des choix
 
-The engine tracks every choice the player makes during a scene. This history is used internally for `choice:` condition evaluation, and is also available to handler code:
+Le engine track chaque choix que le joueur fait pendant une scene. Cet historique est utilisé en interne pour l'évaluation des conditions `choice:`, et est aussi disponible pour le code appelant :
 
 ```ts
 handle.onExit(({ scene }) => {
@@ -1191,16 +1191,16 @@ handle.onExit(({ scene }) => {
 });
 ```
 
-## Full Lifecycle
+## Lifecycle complet
 
-### Execution Order for Each Block
+### Ordre d'exécution pour chaque block
 
-1. `onValidateNextBlock` — Validation before execution
-2. **Previous block cleanup** — The cleanup function returned by the *previous* block's handler
-3. `onBeforeBlock` — Pre-processing (must call `resolve()` to continue)
-4. Type handler (Tier 2 then Tier 1)
+1. `onValidateNextBlock` — Validation avant exécution
+2. **Cleanup du block précédent** — La fonction de cleanup retournée par le handler du block *précédent*
+3. `onBeforeBlock` — Pré-traitement (doit call `resolve()` pour continuer)
+4. Handler de type (Tier 2 puis Tier 1)
 
-### Scene Events
+### Events de scene
 
 ```ts
 engine.onSceneEnter(({ scene, context }) => {
@@ -1214,7 +1214,7 @@ engine.onSceneExit(({ scene, context }) => {
 
 ## onValidateNextBlock
 
-Intercepts each block transition for validation:
+Intercepte chaque transition de block pour validation :
 
 ```ts
 engine.onValidateNextBlock(({ nextBlock, fromBlock, port }) => {
@@ -1230,7 +1230,7 @@ engine.onInvalidateBlock(({ scene, reason }) => {
 
 ## onBeforeBlock
 
-Called before each block. **Must call `resolve()`** to continue:
+Appelé avant chaque block. **`resolve()` doit être appelé** pour continuer :
 
 ```ts
 engine.onBeforeBlock(({ block, resolve }) => {
@@ -1243,9 +1243,9 @@ engine.onBeforeBlock(({ block, resolve }) => {
 });
 ```
 
-## Cleanup Functions
+## Fonctions de cleanup
 
-A handler can return a cleanup function, called when leaving the block:
+Un handler peut retourner une fonction de cleanup, appelée quand le block est quitté :
 
 ```ts
 engine.onDialog(({ block, next }) => {
@@ -1261,7 +1261,7 @@ engine.onDialog(({ block, next }) => {
 
 ## Block Override
 
-A `SceneHandle` can also override a specific block by UUID:
+Un `SceneHandle` peut aussi override un block spécifique par UUID :
 
 ```ts
 const handle = engine.scene(sceneId);
@@ -1273,22 +1273,22 @@ handle.onBlock('block-uuid-123', ({ block, context, next }) => {
 
 ## Error Boundaries
 
-Every handler call is wrapped in a try/catch. If a handler throws:
+Chaque call de handler est wrappé dans un try/catch. Si un handler throw :
 
-- The error does not corrupt engine state
-- For the main track: the scene ends cleanly
-- For async tracks: only the affected track is terminated — other tracks and the main flow continue
+- L'erreur ne corrompt pas le state du engine
+- Pour le main track : la scene finit proprement
+- Pour les async tracks : seulement le track affecté est terminé — les autres tracks et le flow principal continuent
 
-This is cross-language compatible (try/catch in TS, C#, C++, GDScript).
+C'est compatible cross-language (try/catch en TS, C#, C++, GDScript).
 
 ## cancel()
 
-Calling `scene.cancel()` triggers this sequence:
+Appeler `scene.cancel()` trigger cette séquence :
 
-1. All **async tracks** are cancelled
-2. The **cleanup function** of the current block is executed
-3. The `onSceneExit` handler is called
-4. The scene is marked as finished
+1. Tous les **async tracks** sont cancelled
+2. La **fonction de cleanup** du block courant est exécutée
+3. Le handler `onSceneExit` est callé
+4. La scene est marquée comme finished
 
 ```ts
 engine.onInvalidateBlock(({ scene, reason }) => {
@@ -1299,53 +1299,53 @@ engine.onInvalidateBlock(({ scene, reason }) => {
 
 ## Async Tracks
 
-When a block has `nativeProperties.isAsync = true`, the engine creates a **parallel track** that runs independently of the main flow.
+Quand un block a `nativeProperties.isAsync = true`, le engine crée un **track parallèle** qui run indépendamment du flow principal.
 
-### How Tracks are Created
+### Comment les tracks sont créés
 
-During port resolution, if multiple outgoing connections exist:
-- The **first non-async connection** becomes the continuation of the main flow
-- The **other connections** (to blocks with `isAsync`) become parallel tracks
+Pendant la résolution des ports, si plusieurs connections sortantes existent :
+- La **première connection non-async** devient la continuation du flow principal
+- Les **autres connections** (vers des blocks avec `isAsync`) deviennent des tracks parallèles
 
-### Differences from the Main Flow
+### Différences avec le flow principal
 
-- `onBeforeBlock` is **skipped** on async tracks — the type handler is called directly
-- Each async track follows only **one connection** (no multi-path branching)
-- Tracks are automatically cancelled when the scene ends
+- `onBeforeBlock` est **skippé** sur les async tracks — le handler de type est callé directement
+- Chaque async track suit seulement **une connection** (pas de branching multi-path)
+- Les tracks sont automatiquement cancelled quand la scene finit
 
 ### followNarrative
 
-When `followNarrative = true` on an async block:
-- The async track **waits** for the main flow to advance
-- If `next()` has already been called in the handler, the pending advance executes
-- If `next()` has **not** been called, the block is **force-advanced** (skipped)
+Quand `followNarrative = true` sur un block async :
+- Le async track **attend** que le flow principal avance
+- Si `next()` a déjà été callé dans le handler, l'avancement en attente s'exécute
+- Si `next()` n'a **pas** été callé, le block est **force-advanced** (skippé)
 
-### What Works in Async Tracks (and What Doesn't)
+### Ce qui fonctionne dans les async tracks (et ce qui fonctionne pas)
 
-Async tracks are great for things that happen *alongside* the main conversation — ambient effects, parallel animations, companion reactions. But they have limits.
+Les async tracks sont parfaits pour des choses qui se passent *en parallèle* de la conversation principale — effets ambient, animations parallèles, réactions de compagnons. Mais il y a des limites.
 
-**DO — fire-and-forget side effects:**
-| Use case | Why it works |
+**DO — effets fire-and-forget :**
+| Cas d'utilisation | Pourquoi ça marche |
 |---|---|
-| NPC ambient dialogue ("barks") | Dialog blocks on an async track — NPCs comment, react, or banter while the main conversation continues. Great for making the world feel alive. |
-| NPC companion reactions | A party member reacts to what the player just said — async dialog synced with followNarrative |
-| Play ambient sounds or music | Action block, no player interaction needed |
-| Trigger camera movements | Action block, runs in parallel |
-| Parallel animations | followNarrative syncs to main track pacing |
+| Dialogue ambient de NPC ("barks") | Blocks dialog sur un async track — les NPCs commentent, réagissent ou bavardent pendant que la conversation principale continue. Parfait pour rendre le monde vivant. |
+| Réactions de compagnons NPC | Un membre du party réagit à ce que le joueur vient de dire — async dialog synchronisé avec followNarrative |
+| Jouer des sons ambient ou de la musique | Block action, pas d'interaction joueur nécessaire |
+| Trigger des mouvements de caméra | Block action, run en parallèle |
+| Animations parallèles | followNarrative synchronise avec le pace du track principal |
 
-**DON'T — player interaction or game logic branching:**
-| Use case | Why it breaks |
+**DON'T — interaction joueur ou branching de game logic :**
+| Cas d'utilisation | Pourquoi ça casse |
 |---|---|
-| CHOICE block in async track | The player is already interacting with the main track — who answers the async choice? |
-| CONDITION block in followNarrative | If force-advanced, the condition resolves with `null` → port resolver returns nothing → track silently ends |
-| Critical game state changes | If the async track is cancelled (scene ends), the action never executes |
+| Block CHOICE dans un async track | Le joueur est déjà en interaction avec le main track — qui répond au choice async? |
+| Block CONDITION dans followNarrative | Si force-advanced, la condition résout avec `null` → le port resolver retourne rien → le track finit en silence |
+| Changements critiques de game state | Si le async track est cancelled (la scene finit), l'action ne s'exécute jamais |
 
 > WARNING:
-A CHOICE block in an async track implies the player should make a selection while already engaged with the main dialogue. The only valid scenario is an AI-driven "choice" (e.g., a companion NPC auto-selects based on personality). If an async track hits a CHOICE block without a scene-level handler that auto-selects, the flow will stall or end silently.
+Un block CHOICE dans un async track implique que le joueur devrait faire une sélection pendant qu'il est déjà engagé avec le dialogue principal. Le seul scénario valide c'est un "choix" piloté par l'IA (ex. un compagnon NPC auto-sélectionne basé sur sa personnalité). Si un async track hit un block CHOICE sans scene-level handler qui auto-sélectionne, le flow va stall ou finir en silence.
 
-### Multiple Scenes in Parallel
+### Plusieurs scenes en parallèle
 
-The engine supports running multiple scenes simultaneously. Each `SceneHandle` has its own state, visited blocks, and async tracks. Global handlers (Tier 1) are shared — use the `scene` argument to know which scene is calling:
+Le engine supporte le fait de runner plusieurs scenes en même temps. Chaque `SceneHandle` a son propre state, ses blocks visités et ses async tracks. Les handlers globaux (Tier 1) sont partagés — utilise l'argument `scene` pour savoir quelle scene appelle :
 
 ```ts
 engine.onDialog(({ scene, block, context, next }) => {
@@ -1366,27 +1366,27 @@ tutorialOverlay.start();
 ```
 
 > TIP:
-For many concurrent scenes, consider registering scene-level (Tier 2) handlers on each handle instead of routing in the global handler. Cleaner separation, no `if/else` chains.
+Avec plusieurs scenes concurrentes, il est préférable d'enregistrer des handlers scene-level (Tier 2) sur chaque handle au lieu de router dans le handler global. Meilleure séparation, pas de chaînes `if/else`.
 
 ================================================================================
 
-# Game Engine Integration
+# Intégration avec un game engine
 
-The LSDE engine is a pure graph traversal machine — it walks nodes and calls registered handlers. **The handlers are the bridge between the engine and the host application.** This page shows how to wire them into real game engines.
+Le LSDE engine est une pure machine de traversée de graphe — il walk les nodes et call les handlers enregistrés. **Les handlers sont le pont entre le engine et le jeu.** Cette page montre comment les brancher dans de vrais game engines.
 
-## The Pattern
+## Le pattern
 
-Every integration follows the same 3-step dance:
+Chaque intégration suit la même danse en 3 étapes :
 
-1. **Initialize** — feed the engine the blueprint JSON
-2. **Connect** — plug the 4 handlers into the game systems (UI, state, audio...)
-3. **Start** — the engine calls the handlers, the host application takes it from there
+1. **Initialiser** — feed le engine le blueprint JSON
+2. **Connecter** — plug les 4 handlers dans les systèmes de jeu (UI, state, audio...)
+3. **Starter** — le engine call les handlers, le code fait la magie
 
-The engine never touches the UI, game state, or audio. It only reports *what* happened. The reaction is up to the host application. Think of it as a director reading stage directions — the game is the cast, crew, and stage.
+Le engine ne touche jamais à l'UI, au state ou à l'audio. Il indique juste *ce qui* s'est passé. Le code décide *comment* réagir. C'est comme un directeur qui lit les directions de scène — le jeu c'est le cast, le crew et la scène.
 
-## Showing Dialogue
+## Afficher le dialogue
 
-The simplest handler — display text and wait for the player to continue.
+Le handler le plus simple — affiche du texte et attend que le joueur continue.
 
 
 ```ts [TypeScript]
@@ -1462,11 +1462,11 @@ engine.on_dialog(func(args):
 ```
 
 > TIP:
-Call `next()` instantly for rapid-fire dialogue, or store it and call later — after an animation, a timer, a player click... whatever fits the game. The engine waits patiently.
+Appeler `next()` instantanément pour du dialogue rapide, ou le stocker et l'appeler plus tard — après une animation, un timer, un click du joueur... whatever qui fit le jeu. Le engine attend patiemment.
 
-## Presenting Choices
+## Présenter des choix
 
-Spawn UI elements dynamically, let the player pick, and tell the engine what was selected.
+Spawner des éléments UI dynamiquement, laisser le joueur choisir, et indiquer au engine ce qui a été sélectionné.
 
 
 ```ts [TypeScript]
@@ -1561,9 +1561,9 @@ engine.on_choice(func(args):
 )
 ```
 
-## Evaluating Conditions
+## Évaluer les conditions
 
-The game state, the rules. The engine just needs a `true` or `false`.
+Le game state, les règles du jeu. Le engine a juste besoin d'un `true` ou `false`.
 
 
 ```ts [TypeScript]
@@ -1620,9 +1620,9 @@ engine.on_condition(func(args):
 )
 ```
 
-## Executing Actions
+## Exécuter des actions
 
-This is where the game comes alive — play sounds, give items, set flags, trigger cutscenes.
+C'est ici que le jeu prend vie — jouer des sons, donner des items, set des flags, trigger des cutscenes.
 
 
 ```ts [TypeScript]
@@ -1681,23 +1681,23 @@ engine.on_action(func(args):
 )
 ```
 
-## What Connects Where
+## Ce qui connecte où
 
-| Handler | What the engine reports | What the host application does |
+| Handler | Ce que le engine communique | Ce que le handler fait |
 |---|---|---|
-| `onDialog` | "Show this text from this character" | Display UI, play voice, wait for input |
-| `onChoice` | "Here are the options (tagged visible/hidden)" | Spawn buttons, handle selection |
-| `onCondition` | "Evaluate these conditions" | Check game state, return true/false |
-| `onAction` | "Execute these effects" | Set flags, give items, play sounds |
-| `onResolveCharacter` | "Which character is active?" | Party system, battle formation |
-| `setChoiceFilter` | "Is this condition true for visibility?" | Check inventory, flags, quest state |
-| `onBeforeBlock` | "Block is about to execute" | Handle delays, transitions, fade-ins |
+| `onDialog` | "Affiche ce texte de ce personnage" | Afficher l'UI, jouer la voix, attendre l'input |
+| `onChoice` | "Voici les options (taggées visible/hidden)" | Spawn des boutons, gérer la sélection |
+| `onCondition` | "Évalue ces conditions" | Checker le game state, retourner true/false |
+| `onAction` | "Exécute ces effets" | Set des flags, donner des items, jouer des sons |
+| `onResolveCharacter` | "Quel personnage est actif?" | Système de party, formation de bataille |
+| `setChoiceFilter` | "Est-ce que cette condition est vraie pour la visibilité?" | Checker inventaire, flags, state des quêtes |
+| `onBeforeBlock` | "Un block est sur le point de s'exécuter" | Gérer les delays, transitions, fade-ins |
 
 ## Pro Tips
 
-- **`next()` is a remote control.** Call it instantly for rapid-fire dialogue, or hold it until an animation finishes. The engine waits — it has no concept of time.
-- **Cleanup functions are free housekeeping.** Return one from any handler and the engine calls it when moving to the next block. Perfect for hiding UI, stopping audio, or freeing spawned nodes.
-- **`onBeforeBlock` handles delays.** The engine does not enforce `delay` — the `onBeforeBlock` handler reads `nativeProperties.delay` and calls `resolve()` after a timer. Full control.
-- **Async tracks are parallel storylines.** If a cutscene needs dialogue and camera movement at the same time, mark blocks as `isAsync` in the editor. Each track runs independently.
+- **`next()` est la télécommande.** L'appeler instantanément pour du dialogue rapide, ou le garder en réserve jusqu'à ce qu'une animation finisse. Le engine attend — il n'a aucun concept du temps.
+- **Les fonctions de cleanup c'est du housekeeping gratuit.** En retourner une de n'importe quel handler et le engine va l'appeler quand il move au prochain block. Parfait pour cacher l'UI, stopper l'audio ou free des nodes spawnés.
+- **`onBeforeBlock` gère les delays.** Le engine n'enforce pas `delay` — c'est le handler `onBeforeBlock` qui lit `nativeProperties.delay` et appelle `resolve()` après un timer. Full control.
+- **Les async tracks sont des storylines parallèles.** Si une cutscene a besoin de dialogue et de mouvements de caméra en même temps, marquer les blocks comme `isAsync` dans l'éditeur. Chaque track run indépendamment.
 
 ================================================================================

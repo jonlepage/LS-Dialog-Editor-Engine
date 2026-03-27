@@ -8,21 +8,21 @@ npm install @lsde/dialog-engine
 ```
 ```bash [C#]
 dotnet add package LsdeDialogEngine
-# Ou ajoute le projet source directement à ta solution
+# Ou ajouter le projet source directement à la solution
 ```
 ```bash [C++]
-# Ajoute lsde-cpp/ à ton projet CMake
+# Ajouter lsde-cpp/ au projet CMake
 add_subdirectory(lsde-cpp)
 target_link_libraries(your_target PRIVATE lsde)
 ```
 ```bash [GDScript]
-# Copie addons/lsde/ dans le dossier addons/ de ton projet Godot
+# Copier addons/lsde/ dans le dossier addons/ du projet Godot
 ```
 :::
 
 ## Usage minimal
 
-Le engine est une machine de traversée de graphe — il dispatch les blocks à tes handlers et tu leur donnes un sens. Sans handlers, le engine n'a aucun output.
+Le engine est une machine de traversée de graphe — il dispatch les blocks aux handlers enregistrés qui leur donnent un sens. Sans handlers, le engine n'a aucun output.
 
 ::: code-group
 ```ts [TypeScript]
@@ -251,7 +251,7 @@ handle.start()
 :::
 
 ::: tip Pourquoi les 4 handlers sont required?
-Le engine est une pure machine de traversée de graphe — il walk les nodes et call ton code. Sans handlers, les blocks seraient visités en silence sans aucun output. La validation au `start()` catch ça early pour que t'aies jamais une scene qui run mais qui fait rien.
+Le engine est une pure machine de traversée de graphe — il walk les nodes et call le code des handlers. Sans handlers, les blocks seraient visités en silence sans aucun output. La validation au `start()` catch ça early pour éviter qu'une scene run sans produire aucun résultat.
 :::
 
 ## Validation du blueprint
@@ -264,7 +264,7 @@ Le engine est une pure machine de traversée de graphe — il walk les nodes et 
 | `warnings` | `DiagnosticEntry[]` | Warnings non-bloquants |
 | `stats` | `DiagnosticStats` | Compteurs : scenes, blocks, connections |
 
-Tu peux aussi fournir `check` pour cross-valider avec les capabilities de ton jeu :
+Il est aussi possible de fournir `check` pour cross-valider avec les capabilities du jeu :
 
 ::: code-group
 ```ts [TypeScript]

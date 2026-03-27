@@ -1,16 +1,16 @@
 # Intégration avec un game engine
 
-Le LSDE engine est une pure machine de traversée de graphe — il walk les nodes et call tes handlers. **Tes handlers sont le pont entre le engine et ton jeu.** Cette page montre comment les brancher dans de vrais game engines.
+Le LSDE engine est une pure machine de traversée de graphe — il walk les nodes et call les handlers enregistrés. **Les handlers sont le pont entre le engine et le jeu.** Cette page montre comment les brancher dans de vrais game engines.
 
 ## Le pattern
 
 Chaque intégration suit la même danse en 3 étapes :
 
-1. **Initialiser** — feed le engine ton blueprint JSON
-2. **Connecter** — plug tes 4 handlers dans tes systèmes de jeu (UI, state, audio...)
-3. **Starter** — le engine call tes handlers, tu fais la magie
+1. **Initialiser** — feed le engine le blueprint JSON
+2. **Connecter** — plug les 4 handlers dans les systèmes de jeu (UI, state, audio...)
+3. **Starter** — le engine call les handlers, le code fait la magie
 
-Le engine touche jamais à ton UI, ton state ou ton audio. Il te dit juste *ce qui* s'est passé. Tu décides *comment* réagir. Pense à ça comme un directeur qui lit les directions de scène — ton jeu c'est le cast, le crew et la scène.
+Le engine ne touche jamais à l'UI, au state ou à l'audio. Il indique juste *ce qui* s'est passé. Le code décide *comment* réagir. C'est comme un directeur qui lit les directions de scène — le jeu c'est le cast, le crew et la scène.
 
 ## Afficher le dialogue
 
@@ -90,13 +90,13 @@ engine.on_dialog(func(args):
 ```
 :::
 
-::: tip next() c'est ta télécommande
-Call `next()` instantanément pour du dialogue rapide, ou store-le et call-le plus tard — après une animation, un timer, un click du joueur... whatever qui fit ton jeu. Le engine attend patiemment.
+::: tip next() est la télécommande
+Appeler `next()` instantanément pour du dialogue rapide, ou le stocker et l'appeler plus tard — après une animation, un timer, un click du joueur... whatever qui fit le jeu. Le engine attend patiemment.
 :::
 
 ## Présenter des choix
 
-Spawn des éléments UI dynamiquement, laisse le joueur choisir, et dis au engine ce qui a été sélectionné.
+Spawner des éléments UI dynamiquement, laisser le joueur choisir, et indiquer au engine ce qui a été sélectionné.
 
 ::: code-group
 ```ts [TypeScript]
@@ -194,7 +194,7 @@ engine.on_choice(func(args):
 
 ## Évaluer les conditions
 
-Ton game state, tes règles. Le engine a juste besoin d'un `true` ou `false`.
+Le game state, les règles du jeu. Le engine a juste besoin d'un `true` ou `false`.
 
 ::: code-group
 ```ts [TypeScript]
@@ -254,7 +254,7 @@ engine.on_condition(func(args):
 
 ## Exécuter des actions
 
-C'est ici que ton jeu prend vie — joue des sons, donne des items, set des flags, trigger des cutscenes.
+C'est ici que le jeu prend vie — jouer des sons, donner des items, set des flags, trigger des cutscenes.
 
 ::: code-group
 ```ts [TypeScript]
@@ -316,7 +316,7 @@ engine.on_action(func(args):
 
 ## Ce qui connecte où
 
-| Handler | Ce que le engine te dit | Ce que tu fais avec |
+| Handler | Ce que le engine communique | Ce que le handler fait |
 |---|---|---|
 | `onDialog` | "Affiche ce texte de ce personnage" | Afficher l'UI, jouer la voix, attendre l'input |
 | `onChoice` | "Voici les options (taggées visible/hidden)" | Spawn des boutons, gérer la sélection |
@@ -328,7 +328,7 @@ engine.on_action(func(args):
 
 ## Pro Tips
 
-- **`next()` c'est ta télécommande.** Call-le instantanément pour du dialogue rapide, ou garde-le en otage jusqu'à ce que ton animation finisse. Le engine attend — il a aucun concept du temps.
-- **Les fonctions de cleanup c'est du housekeeping gratuit.** Retourne-en une de n'importe quel handler et le engine va la call quand il move au prochain block. Parfait pour cacher l'UI, stopper l'audio ou free des nodes spawnés.
-- **`onBeforeBlock` gère les delays.** Le engine enforce pas `delay` — c'est ton handler `onBeforeBlock` qui lit `nativeProperties.delay` et call `resolve()` après un timer. Full control.
-- **Les async tracks sont des storylines parallèles.** Si ta cutscene a besoin de dialogue et de mouvements de caméra en même temps, marque les blocks comme `isAsync` dans l'éditeur. Chaque track run indépendamment.
+- **`next()` est la télécommande.** L'appeler instantanément pour du dialogue rapide, ou le garder en réserve jusqu'à ce qu'une animation finisse. Le engine attend — il n'a aucun concept du temps.
+- **Les fonctions de cleanup c'est du housekeeping gratuit.** En retourner une de n'importe quel handler et le engine va l'appeler quand il move au prochain block. Parfait pour cacher l'UI, stopper l'audio ou free des nodes spawnés.
+- **`onBeforeBlock` gère les delays.** Le engine n'enforce pas `delay` — c'est le handler `onBeforeBlock` qui lit `nativeProperties.delay` et appelle `resolve()` après un timer. Full control.
+- **Les async tracks sont des storylines parallèles.** Si une cutscene a besoin de dialogue et de mouvements de caméra en même temps, marquer les blocks comme `isAsync` dans l'éditeur. Chaque track run indépendamment.

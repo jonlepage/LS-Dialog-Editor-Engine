@@ -1,16 +1,16 @@
 # Game Engine Integration
 
-The LSDE engine is a pure graph traversal machine — it walks nodes and calls your handlers. **Your handlers are the bridge between the engine and your game.** This page shows how to wire them into real game engines.
+The LSDE engine is a pure graph traversal machine — it walks nodes and calls registered handlers. **The handlers are the bridge between the engine and the host application.** This page shows how to wire them into real game engines.
 
 ## The Pattern
 
 Every integration follows the same 3-step dance:
 
-1. **Initialize** — feed the engine your blueprint JSON
-2. **Connect** — plug your 4 handlers into your game systems (UI, state, audio...)
-3. **Start** — the engine calls your handlers, you make the magic happen
+1. **Initialize** — feed the engine the blueprint JSON
+2. **Connect** — plug the 4 handlers into the game systems (UI, state, audio...)
+3. **Start** — the engine calls the handlers, the host application takes it from there
 
-The engine never touches your UI, your state, or your audio. It only tells you *what* happened. You decide *how* to react. Think of it as a director reading stage directions — your game is the cast, crew, and stage.
+The engine never touches the UI, game state, or audio. It only reports *what* happened. The reaction is up to the host application. Think of it as a director reading stage directions — the game is the cast, crew, and stage.
 
 ## Showing Dialogue
 
@@ -90,8 +90,8 @@ engine.on_dialog(func(args):
 ```
 :::
 
-::: tip next() is your remote control
-Call `next()` instantly for rapid-fire dialogue, or store it and call later — after an animation, a timer, a player click... whatever fits your game. The engine waits patiently.
+::: tip next() is a remote control
+Call `next()` instantly for rapid-fire dialogue, or store it and call later — after an animation, a timer, a player click... whatever fits the game. The engine waits patiently.
 :::
 
 ## Presenting Choices
@@ -194,7 +194,7 @@ engine.on_choice(func(args):
 
 ## Evaluating Conditions
 
-Your game state, your rules. The engine just needs a `true` or `false`.
+The game state, the rules. The engine just needs a `true` or `false`.
 
 ::: code-group
 ```ts [TypeScript]
@@ -254,7 +254,7 @@ engine.on_condition(func(args):
 
 ## Executing Actions
 
-This is where your game comes alive — play sounds, give items, set flags, trigger cutscenes.
+This is where the game comes alive — play sounds, give items, set flags, trigger cutscenes.
 
 ::: code-group
 ```ts [TypeScript]
@@ -316,7 +316,7 @@ engine.on_action(func(args):
 
 ## What Connects Where
 
-| Handler | What the engine tells you | What you do with it |
+| Handler | What the engine reports | What the host application does |
 |---|---|---|
 | `onDialog` | "Show this text from this character" | Display UI, play voice, wait for input |
 | `onChoice` | "Here are the options (tagged visible/hidden)" | Spawn buttons, handle selection |
@@ -328,7 +328,7 @@ engine.on_action(func(args):
 
 ## Pro Tips
 
-- **`next()` is your remote control.** Call it instantly for rapid-fire dialogue, or hold it hostage until your animation finishes. The engine waits — it has no concept of time.
+- **`next()` is a remote control.** Call it instantly for rapid-fire dialogue, or hold it until an animation finishes. The engine waits — it has no concept of time.
 - **Cleanup functions are free housekeeping.** Return one from any handler and the engine calls it when moving to the next block. Perfect for hiding UI, stopping audio, or freeing spawned nodes.
-- **`onBeforeBlock` handles delays.** The engine doesn't enforce `delay` — that's your `onBeforeBlock` handler reading `nativeProperties.delay` and calling `resolve()` after a timer. Full control.
-- **Async tracks are parallel storylines.** If your cutscene needs dialogue and camera movement at the same time, mark blocks as `isAsync` in the editor. Each track runs independently.
+- **`onBeforeBlock` handles delays.** The engine does not enforce `delay` — the `onBeforeBlock` handler reads `nativeProperties.delay` and calls `resolve()` after a timer. Full control.
+- **Async tracks are parallel storylines.** If a cutscene needs dialogue and camera movement at the same time, mark blocks as `isAsync` in the editor. Each track runs independently.

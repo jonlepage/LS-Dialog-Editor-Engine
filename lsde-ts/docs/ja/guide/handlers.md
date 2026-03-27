@@ -2,7 +2,7 @@
 
 ## 必須 Handler
 
-engine はグラフ走査マシンです — ノードを辿り、あなたのコードにディスパッチします。4つのコンテンツ handler は、それなしでは engine が何も出力しないため、必須です：
+engine はグラフ走査マシンです — ノードを辿り、登録されたコードにディスパッチします。4つのコンテンツ handler は、それなしでは engine が何も出力しないため、必須です：
 
 - `onDialog` — 対話テキストに反応する
 - `onChoice` — プレイヤーに選択肢を提示する
@@ -192,7 +192,7 @@ handle.on_resolve_character(func(chars):
 
 ## Choice 履歴
 
-engine は scene 中のプレイヤーのすべての choice を追跡します。この履歴は `choice:` condition の評価に内部的に使用され、あなたのコードからもアクセスできます：
+engine は scene 中のプレイヤーのすべての choice を追跡します。この履歴は `choice:` condition の評価に内部的に使用され、ホストアプリケーション側のコードからもアクセスできます：
 
 ```ts
 handle.onExit(({ scene }) => {

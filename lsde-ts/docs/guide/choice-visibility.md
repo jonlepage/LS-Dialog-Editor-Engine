@@ -4,7 +4,7 @@
 
 When a CHOICE block is dispatched, `context.choices` always contains **all** choices defined in the blueprint — none are pre-filtered. The engine never removes choices from the array.
 
-If you need visibility filtering (e.g., hide choices based on game state or previous selections), the engine provides an **opt-in tagging** system. You install a filter once, and the engine tags each choice with `visible: true | false` before your `onChoice` handler sees it.
+If visibility filtering is needed (e.g., hiding choices based on game state or previous selections), the engine provides an **opt-in tagging** system. A filter is installed once, and the engine tags each choice with `visible: true | false` before the `onChoice` handler sees it.
 
 ## Setup
 
@@ -37,13 +37,13 @@ engine.set_choice_filter(func(cond):
 
 When installed, the engine evaluates each choice's `visibilityConditions` **before** calling `onChoice`:
 
-- **`choice:` conditions** (referencing previous player selections) are resolved automatically by the engine via its internal choice history — your callback never sees them.
-- **Game-state conditions** (everything else) are delegated to your callback.
+- **`choice:` conditions** (referencing previous player selections) are resolved automatically by the engine via its internal choice history — the callback never sees them.
+- **Game-state conditions** (everything else) are delegated to the callback.
 - Chaining with `&` (AND) and `|` (OR) works correctly across both types.
 
 ## Filtering in onChoice
 
-In your handler, filter with one line:
+In the handler, filter with one line:
 
 ::: code-group
 ```ts [TypeScript]
@@ -179,9 +179,9 @@ tutorial.onChoice(({ context, next }) => {
 });
 ```
 
-## Sharing Your Evaluator
+## Sharing the Evaluator
 
-Your game probably evaluates conditions in one place — an inventory system, a flag manager, a quest tracker. You can share the **same evaluator function** between `setChoiceFilter` and `onCondition` so the logic stays in one place:
+Most games evaluate conditions in one place — an inventory system, a flag manager, a quest tracker. The **same evaluator function** can be shared between `setChoiceFilter` and `onCondition` so the logic stays in one place:
 
 ::: code-group
 ```ts [TypeScript]
@@ -264,12 +264,12 @@ engine.on_condition(func(args):
 :::
 
 ::: tip Why share?
-Without this pattern, you'll end up writing the same `gameState.check(...)` logic in two places. When your game state API changes, you'll fix one and forget the other. One function, two registrations, zero drift.
+Without this pattern, the same `gameState.check(...)` logic ends up in two places. When the game state API changes, one gets fixed and the other is forgotten. One function, two registrations, zero drift.
 :::
 
 ## Advanced: Manual Filtering
 
-If you prefer not to install a global filter, `LsdeUtils` provides a low-level utility:
+If a global filter is not desired, `LsdeUtils` provides a low-level utility:
 
 ```ts
 import { LsdeUtils } from '@lsde/dialog-engine';
@@ -281,4 +281,4 @@ const visible = LsdeUtils.filterVisibleChoices(
 );
 ```
 
-The `scene` parameter enables automatic `choice:` condition resolution. Without it, all conditions are delegated to your evaluator callback.
+The `scene` parameter enables automatic `choice:` condition resolution. Without it, all conditions are delegated to the evaluator callback.

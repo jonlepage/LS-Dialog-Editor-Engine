@@ -1,8 +1,8 @@
 # LSDEDE とは？
 
-**LSDE**（LepaSoft Dialogue Editor）は、インタラクティブな対話システムを設計するためのビジュアルエディターです。対話グラフを、scene、block、connection、dictionary、action signature を含む JSON blueprint として出力します。
+**LSDE**（LS Dialog Editor）は、ゲームおよびソフトウェア開発者向けの無料ツールで、ビジュアルダイアローググラフ編集、AI翻訳、音声生成、i18nコード統合、プロジェクト診断を統合しています。対話グラフを、scene、block、connection、dictionary、action signature を含む JSON blueprint として出力します。詳細: https://lepasoft.com/ja/software/ls-dialog-editor
 
-**LSDEDE**（LSDE Dialog Engine）は、これらの blueprint を読み込み実行するマルチランタイム engine です。複数の言語で利用可能なため、お好みのゲームエンジンやフレームワークにネイティブ統合できます。
+**LSDEDE**（LSDE Dialog Engine）は、これらの blueprint を読み込み実行するマルチランタイム engine です。複数の言語で利用可能なため、各種ゲームエンジンやフレームワークにネイティブ統合できます。
 
 ## 利用可能なランタイム
 
@@ -21,15 +21,19 @@
 
 1. **Blueprint** — LSDE から出力された JSON ファイル。scene、block、connection を含みます。
 2. **Engine** — blueprint を検証し、内部グラフを構築して block を handler にディスパッチします。
-3. **Handler** — 各 block タイプ（dialog、choice、condition、action）に反応するあなたの関数です。
-4. **ゲーム本体** — condition、action、キャラクター解決は、あなたの handler callback によって処理されます。
+3. **Handler** — 各 block タイプ（dialog、choice、condition、action）に反応するホストアプリケーション側の関数です。
+4. **ゲーム本体** — condition、action、キャラクター解決は、登録された handler callback によって処理されます。
 
 ```
-Blueprint JSON → engine.init() → engine.scene(id).start()
-                                        ↓
-                              onDialog / onChoice / ...
-                                        ↓
-                                  next() → next block
+  Blueprint (JSON)
+        │
+        ▼
+     Engine ◄── next() ──┐
+        │                 │
+     dispatch             │
+        │                 │
+        ▼                 │
+     Handlers ────────────┘
 ```
 
 ## 設計原則

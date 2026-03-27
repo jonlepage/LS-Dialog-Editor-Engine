@@ -2,14 +2,14 @@
 
 ## 必需的 Handler
 
-engine 是一个图遍历机器 — 它遍历节点并将其分发给你的代码。4 个内容 handler 是必需的，因为没有它们 engine 就没有输出：
+engine 是一个图遍历机器 — 它遍历节点并将其分发给已注册的 handler。4 个内容 handler 是必需的，因为没有它们 engine 就没有输出：
 
 - `onDialog` — 响应对话文本
 - `onChoice` — 向玩家呈现选项
 - `onCondition` — 评估 condition 以分支流程
 - `onAction` — 执行游戏副作用
 
-当你调用 `handle.start()` 时，engine 会验证所有 4 个 handler 是否已注册（在 engine 级别或 scene 级别）。如果有缺失，会抛出一个描述性错误，列出缺失的 handler。
+调用 `handle.start()` 时，engine 会验证所有 4 个 handler 是否已注册（在 engine 级别或 scene 级别）。如果有缺失，会抛出一个描述性错误，列出缺失的 handler。
 
 ::: code-group
 ```ts [TypeScript]
@@ -192,7 +192,7 @@ handle.on_resolve_character(func(chars):
 
 ## 选择历史
 
-engine 跟踪玩家在 scene 中做出的每个选择。此历史记录在内部用于 `choice:` condition 评估，同时也可供你的代码使用：
+engine 跟踪玩家在 scene 中做出的每个选择。此历史记录在内部用于 `choice:` condition 评估，同时也可供外部代码使用：
 
 ```ts
 handle.onExit(({ scene }) => {
@@ -351,10 +351,10 @@ engine.onInvalidateBlock(({ scene, reason }) => {
 |---|---|
 | 异步轨道中的 CHOICE block | 玩家已经在与主轨道交互 — 谁来回答异步的选择？ |
 | followNarrative 中的 CONDITION block | 如果被强制前进，condition 以 `null` 解析 → port 解析器返回空 → 轨道静默结束 |
-| 关键的游戏状态变更 | 如果异步轨道被取消（scene 结束），你的 action 永远不会执行 |
+| 关键的游戏状态变更 | 如果异步轨道被取消（scene 结束），action 永远不会执行 |
 
 ::: warning 异步轨道中的 Choice
-异步轨道中的 CHOICE block 意味着玩家需要在已经参与主对话的同时做出选择。唯一合理的场景是 AI 驱动的"选择"（例如，同伴 NPC 根据性格自动选择）。如果你的异步轨道遇到一个 CHOICE block 而没有自动选择的 scene 级 handler，流程将停滞或静默结束。
+异步轨道中的 CHOICE block 意味着玩家需要在已经参与主对话的同时做出选择。唯一合理的场景是 AI 驱动的"选择"（例如，同伴 NPC 根据性格自动选择）。如果异步轨道遇到一个 CHOICE block 而没有自动选择的 scene 级 handler，流程将停滞或静默结束。
 :::
 
 ### 多个 Scene 并行运行
@@ -380,5 +380,5 @@ tutorialOverlay.start();
 ```
 
 ::: tip 按 scene 路由
-如果你有多个并发 scene，考虑在每个 handle 上注册 scene 级（第 2 层）handler，而不是在全局 handler 中进行路由。更清晰的分离，没有 `if/else` 链。
+如果有多个并发 scene，建议在每个 handle 上注册 scene 级（第 2 层）handler，而不是在全局 handler 中进行路由。更清晰的分离，没有 `if/else` 链。
 :::

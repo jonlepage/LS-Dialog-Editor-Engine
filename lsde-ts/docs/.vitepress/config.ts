@@ -1,4 +1,4 @@
-import { defineConfig } from "vitepress";
+import { defineConfig, type DefaultTheme } from "vitepress";
 import typedocSidebar from "../api-ref/typedoc-sidebar.json";
 
 const labels: Record<string, Record<string, string>> = {
@@ -12,6 +12,9 @@ const labels: Record<string, Record<string, string>> = {
 		choiceVisibility: "Choice Visibility",
 		handlers: "Handlers & Lifecycle",
 		integration: "Game Engine Integration",
+		navGuide: "Guide",
+		navApi: "API Reference",
+		navLlm: "RAW Guide (for LLM)",
 	},
 	"/ja": {
 		introduction: "はじめに",
@@ -23,6 +26,9 @@ const labels: Record<string, Record<string, string>> = {
 		choiceVisibility: "選択肢の表示制御",
 		handlers: "ハンドラーとライフサイクル",
 		integration: "ゲームエンジン統合",
+		navGuide: "ガイド",
+		navApi: "APIリファレンス",
+		navLlm: "RAWガイド (LLM用)",
 	},
 	"/zh": {
 		introduction: "介绍",
@@ -34,6 +40,9 @@ const labels: Record<string, Record<string, string>> = {
 		choiceVisibility: "选项可见性",
 		handlers: "处理器与生命周期",
 		integration: "游戏引擎集成",
+		navGuide: "指南",
+		navApi: "API 参考",
+		navLlm: "RAW 指南 (LLM用)",
 	},
 	"/fr": {
 		introduction: "Introduction",
@@ -45,6 +54,9 @@ const labels: Record<string, Record<string, string>> = {
 		choiceVisibility: "Visibilité des choix",
 		handlers: "Handlers & Lifecycle",
 		integration: "Intégration game engine",
+		navGuide: "Guide",
+		navApi: "Référence API",
+		navLlm: "Guide RAW (pour LLM)",
 	},
 };
 
@@ -71,6 +83,15 @@ const guideSidebar = (prefix: string) => {
 	];
 };
 
+const localeNav = (prefix: string): DefaultTheme.NavItem[] => {
+	const l = labels[prefix] ?? labels[""];
+	return [
+		{ text: l.navGuide, link: `${prefix}/guide/getting-started` },
+		{ text: l.navApi, link: "/api-ref/" },
+		{ text: l.navLlm, link: `${prefix}/guide/llm-full-guide` },
+	];
+};
+
 export default defineConfig({
 	title: "LSDEDE",
 	description:
@@ -81,33 +102,31 @@ export default defineConfig({
 		root: {
 			label: "English",
 			lang: "en",
+			themeConfig: { nav: localeNav("") },
 		},
 		ja: {
 			label: "日本語",
 			lang: "ja",
 			description:
 				"インタラクティブな対話ブループリントのためのコールバック駆動グラフディスパッチャー",
+			themeConfig: { nav: localeNav("/ja") },
 		},
 		zh: {
 			label: "中文",
 			lang: "zh",
 			description: "用于交互式对话蓝图的回调驱动图调度器",
+			themeConfig: { nav: localeNav("/zh") },
 		},
 		fr: {
 			label: "Français",
 			lang: "fr-CA",
 			description:
 				"Dispatcher de graphe callback-driven pour blueprints de dialogue interactifs",
+			themeConfig: { nav: localeNav("/fr") },
 		},
 	},
 
 	themeConfig: {
-		nav: [
-			{ text: "Guide", link: "/guide/getting-started" },
-			{ text: "API Reference", link: "/api-ref/" },
-			{ text: "RAW Guide (for LLM)", link: "/guide/llm-full-guide" },
-		],
-
 		sidebar: {
 			"/guide/": guideSidebar(""),
 			"/ja/guide/": guideSidebar("/ja"),

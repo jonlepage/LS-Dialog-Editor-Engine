@@ -1,4 +1,4 @@
-LSDE Dialog Engine — Full API Reference (plain text, auto-generated)
+﻿LSDE Dialog Engine — Full API Reference (plain text, auto-generated)
 ============================================================
 Concatenates all TypeDoc-generated API documentation for LLM consumption.
 Source: lsde-ts/docs/api-ref/**/*.md

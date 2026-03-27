@@ -19,9 +19,9 @@ features:
   - title: 多运行时
     details: 提供 TypeScript、C#、C++ 和 GDScript 版本。相同的 blueprint 格式、相同的测试套件、原生集成。
   - title: 回调驱动
-    details: 没有内部渲染循环。engine 将 block 分发给你的 handler，由你来控制流程。
+    details: 没有内部渲染循环。engine 将 block 分发给已注册的 handler，由 handler 控制流程。
   - title: 零魔法
-    details: engine 是一个纯粹的图遍历机器。你的 4 个 handler 赋予每个 block 以意义 — 没有隐式回退，没有自动求值。
+    details: engine 是一个纯粹的图遍历机器。4 个 handler 赋予每个 block 以意义 — 没有隐式回退，没有自动求值。
 ---
 
 ## 运行时
