@@ -8,7 +8,7 @@
 export enum LSDE_SCENES {
 	/**
 	 * ### Scene: New Scene
-	 * 1 ACTION, 2 CHOICE, 1 CONDITION, 8 DIALOG
+	 * 2 ACTION, 2 CHOICE, 1 CONDITION, 8 DIALOG
 	 * Entry: `DIALOG-001` ⭐
 	 * - Emotions: `sad`
 	 * - Characters: `Boo`, `Gruht Tyron`, `Svelt Moon`, `Zoozo Zee`, `lia`
@@ -32,6 +32,15 @@ export enum LSDE_BLOCKS {
 	 * <image url="./_images/action.webp" />
 	 */
 	newSceneAction001 = 'd72bcf6a-161b-4759-90dd-2ae10a58fdd3',
+	/**
+	 * ### 🟧[ACTION] ACTION-002
+	 * - Scene: `New Scene`
+	 * - In: `DIALOG-007`
+	 * `signatureID1`(item2, 1)
+	 * ---
+	 * <image url="./_images/action.webp" />
+	 */
+	newSceneAction002 = '7662f44f-1836-4176-85b2-39f3c1bd4620',
 	/**
 	 * ### ⬜[CHOICE] CHOICE-001
 	 * - Characters: `lia`
@@ -132,6 +141,7 @@ export enum LSDE_BLOCKS {
 	 * - Characters: `Zoozo Zee`
 	 * - Scene: `New Scene`
 	 * - In: `DIALOG-006`
+	 * - Out: `ACTION-002`
 	 * ---
 	 * <image url="./_images/dialog.webp" />
 	 */

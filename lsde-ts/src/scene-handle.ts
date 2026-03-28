@@ -45,6 +45,8 @@ class AsyncTrack {
 	/** IDs of child tracks spawned by this track, used for recursive cancel cascade. */
 	private readonly childTrackIds: number[] = [];
 
+	private readonly startBlock: BlueprintBlock;
+
 	constructor(
 		private readonly sceneGraph: SceneGraph,
 		private readonly parentHandle: SceneHandleImpl,
@@ -55,7 +57,20 @@ class AsyncTrack {
 		this.id = id;
 		this.parentTrackId = parentTrackId;
 		this.startBlockUuid = startBlock.uuid;
-		this.processBlock( startBlock );
+		this.startBlock = startBlock;
+	}
+
+	/** Begin track execution. Must be called after the track is added to the pool. */
+	start(): void {
+		// If the start block has waitForBlocks, defer the entire track until satisfied.
+		// Sequence: spawn → wait → processBlock → onBeforeBlock (delay) → handler
+		const waitBlocks = this.startBlock.nativeProperties?.waitForBlocks;
+		if ( waitBlocks?.length && !waitBlocks.every( uuid => this.parentHandle.isVisited( uuid ) ) ) {
+			this.pendingAdvance = () => this.processBlock( this.startBlock );
+			this.parentHandle.registerWaitForBlocks( this, waitBlocks );
+			return;
+		}
+		this.processBlock( this.startBlock );
 	}
 
 	cancel(): void {
@@ -116,7 +131,19 @@ class AsyncTrack {
 
 		this.currentBlock = block;
 		this.parentHandle.addVisited( block.uuid );
-		this.executeBlockHandler( block );
+
+		// Fire onBeforeBlock — same gate pattern as SceneHandleImpl.processBlock
+		const registry = this.parentHandle.getGlobalRegistry();
+		if ( registry.beforeBlockHandler ) {
+			registry.beforeBlockHandler( {
+				block,
+				scene: this.parentHandle as SceneHandle,
+				context: { nativeProperties: block.nativeProperties },
+				resolve: () => this.executeBlockHandler( block ),
+			} );
+		} else {
+			this.executeBlockHandler( block );
+		}
 	}
 
 	private executeBlockHandler( block: BlueprintBlock ): void {
@@ -439,6 +466,7 @@ export class SceneHandleImpl implements SceneHandle {
 		const id = this.nextTrackId++;
 		const track = new AsyncTrack( this.sceneGraph, this, startBlock, id, parentTrackId );
 		this.asyncTracks.push( track );
+		track.start();
 		return id;
 	}
 

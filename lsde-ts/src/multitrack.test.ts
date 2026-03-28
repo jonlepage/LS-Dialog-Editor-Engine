@@ -795,8 +795,9 @@ describe( 'multitrack — waitForBlocks', () => {
 		handle.start();
 
 		// main ends → endScene → pending waits cleared, no crash
+		// a1's handler never fires: waitForBlocks gates start(), processBlock never reached
 		expect( handle.isRunning() ).toBe( false );
-		expect( calls ).toContain( 'a1' );
+		expect( calls ).not.toContain( 'a1' );
 		expect( calls ).not.toContain( 'never-visited' );
 	} );
 
