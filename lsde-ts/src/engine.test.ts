@@ -603,10 +603,9 @@ describe( 'DialogueEngine', () => {
 					{ uuid: 'bg2', type: 'DIALOG', properties: [],
 						dialogueText: { en: 'NPC finishes mumbling' } },
 					{ uuid: 'follow1', type: 'DIALOG', properties: [],
-						nativeProperties: { isAsync: true, followNarrative: true },
+						nativeProperties: { isAsync: true },
 						dialogueText: { en: 'Crowd reacts' } },
 					{ uuid: 'follow2', type: 'DIALOG', properties: [],
-						nativeProperties: { isAsync: true, followNarrative: true },
 						dialogueText: { en: 'Crowd cheers' } },
 				],
 				connections: [
@@ -615,7 +614,7 @@ describe( 'DialogueEngine', () => {
 					// Async background fork (self-driven)
 					{ id: 'c-bg', fromId: 'main1', toId: 'bg1', fromPort: 'out', toPort: 'in' },
 					{ id: 'c-bg2', fromId: 'bg1', toId: 'bg2', fromPort: 'out', toPort: 'in' },
-					// Follow-narrative fork
+					// Second async fork
 					{ id: 'c-follow', fromId: 'main1', toId: 'follow1', fromPort: 'out', toPort: 'in' },
 					{ id: 'c-follow2', fromId: 'follow1', toId: 'follow2', fromPort: 'out', toPort: 'in' },
 				],
@@ -633,10 +632,10 @@ describe( 'DialogueEngine', () => {
 			const handle = engine.scene( 'scene-multi' );
 			handle.start();
 
-			// main1 → forks to main2 (main) + bg1 (async, self-driven) + follow1 (async, follow)
-			// bg1 calls next() → bg2 (self-driven async track completes)
-			// main1 next → main2 fires + follow1 notified → follow1 advances to follow2
-			// main2 next → end scene → follow track cancelled
+			// main1 → forks to main2 (main) + bg1 (async) + follow1 (async)
+			// bg1 calls next() → bg2 (async track completes)
+			// follow1 calls next() → follow2 (async track completes)
+			// main2 next → end scene
 			expect( calls ).toContain( 'main1' );
 			expect( calls ).toContain( 'main2' );
 			expect( calls ).toContain( 'bg1' );

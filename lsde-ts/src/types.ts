@@ -112,9 +112,9 @@ export interface RuntimeChoiceItem extends ChoiceItem {
  *   of the main flow. Async tracks skip `onBeforeBlock`, follow only one connection, and are
  *   automatically cancelled when the scene ends.
  *
- * - **followNarrative**: Only meaningful when `isAsync = true`. The async track waits for
- *   the main flow to advance before continuing. If `next()` was already called in the handler,
- *   the pending advance executes immediately; otherwise the block is force-advanced (skipped).
+ * - **waitForBlocks**: When set, the block defers its advance until ALL listed block UUIDs
+ *   have been visited in the scene. This enables precise synchronization between parallel
+ *   async branches (e.g. a character waits for another to finish before reacting).
  *
  * - **delay**: Consumed by `onBeforeBlock` — the engine does not enforce it automatically.
  *   Your `onBeforeBlock` handler should read `block.nativeProperties.delay` and call
@@ -140,8 +140,21 @@ export interface NativeProperties {
 	portPerCharacter?: boolean;
 	/** Skip this block entirely if the assigned actor/character is missing at runtime. */
 	skipIfMissingActor?: boolean;
-	/** When true (requires `isAsync`), this async track advances automatically when the main track advances. If `next()` was already called, the pending advance executes; otherwise the block is force-advanced (skipped). */
-	followNarrative?: boolean;
+	/**
+	 * UUIDs of blocks that must have been visited before this block can progress.
+	 * When `next()` is called and not all listed blocks are in `visitedBlocks`,
+	 * the block defers its advance. Once the last required block is visited
+	 * anywhere in the scene (main or async track), the deferred advance fires.
+	 * Enables precise synchronization of parallel async branches.
+	 */
+	waitForBlocks?: string[];
+	/**
+	 * Passive flag indicating this block should wait for explicit player input
+	 * or an engine-specific signal before proceeding. The engine does NOT
+	 * interpret this flag — it is exposed as-is to game handlers.
+	 * Use case: second player controller, custom input events, etc.
+	 */
+	waitInput?: boolean;
 }
 
 /** Character (actor) assigned to a block. */
@@ -732,6 +745,28 @@ export interface SceneLifecycleArgs {
 /** Handler for scene enter/exit events. */
 export type SceneLifecycleHandler = (args: SceneLifecycleArgs) => void;
 
+// ─── TrackInfo ──────────────────────────────────────────────────────────────
+
+/**
+ * Read-only snapshot of an async track's state.
+ * Returned by {@link SceneHandle.getTrackInfos} for debug, rendering, and validation.
+ *
+ * Track IDs are auto-incremented integers starting at 1. The main track is implicit (id 0)
+ * and never appears in the track info list.
+ */
+export interface TrackInfo {
+	/** Unique auto-incremented identifier for this track within the scene. Main track is implicit (id 0). */
+	readonly id: number;
+	/** ID of the track that spawned this one. `null` means spawned directly by the main track. */
+	readonly parentTrackId: number | null;
+	/** UUID of the first block that started this track's execution. */
+	readonly startBlockUuid: string;
+	/** UUID of the block currently being processed, or `null` if the track has ended. */
+	readonly currentBlockUuid: string | null;
+	/** Whether this track is still actively executing. */
+	readonly running: boolean;
+}
+
 // ─── SceneHandle Interface ──────────────────────────────────────────────────
 
 /**
@@ -798,6 +833,8 @@ export interface SceneHandle {
 	isRunning(): boolean;
 	/** Get the number of async tracks currently running in parallel. */
 	getActiveTracks(): number;
+	/** Get detailed info for all currently running async tracks. Useful for debug, rendering, and validation. */
+	getTrackInfos(): readonly TrackInfo[];
 
 	/** Get the full choice history for this scene. Keys are block UUIDs, values are arrays of selected choice UUIDs. */
 	getChoiceHistory(): ReadonlyMap<string, readonly string[]>;

@@ -675,10 +675,10 @@ describe( 'SceneHandleImpl — Choice Condition Resolution', () => {
 
 // ─── Multi-track (AsyncTrack) ────────────────────────────────────────────────
 
-function asyncDialog( uuid: string, follow = false ): BlueprintBlock {
+function asyncDialog( uuid: string ): BlueprintBlock {
 	return {
 		uuid, type: 'DIALOG', properties: [],
-		nativeProperties: { isAsync: true, followNarrative: follow },
+		nativeProperties: { isAsync: true },
 	} as BlueprintBlock;
 }
 
@@ -798,72 +798,6 @@ describe( 'SceneHandleImpl — AsyncTracks', () => {
 		handle.start();
 
 		expect( capturedCount ).toBe( 1 );
-	} );
-
-	it( 'follow-narrative track advances when main advances', () => {
-		const calls: string[] = [];
-		const scene = makeScene( {
-			blocks: [
-				dialog( 'main1', true ),
-				dialog( 'main2' ),
-				asyncDialog( 'follow1', true ),  // followNarrative
-				asyncDialog( 'follow2', true ),  // followNarrative continuation
-			],
-			connections: [
-				conn( 'main1', 'main2' ),        // main track
-				conn( 'main1', 'follow1' ),      // async fork
-				conn( 'follow1', 'follow2' ),    // follow continues
-			],
-		} );
-		const global = new HandlerRegistry();
-		registerBaseHandlers( global );
-		global.dialogHandler = ( { block, next } ) => {
-			calls.push( block.uuid );
-			next();
-		};
-
-		new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() ).start();
-
-		// main1 → forks to main2 + follow1
-		// main1 next() → main2 fires + notifyMainAdvance → follow1 advances to follow2
-		// main2 next() → endScene → follow track cancelled
-		expect( calls ).toContain( 'main1' );
-		expect( calls ).toContain( 'main2' );
-		expect( calls ).toContain( 'follow1' );
-		expect( calls ).toContain( 'follow2' );
-	} );
-
-	it( 'follow-narrative track shorter than main ends silently', () => {
-		const calls: string[] = [];
-		const scene = makeScene( {
-			blocks: [
-				dialog( 'main1', true ),
-				dialog( 'main2' ),
-				dialog( 'main3' ),
-				asyncDialog( 'follow1', true ),
-				// follow1 has no next connection → ends after first advance
-			],
-			connections: [
-				conn( 'main1', 'main2' ),
-				conn( 'main2', 'main3' ),
-				conn( 'main1', 'follow1' ),
-			],
-		} );
-		const global = new HandlerRegistry();
-		registerBaseHandlers( global );
-		global.dialogHandler = ( { block, next } ) => {
-			calls.push( block.uuid );
-			next();
-		};
-
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
-		handle.start();
-
-		expect( calls ).toContain( 'main1' );
-		expect( calls ).toContain( 'main2' );
-		expect( calls ).toContain( 'main3' );
-		expect( calls ).toContain( 'follow1' );
-		expect( handle.isRunning() ).toBe( false );
 	} );
 
 } );

@@ -8,11 +8,11 @@ function makeExport( scenes: BlueprintScene[] ): BlueprintExport {
 	return { version: '1.0.0', exportDate: '2025-01-01', locales: ['en'], scenes };
 }
 
-function dialog( uuid: string, opts: { start?: boolean; async?: boolean; follow?: boolean; text?: string; chars?: string[] } = {} ): BlueprintBlock {
+function dialog( uuid: string, opts: { start?: boolean; async?: boolean; waitFor?: string[]; text?: string; chars?: string[] } = {} ): BlueprintBlock {
 	return {
 		uuid, type: 'DIALOG', properties: [],
 		isStartBlock: opts.start,
-		nativeProperties: ( opts.async || opts.follow ) ? { isAsync: true, followNarrative: opts.follow } : undefined,
+		nativeProperties: opts.async ? { isAsync: true, waitForBlocks: opts.waitFor } : undefined,
 		dialogueText: opts.text ? { en: opts.text } : undefined,
 		metadata: opts.chars ? { characters: opts.chars.map( name => ( { uuid: `${ name }-uuid`, id: name.toLowerCase(), name } ) ) } : undefined,
 	} as BlueprintBlock;
@@ -158,152 +158,6 @@ describe( 'multitrack — self-driven async', () => {
 		expect( calls ).toContain( 'main1' );
 		// async track fires a1 → a2 → a3 before scene ends
 		expect( calls ).toContain( 'a1' );
-	} );
-
-} );
-
-// ─── Follow-narrative tracks ─────────────────────────────────────────────────
-
-describe( 'multitrack — follow-narrative', () => {
-
-	it( 'follow track advances in sync with main track', () => {
-		const calls: string[] = [];
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
-			blocks: [
-				dialog( 'main1', { start: true, text: 'Hero: line 1' } ),
-				dialog( 'main2', { text: 'Hero: line 2' } ),
-				dialog( 'main3', { text: 'Hero: line 3' } ),
-				dialog( 'crowd1', { async: true, follow: true, text: 'Crowd: ooh' } ),
-				dialog( 'crowd2', { follow: true, text: 'Crowd: aah' } ),
-				dialog( 'crowd3', { follow: true, text: 'Crowd: wow' } ),
-			],
-			connections: [
-				conn( 'main1', 'main2' ),
-				conn( 'main2', 'main3' ),
-				conn( 'main1', 'crowd1' ),
-				conn( 'crowd1', 'crowd2' ),
-				conn( 'crowd2', 'crowd3' ),
-			],
-		};
-
-		const engine = setupEngine( scene );
-		engine.onDialog( ( { block, next } ) => { calls.push( block.uuid ); next(); } );
-		engine.scene( 's1' ).start();
-
-		// main1 next → main2 fires + follow notified (crowd1→crowd2)
-		// main2 next → main3 fires + follow notified (crowd2→crowd3)
-		// main3 next → endScene, follow cancelled
-		expect( calls ).toContain( 'main1' );
-		expect( calls ).toContain( 'main2' );
-		expect( calls ).toContain( 'main3' );
-		expect( calls ).toContain( 'crowd1' );
-		expect( calls ).toContain( 'crowd2' );
-		expect( calls ).toContain( 'crowd3' );
-	} );
-
-	it( 'follow track shorter than main: ends silently, main continues', () => {
-		const calls: string[] = [];
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
-			blocks: [
-				dialog( 'main1', { start: true } ),
-				dialog( 'main2' ),
-				dialog( 'main3' ),
-				dialog( 'main4' ),
-				dialog( 'f1', { async: true, follow: true } ),
-				// f1 has no continuation → track ends after first advance
-			],
-			connections: [
-				conn( 'main1', 'main2' ),
-				conn( 'main2', 'main3' ),
-				conn( 'main3', 'main4' ),
-				conn( 'main1', 'f1' ),
-			],
-		};
-
-		const engine = setupEngine( scene );
-		engine.onDialog( ( { block, next } ) => { calls.push( block.uuid ); next(); } );
-
-		const handle = engine.scene( 's1' );
-		handle.start();
-
-		expect( calls ).toContain( 'main4' );
-		expect( calls ).toContain( 'f1' );
-		expect( handle.isRunning() ).toBe( false );
-	} );
-
-	it( 'follow track longer than main: remaining blocks cancelled with cleanup', () => {
-		const cleanupSpy = vi.fn();
-		const calls: string[] = [];
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
-			blocks: [
-				dialog( 'main1', { start: true } ),
-				// main has only 1 block → ends fast
-				dialog( 'f1', { async: true, follow: true } ),
-				dialog( 'f2', { follow: true } ),
-				dialog( 'f3', { follow: true } ),
-			],
-			connections: [
-				conn( 'main1', 'f1' ),
-				conn( 'f1', 'f2' ),
-				conn( 'f2', 'f3' ),
-			],
-		};
-
-		const engine = setupEngine( scene );
-		engine.onDialog( ( { block, next } ) => {
-			calls.push( block.uuid );
-			if ( block.uuid === 'f1' ) {
-				next();
-				return cleanupSpy;
-			}
-			next();
-		} );
-
-		engine.scene( 's1' ).start();
-
-		// main1 has no non-async continuation → endScene → follow cancelled
-		expect( calls ).toContain( 'main1' );
-		expect( calls ).toContain( 'f1' );
-		// f2/f3 never reached because scene ends
-		expect( calls ).not.toContain( 'f3' );
-	} );
-
-	it( 'follow-narrative force-advances when handler has not called next()', () => {
-		const calls: string[] = [];
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
-			blocks: [
-				dialog( 'main1', { start: true } ),
-				dialog( 'main2' ),
-				dialog( 'f1', { async: true, follow: true } ),
-				dialog( 'f2', { follow: true } ),
-			],
-			connections: [
-				conn( 'main1', 'main2' ),
-				conn( 'main1', 'f1' ),
-				conn( 'f1', 'f2' ),
-			],
-		};
-
-		const engine = setupEngine( scene );
-		engine.onDialog( ( { block, next } ) => {
-			calls.push( block.uuid );
-			if ( block.uuid === 'f1' ) {
-				// Intentionally do NOT call next() — simulating a slow animation
-				return;
-			}
-			next();
-		} );
-
-		engine.scene( 's1' ).start();
-
-		// main1 → main2, follow is notified but f1 never called next()
-		// notifyMainAdvance force-advances f1 → f2
-		expect( calls ).toContain( 'f1' );
-		expect( calls ).toContain( 'f2' );
 	} );
 
 } );
@@ -501,6 +355,480 @@ describe( 'multitrack — mixed scenarios', () => {
 		handle.start();
 
 		expect( tracksAtMain2 ).toBe( 2 );
+	} );
+
+} );
+
+// ─── Sub-track spawning ─────────────────────────────────────────────────────
+
+describe( 'multitrack — sub-track spawning', () => {
+
+	it( 'async track with outgoing async connection spawns sub-track', () => {
+		const calls: string[] = [];
+		const scene: BlueprintScene = {
+			uuid: 's1', label: 'S1', date: '2025-01-01',
+			blocks: [
+				dialog( 'main1', { start: true } ),
+				dialog( 'main2' ),
+				dialog( 'async1', { async: true } ),   // spawned by main
+				dialog( 'async1b' ),                     // continuation of async1
+				dialog( 'sub1', { async: true } ),       // spawned by async1 (sub-track)
+				dialog( 'sub1b' ),                        // continuation of sub1
+			],
+			connections: [
+				conn( 'main1', 'main2' ),
+				conn( 'main1', 'async1' ),
+				conn( 'async1', 'async1b' ),   // main continuation on async track
+				conn( 'async1', 'sub1' ),       // sub-track fork
+				conn( 'sub1', 'sub1b' ),
+			],
+		};
+
+		const engine = setupEngine( scene );
+		engine.onDialog( ( { block, next } ) => { calls.push( block.uuid ); next(); } );
+		engine.scene( 's1' ).start();
+
+		expect( calls ).toContain( 'main1' );
+		expect( calls ).toContain( 'main2' );
+		expect( calls ).toContain( 'async1' );
+		expect( calls ).toContain( 'async1b' );
+		expect( calls ).toContain( 'sub1' );
+		expect( calls ).toContain( 'sub1b' );
+	} );
+
+	it( 'sub-track spawns sub-sub-track (depth 2)', () => {
+		const calls: string[] = [];
+		const scene: BlueprintScene = {
+			uuid: 's1', label: 'S1', date: '2025-01-01',
+			blocks: [
+				dialog( 'main1', { start: true } ),
+				dialog( 'a1', { async: true } ),
+				dialog( 'b1', { async: true } ),   // sub-track of a1
+				dialog( 'c1', { async: true } ),   // sub-sub-track of b1
+			],
+			connections: [
+				conn( 'main1', 'a1' ),
+				conn( 'a1', 'b1' ),
+				conn( 'b1', 'c1' ),
+			],
+		};
+
+		const engine = setupEngine( scene );
+		engine.onDialog( ( { block, next } ) => { calls.push( block.uuid ); next(); } );
+		engine.scene( 's1' ).start();
+
+		expect( calls ).toContain( 'a1' );
+		expect( calls ).toContain( 'b1' );
+		expect( calls ).toContain( 'c1' );
+	} );
+
+	it( 'getActiveTracks includes sub-tracks', () => {
+		let countDuringMain2 = -1;
+		const scene: BlueprintScene = {
+			uuid: 's1', label: 'S1', date: '2025-01-01',
+			blocks: [
+				dialog( 'main1', { start: true } ),
+				dialog( 'main2' ),
+				dialog( 'a1', { async: true } ),
+				dialog( 'a1b' ),                      // non-async continuation of a1
+				dialog( 'sub1', { async: true } ),    // sub-track spawned by a1
+			],
+			connections: [
+				conn( 'main1', 'main2' ),
+				conn( 'main1', 'a1' ),
+				conn( 'a1', 'a1b' ),     // main continuation
+				conn( 'a1', 'sub1' ),    // async sub-track fork
+			],
+		};
+
+		const engine = setupEngine( scene );
+		const handle = engine.scene( 's1' );
+		engine.onDialog( ( { block, next } ) => {
+			if ( block.uuid === 'a1b' || block.uuid === 'sub1' ) return; // stay alive
+			if ( block.uuid === 'main2' ) countDuringMain2 = handle.getActiveTracks();
+			next();
+		} );
+		handle.start();
+
+		// a1 advances → spawns sub1 + continues to a1b (alive) → 2 tracks: a1 track (at a1b) + sub1
+		expect( countDuringMain2 ).toBe( 2 );
+	} );
+
+} );
+
+// ─── Cancel cascade ─────────────────────────────────────────────────────────
+
+describe( 'multitrack — cancel cascade', () => {
+
+	it( 'explicit cancel() cascades to child sub-tracks', () => {
+		const parentCleanup = vi.fn();
+		const childCleanup = vi.fn();
+		const scene: BlueprintScene = {
+			uuid: 's1', label: 'S1', date: '2025-01-01',
+			blocks: [
+				dialog( 'main1', { start: true } ),
+				dialog( 'main2' ),
+				dialog( 'a1', { async: true } ),
+				dialog( 'a1b' ),                     // non-async continuation
+				dialog( 'sub1', { async: true } ),
+			],
+			connections: [
+				conn( 'main1', 'main2' ),
+				conn( 'main1', 'a1' ),
+				conn( 'a1', 'a1b' ),
+				conn( 'a1', 'sub1' ),
+			],
+		};
+
+		const engine = setupEngine( scene );
+		engine.onDialog( ( { block, next } ) => {
+			if ( block.uuid === 'a1b' ) return parentCleanup; // stay alive
+			if ( block.uuid === 'sub1' ) return childCleanup; // stay alive
+			next();
+		} );
+
+		const handle = engine.scene( 's1' );
+		handle.start();
+
+		// main ends → endScene cancels all tracks → explicit cancel cascades
+		expect( parentCleanup ).toHaveBeenCalled();
+		expect( childCleanup ).toHaveBeenCalled();
+	} );
+
+	it( 'natural endTrack does NOT cascade — child tracks survive', () => {
+		const calls: string[] = [];
+		const scene: BlueprintScene = {
+			uuid: 's1', label: 'S1', date: '2025-01-01',
+			blocks: [
+				dialog( 'main1', { start: true } ),
+				dialog( 'main2' ),
+				dialog( 'a1', { async: true } ),
+				// a1 has no non-async continuation → will endTrack naturally after spawning sub1
+				dialog( 'sub1', { async: true } ),
+				dialog( 'sub1b' ),
+			],
+			connections: [
+				conn( 'main1', 'main2' ),
+				conn( 'main1', 'a1' ),
+				conn( 'a1', 'sub1' ),
+				conn( 'sub1', 'sub1b' ),
+			],
+		};
+
+		const engine = setupEngine( scene );
+		engine.onDialog( ( { block, next } ) => { calls.push( block.uuid ); next(); } );
+		engine.scene( 's1' ).start();
+
+		// a1 advances → spawns sub1, no main continuation → endTrack (natural)
+		// sub1 survives, advances to sub1b
+		expect( calls ).toContain( 'sub1' );
+		expect( calls ).toContain( 'sub1b' );
+	} );
+
+	it( 'handle.cancel() clears everything including sub-tracks', () => {
+		const subCleanup = vi.fn();
+		const scene: BlueprintScene = {
+			uuid: 's1', label: 'S1', date: '2025-01-01',
+			blocks: [
+				dialog( 'main1', { start: true } ),
+				dialog( 'a1', { async: true } ),
+				dialog( 'sub1', { async: true } ),
+			],
+			connections: [
+				conn( 'main1', 'a1' ),
+				conn( 'a1', 'sub1' ),
+			],
+		};
+
+		const engine = setupEngine( scene );
+		engine.onDialog( ( { block, next } ) => {
+			if ( block.uuid === 'sub1' ) return subCleanup;
+			if ( block.uuid === 'a1' ) { next(); return; }
+			next();
+		} );
+
+		const handle = engine.scene( 's1' );
+		handle.start();
+
+		// main1 has no non-async continuation → endScene → all cancelled
+		expect( subCleanup ).toHaveBeenCalled();
+	} );
+
+} );
+
+// ─── TrackInfo API ──────────────────────────────────────────────────────────
+
+describe( 'multitrack — TrackInfo', () => {
+
+	it( 'getTrackInfos returns correct data for running tracks', () => {
+		let infos: readonly import('./types.js').TrackInfo[] = [];
+		const scene: BlueprintScene = {
+			uuid: 's1', label: 'S1', date: '2025-01-01',
+			blocks: [
+				dialog( 'main1', { start: true } ),
+				dialog( 'main2' ),
+				dialog( 'a1', { async: true } ),
+				dialog( 'a2', { async: true } ),
+			],
+			connections: [
+				conn( 'main1', 'main2' ),
+				conn( 'main1', 'a1' ),
+				conn( 'main1', 'a2' ),
+			],
+		};
+
+		const engine = setupEngine( scene );
+		const handle = engine.scene( 's1' );
+		engine.onDialog( ( { block, next } ) => {
+			if ( block.uuid === 'a1' || block.uuid === 'a2' ) return; // stay alive
+			if ( block.uuid === 'main2' ) infos = handle.getTrackInfos();
+			next();
+		} );
+		handle.start();
+
+		expect( infos ).toHaveLength( 2 );
+		expect( infos[0]!.parentTrackId ).toBeNull(); // spawned by main
+		expect( infos[0]!.startBlockUuid ).toBe( 'a1' );
+		expect( infos[0]!.running ).toBe( true );
+		expect( infos[1]!.startBlockUuid ).toBe( 'a2' );
+	} );
+
+	it( 'sub-track parentTrackId matches parent track id', () => {
+		let infos: readonly import('./types.js').TrackInfo[] = [];
+		const scene: BlueprintScene = {
+			uuid: 's1', label: 'S1', date: '2025-01-01',
+			blocks: [
+				dialog( 'main1', { start: true } ),
+				dialog( 'main2' ),
+				dialog( 'a1', { async: true } ),
+				dialog( 'a1b' ),                      // non-async continuation
+				dialog( 'sub1', { async: true } ),
+			],
+			connections: [
+				conn( 'main1', 'main2' ),
+				conn( 'main1', 'a1' ),
+				conn( 'a1', 'a1b' ),      // main continuation
+				conn( 'a1', 'sub1' ),     // sub-track fork
+			],
+		};
+
+		const engine = setupEngine( scene );
+		const handle = engine.scene( 's1' );
+		engine.onDialog( ( { block, next } ) => {
+			if ( block.uuid === 'a1b' || block.uuid === 'sub1' ) return; // stay alive
+			if ( block.uuid === 'main2' ) infos = handle.getTrackInfos();
+			next();
+		} );
+		handle.start();
+
+		expect( infos ).toHaveLength( 2 );
+		const parent = infos.find( t => t.startBlockUuid === 'a1' )!;
+		const child = infos.find( t => t.startBlockUuid === 'sub1' )!;
+		expect( parent.parentTrackId ).toBeNull();
+		expect( child.parentTrackId ).toBe( parent.id );
+	} );
+
+	it( 'ended track does not appear in getTrackInfos', () => {
+		let infosAfterEnd: readonly import('./types.js').TrackInfo[] = [];
+		const scene: BlueprintScene = {
+			uuid: 's1', label: 'S1', date: '2025-01-01',
+			blocks: [
+				dialog( 'main1', { start: true } ),
+				dialog( 'main2' ),
+				dialog( 'a1', { async: true } ), // will end immediately (no continuation)
+			],
+			connections: [
+				conn( 'main1', 'main2' ),
+				conn( 'main1', 'a1' ),
+			],
+		};
+
+		const engine = setupEngine( scene );
+		const handle = engine.scene( 's1' );
+		engine.onDialog( ( { block, next } ) => {
+			if ( block.uuid === 'main2' ) infosAfterEnd = handle.getTrackInfos();
+			next();
+		} );
+		handle.start();
+
+		// a1 calls next() and has no outgoing → endTrack → removed
+		expect( infosAfterEnd ).toHaveLength( 0 );
+	} );
+
+	it( 'track IDs are monotonically increasing', () => {
+		let infos: readonly import('./types.js').TrackInfo[] = [];
+		const scene: BlueprintScene = {
+			uuid: 's1', label: 'S1', date: '2025-01-01',
+			blocks: [
+				dialog( 'main1', { start: true } ),
+				dialog( 'main2' ),
+				dialog( 'a1', { async: true } ),
+				dialog( 'a2', { async: true } ),
+				dialog( 'a3', { async: true } ),
+			],
+			connections: [
+				conn( 'main1', 'main2' ),
+				conn( 'main1', 'a1' ),
+				conn( 'main1', 'a2' ),
+				conn( 'main1', 'a3' ),
+			],
+		};
+
+		const engine = setupEngine( scene );
+		const handle = engine.scene( 's1' );
+		engine.onDialog( ( { block, next } ) => {
+			if ( block.uuid.startsWith( 'a' ) ) return; // stay alive
+			if ( block.uuid === 'main2' ) infos = handle.getTrackInfos();
+			next();
+		} );
+		handle.start();
+
+		const ids = infos.map( t => t.id );
+		expect( ids ).toEqual( [1, 2, 3] );
+	} );
+
+} );
+
+// ─── waitForBlocks ──────────────────────────────────────────────────────────
+
+describe( 'multitrack — waitForBlocks', () => {
+
+	it( 'block with waitForBlocks defers until target is visited', () => {
+		const calls: string[] = [];
+		const scene: BlueprintScene = {
+			uuid: 's1', label: 'S1', date: '2025-01-01',
+			blocks: [
+				dialog( 'main1', { start: true } ),
+				dialog( 'main2' ),
+				dialog( 'a1', { async: true, waitFor: ['main2'] } ),
+				dialog( 'a2' ),   // continuation after a1 advances
+			],
+			connections: [
+				conn( 'main1', 'main2' ),
+				conn( 'main1', 'a1' ),
+				conn( 'a1', 'a2' ),
+			],
+		};
+
+		const engine = setupEngine( scene );
+		engine.onDialog( ( { block, next } ) => { calls.push( block.uuid ); next(); } );
+		engine.scene( 's1' ).start();
+
+		// a1 calls next() but main2 not yet visited → defers
+		// main1 → main2 visited → a1 advance triggers → a2 fires
+		expect( calls ).toContain( 'a1' );
+		expect( calls ).toContain( 'a2' );
+		expect( calls ).toContain( 'main2' );
+	} );
+
+	it( 'waitForBlocks already satisfied advances immediately', () => {
+		const calls: string[] = [];
+		// a1 waits for main1, but main1 is the start block → already visited when a1 runs
+		const scene: BlueprintScene = {
+			uuid: 's1', label: 'S1', date: '2025-01-01',
+			blocks: [
+				dialog( 'main1', { start: true } ),
+				dialog( 'a1', { async: true, waitFor: ['main1'] } ),
+				dialog( 'a2' ),
+			],
+			connections: [
+				conn( 'main1', 'a1' ),
+				conn( 'a1', 'a2' ),
+			],
+		};
+
+		const engine = setupEngine( scene );
+		engine.onDialog( ( { block, next } ) => { calls.push( block.uuid ); next(); } );
+		engine.scene( 's1' ).start();
+
+		expect( calls ).toContain( 'a1' );
+		expect( calls ).toContain( 'a2' );
+	} );
+
+	it( 'waitForBlocks with multiple UUIDs waits for ALL', () => {
+		const calls: string[] = [];
+		const scene: BlueprintScene = {
+			uuid: 's1', label: 'S1', date: '2025-01-01',
+			blocks: [
+				dialog( 'main1', { start: true } ),
+				dialog( 'main2' ),
+				dialog( 'main3' ),
+				dialog( 'a1', { async: true, waitFor: ['main2', 'main3'] } ),
+				dialog( 'a2' ),
+			],
+			connections: [
+				conn( 'main1', 'main2' ),
+				conn( 'main2', 'main3' ),
+				conn( 'main1', 'a1' ),
+				conn( 'a1', 'a2' ),
+			],
+		};
+
+		const engine = setupEngine( scene );
+		engine.onDialog( ( { block, next } ) => { calls.push( block.uuid ); next(); } );
+		engine.scene( 's1' ).start();
+
+		// a1 waits for both main2 AND main3
+		expect( calls ).toContain( 'a1' );
+		expect( calls ).toContain( 'a2' );
+	} );
+
+	it( 'scene cancel clears pending waitForBlocks without leak', () => {
+		const calls: string[] = [];
+		const scene: BlueprintScene = {
+			uuid: 's1', label: 'S1', date: '2025-01-01',
+			blocks: [
+				dialog( 'main1', { start: true } ),
+				dialog( 'main2' ),
+				dialog( 'a1', { async: true, waitFor: ['never-visited'] } ),
+			],
+			connections: [
+				conn( 'main1', 'main2' ),
+				conn( 'main1', 'a1' ),
+			],
+		};
+
+		const engine = setupEngine( scene );
+		engine.onDialog( ( { block, next } ) => { calls.push( block.uuid ); next(); } );
+
+		const handle = engine.scene( 's1' );
+		handle.start();
+
+		// main ends → endScene → pending waits cleared, no crash
+		expect( handle.isRunning() ).toBe( false );
+		expect( calls ).toContain( 'a1' );
+		expect( calls ).not.toContain( 'never-visited' );
+	} );
+
+	it( 'waitForBlocks on sub-track waits for main track block', () => {
+		const calls: string[] = [];
+		const scene: BlueprintScene = {
+			uuid: 's1', label: 'S1', date: '2025-01-01',
+			blocks: [
+				dialog( 'main1', { start: true } ),
+				dialog( 'main2' ),
+				dialog( 'main3' ),
+				dialog( 'a1', { async: true } ),
+				dialog( 'sub1', { async: true, waitFor: ['main3'] } ),
+				dialog( 'sub2' ),
+			],
+			connections: [
+				conn( 'main1', 'main2' ),
+				conn( 'main2', 'main3' ),
+				conn( 'main1', 'a1' ),
+				conn( 'a1', 'sub1' ),      // sub-track fork (a1 endTrack naturally, sub1 survives)
+				conn( 'sub1', 'sub2' ),
+			],
+		};
+
+		const engine = setupEngine( scene );
+		engine.onDialog( ( { block, next } ) => { calls.push( block.uuid ); next(); } );
+		engine.scene( 's1' ).start();
+
+		// a1 ends naturally → sub1 survives (philosophy B)
+		// sub1 waits for main3 → main3 visited → sub1 advances → sub2
+		expect( calls ).toContain( 'sub1' );
+		expect( calls ).toContain( 'sub2' );
 	} );
 
 } );

@@ -17,7 +17,7 @@ export type {
 	// Engine types
 	DiagnosticReport, DiagnosticEntry, DiagnosticStats,
 	InitOptions, CheckOptions,
-	ValidationResult, CleanupFn,
+	ValidationResult, CleanupFn, TrackInfo,
 
 	// Context types
 	BaseBlockContext, DialogContext, ChoiceContext, ConditionContext, ActionContext,

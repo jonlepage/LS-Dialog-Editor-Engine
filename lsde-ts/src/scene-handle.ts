@@ -34,15 +34,27 @@ class AsyncTrack {
 	private running = true;
 	private currentBlock: BlueprintBlock | null = null;
 	private previousCleanup: CleanupFn | null = null;
-	private readonly followNarrative: boolean;
 	private pendingAdvance: ( () => void ) | null = null;
+
+	/** Unique auto-incremented identifier for this track within the scene. */
+	public readonly id: number;
+	/** ID of the parent track that spawned this one, or `null` if spawned by the main track. */
+	public readonly parentTrackId: number | null;
+	/** UUID of the block that started this track's execution. */
+	public readonly startBlockUuid: string;
+	/** IDs of child tracks spawned by this track, used for recursive cancel cascade. */
+	private readonly childTrackIds: number[] = [];
 
 	constructor(
 		private readonly sceneGraph: SceneGraph,
 		private readonly parentHandle: SceneHandleImpl,
 		startBlock: BlueprintBlock,
+		id: number,
+		parentTrackId: number | null,
 	) {
-		this.followNarrative = startBlock.nativeProperties?.followNarrative ?? false;
+		this.id = id;
+		this.parentTrackId = parentTrackId;
+		this.startBlockUuid = startBlock.uuid;
 		this.processBlock( startBlock );
 	}
 
@@ -55,27 +67,33 @@ class AsyncTrack {
 		}
 		this.currentBlock = null;
 		this.pendingAdvance = null;
+		for ( const childId of this.childTrackIds ) {
+			this.parentHandle.cancelTrack( childId );
+		}
+		this.childTrackIds.length = 0;
 	}
 
 	isRunning(): boolean {
 		return this.running;
 	}
 
-	isFollowNarrative(): boolean {
-		return this.followNarrative;
+	/** Called by the parent handle when all `waitForBlocks` UUIDs have been visited. */
+	notifyWaitSatisfied(): void {
+		if ( !this.running || !this.pendingAdvance ) return;
+		const advance = this.pendingAdvance;
+		this.pendingAdvance = null;
+		advance();
 	}
 
-	/** Called by the main track when it advances. Triggers pending follow-narrative advance. */
-	notifyMainAdvance(): void {
-		if ( !this.running || !this.followNarrative ) return;
-
-		if ( this.pendingAdvance ) {
-			const advance = this.pendingAdvance;
-			this.pendingAdvance = null;
-			advance();
-		} else {
-			this.forceAdvance();
-		}
+	/** Build a read-only snapshot of this track's state for the public API. */
+	getTrackInfo(): import('./types.js').TrackInfo {
+		return {
+			id: this.id,
+			parentTrackId: this.parentTrackId,
+			startBlockUuid: this.startBlockUuid,
+			currentBlockUuid: this.currentBlock?.uuid ?? null,
+			running: this.running,
+		};
 	}
 
 	// ─── Traversal (mirrors SceneHandleImpl logic) ───────────────────
@@ -131,9 +149,14 @@ class AsyncTrack {
 			if ( nextCalled ) return;
 			nextCalled = true;
 
-			if ( this.followNarrative ) {
-				this.pendingAdvance = () => this.advanceToNextBlock( block, context );
-				return;
+			// waitForBlocks: defer advance until all required blocks are visited
+			const waitBlocks = block.nativeProperties?.waitForBlocks;
+			if ( waitBlocks?.length ) {
+				if ( !waitBlocks.every( uuid => this.parentHandle.isVisited( uuid ) ) ) {
+					this.pendingAdvance = () => this.advanceToNextBlock( block, context );
+					this.parentHandle.registerWaitForBlocks( this, waitBlocks );
+					return;
+				}
 			}
 
 			if ( syncPhase ) return;
@@ -159,7 +182,7 @@ class AsyncTrack {
 		this.previousCleanup = this.combineCleanups( sceneCleanup, globalCleanup );
 
 		syncPhase = false;
-		if ( nextCalled && !this.followNarrative ) {
+		if ( nextCalled && !this.pendingAdvance ) {
 			this.advanceToNextBlock( block, context );
 		}
 	}
@@ -177,9 +200,34 @@ class AsyncTrack {
 			characterPortIndex: context && '_characterPortIndex' in context ? context._characterPortIndex : undefined,
 		} );
 
-		const conn = resolution.connections[0];
-		if ( conn ) {
-			const nextBlock = this.sceneGraph.getBlock( conn.toId );
+		// Separate main (first non-async) from async connections — same logic as SceneHandleImpl
+		const allConnections = resolution.connections;
+		let mainConnection: typeof allConnections[number] | null = null;
+		const asyncConnections: typeof allConnections = [];
+
+		for ( const conn of allConnections ) {
+			const targetBlock = this.sceneGraph.getBlock( conn.toId );
+			if ( !targetBlock ) continue;
+
+			if ( !mainConnection && !targetBlock.nativeProperties?.isAsync ) {
+				mainConnection = conn;
+			} else {
+				asyncConnections.push( conn );
+			}
+		}
+
+		// Spawn sub-tracks for async connections
+		for ( const conn of asyncConnections ) {
+			const targetBlock = this.sceneGraph.getBlock( conn.toId );
+			if ( targetBlock ) {
+				const trackId = this.parentHandle.spawnAsyncTrack( targetBlock, this.id );
+				this.childTrackIds.push( trackId );
+			}
+		}
+
+		// Follow main connection or end track
+		if ( mainConnection ) {
+			const nextBlock = this.sceneGraph.getBlock( mainConnection.toId );
 			if ( nextBlock ) {
 				const cleanupToRun = this.previousCleanup;
 				this.previousCleanup = null;
@@ -192,21 +240,13 @@ class AsyncTrack {
 		this.endTrack();
 	}
 
-	private forceAdvance(): void {
-		if ( !this.running || !this.currentBlock ) return;
-		const block = this.currentBlock;
-		if ( this.previousCleanup ) {
-			this.previousCleanup();
-			this.previousCleanup = null;
-		}
-		this.advanceToNextBlock( block, null );
-	}
-
 	private endTrack(): void {
 		if ( this.previousCleanup ) {
 			this.previousCleanup();
 			this.previousCleanup = null;
 		}
+		// Child tracks survive — they live independently in the flat pool.
+		// Only explicit cancel() cascades to children.
 		this.running = false;
 		this.currentBlock = null;
 		this.parentHandle.removeTrack( this );
@@ -238,6 +278,10 @@ export class SceneHandleImpl implements SceneHandle {
 	private readonly choiceHistory = new Map<string, string[]>();
 	private previousCleanup: CleanupFn | null = null;
 	private readonly asyncTracks: AsyncTrack[] = [];
+	/** Auto-incremented counter for track IDs. 0 is reserved for the implicit main track. */
+	private nextTrackId = 1;
+	/** Tracks waiting for specific blocks to be visited before they can advance. */
+	private readonly pendingWaits = new Map<AsyncTrack, string[]>();
 	private _resolveCharacter: ( ( characters: BlockCharacter[] ) => BlockCharacter | undefined ) | null = null;
 
 	constructor(
@@ -285,6 +329,7 @@ export class SceneHandleImpl implements SceneHandle {
 	cancel(): void {
 		if ( !this.running ) return;
 		this.cancelled = true;
+		this.pendingWaits.clear();
 		for ( const track of this.asyncTracks ) {
 			track.cancel();
 		}
@@ -343,6 +388,12 @@ export class SceneHandleImpl implements SceneHandle {
 		return this.asyncTracks.filter( t => t.isRunning() ).length;
 	}
 
+	getTrackInfos(): readonly import('./types.js').TrackInfo[] {
+		return this.asyncTracks
+			.filter( t => t.isRunning() )
+			.map( t => t.getTrackInfo() );
+	}
+
 	getSceneGraph(): SceneGraph {
 		return this.sceneGraph;
 	}
@@ -367,7 +418,45 @@ export class SceneHandleImpl implements SceneHandle {
 
 	/** @internal */ getSceneRegistry(): SceneHandlerRegistry { return this.sceneRegistry; }
 	/** @internal */ getGlobalRegistry(): HandlerRegistry { return this.globalRegistry; }
-	/** @internal */ addVisited( uuid: string ): void { this.visited.add( uuid ); }
+	/** @internal */ addVisited( uuid: string ): void {
+		this.visited.add( uuid );
+		if ( this.pendingWaits.size > 0 ) {
+			const satisfied: AsyncTrack[] = [];
+			for ( const [track, required] of this.pendingWaits ) {
+				if ( required.every( u => this.visited.has( u ) ) ) {
+					satisfied.push( track );
+				}
+			}
+			for ( const track of satisfied ) {
+				this.pendingWaits.delete( track );
+				track.notifyWaitSatisfied();
+			}
+		}
+	}
+
+	/** @internal — Spawn a new async track in the flat pool. Returns the assigned track ID. */
+	spawnAsyncTrack( startBlock: BlueprintBlock, parentTrackId: number | null ): number {
+		const id = this.nextTrackId++;
+		const track = new AsyncTrack( this.sceneGraph, this, startBlock, id, parentTrackId );
+		this.asyncTracks.push( track );
+		return id;
+	}
+
+	/** @internal — Cancel a specific track by ID (used for parent→child cascade). */
+	cancelTrack( trackId: number ): void {
+		const track = this.asyncTracks.find( t => t.id === trackId );
+		if ( track ) track.cancel();
+	}
+
+	/** @internal — Register a track as waiting for specific block UUIDs to be visited. */
+	registerWaitForBlocks( track: AsyncTrack, blockUuids: string[] ): void {
+		this.pendingWaits.set( track, blockUuids );
+	}
+
+	/** @internal — Check if a block UUID has been visited in this scene. */
+	isVisited( uuid: string ): boolean {
+		return this.visited.has( uuid );
+	}
 
 	/** @internal */ recordChoice( blockUuid: string, choiceUuid: string ): void {
 		const existing = this.choiceHistory.get( blockUuid );
@@ -436,7 +525,7 @@ export class SceneHandleImpl implements SceneHandle {
 
 		// Step 3: Mark as current and visited
 		this.currentBlock = block;
-		this.visited.add( block.uuid );
+		this.addVisited( block.uuid );
 
 		// Step 3b: onBeforeBlock
 		if ( this.globalRegistry.beforeBlockHandler ) {
@@ -544,13 +633,7 @@ export class SceneHandleImpl implements SceneHandle {
 		for ( const conn of asyncConnections ) {
 			const targetBlock = this.sceneGraph.getBlock( conn.toId );
 			if ( targetBlock ) {
-				this.asyncTracks.push( new AsyncTrack( this.sceneGraph, this, targetBlock ) );
-			}
-		}
-
-		for ( const track of this.asyncTracks ) {
-			if ( track.isFollowNarrative() ) {
-				track.notifyMainAdvance();
+				this.spawnAsyncTrack( targetBlock, null );
 			}
 		}
 
@@ -569,6 +652,7 @@ export class SceneHandleImpl implements SceneHandle {
 	}
 
 	private endScene(): void {
+		this.pendingWaits.clear();
 		for ( const track of this.asyncTracks ) {
 			track.cancel();
 		}
