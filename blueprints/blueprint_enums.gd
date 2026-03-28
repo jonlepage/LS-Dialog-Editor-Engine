@@ -7,18 +7,10 @@ class_name BlueprintEnums
 ## Each value maps to the scene's UUID — stable even if the scene is renamed.
 class LSDE_SCENES:
 	## [b]Scene: New Scene[/b]
-	## 1 ACTION, 1 CHOICE, 1 CONDITION, 5 DIALOG
+	## 1 ACTION, 2 CHOICE, 1 CONDITION, 8 DIALOG
 	## Entry: [code]DIALOG-001[/code]
 	## Emotions: [code]sad[/code]
-	## Characters: [code]Boo[/code], [code]Gigi Jinx [/code], [code]Gruht Tyron[/code], [code]Lulu Star[/code], [code]Salomon Sky[/code], [code]Svelt Moon[/code], [code]lia[/code]
-	## ---
-	## <image url="./_images/char_gruht_tyron_0.png" />
-	## <image url="./_images/char_gigi_jinx__1.png" />
-	## <image url="./_images/char_lulu_star_2.png" />
-	## <image url="./_images/char_boo_3.png" />
-	## <image url="./_images/char_svelt_moon_4.png" />
-	## <image url="./_images/char_salomon_sky_5.png" />
-	## <image url="./_images/char_lia_6.png" />
+	## Characters: [code]Boo[/code], [code]Gruht Tyron[/code], [code]Svelt Moon[/code], [code]Zoozo Zee[/code], [code]lia[/code]
 	const newScene = "3e0110a5-49bb-46fe-884b-05ce106af4cd"
 
 
@@ -29,99 +21,136 @@ class LSDE_SCENES:
 class LSDE_BLOCKS:
 	## [b]🟧[ACTION] ACTION-001[/b]
 	## Scene: [code]New Scene[/code]
-	## In: [code]DIALOG-001[/code]
-	## Out: [code]DIALOG-002[/code], [code]DIALOG-005[/code]
+	## In: [code]CONDITION-001[/code]
 	## ---
 	## <image url="./_images/action.webp" />
-	const newSceneAction001 = "b1e1cf07-e8d2-42cc-b1ec-7cfb21b6a3aa"
+	const newSceneAction001 = "d72bcf6a-161b-4759-90dd-2ae10a58fdd3"
 
 	## [b]⬜[CHOICE] CHOICE-001[/b]
-	## Characters: [code]Gruht Tyron[/code], [code]Gigi Jinx [/code], [code]Lulu Star[/code], [code]Boo[/code], [code]Svelt Moon[/code], [code]Salomon Sky[/code]
+	## Characters: [code]lia[/code]
 	## Scene: [code]New Scene[/code]
 	## In: [code]DIALOG-001[/code]
-	## Out: [code]CONDITION-001[/code], [code]DIALOG-001[/code]
+	## Out: [code]DIALOG-002[/code], [code]DIALOG-004[/code]
 	## ---
 	## <image url="./_images/choice.webp" />
-	## <image url="./_images/char_gruht_tyron_0.png" />
-	## <image url="./_images/char_gigi_jinx__1.png" />
-	## <image url="./_images/char_lulu_star_2.png" />
-	## <image url="./_images/char_boo_3.png" />
-	## <image url="./_images/char_svelt_moon_4.png" />
-	## <image url="./_images/char_salomon_sky_5.png" />
 	const newSceneChoice001 = "014f503a-6688-429d-a5fe-801cf33f2410"
+
+	## [b]⬜[CHOICE] CHOICE-002[/b]
+	## Scene: [code]New Scene[/code]
+	## In: [code]DIALOG-002[/code]
+	## Out: [code]CONDITION-001[/code]
+	## ---
+	## <image url="./_images/choice.webp" />
+	const newSceneChoice002 = "2b184947-49f9-4e57-8600-70b46e2cd0ba"
 
 	## [b]🟪[CONDITION] CONDITION-001[/b]
 	## Scene: [code]New Scene[/code]
-	## In: [code]DIALOG-002[/code], [code]CHOICE-001[/code]
-	## Out: [code]DIALOG-003[/code], [code]DIALOG-004[/code]
+	## In: [code]CHOICE-002[/code]
+	## Out: [code]ACTION-001[/code], [code]DIALOG-003[/code]
 	## ---
 	## <image url="./_images/cond.webp" />
-	const newSceneCondition001 = "85f4640b-9c6e-4940-9bc6-b4d12847d5f8"
+	const newSceneCondition001 = "4074b6c2-bfc8-44f1-9a29-cda529bf522a"
 
 	## [b]🟦[DIALOG] DIALOG-001 (entry)[/b]
-	## [i]"choice2"[/i]
-	## Characters: [code]Gruht Tyron[/code] (sad x2), [code]Svelt Moon[/code] (sad x2), [code]lia[/code] (sad x2), [code]Boo[/code] (sad x2)
+	## [i]"C2"[/i]
+	## Characters: [code]lia[/code] (sad x2), [code]Boo[/code] (sad x2), [code]Svelt Moon[/code] (sad x2), [code]Gruht Tyron[/code] (sad x2)
 	## Scene: [code]New Scene[/code]
-	## In: [code]CHOICE-001[/code]
-	## Out: [code]CHOICE-001[/code], [code]ACTION-001[/code], [code]DIALOG-005[/code]
+	## Out: [code]CHOICE-001[/code]
 	## ---
 	## <image url="./_images/dialog.webp" />
-	## <image url="./_images/char_gruht_tyron_0.png" />
-	## <image url="./_images/char_svelt_moon_1.png" />
-	## <image url="./_images/char_lia_2.png" />
-	## <image url="./_images/char_boo_3.png" />
 	const newSceneDialog001 = "6462dab3-0eb4-4a2c-a505-407556441156"
 
 	## [b]🟦[DIALOG] DIALOG-002[/b]
-	## [i]"text 2"[/i]
-	## Characters: [code]lia[/code]
+	## [i]"D2"[/i]
 	## Scene: [code]New Scene[/code]
-	## In: [code]ACTION-001[/code]
-	## Out: [code]CONDITION-001[/code]
+	## In: [code]CHOICE-001[/code]
+	## Out: [code]CHOICE-002[/code]
 	## ---
 	## <image url="./_images/dialog.webp" />
-	## <image url="./_images/char_lia_0.png" />
-	const newSceneDialog002 = "df23757c-a35a-4bcb-8056-e7ad232eff1d"
+	const newSceneDialog002 = "c66437af-54b7-4a75-9efa-713e983c145d"
 
 	## [b]🟦[DIALOG] DIALOG-003[/b]
-	## [i]"text 3"[/i]
+	## [i]"D5"[/i]
 	## Scene: [code]New Scene[/code]
 	## In: [code]CONDITION-001[/code]
 	## ---
 	## <image url="./_images/dialog.webp" />
-	const newSceneDialog003 = "bccf5542-80f1-4415-b0c4-24ff4a638aa7"
+	const newSceneDialog003 = "dfc30c4c-a1aa-4e76-81b6-640bf447351b"
 
 	## [b]🟦[DIALOG] DIALOG-004[/b]
-	## [i]"text 3.2"[/i]
+	## [i]"Hehehe!"[/i]
+	## Characters: [code]Gruht Tyron[/code]
 	## Scene: [code]New Scene[/code]
-	## In: [code]CONDITION-001[/code], [code]DIALOG-005[/code]
+	## In: [code]CHOICE-001[/code]
+	## Out: [code]DIALOG-005[/code], [code]DIALOG-006[/code]
 	## ---
 	## <image url="./_images/dialog.webp" />
-	const newSceneDialog004 = "0c524a39-6bbe-468f-8876-43c1fbb2a030"
+	const newSceneDialog004 = "4a800564-098f-4b88-a36b-f5d03f642944"
 
 	## [b]🟦[DIALOG] DIALOG-005[/b]
-	## [i]"action fail"[/i]
+	## [i]"Je suis le roi!"[/i]
+	## Characters: [code]Gruht Tyron[/code]
 	## Scene: [code]New Scene[/code]
-	## In: [code]ACTION-001[/code], [code]DIALOG-001[/code]
-	## Out: [code]DIALOG-004[/code]
+	## In: [code]DIALOG-004[/code]
+	## Out: [code]DIALOG-008[/code]
 	## ---
 	## <image url="./_images/dialog.webp" />
-	const newSceneDialog005 = "9b47c43c-4b06-4e37-bec6-2ee2597d4bae"
+	const newSceneDialog005 = "2a087cbc-3b00-457a-9448-538e39a475ab"
+
+	## [b]🟦[DIALOG] DIALOG-006[/b]
+	## [i]"heu, je suis pas certain de comprendre"[/i]
+	## Characters: [code]Zoozo Zee[/code]
+	## Scene: [code]New Scene[/code]
+	## In: [code]DIALOG-004[/code]
+	## Out: [code]DIALOG-007[/code]
+	## ---
+	## <image url="./_images/dialog.webp" />
+	const newSceneDialog006 = "ef7301d9-c8ce-4416-9a28-4b1f5595ac74"
+
+	## [b]🟦[DIALOG] DIALOG-007[/b]
+	## [i]"heu non mais ca va pas !? ces moi qui est las"[/i]
+	## Characters: [code]Zoozo Zee[/code]
+	## Scene: [code]New Scene[/code]
+	## In: [code]DIALOG-006[/code]
+	## ---
+	## <image url="./_images/dialog.webp" />
+	const newSceneDialog007 = "d0cf7ee4-8dcb-4b75-b373-5d4a1dca73be"
+
+	## [b]🟦[DIALOG] DIALOG-008[/b]
+	## [i]"ces pas moi le probleme !!!"[/i]
+	## Characters: [code]Gruht Tyron[/code]
+	## Scene: [code]New Scene[/code]
+	## In: [code]DIALOG-005[/code]
+	## ---
+	## <image url="./_images/dialog.webp" />
+	const newSceneDialog008 = "7ab18c86-c98e-41f1-99ca-51c7e66cb144"
 
 
 ## Choice item identifiers for type-safe access to individual player choices.
 ## Each value maps to a choice item's UUID within a CHOICE block.
 ## Use these for switch/case handling of specific player decisions.
 class LSDE_CHOICES:
-	## [b]⬜[CHOICE_ITEM] choice1[/b]
-	## [i]"choice1"[/i]
+	## [b]⬜[CHOICE_ITEM] C1[/b]
+	## [i]"C1"[/i]
 	## Scene: [code]New Scene[/code]
 	## See LSDE_BLOCKS.newSceneChoice001
-	const newSceneChoice1 = "17e98de3-1690-4ca4-8ea5-8070c15b1fe1"
+	const newSceneC1 = "17e98de3-1690-4ca4-8ea5-8070c15b1fe1"
 
-	## [b]⬜[CHOICE_ITEM] choice2[/b]
-	## [i]"choice2"[/i]
+	## [b]⬜[CHOICE_ITEM] C2[/b]
+	## [i]"C2"[/i]
 	## Scene: [code]New Scene[/code]
 	## See LSDE_BLOCKS.newSceneChoice001
-	const newSceneChoice2 = "a0eee458-6ccc-4a23-bd36-0b3d1f73771e"
+	const newSceneC2 = "a0eee458-6ccc-4a23-bd36-0b3d1f73771e"
+
+	## [b]⬜[CHOICE_ITEM] C1.1[/b]
+	## [i]"C1.1"[/i]
+	## Scene: [code]New Scene[/code]
+	## See LSDE_BLOCKS.newSceneChoice002
+	const newSceneC11 = "d16d21ea-ecf8-4172-aaa3-668df80e9853"
+
+	## [b]⬜[CHOICE_ITEM] C2.1[/b]
+	## [i]"C2.1"[/i]
+	## Scene: [code]New Scene[/code]
+	## See LSDE_BLOCKS.newSceneChoice002
+	const newSceneC21 = "e306346e-6bcc-4564-8b19-e2ed28fabafe"
 

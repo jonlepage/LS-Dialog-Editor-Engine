@@ -133,12 +133,11 @@ struct ExportCondition {
  * or invoke any custom behavior in your engine.
  */
 struct ExportAction {
-	/** @brief Unique identifier for this action. */
+	/** @brief Unique identifier for this action instance. */
 	std::string uuid;
-	/**
-	 * Action type identifier referencing your engine's action system.
-	 * Map this to your game's action handlers or event system.
-	 */
+	/** @brief UUID of the signature definition in the project. */
+	std::string signatureUuid;
+	/** @brief Human-readable signature ID for mapping to your engine's action handlers. */
 	std::string actionId;
 	/**
 	 * Ordered list of parameters for the action.
@@ -225,6 +224,18 @@ struct NativeProperties {
 	 * Useful for optional dialogue that depends on character presence.
 	 */
 	bool skipIfMissingActor = false;
+	/**
+	 * UUIDs of blocks that must have been visited before this block can progress.
+	 * Enables synchronization of parallel async branches.
+	 * The block will not call next() until ALL listed blocks appear in visitedBlocks.
+	 */
+	std::vector<std::string> waitForBlocks;
+	/**
+	 * When true, this block waits for explicit player input or an engine signal
+	 * before proceeding. This is a passive flag — the engine does not interpret it;
+	 * it is up to the game developer to decide how to handle it.
+	 */
+	bool waitInput = false;
 };
 
 /**
@@ -232,13 +243,12 @@ struct NativeProperties {
  * Characters represent the speakers or participants in a dialogue exchange.
  */
 struct BlockCharacter {
+	/** @brief UUID of the character variable in the project. */
+	std::string uuid;
+	/** @brief Short identifier (tag) assigned in Character Configuration. */
+	std::string id;
 	/** @brief Character display name as defined in the project's character variables. */
 	std::string name;
-	/**
-	 * Base64-encoded portrait image or URL for the character.
-	 * Only included when "Images in documentation" export option is enabled.
-	 */
-	std::string image;
 	/**
 	 * Emotion label assigned to this character in this dialogue block.
 	 * Represents the character's emotional state during this dialogue.

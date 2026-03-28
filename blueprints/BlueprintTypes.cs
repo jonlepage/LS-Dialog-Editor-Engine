@@ -139,12 +139,11 @@ public class ExportCondition
 [System.Serializable]
 public class ExportAction
 {
-	/// <summary>Unique identifier for this action.</summary>
+	/// <summary>Unique identifier for this action instance.</summary>
 	public string uuid;
-	/// <summary>
-	/// Action type identifier referencing your engine&apos;s action system.
-	/// Map this to your game&apos;s action handlers or event system.
-	/// </summary>
+	/// <summary>UUID of the signature definition in the project.</summary>
+	public string signatureUuid;
+	/// <summary>Human-readable signature ID for mapping to your engine&apos;s action handlers.</summary>
 	public string actionId;
 	/// <summary>
 	/// Ordered list of parameters for the action.
@@ -235,6 +234,18 @@ public class NativeProperties
 	/// Useful for optional dialogue that depends on character presence.
 	/// </summary>
 	public bool skipIfMissingActor;
+	/// <summary>
+	/// UUIDs of blocks that must have been visited before this block can progress.
+	/// Enables synchronization of parallel async branches.
+	/// The block will not call next() until ALL listed blocks appear in visitedBlocks.
+	/// </summary>
+	public List<string> waitForBlocks;
+	/// <summary>
+	/// When true, this block waits for explicit player input or an engine signal
+	/// before proceeding. This is a passive flag — the engine does not interpret it;
+	/// it is up to the game developer to decide how to handle it.
+	/// </summary>
+	public bool waitInput;
 }
 
 /// <summary>
@@ -244,13 +255,12 @@ public class NativeProperties
 [System.Serializable]
 public class BlockCharacter
 {
+	/// <summary>UUID of the character variable in the project.</summary>
+	public string uuid;
+	/// <summary>Short identifier (tag) assigned in Character Configuration.</summary>
+	public string id;
 	/// <summary>Character display name as defined in the project&apos;s character variables.</summary>
 	public string name;
-	/// <summary>
-	/// Base64-encoded portrait image or URL for the character.
-	/// Only included when &quot;Images in documentation&quot; export option is enabled.
-	/// </summary>
-	public string image;
 	/// <summary>
 	/// Emotion label assigned to this character in this dialogue block.
 	/// Represents the character&apos;s emotional state during this dialogue.

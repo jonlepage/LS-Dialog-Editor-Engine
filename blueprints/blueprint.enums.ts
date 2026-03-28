@@ -8,10 +8,10 @@
 export enum LSDE_SCENES {
 	/**
 	 * ### Scene: New Scene
-	 * 1 ACTION, 2 CHOICE, 1 CONDITION, 3 DIALOG
+	 * 1 ACTION, 2 CHOICE, 1 CONDITION, 8 DIALOG
 	 * Entry: `DIALOG-001` ⭐
 	 * - Emotions: `sad`
-	 * - Characters: `Boo`, `Gruht Tyron`, `Svelt Moon`, `lia`
+	 * - Characters: `Boo`, `Gruht Tyron`, `Svelt Moon`, `Zoozo Zee`, `lia`
 	 */
 	newScene = '3e0110a5-49bb-46fe-884b-05ce106af4cd',
 }
@@ -37,7 +37,7 @@ export enum LSDE_BLOCKS {
 	 * - Characters: `lia`
 	 * - Scene: `New Scene`
 	 * - In: `DIALOG-001`
-	 * - Out: `DIALOG-002`
+	 * - Out: `DIALOG-002`, `DIALOG-004`
 	 * - Choices: `C1`, `C2`
 	 * ---
 	 * <image url="./_images/choice.webp" />
@@ -67,7 +67,7 @@ export enum LSDE_BLOCKS {
 	/**
 	 * ### 🟦[DIALOG] DIALOG-001 ⭐
 	 * _"C2"_
-	 * - Characters: `Gruht Tyron` (sad ×2), `Svelt Moon` (sad ×2), `lia` (sad ×2), `Boo` (sad ×2)
+	 * - Characters: `lia` (sad ×2), `Boo` (sad ×2), `Svelt Moon` (sad ×2), `Gruht Tyron` (sad ×2)
 	 * - Scene: `New Scene`
 	 * - Out: `CHOICE-001`
 	 * ---
@@ -93,6 +93,59 @@ export enum LSDE_BLOCKS {
 	 * <image url="./_images/dialog.webp" />
 	 */
 	newSceneDialog003 = 'dfc30c4c-a1aa-4e76-81b6-640bf447351b',
+	/**
+	 * ### 🟦[DIALOG] DIALOG-004
+	 * _"Hehehe!"_
+	 * - Characters: `Gruht Tyron`
+	 * - Scene: `New Scene`
+	 * - In: `CHOICE-001`
+	 * - Out: `DIALOG-005`, `DIALOG-006`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	newSceneDialog004 = '4a800564-098f-4b88-a36b-f5d03f642944',
+	/**
+	 * ### 🟦[DIALOG] DIALOG-005
+	 * _"Je suis le roi!"_
+	 * - Characters: `Gruht Tyron`
+	 * - Scene: `New Scene`
+	 * - In: `DIALOG-004`
+	 * - Out: `DIALOG-008`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	newSceneDialog005 = '2a087cbc-3b00-457a-9448-538e39a475ab',
+	/**
+	 * ### 🟦[DIALOG] DIALOG-006
+	 * _"heu, je suis pas certain de comprendre"_
+	 * - Characters: `Zoozo Zee`
+	 * - Scene: `New Scene`
+	 * - In: `DIALOG-004`
+	 * - Out: `DIALOG-007`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	newSceneDialog006 = 'ef7301d9-c8ce-4416-9a28-4b1f5595ac74',
+	/**
+	 * ### 🟦[DIALOG] DIALOG-007
+	 * _"heu non mais ca va pas !? ces moi qui est las"_
+	 * - Characters: `Zoozo Zee`
+	 * - Scene: `New Scene`
+	 * - In: `DIALOG-006`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	newSceneDialog007 = 'd0cf7ee4-8dcb-4b75-b373-5d4a1dca73be',
+	/**
+	 * ### 🟦[DIALOG] DIALOG-008
+	 * _"ces pas moi le probleme !!!"_
+	 * - Characters: `Gruht Tyron`
+	 * - Scene: `New Scene`
+	 * - In: `DIALOG-005`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	newSceneDialog008 = '7ab18c86-c98e-41f1-99ca-51c7e66cb144',
 }
 
 /**

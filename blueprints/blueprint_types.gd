@@ -100,10 +100,11 @@ class ExportCondition extends Resource:
 ## Actions can modify game state, trigger events, set variables,
 ## or invoke any custom behavior in your engine.
 class ExportAction extends Resource:
-	## Unique identifier for this action.
+	## Unique identifier for this action instance.
 	@export var uuid: String
-	## Action type identifier referencing your engine's action system.
-	## Map this to your game's action handlers or event system.
+	## UUID of the signature definition in the project.
+	@export var signatureUuid: String
+	## Human-readable signature ID for mapping to your engine's action handlers.
 	@export var actionId: String
 	## Ordered list of parameters for the action.
 	## Parameter types and count depend on the action type.
@@ -162,15 +163,24 @@ class NativeProperties extends Resource:
 	## is not present in the current scene.
 	## Useful for optional dialogue that depends on character presence.
 	@export var skipIfMissingActor: bool
+	## UUIDs of blocks that must have been visited before this block can progress.
+	## Enables synchronization of parallel async branches.
+	## The block will not call next() until ALL listed blocks appear in visitedBlocks.
+	@export var waitForBlocks: Array[String]
+	## When true, this block waits for explicit player input or an engine signal
+	## before proceeding. This is a passive flag — the engine does not interpret it;
+	## it is up to the game developer to decide how to handle it.
+	@export var waitInput: bool
 
 ## A character (actor) assigned to a dialogue block.
 ## Characters represent the speakers or participants in a dialogue exchange.
 class BlockCharacter extends Resource:
+	## UUID of the character variable in the project.
+	@export var uuid: String
+	## Short identifier (tag) assigned in Character Configuration.
+	@export var id: String
 	## Character display name as defined in the project's character variables.
 	@export var name: String
-	## Base64-encoded portrait image or URL for the character.
-	## Only included when "Images in documentation" export option is enabled.
-	@export var image: String
 	## Emotion label assigned to this character in this dialogue block.
 	## Represents the character's emotional state during this dialogue.
 	## Values are project-defined (e.g. happy, angry, sad, neutral).

@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "publish:patch": "cd lsde-ts && bash scripts/publish.sh patch",
-    "publish:minor": "cd lsde-ts && bash scripts/publish.sh minor",
-    "publish:major": "cd lsde-ts && bash scripts/publish.sh major"
+    "publish:patch": "cd lsde-ts && \"C:/Program Files/Git/bin/bash.exe\" scripts/publish.sh patch",
+    "publish:minor": "cd lsde-ts && \"C:/Program Files/Git/bin/bash.exe\" scripts/publish.sh minor",
+    "publish:major": "cd lsde-ts && \"C:/Program Files/Git/bin/bash.exe\" scripts/publish.sh major"
   },
   "keywords": [],
   "author": "",

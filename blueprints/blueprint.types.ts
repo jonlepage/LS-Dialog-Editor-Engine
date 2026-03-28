@@ -214,6 +214,18 @@ export interface NativeProperties {
 	 * Useful for optional dialogue that depends on character presence.
 	 */
 	skipIfMissingActor?: boolean;
+	/**
+	 * UUIDs of blocks that must have been visited before this block can progress.
+	 * Enables synchronization of parallel async branches.
+	 * The block will not call next() until ALL listed blocks appear in visitedBlocks.
+	 */
+	waitForBlocks?: string[];
+	/**
+	 * When true, this block waits for explicit player input or an engine signal
+	 * before proceeding. This is a passive flag — the engine does not interpret it;
+	 * it is up to the game developer to decide how to handle it.
+	 */
+	waitInput?: boolean;
 }
 
 /**

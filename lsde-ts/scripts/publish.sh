@@ -15,8 +15,8 @@ set -euo pipefail
 #   npm   : stored in ~/.npmrc (npm login)
 #   nuget : NUGET_API_KEY env var, or stored in ~/.lsde-nuget-key
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -W 2>/dev/null || pwd)"
+ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -W 2>/dev/null || pwd)"
 TS_DIR="$ROOT/lsde-ts"
 CS_DIR="$ROOT/lsde-csharp/src/LsdeDialogEngine"
 CSPROJ="$CS_DIR/LsdeDialogEngine.csproj"

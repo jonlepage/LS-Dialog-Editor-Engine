@@ -11,18 +11,10 @@
 namespace LSDE_SCENES {
 	/**
 	 * @brief Scene: New Scene
-	 * 1 ACTION, 1 CHOICE, 1 CONDITION, 5 DIALOG
+	 * 1 ACTION, 2 CHOICE, 1 CONDITION, 8 DIALOG
 	 * Entry: `DIALOG-001`
 	 * - Emotions: `sad`
-	 * - Characters: `Boo`, `Gigi Jinx `, `Gruht Tyron`, `Lulu Star`, `Salomon Sky`, `Svelt Moon`, `lia`
-	 * ---
-	 * <image url="./_images/char_gruht_tyron_0.png" />
-	 * <image url="./_images/char_gigi_jinx__1.png" />
-	 * <image url="./_images/char_lulu_star_2.png" />
-	 * <image url="./_images/char_boo_3.png" />
-	 * <image url="./_images/char_svelt_moon_4.png" />
-	 * <image url="./_images/char_salomon_sky_5.png" />
-	 * <image url="./_images/char_lia_6.png" />
+	 * - Characters: `Boo`, `Gruht Tyron`, `Svelt Moon`, `Zoozo Zee`, `lia`
 	 */
 	constexpr const char* newScene = "3e0110a5-49bb-46fe-884b-05ce106af4cd";
 
@@ -38,104 +30,137 @@ namespace LSDE_BLOCKS {
 	/**
 	 * @brief 🟧[ACTION] ACTION-001
 	 * - Scene: `New Scene`
-	 * - In: `DIALOG-001`
-	 * - Out: `DIALOG-002`, `DIALOG-005`
-	 * `7908f59d-b97d-40ea-80f1-30c6f762e30d`()
+	 * - In: `CONDITION-001`
+	 * `signatureID1`(a, 2)
 	 * ---
 	 * <image url="./_images/action.webp" />
 	 */
-	constexpr const char* newSceneAction001 = "b1e1cf07-e8d2-42cc-b1ec-7cfb21b6a3aa";
+	constexpr const char* newSceneAction001 = "d72bcf6a-161b-4759-90dd-2ae10a58fdd3";
 
 	/**
 	 * @brief ⬜[CHOICE] CHOICE-001
-	 * - Characters: `Gruht Tyron`, `Gigi Jinx `, `Lulu Star`, `Boo`, `Svelt Moon`, `Salomon Sky`
+	 * - Characters: `lia`
 	 * - Scene: `New Scene`
 	 * - In: `DIALOG-001`
-	 * - Out: `CONDITION-001`, `DIALOG-001`
-	 * - Choices: `choice1`, `choice2`
+	 * - Out: `DIALOG-002`, `DIALOG-004`
+	 * - Choices: `C1`, `C2`
 	 * ---
 	 * <image url="./_images/choice.webp" />
-	 * <image url="./_images/char_gruht_tyron_0.png" />
-	 * <image url="./_images/char_gigi_jinx__1.png" />
-	 * <image url="./_images/char_lulu_star_2.png" />
-	 * <image url="./_images/char_boo_3.png" />
-	 * <image url="./_images/char_svelt_moon_4.png" />
-	 * <image url="./_images/char_salomon_sky_5.png" />
 	 */
 	constexpr const char* newSceneChoice001 = "014f503a-6688-429d-a5fe-801cf33f2410";
 
 	/**
+	 * @brief ⬜[CHOICE] CHOICE-002
+	 * - Scene: `New Scene`
+	 * - In: `DIALOG-002`
+	 * - Out: `CONDITION-001`
+	 * - Choices: `C1.1`, `C2.1`
+	 * ---
+	 * <image url="./_images/choice.webp" />
+	 */
+	constexpr const char* newSceneChoice002 = "2b184947-49f9-4e57-8600-70b46e2cd0ba";
+
+	/**
 	 * @brief 🟪[CONDITION] CONDITION-001
 	 * - Scene: `New Scene`
-	 * - In: `DIALOG-002`, `CHOICE-001`
-	 * - Out: `DIALOG-003`, `DIALOG-004`
-	 * `variable_0` = ``
-	 * `variable_0` = ``
-	 * `variable_0` = ``
+	 * - In: `CHOICE-002`
+	 * - Out: `ACTION-001`, `DIALOG-003`
+	 * `choice:014f503a-6688-429d-a5fe-801cf33f2410` = `a0eee458-6ccc-4a23-bd36-0b3d1f73771e`
+	 * `choice:2b184947-49f9-4e57-8600-70b46e2cd0ba` = `e306346e-6bcc-4564-8b19-e2ed28fabafe`
 	 * ---
 	 * <image url="./_images/cond.webp" />
 	 */
-	constexpr const char* newSceneCondition001 = "85f4640b-9c6e-4940-9bc6-b4d12847d5f8";
+	constexpr const char* newSceneCondition001 = "4074b6c2-bfc8-44f1-9a29-cda529bf522a";
 
 	/**
 	 * @brief 🟦[DIALOG] DIALOG-001 (entry)
-	 * "choice2"
-	 * - Characters: `Gruht Tyron` (sad x2), `Svelt Moon` (sad x2), `lia` (sad x2), `Boo` (sad x2)
+	 * "C2"
+	 * - Characters: `lia` (sad x2), `Boo` (sad x2), `Svelt Moon` (sad x2), `Gruht Tyron` (sad x2)
 	 * - Scene: `New Scene`
-	 * - In: `CHOICE-001`
-	 * - Out: `CHOICE-001`, `ACTION-001`, `DIALOG-005`
+	 * - Out: `CHOICE-001`
 	 * ---
 	 * <image url="./_images/dialog.webp" />
-	 * <image url="./_images/char_gruht_tyron_0.png" />
-	 * <image url="./_images/char_svelt_moon_1.png" />
-	 * <image url="./_images/char_lia_2.png" />
-	 * <image url="./_images/char_boo_3.png" />
 	 */
 	constexpr const char* newSceneDialog001 = "6462dab3-0eb4-4a2c-a505-407556441156";
 
 	/**
 	 * @brief 🟦[DIALOG] DIALOG-002
-	 * "text 2"
-	 * - Characters: `lia`
+	 * "D2"
 	 * - Scene: `New Scene`
-	 * - In: `ACTION-001`
-	 * - Out: `CONDITION-001`
+	 * - In: `CHOICE-001`
+	 * - Out: `CHOICE-002`
 	 * ---
 	 * <image url="./_images/dialog.webp" />
-	 * <image url="./_images/char_lia_0.png" />
 	 */
-	constexpr const char* newSceneDialog002 = "df23757c-a35a-4bcb-8056-e7ad232eff1d";
+	constexpr const char* newSceneDialog002 = "c66437af-54b7-4a75-9efa-713e983c145d";
 
 	/**
 	 * @brief 🟦[DIALOG] DIALOG-003
-	 * "text 3"
+	 * "D5"
 	 * - Scene: `New Scene`
 	 * - In: `CONDITION-001`
 	 * ---
 	 * <image url="./_images/dialog.webp" />
 	 */
-	constexpr const char* newSceneDialog003 = "bccf5542-80f1-4415-b0c4-24ff4a638aa7";
+	constexpr const char* newSceneDialog003 = "dfc30c4c-a1aa-4e76-81b6-640bf447351b";
 
 	/**
 	 * @brief 🟦[DIALOG] DIALOG-004
-	 * "text 3.2"
+	 * "Hehehe!"
+	 * - Characters: `Gruht Tyron`
 	 * - Scene: `New Scene`
-	 * - In: `CONDITION-001`, `DIALOG-005`
+	 * - In: `CHOICE-001`
+	 * - Out: `DIALOG-005`, `DIALOG-006`
 	 * ---
 	 * <image url="./_images/dialog.webp" />
 	 */
-	constexpr const char* newSceneDialog004 = "0c524a39-6bbe-468f-8876-43c1fbb2a030";
+	constexpr const char* newSceneDialog004 = "4a800564-098f-4b88-a36b-f5d03f642944";
 
 	/**
 	 * @brief 🟦[DIALOG] DIALOG-005
-	 * "action fail"
+	 * "Je suis le roi!"
+	 * - Characters: `Gruht Tyron`
 	 * - Scene: `New Scene`
-	 * - In: `ACTION-001`, `DIALOG-001`
-	 * - Out: `DIALOG-004`
+	 * - In: `DIALOG-004`
+	 * - Out: `DIALOG-008`
 	 * ---
 	 * <image url="./_images/dialog.webp" />
 	 */
-	constexpr const char* newSceneDialog005 = "9b47c43c-4b06-4e37-bec6-2ee2597d4bae";
+	constexpr const char* newSceneDialog005 = "2a087cbc-3b00-457a-9448-538e39a475ab";
+
+	/**
+	 * @brief 🟦[DIALOG] DIALOG-006
+	 * "heu, je suis pas certain de comprendre"
+	 * - Characters: `Zoozo Zee`
+	 * - Scene: `New Scene`
+	 * - In: `DIALOG-004`
+	 * - Out: `DIALOG-007`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	constexpr const char* newSceneDialog006 = "ef7301d9-c8ce-4416-9a28-4b1f5595ac74";
+
+	/**
+	 * @brief 🟦[DIALOG] DIALOG-007
+	 * "heu non mais ca va pas !? ces moi qui est las"
+	 * - Characters: `Zoozo Zee`
+	 * - Scene: `New Scene`
+	 * - In: `DIALOG-006`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	constexpr const char* newSceneDialog007 = "d0cf7ee4-8dcb-4b75-b373-5d4a1dca73be";
+
+	/**
+	 * @brief 🟦[DIALOG] DIALOG-008
+	 * "ces pas moi le probleme !!!"
+	 * - Characters: `Gruht Tyron`
+	 * - Scene: `New Scene`
+	 * - In: `DIALOG-005`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	constexpr const char* newSceneDialog008 = "7ab18c86-c98e-41f1-99ca-51c7e66cb144";
 
 }
 
@@ -146,21 +171,39 @@ namespace LSDE_BLOCKS {
  */
 namespace LSDE_CHOICES {
 	/**
-	 * @brief ⬜[CHOICE_ITEM] choice1
-	 * "choice1"
+	 * @brief ⬜[CHOICE_ITEM] C1
+	 * "C1"
 	 * - Scene: `New Scene`
 	 * - Parent: `CHOICE-001`
 	 */
 	/** @see LSDE_BLOCKS::newSceneChoice001 */
-	constexpr const char* newSceneChoice1 = "17e98de3-1690-4ca4-8ea5-8070c15b1fe1";
+	constexpr const char* newSceneC1 = "17e98de3-1690-4ca4-8ea5-8070c15b1fe1";
 
 	/**
-	 * @brief ⬜[CHOICE_ITEM] choice2
-	 * "choice2"
+	 * @brief ⬜[CHOICE_ITEM] C2
+	 * "C2"
 	 * - Scene: `New Scene`
 	 * - Parent: `CHOICE-001`
 	 */
 	/** @see LSDE_BLOCKS::newSceneChoice001 */
-	constexpr const char* newSceneChoice2 = "a0eee458-6ccc-4a23-bd36-0b3d1f73771e";
+	constexpr const char* newSceneC2 = "a0eee458-6ccc-4a23-bd36-0b3d1f73771e";
+
+	/**
+	 * @brief ⬜[CHOICE_ITEM] C1.1
+	 * "C1.1"
+	 * - Scene: `New Scene`
+	 * - Parent: `CHOICE-002`
+	 */
+	/** @see LSDE_BLOCKS::newSceneChoice002 */
+	constexpr const char* newSceneC11 = "d16d21ea-ecf8-4172-aaa3-668df80e9853";
+
+	/**
+	 * @brief ⬜[CHOICE_ITEM] C2.1
+	 * "C2.1"
+	 * - Scene: `New Scene`
+	 * - Parent: `CHOICE-002`
+	 */
+	/** @see LSDE_BLOCKS::newSceneChoice002 */
+	constexpr const char* newSceneC21 = "e306346e-6bcc-4564-8b19-e2ed28fabafe";
 
 }
