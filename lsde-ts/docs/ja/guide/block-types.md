@@ -265,4 +265,7 @@ engine.on_action(func(args):
 | `delay` | `number?` | 実行前の遅延（`onBeforeBlock` で処理） |
 | `timeout` | `number?` | 実行タイムアウト |
 | `portPerCharacter` | `boolean?` | metadata 内のキャラクターごとに1つの出力 port |
-| `followNarrative` | `boolean?` | async トラックがメインナラティブのペースに従う |
+| `skipIfMissingActor` | `boolean?` | 参照アクターが不在の場合 block をスキップ |
+| `debug` | `boolean?` | エディタ用デバッグフラグ |
+| `waitForBlocks` | `string[]?` | この block が進行する前に訪問済みでなければならない block UUID |
+| `waitInput` | `boolean?` | プレイヤー入力制御用パッシブフラグ |

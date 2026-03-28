@@ -265,4 +265,7 @@ Tous les blocks partagent ces champs de base :
 | `delay` | `number?` | Délai avant exécution (consommé par `onBeforeBlock`) |
 | `timeout` | `number?` | Timeout d'exécution |
 | `portPerCharacter` | `boolean?` | Un output port par personnage dans les metadata |
-| `followNarrative` | `boolean?` | Le track async suit le pace du narratif principal |
+| `skipIfMissingActor` | `boolean?` | Ignorer le block si l'acteur est absent |
+| `debug` | `boolean?` | Flag de debug pour l'éditeur |
+| `waitForBlocks` | `string[]?` | UUIDs de blocks qui doivent être visités avant que ce block puisse progresser |
+| `waitInput` | `boolean?` | Flag passif pour contrôle d'input joueur explicite |

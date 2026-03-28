@@ -265,4 +265,7 @@ All blocks share these base fields:
 | `delay` | `number?` | Delay before execution (consumed by `onBeforeBlock`) |
 | `timeout` | `number?` | Execution timeout |
 | `portPerCharacter` | `boolean?` | One output port per character in metadata |
-| `followNarrative` | `boolean?` | Async track follows main narrative pace |
+| `skipIfMissingActor` | `boolean?` | Skip block if referenced actor is absent |
+| `debug` | `boolean?` | Debug flag for editor use |
+| `waitForBlocks` | `string[]?` | Block UUIDs that must be visited before this block can progress |
+| `waitInput` | `boolean?` | Passive flag for explicit player input control |

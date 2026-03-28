@@ -317,40 +317,66 @@ Quand un block a `nativeProperties.isAsync = true`, le engine crée un **track p
 ### Comment les tracks sont créés
 
 Pendant la résolution des ports, si plusieurs connections sortantes existent :
-- La **première connection non-async** devient la continuation du flow principal
+- La **première connection non-async** devient la continuation du flow courant
 - Les **autres connections** (vers des blocks avec `isAsync`) deviennent des tracks parallèles
 
-### Différences avec le flow principal
+Ceci s'applique au main track **et** aux async tracks — un async track peut spawner des sub-tracks depuis ses propres connections async, créant une hiérarchie d'exécution parallèle.
 
-- `onBeforeBlock` est **skippé** sur les async tracks — le handler de type est callé directement
-- Chaque async track suit seulement **une connection** (pas de branching multi-path)
-- Les tracks sont automatiquement cancelled quand la scene finit
+### Cycle de vie des tracks
 
-### followNarrative
+- `onBeforeBlock` est callé pour **tous les blocks** (main et async tracks)
+- Les async tracks séparent les connections sortantes en main vs async, comme le main track
+- Les tracks sont automatiquement cancelled quand la scene finit ou que `cancel()` est callé
+- Quand un track finit naturellement (plus de connections), ses sub-tracks **continuent de vivre** indépendamment
+- Quand un track est explicitement cancelled (`cancel()`), l'annulation **cascade** vers tous les tracks enfants
 
-Quand `followNarrative = true` sur un block async :
-- Le async track **attend** que le flow principal avance
-- Si `next()` a déjà été callé dans le handler, l'avancement en attente s'exécute
-- Si `next()` n'a **pas** été callé, le block est **force-advanced** (skippé)
+### waitForBlocks — Synchronisation de tracks
+
+Utilisez `nativeProperties.waitForBlocks` pour synchroniser les tracks parallèles. Il accepte un array de block UUIDs qui doivent être visités avant que le block puisse progresser :
+
+- **Sur le block de départ** : Le track entier attend avant même de commencer l'exécution. `onBeforeBlock` n'est pas callé tant que tous les blocks requis ne sont pas visités.
+- **Sur tout autre block** : Quand le handler call `next()`, l'avancement est différé jusqu'à ce que la condition soit remplie.
+
+La séquence d'exécution complète avec `delay` et `waitForBlocks` :
+
+```
+spawn → waitForBlocks gate → onBeforeBlock (delay) → handler → next()
+```
+
+### waitInput — Flag d'input joueur
+
+`nativeProperties.waitInput` est un **flag passif** — le engine l'expose mais ne l'interprète pas. Votre handler de jeu le lit pour décider s'il faut attendre un input explicite du joueur.
+
+### API TrackInfo — Observabilité
+
+Utilisez `scene.getTrackInfos()` pour inspecter les async tracks en cours. Retourne un snapshot readonly de l'état de chaque track :
+
+```ts
+const tracks = scene.getTrackInfos();
+for (const track of tracks) {
+  console.log(`Track ${track.id} (parent: ${track.parentTrackId}) au block ${track.currentBlockUuid}`);
+}
+```
+
+Chaque `TrackInfo` contient : `id`, `parentTrackId`, `startBlockUuid`, `currentBlockUuid`, `running`.
 
 ### Ce qui fonctionne dans les async tracks (et ce qui fonctionne pas)
 
 Les async tracks sont parfaits pour des choses qui se passent *en parallèle* de la conversation principale — effets ambient, animations parallèles, réactions de compagnons. Mais il y a des limites.
 
-**DO — effets fire-and-forget :**
+**DO — contenu parallèle :**
 | Cas d'utilisation | Pourquoi ça marche |
 |---|---|
-| Dialogue ambient de NPC ("barks") | Blocks dialog sur un async track — les NPCs commentent, réagissent ou bavardent pendant que la conversation principale continue. Parfait pour rendre le monde vivant. |
-| Réactions de compagnons NPC | Un membre du party réagit à ce que le joueur vient de dire — async dialog synchronisé avec followNarrative |
+| Dialogue ambient de NPC ("barks") | Blocks dialog sur un async track — les NPCs commentent, réagissent ou bavardent pendant que la conversation principale continue |
+| Réactions de personnages synchronisées | Utilisez `waitForBlocks` pour trigger une réaction quand un block spécifique est atteint |
 | Jouer des sons ambient ou de la musique | Block action, pas d'interaction joueur nécessaire |
 | Trigger des mouvements de caméra | Block action, run en parallèle |
-| Animations parallèles | followNarrative synchronise avec le pace du track principal |
+| Effets avec timing précis | Combinez `waitForBlocks` + `delay` pour un timing précis |
 
 **DON'T — interaction joueur ou branching de game logic :**
 | Cas d'utilisation | Pourquoi ça casse |
 |---|---|
 | Block CHOICE dans un async track | Le joueur est déjà en interaction avec le main track — qui répond au choice async? |
-| Block CONDITION dans followNarrative | Si force-advanced, la condition résout avec `null` → le port resolver retourne rien → le track finit en silence |
 | Changements critiques de game state | Si le async track est cancelled (la scene finit), l'action ne s'exécute jamais |
 
 ::: warning Choices dans les async tracks

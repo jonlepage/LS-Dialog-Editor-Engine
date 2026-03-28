@@ -312,49 +312,75 @@ engine.onInvalidateBlock(({ scene, reason }) => {
 
 ## 异步轨道
 
-当一个 block 的 `nativeProperties.isAsync = true` 时，engine 会创建一个与主流程独立运行的**并行轨道**。
+当 block 设置了 `nativeProperties.isAsync = true` 时，engine 会创建一个独立于主流程运行的**并行轨道**。
 
 ### 轨道的创建方式
 
-在 port 解析过程中，如果存在多个传出 connection：
-- **第一个非异步 connection** 成为主流程的延续
-- **其他 connection**（指向 `isAsync` block 的）成为并行轨道
+在端口解析过程中，如果存在多个输出连接：
+- **第一个非 async 连接**成为当前流程的延续
+- **其他连接**（指向具有 `isAsync` 的 block）成为新的并行轨道
 
-### 与主流程的区别
+这适用于主轨道**和** async 轨道 — async 轨道可以从自己的 async 连接中 spawn 子轨道，创建并行执行的层次结构。
 
-- 异步轨道**跳过** `onBeforeBlock` — 直接调用类型 handler
-- 每个异步轨道只跟随**一个 connection**（不支持多路径分支）
-- scene 结束时轨道会自动取消
+### 轨道生命周期
 
-### followNarrative
+- `onBeforeBlock` 会为**所有 block** 调用（主轨道和 async 轨道）
+- async 轨道像主轨道一样将输出连接分为 main 和 async
+- 轨道在 scene 结束或调用 `cancel()` 时自动取消
+- 当轨道自然结束时（没有更多连接），其子轨道**继续独立存在**
+- 当轨道被显式取消时（`cancel()`），取消会**级联**到所有子轨道
 
-当异步 block 上的 `followNarrative = true` 时：
-- 异步轨道**等待**主流程前进
-- 如果 handler 中已经调用了 `next()`，挂起的前进会执行
-- 如果 `next()` **未被**调用，block 会被**强制前进**（跳过）
+### waitForBlocks — 轨道同步
 
-### 异步轨道的适用场景（以及不适用的场景）
+使用 `nativeProperties.waitForBlocks` 来同步并行轨道。它接受一个 block UUID 数组，这些 block 必须在当前 block 可以继续之前被访问：
 
-异步轨道非常适合与主对话*同时*发生的事情 — 环境效果、并行动画、同伴反应。但它们有局限性。
+- **在起始 block 上**：整个轨道在开始执行之前等待。在所有必需的 block 被访问之前，不会调用 `onBeforeBlock`。
+- **在其他 block 上**：当 handler 调用 `next()` 时，推进会被延迟直到条件满足。
 
-**适合 — 即发即忘的副作用：**
-| 用例 | 为什么可行 |
+使用 `delay` 和 `waitForBlocks` 的完整执行序列：
+
+```
+spawn → waitForBlocks 门控 → onBeforeBlock (delay) → handler → next()
+```
+
+### waitInput — 玩家输入标志
+
+`nativeProperties.waitInput` 是一个**被动标志** — engine 公开它但不解释它。您的游戏 handler 读取它来决定是否等待明确的玩家输入。
+
+### TrackInfo API — 可观测性
+
+使用 `scene.getTrackInfos()` 来检查运行中的 async 轨道。返回每个轨道状态的只读快照：
+
+```ts
+const tracks = scene.getTrackInfos();
+for (const track of tracks) {
+  console.log(`Track ${track.id} (parent: ${track.parentTrackId}) at block ${track.currentBlockUuid}`);
+}
+```
+
+每个 `TrackInfo` 包含：`id`、`parentTrackId`、`startBlockUuid`、`currentBlockUuid`、`running`。
+
+### async 轨道中的适用与不适用
+
+async 轨道非常适合与主对话*并行*发生的事物 — 环境效果、并行动画、同伴反应。但有一些限制。
+
+**推荐 — 并行内容：**
+| 用例 | 适用原因 |
 |---|---|
-| NPC 环境对话（"插嘴"） | 异步轨道上的 dialog block — NPC 在主对话继续时发表评论、做出反应或闲聊。非常适合让世界更有生气。 |
-| NPC 同伴反应 | 队友对玩家刚说的话做出反应 — 使用 followNarrative 同步的异步 dialog |
-| 播放环境音效或音乐 | Action block，不需要玩家交互 |
-| 触发镜头移动 | Action block，并行运行 |
-| 并行动画 | followNarrative 与主轨道节奏同步 |
+| NPC 环境对话（"barks"） | async 轨道上的 dialog block — NPC 在主对话进行时评论、反应或闲聊 |
+| 与事件同步的角色反应 | 使用 `waitForBlocks` 在到达特定 block 时触发反应 |
+| 播放环境音效或音乐 | action block，无需玩家交互 |
+| 触发摄像机移动 | action block，并行运行 |
+| 精确计时的效果 | 结合 `waitForBlocks` + `delay` 实现精确计时 |
 
-**不适合 — 玩家交互或游戏逻辑分支：**
-| 用例 | 为什么会出问题 |
+**不推荐 — 玩家交互或游戏逻辑分支：**
+| 用例 | 问题原因 |
 |---|---|
-| 异步轨道中的 CHOICE block | 玩家已经在与主轨道交互 — 谁来回答异步的选择？ |
-| followNarrative 中的 CONDITION block | 如果被强制前进，condition 以 `null` 解析 → port 解析器返回空 → 轨道静默结束 |
-| 关键的游戏状态变更 | 如果异步轨道被取消（scene 结束），action 永远不会执行 |
+| async 轨道中的 CHOICE block | 玩家已经在与主轨道交互 — 谁来响应 async 的 choice？ |
+| 关键游戏状态变更 | 如果 async 轨道被取消（scene 结束），action 永远不会执行 |
 
-::: warning 异步轨道中的 Choice
-异步轨道中的 CHOICE block 意味着玩家需要在已经参与主对话的同时做出选择。唯一合理的场景是 AI 驱动的"选择"（例如，同伴 NPC 根据性格自动选择）。如果异步轨道遇到一个 CHOICE block 而没有自动选择的 scene 级 handler，流程将停滞或静默结束。
+::: warning async 轨道中的 choice
+async 轨道中的 CHOICE block 意味着玩家应该在已经参与主对话的同时进行选择。唯一有效的场景是 AI 驱动的"choice"（例如：同伴 NPC 基于个性自动选择）。如果 async 轨道在没有自动选择的 scene 级 handler 的情况下到达 CHOICE block，流程将停滞或静默结束。
 :::
 
 ### 多个 Scene 并行运行

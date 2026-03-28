@@ -317,40 +317,66 @@ block に `nativeProperties.isAsync = true` が設定されている場合、eng
 ### トラックの作成方法
 
 port 解決中に複数の送出 connection が存在する場合：
-- **最初の非 async connection** がメインフローの継続となります
-- **その他の connection**（`isAsync` を持つ block へ）が並列トラックになります
+- **最初の非 async connection** が現在のフローの継続となります
+- **その他の connection**（`isAsync` を持つ block へ）が新しい並列トラックになります
 
-### メインフローとの違い
+これはメイントラック**と** async トラックの両方に適用されます — async トラックは独自の async connection からサブトラックを spawn でき、並列実行の階層を作成できます。
 
-- `onBeforeBlock` は async トラックでは**スキップ**されます — タイプ handler が直接呼び出されます
-- 各 async トラックは**1つの connection** のみに従います（マルチパス分岐なし）
-- トラックは scene 終了時に自動的にキャンセルされます
+### トラックのライフサイクル
 
-### followNarrative
+- `onBeforeBlock` は**すべての block** で呼び出されます（メインおよび async トラック）
+- async トラックはメイントラックと同様に、送出 connection をメイン vs async に分離します
+- トラックは scene 終了時または `cancel()` 呼び出し時に自動的にキャンセルされます
+- トラックが自然に終了した場合（connection がなくなった）、サブトラックは**独立して存続**します
+- トラックが明示的にキャンセルされた場合（`cancel()`）、キャンセルはすべての子トラックに**カスケード**します
 
-async block で `followNarrative = true` の場合：
-- async トラックはメインフローが進行するのを**待機**します
-- handler 内で `next()` が既に呼び出されている場合、保留中の進行が実行されます
-- `next()` が**まだ呼び出されていない**場合、block は**強制進行**（スキップ）されます
+### waitForBlocks — トラック同期
+
+`nativeProperties.waitForBlocks` を使用して並列トラックを同期します。block が進行する前に訪問済みでなければならない block UUID の配列を受け入れます：
+
+- **開始 block の場合**：トラック全体が実行開始前に待機します。必要な block がすべて訪問されるまで `onBeforeBlock` は呼び出されません。
+- **その他の block の場合**：handler が `next()` を呼び出すと、条件が満たされるまで進行が延期されます。
+
+`delay` と `waitForBlocks` を使用した完全な実行シーケンス：
+
+```
+spawn → waitForBlocks ゲート → onBeforeBlock (delay) → handler → next()
+```
+
+### waitInput — プレイヤー入力フラグ
+
+`nativeProperties.waitInput` は**パッシブフラグ**です — engine はそれを公開しますが解釈しません。ゲーム handler がそれを読み取り、明示的なプレイヤー入力を待つかどうかを決定します。
+
+### TrackInfo API — 可観測性
+
+`scene.getTrackInfos()` を使用して実行中の async トラックを検査します。各トラックの状態の読み取り専用スナップショットを返します：
+
+```ts
+const tracks = scene.getTrackInfos();
+for (const track of tracks) {
+  console.log(`Track ${track.id} (parent: ${track.parentTrackId}) at block ${track.currentBlockUuid}`);
+}
+```
+
+各 `TrackInfo` には `id`、`parentTrackId`、`startBlockUuid`、`currentBlockUuid`、`running` が含まれます。
 
 ### Async トラックで動作するもの（と動作しないもの）
 
 async トラックは、メインの会話と*並行して*起こること — 環境エフェクト、並列アニメーション、仲間の反応 — に最適です。ただし制限があります。
 
-**推奨 — ファイア・アンド・フォーゲット型のサイドエフェクト：**
+**推奨 — 並列コンテンツ：**
 | ユースケース | 動作する理由 |
 |---|---|
-| NPC の環境セリフ（「バーク」） | async トラック上の dialog block — NPC がメインの会話の進行中にコメント、反応、掛け合いを行います。世界を生き生きさせるのに最適。 |
-| NPC の仲間の反応 | パーティメンバーがプレイヤーの発言に反応 — followNarrative で同期する async dialog |
+| NPC の環境セリフ（「バーク」） | async トラック上の dialog block — NPC がメインの会話の進行中にコメント、反応、掛け合いを行います |
+| イベントに同期したキャラクター反応 | `waitForBlocks` を使用して特定の block に到達したときに反応をトリガー |
 | 環境音やBGMの再生 | action block、プレイヤーのインタラクション不要 |
 | カメラ移動のトリガー | action block、並列実行 |
-| 並列アニメーション | followNarrative でメイントラックのペースに同期 |
+| 精密なタイミングのエフェクト | `waitForBlocks` + `delay` を組み合わせて精密なタイミングを実現 |
 
 **非推奨 — プレイヤーインタラクションやゲームロジック分岐：**
 | ユースケース | 問題となる理由 |
 |---|---|
 | async トラック内の CHOICE block | プレイヤーは既にメイントラックとインタラクション中 — 誰が async の choice に応答するのか？ |
-| followNarrative 内の CONDITION block | 強制進行された場合、condition は `null` で解決 → port リゾルバーは何も返さない → トラックは無言で終了 |
 | 重要なゲームステート変更 | async トラックがキャンセルされた場合（scene 終了）、action は実行されません |
 
 ::: warning async トラック内の choice

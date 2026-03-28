@@ -3644,12 +3644,13 @@ LSDE native execution properties controlling how a block is dispatched by the en
 These properties affect the engine's execution flow, not the block's content:
 
 - **Async tracks**: When `isAsync = true`, the block runs on a parallel track independent
-  of the main flow. Async tracks skip `onBeforeBlock`, follow only one connection, and are
-  automatically cancelled when the scene ends.
+  of the main flow. Async tracks call `onBeforeBlock` like the main track, can spawn
+  sub-tracks from outgoing async connections, and are automatically cancelled when the scene ends.
 
-- **followNarrative**: Only meaningful when `isAsync = true`. The async track waits for
-  the main flow to advance before continuing. If `next()` was already called in the handler,
-  the pending advance executes immediately; otherwise the block is force-advanced (skipped).
+- **waitForBlocks**: When set on an async block, the track defers execution until all
+  listed block UUIDs have been visited. If set on the start block, the entire track waits
+  before even calling `onBeforeBlock`. Combined with `delay`, the sequence is:
+  spawn → waitForBlocks → onBeforeBlock (delay) → handler → next().
 
 - **delay**: Consumed by `onBeforeBlock` — the engine does not enforce it automatically.
   Your `onBeforeBlock` handler should read `block.nativeProperties.delay` and call
@@ -3683,16 +3684,6 @@ Enable debug mode for this block (editor use).
 Defined in: [types.ts:134](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L134)
 
 Delay in seconds before the block is executed. Applied by the `onBeforeBlock` handler.
-
-***
-
-### followNarrative?
-
-> `optional` **followNarrative?**: `boolean`
-
-Defined in: [types.ts:144](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L144)
-
-When true (requires `isAsync`), this async track advances automatically when the main track advances. If `next()` was already called, the pending advance executes; otherwise the block is force-advanced (skipped).
 
 ***
 
@@ -3733,6 +3724,30 @@ Skip this block entirely if the assigned actor/character is missing at runtime.
 Defined in: [types.ts:136](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L136)
 
 Timeout in seconds for block execution.
+
+***
+
+### waitForBlocks?
+
+> `optional` **waitForBlocks?**: `string`[]
+
+UUIDs of blocks that must have been visited before this block can progress.
+When `next()` is called and not all listed blocks are in `visitedBlocks`,
+the block defers its advance. Once the last required block is visited
+anywhere in the scene (main or async track), the deferred advance fires.
+If set on the start block of an async track, the entire track waits before
+even beginning execution (`onBeforeBlock` is not called until satisfied).
+
+***
+
+### waitInput?
+
+> `optional` **waitInput?**: `boolean`
+
+Passive flag indicating this block should wait for explicit player input
+or an engine-specific signal before proceeding. The engine does NOT
+interpret this flag — it is exposed as-is to game handlers via
+`block.nativeProperties.waitInput`.
 
 ================================================================================
 
@@ -4162,6 +4177,20 @@ Get the number of async tracks currently running in parallel.
 
 ***
 
+### getTrackInfos()
+
+> **getTrackInfos**(): readonly [`TrackInfo`](TrackInfo.md)[]
+
+Get detailed info for all currently running async tracks. Returns a read-only
+snapshot of each track's state including its ID, parent track, current block,
+and running status. Useful for debug overlays, play-mode renderers, and validation tools.
+
+#### Returns
+
+readonly [`TrackInfo`](TrackInfo.md)[]
+
+***
+
 ### getChoice()
 
 > **getChoice**(`blockUuid`): readonly `string`[] \| `undefined`
@@ -4497,6 +4526,67 @@ Display label for this parameter.
 Defined in: [types.ts:445](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L445)
 
 Data type of this parameter.
+
+================================================================================
+
+[LSDE Dialog Engine](../index.md) / TrackInfo
+
+# Interface: TrackInfo
+
+Defined in: types.ts
+
+Read-only snapshot of an async track's state.
+Returned by [`SceneHandle.getTrackInfos()`](SceneHandle.md#gettrackinfosfn) for debug, rendering, and validation.
+
+## Remarks
+
+Track IDs are auto-incremented integers starting at 1. The main track is implicit (id 0)
+and never appears in the track info list. Use `parentTrackId` to reconstruct the track
+hierarchy: `null` means spawned by the main track, otherwise it references the parent
+async track's id.
+
+Tracks that have ended naturally or been cancelled are excluded from `getTrackInfos()`.
+
+## Properties
+
+### id
+
+> `readonly` **id**: `number`
+
+Unique auto-incremented identifier for this track within the scene. Main track is implicit (id 0).
+
+***
+
+### parentTrackId
+
+> `readonly` **parentTrackId**: `number` \| `null`
+
+ID of the track that spawned this one. `null` means spawned directly by the main track.
+
+***
+
+### startBlockUuid
+
+> `readonly` **startBlockUuid**: `string`
+
+UUID of the first block that started this track's execution.
+
+***
+
+### currentBlockUuid
+
+> `readonly` **currentBlockUuid**: `string` \| `null`
+
+UUID of the block currently being processed, or `null` if the track has not yet started
+(e.g. waiting for `waitForBlocks` to be satisfied).
+
+***
+
+### running
+
+> `readonly` **running**: `boolean`
+
+Whether this track is still actively executing.
 
 ================================================================================
 

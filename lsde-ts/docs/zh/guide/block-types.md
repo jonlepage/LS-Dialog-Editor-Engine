@@ -265,4 +265,7 @@ engine.on_action(func(args):
 | `delay` | `number?` | 执行前的延迟（由 `onBeforeBlock` 消费） |
 | `timeout` | `number?` | 执行超时时间 |
 | `portPerCharacter` | `boolean?` | metadata 中每个角色对应一个输出 port |
-| `followNarrative` | `boolean?` | 异步轨道跟随主叙事节奏 |
+| `skipIfMissingActor` | `boolean?` | 如果引用的 actor 不存在则跳过 block |
+| `debug` | `boolean?` | 编辑器调试标志 |
+| `waitForBlocks` | `string[]?` | 此 block 可以继续之前必须已访问的 block UUID |
+| `waitInput` | `boolean?` | 用于显式玩家输入控制的被动标志 |
