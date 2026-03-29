@@ -324,6 +324,7 @@ engine.on_action(func(args):
 | `onAction` | "Execute these effects" | Set flags, give items, play sounds |
 | `onResolveCharacter` | "Which character is active?" | Party system, battle formation |
 | `setChoiceFilter` | "Is this condition true for visibility?" | Check inventory, flags, quest state |
+| `onValidateNextBlock` | "This block is next — is it allowed?" | Character gating, status checks, transition rules |
 | `onBeforeBlock` | "Block is about to execute" | Handle delays, transitions, fade-ins |
 
 ## Pro Tips

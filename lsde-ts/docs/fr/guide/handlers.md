@@ -188,7 +188,7 @@ handle.on_resolve_character(func(chars):
 ```
 :::
 
-Le personnage résolu est disponible via `context.character` dans tous les handlers.
+Le personnage résolu est disponible via `context.character` dans tous les block handlers, et via `nextContext.character` / `fromContext.character` dans [`onValidateNextBlock`](#onvalidatenextblock).
 
 ## Historique des choix
 
@@ -227,19 +227,34 @@ engine.onSceneExit(({ scene, context }) => {
 
 ## onValidateNextBlock
 
-Intercepte chaque transition de block pour validation :
+Intercepte chaque transition de block pour validation. Le handler reçoit le **personnage résolu** du prochain block (`nextContext`) et du block précédent (`fromContext`) :
 
 ```ts
-engine.onValidateNextBlock(({ nextBlock, fromBlock, port }) => {
-  // Return { valid: false, reason: '...' } to block
+engine.onValidateNextBlock(({ nextBlock, fromBlock, nextContext, fromContext }) => {
   return { valid: true };
 });
 
 engine.onInvalidateBlock(({ scene, reason }) => {
   console.error('Invalid block:', reason);
-  scene.cancel(); // Stop the scene
+  scene.cancel();
 });
 ```
+
+### Character Gating
+
+Utilisez `nextContext.character` pour contrôler quels blocks peuvent s'exécuter selon l'état du jeu :
+
+```ts
+engine.onValidateNextBlock(({ nextContext }) => {
+  const { character } = nextContext;
+  if (!character) return { valid: false, reason: 'no_character' };
+  if (game.characterHasStatus(character, 'stunned'))
+    return { valid: false, reason: 'character_stunned' };
+  return { valid: true };
+});
+```
+
+Utilisez `fromContext.character` pour valider les transitions entre personnages (ex: relations, cooldowns). `fromContext` est `null` pour le premier block d'une scène.
 
 ## onBeforeBlock
 

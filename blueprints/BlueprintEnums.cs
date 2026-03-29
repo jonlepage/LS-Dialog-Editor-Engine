@@ -9,9 +9,9 @@ public static class LSDE_SCENES
 {
 	/// <summary>
 	/// <para>Scene: New Scene</para>
-	/// <para>1 ACTION, 2 CHOICE, 1 CONDITION, 8 DIALOG</para>
+	/// <para>2 ACTION, 2 CHOICE, 1 CONDITION, 8 DIALOG</para>
 	/// <para>Entry: <c>DIALOG-001</c></para>
-	/// <para>Emotions: <c>sad</c></para>
+	/// <para>Emotions: <c>hangry</c>, <c>sad</c></para>
 	/// <para>Characters: <c>Boo</c>, <c>Gruht Tyron</c>, <c>Svelt Moon</c>, <c>Zoozo Zee</c>, <c>lia</c></para>
 	/// </summary>
 	public const string newScene = "3e0110a5-49bb-46fe-884b-05ce106af4cd";
@@ -35,6 +35,16 @@ public static class LSDE_BLOCKS
 	/// <image url="./_images/action.webp" />
 	/// </remarks>
 	public const string newSceneAction001 = "d72bcf6a-161b-4759-90dd-2ae10a58fdd3";
+
+	/// <summary>
+	/// <para>🟧[ACTION] ACTION-002</para>
+	/// <para>Scene: <c>New Scene</c></para>
+	/// <para>In: <c>DIALOG-007</c></para>
+	/// </summary>
+	/// <remarks>
+	/// <image url="./_images/action.webp" />
+	/// </remarks>
+	public const string newSceneAction002 = "7662f44f-1836-4176-85b2-39f3c1bd4620";
 
 	/// <summary>
 	/// <para>⬜[CHOICE] CHOICE-001</para>
@@ -108,7 +118,7 @@ public static class LSDE_BLOCKS
 	/// <summary>
 	/// <para>🟦[DIALOG] DIALOG-004</para>
 	/// <para>"Hehehe!"</para>
-	/// <para>Characters: <c>Gruht Tyron</c></para>
+	/// <para>Characters: <c>Gruht Tyron</c> (hangry)</para>
 	/// <para>Scene: <c>New Scene</c></para>
 	/// <para>In: <c>CHOICE-001</c></para>
 	/// <para>Out: <c>DIALOG-005</c>, <c>DIALOG-006</c></para>
@@ -150,6 +160,7 @@ public static class LSDE_BLOCKS
 	/// <para>Characters: <c>Zoozo Zee</c></para>
 	/// <para>Scene: <c>New Scene</c></para>
 	/// <para>In: <c>DIALOG-006</c></para>
+	/// <para>Out: <c>ACTION-002</c></para>
 	/// </summary>
 	/// <remarks>
 	/// <image url="./_images/dialog.webp" />

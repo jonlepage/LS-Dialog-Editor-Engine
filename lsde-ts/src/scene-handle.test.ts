@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { SceneHandleImpl, type SceneHandleCallbacks } from './scene-handle.js';
 import { SceneGraph } from './graph.js';
 import { HandlerRegistry } from './handler-registry.js';
-import type { BlueprintScene, BlueprintBlock, ExportCondition } from './types.js';
+import type { BlueprintScene, BlueprintBlock, BlockCharacter, ExportCondition } from './types.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -210,6 +210,122 @@ describe( 'SceneHandleImpl', () => {
 		expect( invalidateSpy ).toHaveBeenCalledOnce();
 		expect( invalidateSpy.mock.calls[0]![0].reason ).toBe( 'blocked' );
 		// b2 should not be visited
+		expect( handle.getVisitedBlocks().has( 'b2' ) ).toBe( false );
+	} );
+
+	it( 'onValidateNextBlock receives nextContext.character', () => {
+		const charLia: BlockCharacter = { uuid: 'c1', id: 'a1', name: 'Lia' };
+		const b1 = { uuid: 'b1', type: 'DIALOG', properties: [], isStartBlock: true,
+			metadata: { characters: [charLia] } } as unknown as BlueprintBlock;
+		const scene = makeScene( {
+			blocks: [b1],
+			connections: [],
+		} );
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		let receivedCharacter: BlockCharacter | undefined;
+		global.validateNextBlockHandler = ( { nextContext } ) => {
+			receivedCharacter = nextContext.character;
+			return { valid: true };
+		};
+
+		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		handle.start();
+
+		expect( receivedCharacter ).toEqual( charLia );
+	} );
+
+	it( 'onValidateNextBlock receives fromContext.character from previous block', () => {
+		const charLia: BlockCharacter = { uuid: 'c1', id: 'a1', name: 'Lia' };
+		const charBob: BlockCharacter = { uuid: 'c2', id: 'a2', name: 'Bob' };
+		const b1 = { uuid: 'b1', type: 'DIALOG', properties: [], isStartBlock: true,
+			metadata: { characters: [charLia] } } as unknown as BlueprintBlock;
+		const b2 = { uuid: 'b2', type: 'DIALOG', properties: [],
+			metadata: { characters: [charBob] } } as unknown as BlueprintBlock;
+		const scene = makeScene( {
+			blocks: [b1, b2],
+			connections: [conn( 'b1', 'b2' )],
+		} );
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		let fromChar: BlockCharacter | undefined;
+		let nextChar: BlockCharacter | undefined;
+		global.validateNextBlockHandler = ( { nextBlock, nextContext, fromContext } ) => {
+			if ( nextBlock.uuid === 'b2' ) {
+				fromChar = fromContext?.character;
+				nextChar = nextContext.character;
+			}
+			return { valid: true };
+		};
+
+		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		handle.start();
+
+		expect( fromChar ).toEqual( charLia );
+		expect( nextChar ).toEqual( charBob );
+	} );
+
+	it( 'onValidateNextBlock fromContext is null for the first block', () => {
+		const scene = makeScene( {
+			blocks: [dialog( 'b1', true )],
+			connections: [],
+		} );
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		let receivedFromContext: unknown = 'not_called';
+		global.validateNextBlockHandler = ( { fromContext } ) => {
+			receivedFromContext = fromContext;
+			return { valid: true };
+		};
+
+		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		handle.start();
+
+		expect( receivedFromContext ).toBeNull();
+	} );
+
+	it( 'onValidateNextBlock nextContext.character is undefined when block has no characters', () => {
+		const scene = makeScene( {
+			blocks: [dialog( 'b1', true )],
+			connections: [],
+		} );
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		let receivedCharacter: BlockCharacter | undefined = { uuid: 'placeholder', id: '', name: '' };
+		global.validateNextBlockHandler = ( { nextContext } ) => {
+			receivedCharacter = nextContext.character;
+			return { valid: true };
+		};
+
+		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		handle.start();
+
+		expect( receivedCharacter ).toBeUndefined();
+	} );
+
+	it( 'onValidateNextBlock can invalidate based on character', () => {
+		const charLia: BlockCharacter = { uuid: 'c1', id: 'a1', name: 'Lia' };
+		const b1 = { uuid: 'b1', type: 'DIALOG', properties: [], isStartBlock: true } as BlueprintBlock;
+		const b2 = { uuid: 'b2', type: 'DIALOG', properties: [],
+			metadata: { characters: [charLia] } } as unknown as BlueprintBlock;
+		const scene = makeScene( {
+			blocks: [b1, b2],
+			connections: [conn( 'b1', 'b2' )],
+		} );
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		const invalidateSpy = vi.fn();
+		global.validateNextBlockHandler = ( { nextContext } ) => {
+			if ( nextContext.character?.name === 'Lia' ) return { valid: false, reason: 'lia_not_allowed' };
+			return { valid: true };
+		};
+		global.invalidateBlockHandler = invalidateSpy;
+
+		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		handle.start();
+
+		expect( invalidateSpy ).toHaveBeenCalledOnce();
+		expect( invalidateSpy.mock.calls[0]![0].reason ).toBe( 'lia_not_allowed' );
 		expect( handle.getVisitedBlocks().has( 'b2' ) ).toBe( false );
 	} );
 
@@ -681,6 +797,75 @@ function asyncDialog( uuid: string ): BlueprintBlock {
 		nativeProperties: { isAsync: true },
 	} as BlueprintBlock;
 }
+
+describe( 'SceneHandleImpl — ValidateNextBlock cache safety', () => {
+
+	it( 'async track does not consume main track pre-resolved character cache', () => {
+		const charLia: BlockCharacter = { uuid: 'c1', id: 'a1', name: 'Lia' };
+		const charBob: BlockCharacter = { uuid: 'c2', id: 'a2', name: 'Bob' };
+		const b1 = { uuid: 'b1', type: 'DIALOG', properties: [], isStartBlock: true,
+			metadata: { characters: [charLia] } } as unknown as BlueprintBlock;
+		const asyncBlock = { uuid: 'async1', type: 'DIALOG', properties: [],
+			nativeProperties: { isAsync: true },
+			metadata: { characters: [charBob] } } as unknown as BlueprintBlock;
+		const scene = makeScene( {
+			blocks: [b1, asyncBlock],
+			connections: [conn( 'b1', 'async1' )],
+		} );
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+
+		const resolvedChars: Array<{ block: string; char: string | undefined }> = [];
+		global.dialogHandler = ( { block, context, next } ) => {
+			resolvedChars.push( { block: block.uuid, char: context.character?.name } );
+			next();
+		};
+
+		// Validate handler sets the cache for each block
+		global.validateNextBlockHandler = () => ( { valid: true } );
+
+		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		handle.start();
+
+		// b1 should get Lia, async1 should get Bob (not Lia from stale cache)
+		const b1Char = resolvedChars.find( r => r.block === 'b1' );
+		const asyncChar = resolvedChars.find( r => r.block === 'async1' );
+		expect( b1Char?.char ).toBe( 'Lia' );
+		expect( asyncChar?.char ).toBe( 'Bob' );
+	} );
+
+	it( 'pre-resolved character cache does not leak across blocks after invalidation', () => {
+		const charLia: BlockCharacter = { uuid: 'c1', id: 'a1', name: 'Lia' };
+		const charBob: BlockCharacter = { uuid: 'c2', id: 'a2', name: 'Bob' };
+		const b1 = { uuid: 'b1', type: 'DIALOG', properties: [], isStartBlock: true } as BlueprintBlock;
+		const b2 = { uuid: 'b2', type: 'DIALOG', properties: [],
+			metadata: { characters: [charLia] } } as unknown as BlueprintBlock;
+		const b3 = { uuid: 'b3', type: 'DIALOG', properties: [],
+			metadata: { characters: [charBob] } } as unknown as BlueprintBlock;
+		const scene = makeScene( {
+			blocks: [b1, b2, b3],
+			connections: [conn( 'b1', 'b2' ), conn( 'b2', 'b3' )],
+		} );
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		const receivedNextChars: Array<{ block: string; char: string | undefined }> = [];
+		global.validateNextBlockHandler = ( { nextBlock, nextContext } ) => {
+			receivedNextChars.push( { block: nextBlock.uuid, char: nextContext.character?.name } );
+			if ( nextBlock.uuid === 'b2' ) return { valid: false, reason: 'blocked' };
+			return { valid: true };
+		};
+		global.invalidateBlockHandler = vi.fn();
+
+		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		handle.start();
+
+		// b1: no characters → undefined, b2: Lia (rejected)
+		expect( receivedNextChars.find( r => r.block === 'b1' )?.char ).toBeUndefined();
+		expect( receivedNextChars.find( r => r.block === 'b2' )?.char ).toBe( 'Lia' );
+		// b3 is never reached because b2 invalidation stops the flow
+		expect( handle.getVisitedBlocks().has( 'b2' ) ).toBe( false );
+	} );
+} );
 
 describe( 'SceneHandleImpl — AsyncTracks', () => {
 

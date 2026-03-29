@@ -74,13 +74,14 @@ void from_json(const nlohmann::json& j, NativeProperties& v) {
     if (j.contains("debug") && !j["debug"].is_null()) v.debug = j["debug"].get<bool>();
     if (j.contains("portPerCharacter") && !j["portPerCharacter"].is_null()) v.portPerCharacter = j["portPerCharacter"].get<bool>();
     if (j.contains("skipIfMissingActor") && !j["skipIfMissingActor"].is_null()) v.skipIfMissingActor = j["skipIfMissingActor"].get<bool>();
-    if (j.contains("followNarrative") && !j["followNarrative"].is_null()) v.followNarrative = j["followNarrative"].get<bool>();
+    if (j.contains("waitForBlocks") && !j["waitForBlocks"].is_null()) v.waitForBlocks = j["waitForBlocks"].get<std::vector<std::string>>();
+    if (j.contains("waitInput") && !j["waitInput"].is_null()) v.waitInput = j["waitInput"].get<bool>();
 }
 
 void from_json(const nlohmann::json& j, BlockCharacter& v) {
-    j.at("uuid").get_to(v.uuid);
-    j.at("id").get_to(v.id);
-    j.at("name").get_to(v.name);
+    if (j.contains("uuid") && !j["uuid"].is_null()) j["uuid"].get_to(v.uuid);
+    if (j.contains("id") && !j["id"].is_null()) j["id"].get_to(v.id);
+    if (j.contains("name") && !j["name"].is_null()) j["name"].get_to(v.name);
     if (j.contains("emotion") && !j["emotion"].is_null()) v.emotion = j["emotion"].get<std::string>();
     if (j.contains("emotionIntensity") && !j["emotionIntensity"].is_null()) v.emotionIntensity = j["emotionIntensity"].get<double>();
 }

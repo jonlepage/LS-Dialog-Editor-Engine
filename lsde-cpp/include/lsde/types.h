@@ -129,12 +129,11 @@ struct RuntimeChoiceItem : ChoiceItem {
 /// These properties affect the engine's execution flow, not the block's content:
 ///
 /// - Async tracks: When isAsync = true, the block runs on a parallel track independent
-///   of the main flow. Async tracks skip onBeforeBlock, follow only one connection, and are
+///   of the main flow. Async tracks call onBeforeBlock, can spawn sub-tracks, and are
 ///   automatically cancelled when the scene ends.
 ///
-/// - followNarrative: Only meaningful when isAsync = true. The async track waits for
-///   the main flow to advance before continuing. If next() was already called in the handler,
-///   the pending advance executes immediately; otherwise the block is force-advanced (skipped).
+/// - waitForBlocks: Defers block progression until all listed block UUIDs have been visited.
+///   If set on the start block of an async track, the entire track waits before beginning.
 ///
 /// - delay: Consumed by onBeforeBlock — the engine does not enforce it automatically.
 ///   Your onBeforeBlock handler should read block.nativeProperties.delay and call
@@ -157,8 +156,12 @@ struct NativeProperties {
     std::optional<bool> portPerCharacter;
     /// Skip this block entirely if the assigned actor/character is missing at runtime.
     std::optional<bool> skipIfMissingActor;
-    /// When true (requires isAsync), this async track advances automatically when the main track advances.
-    std::optional<bool> followNarrative;
+    /// UUIDs of blocks that must have been visited before this block can progress.
+    /// Enables precise synchronization of parallel async branches.
+    std::optional<std::vector<std::string>> waitForBlocks;
+    /// Passive flag indicating this block should wait for explicit player input.
+    /// The engine does NOT interpret this flag — it is exposed as-is to game handlers.
+    std::optional<bool> waitInput;
 };
 
 /// Character (actor) assigned to a block.
@@ -555,16 +558,30 @@ InternalBlockHandler wrapHandler(TypedBlockHandler<TBlock, TContext> handler) {
     };
 }
 
+/// Context attached to a block inside ValidateNextBlockArgs.
+/// The character is resolved by the onResolveCharacter callback before
+/// the validation handler is invoked.
+struct ValidateNextBlockContext {
+    /// Character resolved for this block, or nullptr if none.
+    const BlockCharacter* character = nullptr;
+};
+
 /// Arguments for the onValidateNextBlock handler.
+/// Called before each block is executed. Provides the resolved character for both
+/// the upcoming block (nextContext) and the previously executed block (fromContext).
 struct ValidateNextBlockArgs {
     /// The block about to be executed.
     const BlueprintBlock* nextBlock = nullptr;
     /// The block that was just executed (nullptr for the first block).
     const BlueprintBlock* fromBlock = nullptr;
-    /// The port that was followed to reach nextBlock.
+    /// Context for the upcoming block (character, etc.).
+    ValidateNextBlockContext nextContext;
+    /// Context for the previous block. Only valid when hasFromContext is true.
+    ValidateNextBlockContext fromContext;
+    /// True when fromContext is populated (false for the first block of a scene).
+    bool hasFromContext = false;
+    /// The port that was followed to reach nextBlock (reserved for future use).
     const std::string* port = nullptr;
-    /// Scene-level context (extensible).
-    SceneContext context;
 };
 
 /// Arguments for the onInvalidateBlock handler.
@@ -621,6 +638,21 @@ using SceneLifecycleHandler = std::function<void(const SceneLifecycleArgs&)>;
 /// Scene-level handlers (onDialog, onChoice, etc.) are called BEFORE global handlers.
 /// Both tiers execute unless the scene handler calls context->preventGlobalHandler().
 /// Use onBlock(uuid, handler) for a block-specific handler that takes highest priority.
+/// Read-only snapshot of an async track's state.
+/// Returned by ISceneHandle::getTrackInfos() for debug, rendering, and validation.
+struct TrackInfo {
+    /// Unique auto-incremented identifier for this track within the scene. Main track is implicit (id 0).
+    int id = 0;
+    /// ID of the track that spawned this one. -1 means spawned directly by the main track.
+    int parentTrackId = -1;
+    /// UUID of the first block that started this track's execution.
+    std::string startBlockUuid;
+    /// UUID of the block currently being processed, or empty if the track has not yet started.
+    std::string currentBlockUuid;
+    /// Whether this track is still actively executing.
+    bool running = false;
+};
+
 class ISceneHandle {
 public:
     virtual ~ISceneHandle() = default;
@@ -656,6 +688,8 @@ public:
     virtual bool isRunning() const = 0;
     /// Get the number of async tracks currently running in parallel.
     virtual int getActiveTracks() const = 0;
+    /// Get detailed info for all currently running async tracks.
+    virtual std::vector<TrackInfo> getTrackInfos() const = 0;
 
     /// Get the full choice history for this scene.
     /// Keys are block UUIDs, values are arrays of selected choice UUIDs.

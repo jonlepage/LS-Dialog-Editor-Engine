@@ -21,18 +21,46 @@ namespace LsdeDialogEngine
         private bool _running = true;
         private BlueprintBlock? _currentBlock;
         private Action? _previousCleanup;
-        private readonly bool _followNarrative;
         private Action? _pendingAdvance;
 
+        internal readonly int Id;
+        internal readonly int? ParentTrackId;
+        internal readonly string StartBlockUuid;
+        private readonly List<int> _childTrackIds = new List<int>();
+
+        private readonly BlueprintBlock _startBlock;
         private readonly SceneGraph _sceneGraph;
         private readonly SceneHandleImpl _parentHandle;
 
-        internal AsyncTrack(SceneGraph sceneGraph, SceneHandleImpl parentHandle, BlueprintBlock startBlock)
+        internal AsyncTrack(SceneGraph sceneGraph, SceneHandleImpl parentHandle, BlueprintBlock startBlock, int id, int? parentTrackId)
         {
             _sceneGraph = sceneGraph;
             _parentHandle = parentHandle;
-            _followNarrative = startBlock.NativeProperties?.FollowNarrative == true;
-            ProcessBlock(startBlock);
+            _startBlock = startBlock;
+            Id = id;
+            ParentTrackId = parentTrackId;
+            StartBlockUuid = startBlock.Uuid;
+        }
+
+        /// <summary>Begin track execution. Must be called after the track is added to the pool.</summary>
+        internal void Start()
+        {
+            var waitBlocks = _startBlock.NativeProperties?.WaitForBlocks;
+            if (waitBlocks != null && waitBlocks.Count > 0)
+            {
+                bool allVisited = true;
+                foreach (var uuid in waitBlocks)
+                {
+                    if (!_parentHandle.IsVisited(uuid)) { allVisited = false; break; }
+                }
+                if (!allVisited)
+                {
+                    _pendingAdvance = () => ProcessBlock(_startBlock);
+                    _parentHandle.RegisterWaitForBlocks(this, waitBlocks);
+                    return;
+                }
+            }
+            ProcessBlock(_startBlock);
         }
 
         internal void Cancel()
@@ -46,25 +74,35 @@ namespace LsdeDialogEngine
             }
             _currentBlock = null;
             _pendingAdvance = null;
+            foreach (var childId in _childTrackIds)
+            {
+                _parentHandle.CancelTrack(childId);
+            }
+            _childTrackIds.Clear();
         }
 
         internal bool IsRunning() => _running;
-        internal bool IsFollowNarrative() => _followNarrative;
 
-        internal void NotifyMainAdvance()
+        /// <summary>Called by the parent handle when all waitForBlocks UUIDs have been visited.</summary>
+        internal void NotifyWaitSatisfied()
         {
-            if (!_running || !_followNarrative) return;
+            if (!_running || _pendingAdvance == null) return;
+            var advance = _pendingAdvance;
+            _pendingAdvance = null;
+            advance();
+        }
 
-            if (_pendingAdvance != null)
+        /// <summary>Build a read-only snapshot of this track's state for the public API.</summary>
+        internal TrackInfo GetTrackInfo()
+        {
+            return new TrackInfo
             {
-                var advance = _pendingAdvance;
-                _pendingAdvance = null;
-                advance();
-            }
-            else
-            {
-                ForceAdvance();
-            }
+                Id = this.Id,
+                ParentTrackId = this.ParentTrackId,
+                StartBlockUuid = this.StartBlockUuid,
+                CurrentBlockUuid = _currentBlock?.Uuid,
+                Running = _running
+            };
         }
 
         // ─── Traversal ──────────────────────────────────────────────────
@@ -73,7 +111,6 @@ namespace LsdeDialogEngine
         {
             if (!_running) return;
 
-            // Skip NOTE blocks
             if (block.Type == BlockType.NOTE)
             {
                 var connections = _sceneGraph.GetOutgoingConnections(block.Uuid);
@@ -93,7 +130,22 @@ namespace LsdeDialogEngine
             _currentBlock = block;
             _parentHandle.AddVisited(block.Uuid);
 
-            ExecuteBlockHandler(block);
+            // Fire onBeforeBlock — same gate pattern as SceneHandleImpl.ProcessBlock
+            var registry = _parentHandle.GetGlobalRegistry();
+            if (registry.BeforeBlockHandler != null)
+            {
+                registry.BeforeBlockHandler(new BeforeBlockArgs
+                {
+                    Block = block,
+                    Scene = _parentHandle,
+                    Context = new BeforeBlockContext { NativeProperties = block.NativeProperties },
+                    Resolve = () => ExecuteBlockHandler(block)
+                });
+            }
+            else
+            {
+                ExecuteBlockHandler(block);
+            }
         }
 
         private void ExecuteBlockHandler(BlueprintBlock block)
@@ -112,7 +164,6 @@ namespace LsdeDialogEngine
                 return;
             }
 
-            // No handler -> advance silently (handlers are validated at start())
             if (resolved.SceneHandler == null && resolved.GlobalHandler == null)
             {
                 AdvanceToNextBlock(block, context);
@@ -129,10 +180,20 @@ namespace LsdeDialogEngine
                 if (nextCalled) return;
                 nextCalled = true;
 
-                if (_followNarrative)
+                var waitBlocks = block.NativeProperties?.WaitForBlocks;
+                if (waitBlocks != null && waitBlocks.Count > 0)
                 {
-                    _pendingAdvance = () => AdvanceToNextBlock(block, context);
-                    return;
+                    bool allVisited = true;
+                    foreach (var uuid in waitBlocks)
+                    {
+                        if (!_parentHandle.IsVisited(uuid)) { allVisited = false; break; }
+                    }
+                    if (!allVisited)
+                    {
+                        _pendingAdvance = () => AdvanceToNextBlock(block, context);
+                        _parentHandle.RegisterWaitForBlocks(this, waitBlocks);
+                        return;
+                    }
                 }
 
                 if (syncPhase) return;
@@ -164,7 +225,7 @@ namespace LsdeDialogEngine
             _previousCleanup = CombineCleanups(sceneCleanup, globalCleanup);
 
             syncPhase = false;
-            if (nextCalled && !_followNarrative)
+            if (nextCalled && _pendingAdvance == null)
             {
                 AdvanceToNextBlock(block, context);
             }
@@ -185,11 +246,38 @@ namespace LsdeDialogEngine
                 CharacterPortIndex = (context as InternalDialogContext)?.CharacterPortIndex
             });
 
-            // Async tracks follow the first connection only
-            if (resolution.Connections.Count > 0)
+            var allConnections = resolution.Connections;
+            BlueprintConnection? mainConnection = null;
+            var asyncConnections = new List<BlueprintConnection>();
+
+            foreach (var conn in allConnections)
             {
-                var conn = resolution.Connections[0];
-                var nextBlock = _sceneGraph.GetBlock(conn.ToId);
+                var targetBlock = _sceneGraph.GetBlock(conn.ToId);
+                if (targetBlock == null) continue;
+
+                if (mainConnection == null && targetBlock.NativeProperties?.IsAsync != true)
+                {
+                    mainConnection = conn;
+                }
+                else
+                {
+                    asyncConnections.Add(conn);
+                }
+            }
+
+            foreach (var conn in asyncConnections)
+            {
+                var targetBlock = _sceneGraph.GetBlock(conn.ToId);
+                if (targetBlock != null)
+                {
+                    var trackId = _parentHandle.SpawnAsyncTrack(targetBlock, this.Id);
+                    _childTrackIds.Add(trackId);
+                }
+            }
+
+            if (mainConnection != null)
+            {
+                var nextBlock = _sceneGraph.GetBlock(mainConnection.ToId);
                 if (nextBlock != null)
                 {
                     var cleanupToRun = _previousCleanup;
@@ -203,18 +291,6 @@ namespace LsdeDialogEngine
             EndTrack();
         }
 
-        private void ForceAdvance()
-        {
-            if (!_running || _currentBlock == null) return;
-            var block = _currentBlock;
-            if (_previousCleanup != null)
-            {
-                _previousCleanup();
-                _previousCleanup = null;
-            }
-            AdvanceToNextBlock(block, null);
-        }
-
         private void EndTrack()
         {
             if (_previousCleanup != null)
@@ -222,6 +298,7 @@ namespace LsdeDialogEngine
                 _previousCleanup();
                 _previousCleanup = null;
             }
+            // Child tracks survive — only explicit Cancel() cascades
             _running = false;
             _currentBlock = null;
             _parentHandle.RemoveTrack(this);
@@ -258,10 +335,15 @@ namespace LsdeDialogEngine
         private bool _cancelled;
         private BlueprintBlock? _currentBlock;
         private BlueprintBlock? _previousBlock;
+        private BlockCharacter? _previousCharacter;
+        private BlockCharacter? _preResolvedNextCharacter;
+        private bool _hasPreResolvedCharacter;
         private readonly HashSet<string> _visited = new HashSet<string>();
         private readonly Dictionary<string, List<string>> _choiceHistory = new Dictionary<string, List<string>>();
         private Action? _previousCleanup;
         private readonly List<AsyncTrack> _asyncTracks = new List<AsyncTrack>();
+        private int _nextTrackId = 1;
+        private readonly Dictionary<AsyncTrack, List<string>> _pendingWaits = new Dictionary<AsyncTrack, List<string>>();
         private Func<List<BlockCharacter>, BlockCharacter?>? _resolveCharacter;
 
         internal SceneHandleImpl(
@@ -314,6 +396,7 @@ namespace LsdeDialogEngine
         {
             if (!_running) return;
             _cancelled = true;
+            _pendingWaits.Clear();
             foreach (var track in _asyncTracks)
             {
                 track.Cancel();
@@ -382,6 +465,16 @@ namespace LsdeDialogEngine
             return count;
         }
 
+        public IReadOnlyList<TrackInfo> GetTrackInfos()
+        {
+            var result = new List<TrackInfo>();
+            foreach (var track in _asyncTracks)
+            {
+                if (track.IsRunning()) result.Add(track.GetTrackInfo());
+            }
+            return result.AsReadOnly();
+        }
+
         public IReadOnlyDictionary<string, IReadOnlyList<string>> GetChoiceHistory()
         {
             var result = new Dictionary<string, IReadOnlyList<string>>();
@@ -415,7 +508,52 @@ namespace LsdeDialogEngine
         internal SceneGraph GetSceneGraph() => _sceneGraph;
         internal SceneHandlerRegistry GetSceneRegistry() => _sceneRegistry;
         internal HandlerRegistry GetGlobalRegistry() => _globalRegistry;
-        internal void AddVisited(string uuid) => _visited.Add(uuid);
+        internal void AddVisited(string uuid)
+        {
+            _visited.Add(uuid);
+            if (_pendingWaits.Count > 0)
+            {
+                var satisfied = new List<AsyncTrack>();
+                foreach (var kvp in _pendingWaits)
+                {
+                    bool allVisited = true;
+                    foreach (var u in kvp.Value)
+                    {
+                        if (!_visited.Contains(u)) { allVisited = false; break; }
+                    }
+                    if (allVisited) satisfied.Add(kvp.Key);
+                }
+                foreach (var track in satisfied)
+                {
+                    _pendingWaits.Remove(track);
+                    track.NotifyWaitSatisfied();
+                }
+            }
+        }
+
+        internal int SpawnAsyncTrack(BlueprintBlock startBlock, int? parentTrackId)
+        {
+            var id = _nextTrackId++;
+            var track = new AsyncTrack(_sceneGraph, this, startBlock, id, parentTrackId);
+            _asyncTracks.Add(track);
+            track.Start();
+            return id;
+        }
+
+        internal void CancelTrack(int trackId)
+        {
+            foreach (var track in _asyncTracks)
+            {
+                if (track.Id == trackId) { track.Cancel(); return; }
+            }
+        }
+
+        internal void RegisterWaitForBlocks(AsyncTrack track, List<string> blockUuids)
+        {
+            _pendingWaits[track] = blockUuids;
+        }
+
+        internal bool IsVisited(string uuid) => _visited.Contains(uuid);
 
         internal void RemoveTrack(AsyncTrack track)
         {
@@ -490,12 +628,16 @@ namespace LsdeDialogEngine
             // Step 2: Validate
             if (_globalRegistry.ValidateNextBlockHandler != null)
             {
+                var nextCharacters = block.Metadata?.Characters ?? new List<BlockCharacter>();
+                var nextCharacter = GetResolveCharacterFn()(nextCharacters);
+
                 var result = _globalRegistry.ValidateNextBlockHandler(new ValidateNextBlockArgs
                 {
                     NextBlock = block,
                     FromBlock = _previousBlock,
-                    Port = null,
-                    Context = new SceneContext()
+                    NextContext = new ValidateNextBlockContext { Character = nextCharacter },
+                    FromContext = _previousBlock != null ? new ValidateNextBlockContext { Character = _previousCharacter } : null,
+                    Port = null
                 });
                 if (!result.Valid)
                 {
@@ -506,13 +648,15 @@ namespace LsdeDialogEngine
                     });
                     return;
                 }
+                _hasPreResolvedCharacter = true;
+                _preResolvedNextCharacter = nextCharacter;
             }
 
             if (_cancelled) return;
 
             // Step 3: Mark as current and visited
             _currentBlock = block;
-            _visited.Add(block.Uuid);
+            AddVisited(block.Uuid);
 
             // Step 3b: onBeforeBlock
             if (_globalRegistry.BeforeBlockHandler != null)
@@ -603,6 +747,7 @@ namespace LsdeDialogEngine
             if (_cancelled) return;
 
             _previousBlock = block;
+            _previousCharacter = context?.Character;
 
             var connections = _sceneGraph.GetOutgoingConnections(block.Uuid);
             var resolution = PortResolver.ResolvePort(new PortResolutionInput
@@ -636,22 +781,18 @@ namespace LsdeDialogEngine
                 }
             }
 
+            // Clear pre-resolved cache before spawning async tracks to prevent
+            // an async track from consuming the main track's cached character.
+            _hasPreResolvedCharacter = false;
+            _preResolvedNextCharacter = null;
+
             // Spawn async tracks
             foreach (var conn in asyncConnections)
             {
                 var targetBlock = _sceneGraph.GetBlock(conn.ToId);
                 if (targetBlock != null)
                 {
-                    _asyncTracks.Add(new AsyncTrack(_sceneGraph, this, targetBlock));
-                }
-            }
-
-            // Notify existing follow-narrative tracks
-            foreach (var track in _asyncTracks)
-            {
-                if (track.IsFollowNarrative())
-                {
-                    track.NotifyMainAdvance();
+                    SpawnAsyncTrack(targetBlock, null);
                 }
             }
 
@@ -675,6 +816,7 @@ namespace LsdeDialogEngine
 
         private void EndScene()
         {
+            _pendingWaits.Clear();
             foreach (var track in _asyncTracks)
             {
                 track.Cancel();
@@ -773,8 +915,18 @@ namespace LsdeDialogEngine
 
         private IBaseBlockContext? CreateContext(BlueprintBlock block)
         {
-            var characters = block.Metadata?.Characters ?? new List<BlockCharacter>();
-            var resolvedCharacter = GetResolveCharacterFn()(characters);
+            BlockCharacter? resolvedCharacter;
+            if (_hasPreResolvedCharacter)
+            {
+                resolvedCharacter = _preResolvedNextCharacter;
+                _hasPreResolvedCharacter = false;
+                _preResolvedNextCharacter = null;
+            }
+            else
+            {
+                var characters = block.Metadata?.Characters ?? new List<BlockCharacter>();
+                resolvedCharacter = GetResolveCharacterFn()(characters);
+            }
 
             switch (block)
             {

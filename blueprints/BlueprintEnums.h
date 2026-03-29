@@ -11,9 +11,9 @@
 namespace LSDE_SCENES {
 	/**
 	 * @brief Scene: New Scene
-	 * 1 ACTION, 2 CHOICE, 1 CONDITION, 8 DIALOG
+	 * 2 ACTION, 2 CHOICE, 1 CONDITION, 8 DIALOG
 	 * Entry: `DIALOG-001`
-	 * - Emotions: `sad`
+	 * - Emotions: `hangry`, `sad`
 	 * - Characters: `Boo`, `Gruht Tyron`, `Svelt Moon`, `Zoozo Zee`, `lia`
 	 */
 	constexpr const char* newScene = "3e0110a5-49bb-46fe-884b-05ce106af4cd";
@@ -36,6 +36,16 @@ namespace LSDE_BLOCKS {
 	 * <image url="./_images/action.webp" />
 	 */
 	constexpr const char* newSceneAction001 = "d72bcf6a-161b-4759-90dd-2ae10a58fdd3";
+
+	/**
+	 * @brief 🟧[ACTION] ACTION-002
+	 * - Scene: `New Scene`
+	 * - In: `DIALOG-007`
+	 * `signatureID1`(item2, 1)
+	 * ---
+	 * <image url="./_images/action.webp" />
+	 */
+	constexpr const char* newSceneAction002 = "7662f44f-1836-4176-85b2-39f3c1bd4620";
 
 	/**
 	 * @brief ⬜[CHOICE] CHOICE-001
@@ -107,7 +117,7 @@ namespace LSDE_BLOCKS {
 	/**
 	 * @brief 🟦[DIALOG] DIALOG-004
 	 * "Hehehe!"
-	 * - Characters: `Gruht Tyron`
+	 * - Characters: `Gruht Tyron` (hangry)
 	 * - Scene: `New Scene`
 	 * - In: `CHOICE-001`
 	 * - Out: `DIALOG-005`, `DIALOG-006`
@@ -146,6 +156,7 @@ namespace LSDE_BLOCKS {
 	 * - Characters: `Zoozo Zee`
 	 * - Scene: `New Scene`
 	 * - In: `DIALOG-006`
+	 * - Out: `ACTION-002`
 	 * ---
 	 * <image url="./_images/dialog.webp" />
 	 */

@@ -118,8 +118,8 @@ engine.onSceneExit(() => {
 
 // vous pouvez vouloir gerer la logique de validation des block pour controler le flow de votre scene
 // l'objectif est de pouvoir valider ou non le block qui doit suivre dans le flow, selon la logique de votre jeux
-engine.onValidateNextBlock(({ context }) => {
-	const { character } = context;
+engine.onValidateNextBlock(({ nextContext }) => {
+	const { character } = nextContext;
 	if (game.characterHasStatus(character, "stunned")) {
 		return { valid: false, reason: "character_stunned_status" };
 	}

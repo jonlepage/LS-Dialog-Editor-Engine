@@ -301,6 +301,9 @@ export class SceneHandleImpl implements SceneHandle {
 	private cancelled = false;
 	private currentBlock: BlueprintBlock | null = null;
 	private previousBlock: BlueprintBlock | null = null;
+	private previousCharacter: BlockCharacter | undefined = undefined;
+	private _preResolvedNextCharacter: BlockCharacter | undefined = undefined;
+	private _hasPreResolvedCharacter = false;
 	private readonly visited = new Set<string>();
 	private readonly choiceHistory = new Map<string, string[]>();
 	private previousCleanup: CleanupFn | null = null;
@@ -502,7 +505,9 @@ export class SceneHandleImpl implements SceneHandle {
 		return this.evaluateConditionWithHistory( condition, fallbackEvaluator );
 	}
 
-	/** @internal */ removeTrack( track: AsyncTrack ): void {
+	/** @internal — Safe to call during addVisited→notifyWaitSatisfied chains
+	 *  because satisfied tracks are collected before notification (no concurrent iteration on asyncTracks). */
+	removeTrack( track: AsyncTrack ): void {
 		const idx = this.asyncTracks.indexOf( track );
 		if ( idx >= 0 ) this.asyncTracks.splice( idx, 1 );
 	}
@@ -532,11 +537,14 @@ export class SceneHandleImpl implements SceneHandle {
 
 		// Step 2: Validate
 		if ( this.globalRegistry.validateNextBlockHandler ) {
+			const nextCharacters = block.metadata?.characters ?? [];
+			const nextCharacter = this.getResolveCharacterFn()( nextCharacters );
 			const result = this.globalRegistry.validateNextBlockHandler( {
 				nextBlock: block,
 				fromBlock: this.previousBlock,
+				nextContext: { character: nextCharacter },
+				fromContext: this.previousBlock ? { character: this.previousCharacter } : null,
 				port: null,
-				context: {},
 			} );
 			if ( !result.valid ) {
 				if ( this.globalRegistry.invalidateBlockHandler ) {
@@ -547,6 +555,8 @@ export class SceneHandleImpl implements SceneHandle {
 				}
 				return;
 			}
+			this._hasPreResolvedCharacter = true;
+			this._preResolvedNextCharacter = nextCharacter;
 		}
 
 		if ( this.cancelled ) return;
@@ -631,6 +641,7 @@ export class SceneHandleImpl implements SceneHandle {
 		if ( this.cancelled ) return;
 
 		this.previousBlock = block;
+		this.previousCharacter = context?.character;
 
 		const connections = this.sceneGraph.getOutgoingConnections( block.uuid );
 		const resolution = resolvePort( {
@@ -657,6 +668,11 @@ export class SceneHandleImpl implements SceneHandle {
 				asyncConnections.push( conn );
 			}
 		}
+
+		// Clear pre-resolved cache before spawning async tracks to prevent
+		// an async track from consuming the main track's cached character.
+		this._hasPreResolvedCharacter = false;
+		this._preResolvedNextCharacter = undefined;
 
 		for ( const conn of asyncConnections ) {
 			const targetBlock = this.sceneGraph.getBlock( conn.toId );
@@ -750,8 +766,15 @@ export class SceneHandleImpl implements SceneHandle {
 	}
 
 	private createContext( block: BlueprintBlock ): InternalContext | null {
-		const characters = block.metadata?.characters ?? [];
-		const resolvedCharacter = this.getResolveCharacterFn()( characters );
+		let resolvedCharacter: BlockCharacter | undefined;
+		if ( this._hasPreResolvedCharacter ) {
+			resolvedCharacter = this._preResolvedNextCharacter;
+			this._hasPreResolvedCharacter = false;
+			this._preResolvedNextCharacter = undefined;
+		} else {
+			const characters = block.metadata?.characters ?? [];
+			resolvedCharacter = this.getResolveCharacterFn()( characters );
+		}
 
 		if ( isDialogBlock( block ) ) {
 			return createDialogContext( block, resolvedCharacter );

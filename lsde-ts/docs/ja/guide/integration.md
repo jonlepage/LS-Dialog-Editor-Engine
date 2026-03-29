@@ -324,6 +324,7 @@ engine.on_action(func(args):
 | `onAction` | 「これらのエフェクトを実行して」 | フラグ設定、アイテム付与、サウンド再生 |
 | `onResolveCharacter` | 「どのキャラクターがアクティブ？」 | パーティシステム、戦闘フォーメーション |
 | `setChoiceFilter` | 「この condition は表示制御のために true？」 | インベントリ、フラグ、クエストステートのチェック |
+| `onValidateNextBlock` | 「次の block — 実行を許可する？」 | キャラクターゲーティング、ステータスチェック、遷移ルール |
 | `onBeforeBlock` | 「block が実行されようとしている」 | 遅延処理、トランジション、フェードイン |
 
 ## プロのヒント

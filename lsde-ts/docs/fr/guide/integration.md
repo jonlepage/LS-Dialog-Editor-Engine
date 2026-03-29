@@ -324,6 +324,7 @@ engine.on_action(func(args):
 | `onAction` | "Exécute ces effets" | Set des flags, donner des items, jouer des sons |
 | `onResolveCharacter` | "Quel personnage est actif?" | Système de party, formation de bataille |
 | `setChoiceFilter` | "Est-ce que cette condition est vraie pour la visibilité?" | Checker inventaire, flags, state des quêtes |
+| `onValidateNextBlock` | "Ce block est le prochain — est-il autorisé ?" | Character gating, vérification de statut, règles de transition |
 | `onBeforeBlock` | "Un block est sur le point de s'exécuter" | Gérer les delays, transitions, fade-ins |
 
 ## Pro Tips

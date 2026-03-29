@@ -705,12 +705,58 @@ export type ConditionHandler = BlockHandler<ConditionBlock, ConditionContext>;
 /** Handler for ACTION blocks. Shorthand for `BlockHandler<ActionBlock, ActionContext>`. */
 export type ActionHandler = BlockHandler<ActionBlock, ActionContext>;
 
-/** Arguments for the onValidateNextBlock handler. */
+/**
+ * Context attached to a block inside {@link ValidateNextBlockArgs}.
+ *
+ * @remarks
+ * The character is resolved by the `onResolveCharacter` callback **before** the
+ * validation handler is invoked. If the block has no characters in its metadata,
+ * or the resolver returns nothing, `character` will be `undefined`.
+ *
+ * @see {@link BlockCharacter} for character data
+ * @see {@link ValidateNextBlockArgs} for usage
+ */
+export interface ValidateNextBlockContext {
+	/** Character resolved for this block, or `undefined` if none. */
+	character: BlockCharacter | undefined;
+}
+
+/**
+ * Arguments for the onValidateNextBlock handler.
+ *
+ * @remarks
+ * Called before each block is executed. Provides the resolved character for both
+ * the upcoming block (`nextContext`) and the previously executed block (`fromContext`).
+ * This enables game-side validation such as character authorization, status checks,
+ * or transition rules between characters.
+ *
+ * `fromContext` is `null` for the first block of a scene (no previous block exists).
+ *
+ * @example
+ * ```ts
+ * engine.onValidateNextBlock(({ nextBlock, nextContext, fromContext }) => {
+ *   const { character } = nextContext;
+ *   if (!character) return { valid: false, reason: 'no_character' };
+ *   if (game.characterHasStatus(character, 'stunned'))
+ *     return { valid: false, reason: 'character_stunned' };
+ *   return { valid: true };
+ * });
+ * ```
+ *
+ * @see {@link ValidateNextBlockContext} for per-block context details
+ * @see {@link BlockCharacter} for character data
+ */
 export interface ValidateNextBlockArgs {
+	/** The block about to be executed. */
 	nextBlock: BlueprintBlock;
+	/** The block that was just executed, or `null` for the first block of the scene. */
 	fromBlock: BlueprintBlock | null;
+	/** Context for the upcoming block (character, etc.). */
+	nextContext: ValidateNextBlockContext;
+	/** Context for the previous block, or `null` if this is the first block. */
+	fromContext: ValidateNextBlockContext | null;
+	/** The port that was followed to reach `nextBlock` (reserved for future use). */
 	port: string | null;
-	context: SceneContext;
 }
 
 /** Handler for block validation. */

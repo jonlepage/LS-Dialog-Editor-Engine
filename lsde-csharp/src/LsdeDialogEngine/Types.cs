@@ -124,8 +124,8 @@ namespace LsdeDialogEngine
 
     /// <summary>LSDE native execution properties controlling how a block is dispatched by the engine.
     /// <para>These properties affect the engine's execution flow, not the block's content:</para>
-    /// <para>- <b>IsAsync</b>: Block runs on a parallel track. Async tracks skip OnBeforeBlock, follow only one connection, auto-cancel on scene end.</para>
-    /// <para>- <b>FollowNarrative</b>: Only meaningful when IsAsync = true. The async track waits for the main flow to advance.</para>
+    /// <para>- <b>IsAsync</b>: Block runs on a parallel track. Async tracks call OnBeforeBlock, can spawn sub-tracks, auto-cancel on scene end.</para>
+    /// <para>- <b>WaitForBlocks</b>: Defers block progression until all listed block UUIDs have been visited.</para>
     /// <para>- <b>Delay</b>: Consumed by OnBeforeBlock — the engine does not enforce it automatically.</para>
     /// <para>- <b>PortPerCharacter</b>: One output port per character. The DIALOG handler must call ResolveCharacterPort().</para></summary>
     public class NativeProperties
@@ -148,8 +148,29 @@ namespace LsdeDialogEngine
         /// <summary>Skip this block entirely if the assigned actor/character is missing at runtime.</summary>
         public bool? SkipIfMissingActor { get; set; }
 
-        /// <summary>When true (requires IsAsync), this async track advances when the main track advances.</summary>
-        public bool? FollowNarrative { get; set; }
+        /// <summary>UUIDs of blocks that must have been visited before this block can progress.
+        /// Enables precise synchronization of parallel async branches.</summary>
+        public List<string>? WaitForBlocks { get; set; }
+
+        /// <summary>Passive flag indicating this block should wait for explicit player input.
+        /// The engine does NOT interpret this flag — it is exposed as-is to game handlers.</summary>
+        public bool? WaitInput { get; set; }
+    }
+
+    /// <summary>Read-only snapshot of an async track's state.
+    /// Returned by ISceneHandle.GetTrackInfos() for debug, rendering, and validation.</summary>
+    public class TrackInfo
+    {
+        /// <summary>Unique auto-incremented identifier for this track within the scene. Main track is implicit (id 0).</summary>
+        public int Id { get; set; }
+        /// <summary>ID of the track that spawned this one. Null means spawned directly by the main track.</summary>
+        public int? ParentTrackId { get; set; }
+        /// <summary>UUID of the first block that started this track's execution.</summary>
+        public string StartBlockUuid { get; set; } = "";
+        /// <summary>UUID of the block currently being processed, or null if the track has not yet started.</summary>
+        public string? CurrentBlockUuid { get; set; }
+        /// <summary>Whether this track is still actively executing.</summary>
+        public bool Running { get; set; }
     }
 
     /// <summary>Character (actor) assigned to a block.</summary>
@@ -585,7 +606,17 @@ namespace LsdeDialogEngine
         }
     }
 
-    /// <summary>Arguments for OnValidateNextBlock handler.</summary>
+    /// <summary>Context attached to a block inside <see cref="ValidateNextBlockArgs"/>.
+    /// The character is resolved by OnResolveCharacter before the validation handler is invoked.</summary>
+    public class ValidateNextBlockContext
+    {
+        /// <summary>Character resolved for this block, or null if none.</summary>
+        public BlockCharacter? Character { get; set; }
+    }
+
+    /// <summary>Arguments for OnValidateNextBlock handler.
+    /// Called before each block is executed. Provides the resolved character for both
+    /// the upcoming block (NextContext) and the previously executed block (FromContext).</summary>
     public class ValidateNextBlockArgs
     {
         /// <summary>The block about to be executed.</summary>
@@ -594,11 +625,14 @@ namespace LsdeDialogEngine
         /// <summary>The block that was just executed (null for the first block).</summary>
         public BlueprintBlock? FromBlock { get; set; }
 
-        /// <summary>The port that was followed to reach NextBlock.</summary>
-        public string? Port { get; set; }
+        /// <summary>Context for the upcoming block (character, etc.).</summary>
+        public ValidateNextBlockContext NextContext { get; set; } = new ValidateNextBlockContext();
 
-        /// <summary>Scene-level context (extensible).</summary>
-        public SceneContext Context { get; set; } = new SceneContext();
+        /// <summary>Context for the previous block, or null if this is the first block.</summary>
+        public ValidateNextBlockContext? FromContext { get; set; }
+
+        /// <summary>The port that was followed to reach NextBlock (reserved for future use).</summary>
+        public string? Port { get; set; }
     }
 
     /// <summary>Arguments for OnInvalidateBlock handler.</summary>
@@ -701,6 +735,9 @@ namespace LsdeDialogEngine
 
         /// <summary>Get the number of async tracks currently running in parallel.</summary>
         int GetActiveTracks();
+
+        /// <summary>Get detailed info for all currently running async tracks.</summary>
+        IReadOnlyList<TrackInfo> GetTrackInfos();
 
         /// <summary>Get the full choice history. Keys are block UUIDs, values are arrays of selected choice UUIDs.</summary>
         IReadOnlyDictionary<string, IReadOnlyList<string>> GetChoiceHistory();

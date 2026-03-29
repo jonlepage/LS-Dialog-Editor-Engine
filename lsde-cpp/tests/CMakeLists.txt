@@ -25,13 +25,14 @@ FetchContent_MakeAvailable(googletest json)
 set(TEST_DATA_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../tests")
 
 add_executable(lsde_tests
+    test_main.cpp
     json_deserializer.cpp
     cross_language_runner.cpp
 )
 
 target_link_libraries(lsde_tests PRIVATE
     lsde
-    GTest::gtest_main
+    GTest::gtest
     nlohmann_json::nlohmann_json
 )
 

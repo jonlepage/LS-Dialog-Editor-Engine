@@ -7,9 +7,9 @@ class_name BlueprintEnums
 ## Each value maps to the scene's UUID — stable even if the scene is renamed.
 class LSDE_SCENES:
 	## [b]Scene: New Scene[/b]
-	## 1 ACTION, 2 CHOICE, 1 CONDITION, 8 DIALOG
+	## 2 ACTION, 2 CHOICE, 1 CONDITION, 8 DIALOG
 	## Entry: [code]DIALOG-001[/code]
-	## Emotions: [code]sad[/code]
+	## Emotions: [code]hangry[/code], [code]sad[/code]
 	## Characters: [code]Boo[/code], [code]Gruht Tyron[/code], [code]Svelt Moon[/code], [code]Zoozo Zee[/code], [code]lia[/code]
 	const newScene = "3e0110a5-49bb-46fe-884b-05ce106af4cd"
 
@@ -25,6 +25,13 @@ class LSDE_BLOCKS:
 	## ---
 	## <image url="./_images/action.webp" />
 	const newSceneAction001 = "d72bcf6a-161b-4759-90dd-2ae10a58fdd3"
+
+	## [b]🟧[ACTION] ACTION-002[/b]
+	## Scene: [code]New Scene[/code]
+	## In: [code]DIALOG-007[/code]
+	## ---
+	## <image url="./_images/action.webp" />
+	const newSceneAction002 = "7662f44f-1836-4176-85b2-39f3c1bd4620"
 
 	## [b]⬜[CHOICE] CHOICE-001[/b]
 	## Characters: [code]lia[/code]
@@ -79,7 +86,7 @@ class LSDE_BLOCKS:
 
 	## [b]🟦[DIALOG] DIALOG-004[/b]
 	## [i]"Hehehe!"[/i]
-	## Characters: [code]Gruht Tyron[/code]
+	## Characters: [code]Gruht Tyron[/code] (hangry)
 	## Scene: [code]New Scene[/code]
 	## In: [code]CHOICE-001[/code]
 	## Out: [code]DIALOG-005[/code], [code]DIALOG-006[/code]
@@ -112,6 +119,7 @@ class LSDE_BLOCKS:
 	## Characters: [code]Zoozo Zee[/code]
 	## Scene: [code]New Scene[/code]
 	## In: [code]DIALOG-006[/code]
+	## Out: [code]ACTION-002[/code]
 	## ---
 	## <image url="./_images/dialog.webp" />
 	const newSceneDialog007 = "d0cf7ee4-8dcb-4b75-b373-5d4a1dca73be"

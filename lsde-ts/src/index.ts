@@ -26,7 +26,7 @@ export type {
 	// Handler types
 	BlockHandlerArgs, BlockHandler,
 	DialogHandler, ChoiceHandler, ConditionHandler, ActionHandler,
-	ValidateNextBlockArgs, ValidateNextBlockHandler,
+	ValidateNextBlockArgs, ValidateNextBlockContext, ValidateNextBlockHandler,
 	InvalidateBlockArgs, InvalidateBlockHandler,
 	BeforeBlockArgs, BeforeBlockHandler,
 	SceneLifecycleArgs, SceneLifecycleHandler,

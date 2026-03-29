@@ -33,34 +33,42 @@ class SceneHandleImpl;
 /// Parallel execution branch spawned from async connections.
 ///
 /// Mirrors the main track traversal logic but operates independently.
-/// When followNarrative is true, the track waits for the main track to advance
-/// before continuing its own traversal.
+/// Supports sub-track spawning, waitForBlocks synchronization, and cancel cascade.
 class AsyncTrack {
 public:
-    AsyncTrack(const SceneGraph& sceneGraph, SceneHandleImpl& parent, const BlueprintBlock& startBlock);
-    /// Cancel this track. Runs cleanup for the current block.
+    AsyncTrack(const SceneGraph& sceneGraph, SceneHandleImpl& parent, const BlueprintBlock& startBlock, int id, int parentTrackId);
+
+    /// Begin track execution. Must be called after the track is added to the pool.
+    void start();
+    /// Cancel this track. Runs cleanup and cascades cancel to child tracks.
     void cancel();
     /// Whether this track is still executing.
     bool isRunning() const;
-    /// Whether this track follows the main track's narrative pace.
-    bool isFollowNarrative() const;
-    /// Called by the main track when it advances. Triggers pending follow-narrative advance.
-    void notifyMainAdvance();
+    /// Called by the parent handle when all waitForBlocks UUIDs have been visited.
+    void notifyWaitSatisfied();
+    /// Build a read-only snapshot of this track's state for the public API.
+    TrackInfo getTrackInfo() const;
+
+    /// Unique auto-incremented identifier for this track.
+    const int id;
+    /// ID of the parent track (-1 = spawned by main).
+    const int parentTrackId;
+    /// UUID of the block that started this track.
+    const std::string startBlockUuid;
 
 private:
     void processBlock(const BlueprintBlock& block);
     void executeBlockHandler(const BlueprintBlock& block);
     void advanceToNextBlock(const BlueprintBlock& block, IBaseBlockContext* context);
-    void forceAdvance();
     void endTrack();
-    static CleanupFn combineCleanups(CleanupFn a, CleanupFn b);
 
     bool _running = true;
     const BlueprintBlock* _currentBlock = nullptr;
     CleanupFn _previousCleanup;
-    bool _followNarrative = false;
     std::function<void()> _pendingAdvance;
+    std::vector<int> _childTrackIds;
 
+    const BlueprintBlock* _startBlock;
     const SceneGraph& _sceneGraph;
     SceneHandleImpl& _parent;
     std::unique_ptr<IBaseBlockContext> _ownedContext;
@@ -96,6 +104,7 @@ public:
     const std::vector<std::string>& getVisitedBlocks() const override;
     bool isRunning() const override;
     int getActiveTracks() const override;
+    std::vector<TrackInfo> getTrackInfos() const override;
     const std::unordered_map<std::string, std::vector<std::string>>& getChoiceHistory() const override;
     const std::vector<std::string>* getChoice(const std::string& blockUuid) const override;
     bool evaluateCondition(const ExportCondition& condition) override;
@@ -106,6 +115,14 @@ public:
     const SceneHandlerRegistry& getSceneRegistry() const;
     const HandlerRegistry& getGlobalRegistry() const;
     void addVisited(const std::string& uuid);
+    /// Spawn a new async track in the flat pool. Returns the assigned track ID.
+    int spawnAsyncTrack(const BlueprintBlock& startBlock, int parentTrackId);
+    /// Cancel a specific track by ID (used for parent->child cascade).
+    void cancelTrack(int trackId);
+    /// Register a track as waiting for specific block UUIDs to be visited.
+    void registerWaitForBlocks(AsyncTrack* track, const std::vector<std::string>& blockUuids);
+    /// Check if a block UUID has been visited in this scene.
+    bool isVisited(const std::string& uuid) const;
     void removeTrack(AsyncTrack* track);
     /// Create the appropriate context for a block (Dialog/Choice/Condition/Action).
     std::unique_ptr<IBaseBlockContext> createBlockContext(const BlueprintBlock& block);
@@ -145,11 +162,16 @@ private:
     bool _cancelled = false;
     const BlueprintBlock* _currentBlock = nullptr;
     const BlueprintBlock* _previousBlock = nullptr;
+    const BlockCharacter* _previousCharacter = nullptr;
+    const BlockCharacter* _preResolvedNextCharacter = nullptr;
+    bool _hasPreResolvedCharacter = false;
     std::unordered_set<std::string> _visitedSet;
     std::vector<std::string> _visitedOrder;
     std::unordered_map<std::string, std::vector<std::string>> _choiceHistory;
     CleanupFn _previousCleanup;
     std::vector<std::unique_ptr<AsyncTrack>> _asyncTracks;
+    int _nextTrackId = 1;
+    std::unordered_map<AsyncTrack*, std::vector<std::string>> _pendingWaits;
     std::unique_ptr<IBaseBlockContext> _ownedContext;
     /// Scene-level character resolver override.
     ResolveCharacterFn _resolveCharacter;

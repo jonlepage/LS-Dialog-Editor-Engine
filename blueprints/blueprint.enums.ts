@@ -10,7 +10,7 @@ export enum LSDE_SCENES {
 	 * ### Scene: New Scene
 	 * 2 ACTION, 2 CHOICE, 1 CONDITION, 8 DIALOG
 	 * Entry: `DIALOG-001` ⭐
-	 * - Emotions: `sad`
+	 * - Emotions: `hangry`, `sad`
 	 * - Characters: `Boo`, `Gruht Tyron`, `Svelt Moon`, `Zoozo Zee`, `lia`
 	 */
 	newScene = '3e0110a5-49bb-46fe-884b-05ce106af4cd',
@@ -105,7 +105,7 @@ export enum LSDE_BLOCKS {
 	/**
 	 * ### 🟦[DIALOG] DIALOG-004
 	 * _"Hehehe!"_
-	 * - Characters: `Gruht Tyron`
+	 * - Characters: `Gruht Tyron` (hangry)
 	 * - Scene: `New Scene`
 	 * - In: `CHOICE-001`
 	 * - Out: `DIALOG-005`, `DIALOG-006`

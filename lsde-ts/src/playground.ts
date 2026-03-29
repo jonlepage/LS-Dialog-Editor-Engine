@@ -155,9 +155,9 @@ engine.onSceneExit(() => {
 	console.log(`🔴 ━━━ Scene Exit ━━━\n`);
 });
 
-engine.onValidateNextBlock(({ nextBlock, fromBlock }) => {
+engine.onValidateNextBlock(({ nextBlock, fromBlock, nextContext }) => {
 	if (fromBlock)
-		console.log(`   ✔️  validate: ${fromBlock.label} → ${nextBlock.label}`);
+		console.log(`   ✔️  validate: ${fromBlock.label} → ${nextBlock.label} (char: ${nextContext.character?.name ?? 'none'})`);
 	return { valid: true };
 });
 

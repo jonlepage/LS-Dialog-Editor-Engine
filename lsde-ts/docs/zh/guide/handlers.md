@@ -188,7 +188,7 @@ handle.on_resolve_character(func(chars):
 ```
 :::
 
-解析后的角色可通过所有 handler 中的 `context.character` 获取。
+解析后的角色可通过所有 block handler 中的 `context.character` 获取，也可在 [`onValidateNextBlock`](#onvalidatenextblock) 中通过 `nextContext.character` / `fromContext.character` 获取。
 
 ## 选择历史
 
@@ -227,19 +227,34 @@ engine.onSceneExit(({ scene, context }) => {
 
 ## onValidateNextBlock
 
-拦截每次 block 转换进行验证：
+拦截每次 block 转换进行验证。handler 接收下一个 block（`nextContext`）和上一个 block（`fromContext`）的**已解析角色**：
 
 ```ts
-engine.onValidateNextBlock(({ nextBlock, fromBlock, port }) => {
-  // Return { valid: false, reason: '...' } to block
+engine.onValidateNextBlock(({ nextBlock, fromBlock, nextContext, fromContext }) => {
   return { valid: true };
 });
 
 engine.onInvalidateBlock(({ scene, reason }) => {
   console.error('Invalid block:', reason);
-  scene.cancel(); // Stop the scene
+  scene.cancel();
 });
 ```
+
+### Character Gating
+
+使用 `nextContext.character` 根据游戏状态控制哪些 block 可以执行：
+
+```ts
+engine.onValidateNextBlock(({ nextContext }) => {
+  const { character } = nextContext;
+  if (!character) return { valid: false, reason: 'no_character' };
+  if (game.characterHasStatus(character, 'stunned'))
+    return { valid: false, reason: 'character_stunned' };
+  return { valid: true };
+});
+```
+
+使用 `fromContext.character` 验证角色之间的转换（例如：关系检查、冷却时间）。`fromContext` 在场景的第一个 block 中为 `null`。
 
 ## onBeforeBlock
 

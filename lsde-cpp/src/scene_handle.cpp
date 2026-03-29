@@ -28,12 +28,28 @@ static CleanupFn combineCleanupsImpl(CleanupFn a, CleanupFn b) {
 
 // ─── AsyncTrack ──────────────────────────────────────────────────────────────
 
-AsyncTrack::AsyncTrack(const SceneGraph& sg, SceneHandleImpl& parent, const BlueprintBlock& startBlock)
-    : _sceneGraph(sg), _parent(parent)
+AsyncTrack::AsyncTrack(const SceneGraph& sg, SceneHandleImpl& parent, const BlueprintBlock& startBlock, int id_, int parentTrackId_)
+    : id(id_), parentTrackId(parentTrackId_), startBlockUuid(startBlock.uuid),
+      _startBlock(&startBlock), _sceneGraph(sg), _parent(parent)
 {
-    _followNarrative = startBlock.nativeProperties && startBlock.nativeProperties->followNarrative
-        && *startBlock.nativeProperties->followNarrative;
-    processBlock(startBlock);
+}
+
+void AsyncTrack::start() {
+    if (_startBlock->nativeProperties && _startBlock->nativeProperties->waitForBlocks) {
+        const auto& waitBlocks = *_startBlock->nativeProperties->waitForBlocks;
+        if (!waitBlocks.empty()) {
+            bool allVisited = true;
+            for (const auto& uuid : waitBlocks) {
+                if (!_parent.isVisited(uuid)) { allVisited = false; break; }
+            }
+            if (!allVisited) {
+                _pendingAdvance = [this]() { processBlock(*_startBlock); };
+                _parent.registerWaitForBlocks(this, waitBlocks);
+                return;
+            }
+        }
+    }
+    processBlock(*_startBlock);
 }
 
 void AsyncTrack::cancel() {
@@ -42,20 +58,29 @@ void AsyncTrack::cancel() {
     if (_previousCleanup) { _previousCleanup(); _previousCleanup = {}; }
     _currentBlock = nullptr;
     _pendingAdvance = {};
+    for (auto childId : _childTrackIds) {
+        _parent.cancelTrack(childId);
+    }
+    _childTrackIds.clear();
 }
 
 bool AsyncTrack::isRunning() const { return _running; }
-bool AsyncTrack::isFollowNarrative() const { return _followNarrative; }
 
-void AsyncTrack::notifyMainAdvance() {
-    if (!_running || !_followNarrative) return;
-    if (_pendingAdvance) {
-        auto advance = std::move(_pendingAdvance);
-        _pendingAdvance = {};
-        advance();
-    } else {
-        forceAdvance();
-    }
+void AsyncTrack::notifyWaitSatisfied() {
+    if (!_running || !_pendingAdvance) return;
+    auto advance = std::move(_pendingAdvance);
+    _pendingAdvance = {};
+    advance();
+}
+
+TrackInfo AsyncTrack::getTrackInfo() const {
+    TrackInfo info;
+    info.id = id;
+    info.parentTrackId = parentTrackId;
+    info.startBlockUuid = startBlockUuid;
+    info.currentBlockUuid = _currentBlock ? _currentBlock->uuid : "";
+    info.running = _running;
+    return info;
 }
 
 void AsyncTrack::processBlock(const BlueprintBlock& block) {
@@ -73,7 +98,19 @@ void AsyncTrack::processBlock(const BlueprintBlock& block) {
 
     _currentBlock = &block;
     _parent.addVisited(block.uuid);
-    executeBlockHandler(block);
+
+    // Fire onBeforeBlock — same gate pattern as SceneHandleImpl::processBlock
+    const auto& registry = _parent.getGlobalRegistry();
+    if (registry.beforeBlockHandler) {
+        BeforeBlockArgs args;
+        args.block = &block;
+        args.scene = &_parent;
+        args.context.nativeProperties = block.nativeProperties ? &*block.nativeProperties : nullptr;
+        args.resolve = [this, &block]() { executeBlockHandler(block); };
+        registry.beforeBlockHandler(args);
+    } else {
+        executeBlockHandler(block);
+    }
 }
 
 void AsyncTrack::executeBlockHandler(const BlueprintBlock& block) {
@@ -88,7 +125,6 @@ void AsyncTrack::executeBlockHandler(const BlueprintBlock& block) {
         return;
     }
 
-    // No handler → advance silently (handlers are validated at start())
     if (!resolved.sceneHandler && !resolved.globalHandler) {
         advanceToNextBlock(block, context);
         return;
@@ -102,10 +138,23 @@ void AsyncTrack::executeBlockHandler(const BlueprintBlock& block) {
     auto next = [&nextCalled, &syncPhase, this, blockPtr, context]() {
         if (nextCalled) return;
         nextCalled = true;
-        if (_followNarrative) {
-            _pendingAdvance = [this, blockPtr, context]() { advanceToNextBlock(*blockPtr, context); };
-            return;
+
+        // waitForBlocks: defer advance until all required blocks are visited
+        if (blockPtr->nativeProperties && blockPtr->nativeProperties->waitForBlocks) {
+            const auto& waitBlocks = *blockPtr->nativeProperties->waitForBlocks;
+            if (!waitBlocks.empty()) {
+                bool allVisited = true;
+                for (const auto& uuid : waitBlocks) {
+                    if (!_parent.isVisited(uuid)) { allVisited = false; break; }
+                }
+                if (!allVisited) {
+                    _pendingAdvance = [this, blockPtr, context]() { advanceToNextBlock(*blockPtr, context); };
+                    _parent.registerWaitForBlocks(this, waitBlocks);
+                    return;
+                }
+            }
         }
+
         if (syncPhase) return;
         advanceToNextBlock(*blockPtr, context);
     };
@@ -129,7 +178,7 @@ void AsyncTrack::executeBlockHandler(const BlueprintBlock& block) {
     _previousCleanup = combineCleanupsImpl(std::move(sceneCleanup), std::move(globalCleanup));
 
     syncPhase = false;
-    if (nextCalled && !_followNarrative) {
+    if (nextCalled && !_pendingAdvance) {
         advanceToNextBlock(block, context);
     }
 }
@@ -151,9 +200,32 @@ void AsyncTrack::advanceToNextBlock(const BlueprintBlock& block, IBaseBlockConte
 
     auto resolution = resolvePort(input);
 
-    if (!resolution.connections.empty()) {
-        auto* conn = resolution.connections[0];
-        auto* nextBlock = _sceneGraph.getBlock(conn->toId);
+    // Separate main (first non-async) from async connections
+    const BlueprintConnection* mainConnection = nullptr;
+    std::vector<const BlueprintConnection*> asyncConnections;
+
+    for (auto* conn : resolution.connections) {
+        auto* targetBlock = _sceneGraph.getBlock(conn->toId);
+        if (!targetBlock) continue;
+        if (!mainConnection && !(targetBlock->nativeProperties && targetBlock->nativeProperties->isAsync
+            && *targetBlock->nativeProperties->isAsync)) {
+            mainConnection = conn;
+        } else {
+            asyncConnections.push_back(conn);
+        }
+    }
+
+    // Spawn sub-tracks
+    for (auto* conn : asyncConnections) {
+        auto* targetBlock = _sceneGraph.getBlock(conn->toId);
+        if (targetBlock) {
+            int trackId = _parent.spawnAsyncTrack(*targetBlock, this->id);
+            _childTrackIds.push_back(trackId);
+        }
+    }
+
+    if (mainConnection) {
+        auto* nextBlock = _sceneGraph.getBlock(mainConnection->toId);
         if (nextBlock) {
             auto cleanup = std::move(_previousCleanup);
             _previousCleanup = {};
@@ -165,15 +237,9 @@ void AsyncTrack::advanceToNextBlock(const BlueprintBlock& block, IBaseBlockConte
     endTrack();
 }
 
-void AsyncTrack::forceAdvance() {
-    if (!_running || !_currentBlock) return;
-    auto* block = _currentBlock;
-    if (_previousCleanup) { _previousCleanup(); _previousCleanup = {}; }
-    advanceToNextBlock(*block, nullptr);
-}
-
 void AsyncTrack::endTrack() {
     if (_previousCleanup) { _previousCleanup(); _previousCleanup = {}; }
+    // Child tracks survive — only explicit cancel() cascades
     _running = false;
     _currentBlock = nullptr;
     _parent.removeTrack(this);
@@ -222,6 +288,7 @@ void SceneHandleImpl::start() {
 void SceneHandleImpl::cancel() {
     if (!_running) return;
     _cancelled = true;
+    _pendingWaits.clear();
     for (auto& track : _asyncTracks) track->cancel();
     _asyncTracks.clear();
     if (_previousCleanup) { _previousCleanup(); _previousCleanup = {}; }
@@ -252,10 +319,55 @@ int SceneHandleImpl::getActiveTracks() const {
 const SceneGraph& SceneHandleImpl::getSceneGraph() const { return _sceneGraph; }
 const SceneHandlerRegistry& SceneHandleImpl::getSceneRegistry() const { return _sceneRegistry; }
 const HandlerRegistry& SceneHandleImpl::getGlobalRegistry() const { return _globalRegistry; }
+std::vector<TrackInfo> SceneHandleImpl::getTrackInfos() const {
+    std::vector<TrackInfo> result;
+    for (const auto& t : _asyncTracks) {
+        if (t->isRunning()) result.push_back(t->getTrackInfo());
+    }
+    return result;
+}
+
 void SceneHandleImpl::addVisited(const std::string& uuid) {
     if (_visitedSet.insert(uuid).second) {
         _visitedOrder.push_back(uuid);
     }
+    if (!_pendingWaits.empty()) {
+        std::vector<AsyncTrack*> satisfied;
+        for (auto& [track, required] : _pendingWaits) {
+            bool allVisited = true;
+            for (const auto& u : required) {
+                if (_visitedSet.find(u) == _visitedSet.end()) { allVisited = false; break; }
+            }
+            if (allVisited) satisfied.push_back(track);
+        }
+        for (auto* track : satisfied) {
+            _pendingWaits.erase(track);
+            track->notifyWaitSatisfied();
+        }
+    }
+}
+
+int SceneHandleImpl::spawnAsyncTrack(const BlueprintBlock& startBlock, int parentTrackId) {
+    int trackId = _nextTrackId++;
+    auto track = std::make_unique<AsyncTrack>(_sceneGraph, *this, startBlock, trackId, parentTrackId);
+    auto* trackPtr = track.get();
+    _asyncTracks.push_back(std::move(track));
+    trackPtr->start();
+    return trackId;
+}
+
+void SceneHandleImpl::cancelTrack(int trackId) {
+    for (auto& t : _asyncTracks) {
+        if (t->id == trackId) { t->cancel(); return; }
+    }
+}
+
+void SceneHandleImpl::registerWaitForBlocks(AsyncTrack* track, const std::vector<std::string>& blockUuids) {
+    _pendingWaits[track] = blockUuids;
+}
+
+bool SceneHandleImpl::isVisited(const std::string& uuid) const {
+    return _visitedSet.find(uuid) != _visitedSet.end();
 }
 
 void SceneHandleImpl::removeTrack(AsyncTrack* track) {
@@ -313,13 +425,30 @@ void SceneHandleImpl::processBlock(const BlueprintBlock& block) {
 
     // Validate
     if (_globalRegistry.validateNextBlockHandler) {
-        auto result = _globalRegistry.validateNextBlockHandler({&block, _previousBlock, nullptr, {}});
+        static const std::vector<BlockCharacter> emptyChars;
+        const auto& nextChars = block.metadata ? block.metadata->characters : emptyChars;
+        auto resolverFn = getResolveCharacterFn();
+        const BlockCharacter* nextCharacter = resolverFn ? resolverFn(nextChars) : nullptr;
+
+        ValidateNextBlockArgs args;
+        args.nextBlock = &block;
+        args.fromBlock = _previousBlock;
+        args.nextContext.character = nextCharacter;
+        if (_previousBlock) {
+            args.hasFromContext = true;
+            args.fromContext.character = _previousCharacter;
+        }
+        args.port = nullptr;
+
+        auto result = _globalRegistry.validateNextBlockHandler(args);
         if (!result.valid) {
             if (_globalRegistry.invalidateBlockHandler) {
                 _globalRegistry.invalidateBlockHandler({this, result.reason.value_or("validation_failed")});
             }
             return;
         }
+        _hasPreResolvedCharacter = true;
+        _preResolvedNextCharacter = nextCharacter;
     }
 
     if (_cancelled) return;
@@ -398,6 +527,7 @@ void SceneHandleImpl::advanceToNextBlock(const BlueprintBlock& block, IBaseBlock
     if (_cancelled) return;
 
     _previousBlock = &block;
+    _previousCharacter = context ? context->character() : nullptr;
 
     auto conns = _sceneGraph.getOutgoingConnections(block.uuid);
     std::vector<BlueprintConnection> connsCopy;
@@ -429,18 +559,16 @@ void SceneHandleImpl::advanceToNextBlock(const BlueprintBlock& block, IBaseBlock
         }
     }
 
+    // Clear pre-resolved cache before spawning async tracks to prevent
+    // an async track from consuming the main track's cached character.
+    _hasPreResolvedCharacter = false;
+    _preResolvedNextCharacter = nullptr;
+
     // Spawn async tracks
     for (auto* conn : asyncConnections) {
         auto* targetBlock = _sceneGraph.getBlock(conn->toId);
         if (targetBlock) {
-            _asyncTracks.push_back(std::make_unique<AsyncTrack>(_sceneGraph, *this, *targetBlock));
-        }
-    }
-
-    // Notify follow-narrative tracks
-    for (auto& track : _asyncTracks) {
-        if (track->isFollowNarrative()) {
-            track->notifyMainAdvance();
+            spawnAsyncTrack(*targetBlock, -1);
         }
     }
 
@@ -460,6 +588,7 @@ void SceneHandleImpl::advanceToNextBlock(const BlueprintBlock& block, IBaseBlock
 }
 
 void SceneHandleImpl::endScene() {
+    _pendingWaits.clear();
     for (auto& track : _asyncTracks) track->cancel();
     _asyncTracks.clear();
     if (_previousCleanup) { _previousCleanup(); _previousCleanup = {}; }
@@ -544,10 +673,17 @@ ResolveCharacterFn SceneHandleImpl::getResolveCharacterFn() const {
 }
 
 std::unique_ptr<IBaseBlockContext> SceneHandleImpl::createContext(const BlueprintBlock& block) {
-    static const std::vector<BlockCharacter> emptyCharacters;
-    const auto& characters = block.metadata ? block.metadata->characters : emptyCharacters;
-    auto resolverFn = getResolveCharacterFn();
-    const BlockCharacter* resolvedCharacter = resolverFn ? resolverFn(characters) : nullptr;
+    const BlockCharacter* resolvedCharacter = nullptr;
+    if (_hasPreResolvedCharacter) {
+        resolvedCharacter = _preResolvedNextCharacter;
+        _hasPreResolvedCharacter = false;
+        _preResolvedNextCharacter = nullptr;
+    } else {
+        static const std::vector<BlockCharacter> emptyCharacters;
+        const auto& characters = block.metadata ? block.metadata->characters : emptyCharacters;
+        auto resolverFn = getResolveCharacterFn();
+        resolvedCharacter = resolverFn ? resolverFn(characters) : nullptr;
+    }
 
     if (auto* db = dynamic_cast<const DialogBlock*>(&block)) {
         return createDialogContext(*db, resolvedCharacter);

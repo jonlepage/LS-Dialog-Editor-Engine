@@ -188,7 +188,7 @@ handle.on_resolve_character(func(chars):
 ```
 :::
 
-解決されたキャラクターは、すべての handler 内で `context.character` として利用できます。
+解決されたキャラクターは、すべての block handler 内で `context.character` として、また [`onValidateNextBlock`](#onvalidatenextblock) では `nextContext.character` / `fromContext.character` として利用できます。
 
 ## Choice 履歴
 
@@ -227,19 +227,34 @@ engine.onSceneExit(({ scene, context }) => {
 
 ## onValidateNextBlock
 
-各 block 遷移をインターセプトして検証します：
+各 block 遷移をインターセプトして検証します。handler は次の block (`nextContext`) と前の block (`fromContext`) の**解決されたキャラクター**を受け取ります：
 
 ```ts
-engine.onValidateNextBlock(({ nextBlock, fromBlock, port }) => {
-  // Return { valid: false, reason: '...' } to block
+engine.onValidateNextBlock(({ nextBlock, fromBlock, nextContext, fromContext }) => {
   return { valid: true };
 });
 
 engine.onInvalidateBlock(({ scene, reason }) => {
   console.error('Invalid block:', reason);
-  scene.cancel(); // Stop the scene
+  scene.cancel();
 });
 ```
+
+### Character Gating
+
+`nextContext.character` を使用して、ゲームの状態に基づいて block の実行を制御します：
+
+```ts
+engine.onValidateNextBlock(({ nextContext }) => {
+  const { character } = nextContext;
+  if (!character) return { valid: false, reason: 'no_character' };
+  if (game.characterHasStatus(character, 'stunned'))
+    return { valid: false, reason: 'character_stunned' };
+  return { valid: true };
+});
+```
+
+`fromContext.character` を使用してキャラクター間の遷移を検証できます（例：関係チェック、クールダウン）。`fromContext` はシーンの最初の block では `null` です。
 
 ## onBeforeBlock
 

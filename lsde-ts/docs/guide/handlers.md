@@ -188,7 +188,7 @@ handle.on_resolve_character(func(chars):
 ```
 :::
 
-The resolved character is available as `context.character` in all handlers.
+The resolved character is available as `context.character` in all block handlers, and as `nextContext.character` / `fromContext.character` in [`onValidateNextBlock`](#onvalidatenextblock).
 
 ## Choice History
 
@@ -273,11 +273,11 @@ engine.on_scene_exit(func(args):
 
 ## onValidateNextBlock
 
-Intercepts each block transition for validation:
+Intercepts each block transition for validation. The handler receives the **resolved character** for both the upcoming block (`nextContext`) and the previously executed block (`fromContext`):
 
 ::: code-group
 ```ts [TypeScript]
-engine.onValidateNextBlock(({ nextBlock, fromBlock, port }) => {
+engine.onValidateNextBlock(({ nextBlock, fromBlock, nextContext, fromContext }) => {
   return { valid: true };
 });
 
@@ -288,6 +288,7 @@ engine.onInvalidateBlock(({ scene, reason }) => {
 ```
 ```csharp [C#]
 engine.OnValidateNextBlock(args => {
+    // args.NextContext.Character, args.FromContext?.Character
     return new ValidationResult { Valid = true };
 });
 
@@ -298,6 +299,7 @@ engine.OnInvalidateBlock(args => {
 ```
 ```cpp [C++]
 engine.onValidateNextBlock([](const auto& args) {
+    // args.nextContext.character, args.fromContext.character (check args.hasFromContext)
     return ValidationResult{true};
 });
 
@@ -308,6 +310,7 @@ engine.onInvalidateBlock([](auto* scene, const auto& reason) {
 ```
 ```gdscript [GDScript]
 engine.on_validate_next_block(func(args):
+    # args["nextContext"]["character"], args["fromContext"]["character"]
     return {"valid": true}
 )
 
@@ -317,6 +320,54 @@ engine.on_invalidate_block(func(args):
 )
 ```
 :::
+
+### Character Gating
+
+Use `nextContext.character` to control which blocks are allowed to execute based on game state:
+
+::: code-group
+```ts [TypeScript]
+// Block if the character is stunned
+engine.onValidateNextBlock(({ nextContext }) => {
+  const { character } = nextContext;
+  if (!character) return { valid: false, reason: 'no_character' };
+  if (game.characterHasStatus(character, 'stunned'))
+    return { valid: false, reason: 'character_stunned' };
+  return { valid: true };
+});
+```
+```csharp [C#]
+engine.OnValidateNextBlock(args => {
+    var character = args.NextContext.Character;
+    if (character == null)
+        return ValidationResult.Fail("no_character");
+    if (game.CharacterHasStatus(character, "stunned"))
+        return ValidationResult.Fail("character_stunned");
+    return ValidationResult.Ok();
+});
+```
+```cpp [C++]
+engine.onValidateNextBlock([&game](const auto& args) {
+    auto* character = args.nextContext.character;
+    if (!character) return ValidationResult{false, "no_character"};
+    if (game.characterHasStatus(character, "stunned"))
+        return ValidationResult{false, "character_stunned"};
+    return ValidationResult{true};
+});
+```
+```gdscript [GDScript]
+engine.on_validate_next_block(func(args):
+    var character = args["nextContext"]["character"]
+    if character == null:
+        return {"valid": false, "reason": "no_character"}
+    if game.character_has_status(character, "stunned"):
+        return {"valid": false, "reason": "character_stunned"}
+    return {"valid": true}
+)
+```
+:::
+
+Use `fromContext.character` to validate transitions between characters (e.g. relationship checks, cooldowns). `fromContext` is `null` for the first block of a scene.
 
 ## onBeforeBlock
 

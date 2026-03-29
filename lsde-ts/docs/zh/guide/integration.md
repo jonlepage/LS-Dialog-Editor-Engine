@@ -324,6 +324,7 @@ engine.on_action(func(args):
 | `onAction` | "执行这些效果" | 设置标记、给予物品、播放音效 |
 | `onResolveCharacter` | "哪个角色是活跃的？" | 队伍系统、战斗阵型 |
 | `setChoiceFilter` | "这个 condition 对可见性来说为真吗？" | 检查背包、标记、任务状态 |
+| `onValidateNextBlock` | "下一个 block — 允许执行吗？" | 角色门控、状态检查、转换规则 |
 | `onBeforeBlock` | "Block 即将执行" | 处理延迟、过渡、淡入效果 |
 
 ## 实用技巧

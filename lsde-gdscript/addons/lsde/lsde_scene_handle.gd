@@ -17,11 +17,16 @@ var _running: bool = false
 var _cancelled: bool = false
 var _current_block: Variant = null
 var _previous_block: Variant = null
+var _previous_character: Variant = null
+var _pre_resolved_next_character: Variant = null
+var _has_pre_resolved_character: bool = false
 var _visited: Array = []  # ordered list of visited UUIDs
 var _visited_set: Dictionary = {}  # fast lookup
 var _choice_history: Dictionary = {}  # {block_uuid: [choice_uuid, ...]}
 var _previous_cleanup: Callable
 var _async_tracks: Array = []
+var _next_track_id: int = 1
+var _pending_waits: Dictionary = {}  # {AsyncTrack: [block_uuids]}
 ## Scene-level character resolver override.
 var _resolve_character: Callable
 
@@ -68,6 +73,7 @@ func cancel() -> void:
 	if not _running:
 		return
 	_cancelled = true
+	_pending_waits.clear()
 	for track in _async_tracks:
 		track.cancel()
 	_async_tracks.clear()
@@ -128,6 +134,14 @@ func get_active_tracks() -> int:
 			count += 1
 	return count
 
+## Get detailed info for all currently running async tracks.
+func get_track_infos() -> Array:
+	var result: Array = []
+	for track in _async_tracks:
+		if track.is_running():
+			result.append(track.get_track_info())
+	return result
+
 ## Get the full choice history. Keys are block UUIDs, values are arrays of selected choice UUIDs.
 func get_choice_history() -> Dictionary:
 	return _choice_history
@@ -157,6 +171,44 @@ func _add_visited(uuid: String) -> void:
 	if not _visited_set.has(uuid):
 		_visited.append(uuid)
 		_visited_set[uuid] = true
+	if _pending_waits.size() > 0:
+		var satisfied: Array = []
+		for track in _pending_waits:
+			var required: Array = _pending_waits[track]
+			var all_visited: bool = true
+			for u in required:
+				if not _visited_set.has(u):
+					all_visited = false
+					break
+			if all_visited:
+				satisfied.append(track)
+		for track in satisfied:
+			_pending_waits.erase(track)
+			track.notify_wait_satisfied()
+
+## Spawn a new async track in the flat pool. Returns the assigned track ID.
+func _spawn_async_track(start_block: Dictionary, parent_track_id: int) -> int:
+	var track_id: int = _next_track_id
+	_next_track_id += 1
+	var track: AsyncTrack = AsyncTrack.new(_scene_graph, self, start_block, track_id, parent_track_id)
+	_async_tracks.append(track)
+	track.start()
+	return track_id
+
+## Cancel a specific track by ID (used for parent->child cascade).
+func _cancel_track(track_id: int) -> void:
+	for track in _async_tracks:
+		if track.id == track_id:
+			track.cancel()
+			return
+
+## Register a track as waiting for specific block UUIDs to be visited.
+func _register_wait_for_blocks(track: Variant, block_uuids: Array) -> void:
+	_pending_waits[track] = block_uuids
+
+## Check if a block UUID has been visited in this scene.
+func _is_visited(uuid: String) -> bool:
+	return _visited_set.has(uuid)
 
 func _remove_track(track: Variant) -> void:
 	var idx: int = _async_tracks.find(track)
@@ -196,8 +248,18 @@ func _process_block(block: Dictionary) -> void:
 
 	# Validate
 	if _global_registry.validate_next_block_handler.is_valid():
+		var next_chars: Array = []
+		var _meta: Variant = block.get("metadata")
+		if _meta is Dictionary:
+			next_chars = _meta.get("characters", [])
+		var resolver_fn: Callable = _get_resolve_character_fn()
+		var next_char: Variant = resolver_fn.call(next_chars) if resolver_fn.is_valid() else null
+		var from_ctx: Variant = {"character": _previous_character} if _previous_block != null else null
 		var result: Dictionary = _global_registry.validate_next_block_handler.call({
-			"nextBlock": block, "fromBlock": _previous_block, "port": null, "context": {}
+			"nextBlock": block, "fromBlock": _previous_block,
+			"nextContext": {"character": next_char},
+			"fromContext": from_ctx,
+			"port": null
 		})
 		if not result.get("valid", true):
 			if _global_registry.invalidate_block_handler.is_valid():
@@ -205,6 +267,8 @@ func _process_block(block: Dictionary) -> void:
 					"scene": self, "reason": result.get("reason", "validation_failed")
 				})
 			return
+		_has_pre_resolved_character = true
+		_pre_resolved_next_character = next_char
 
 	if _cancelled:
 		return
@@ -275,6 +339,7 @@ func _advance_to_next_block(block: Dictionary, context: Variant) -> void:
 		return
 
 	_previous_block = block
+	_previous_character = context.character if context != null else null
 
 	var connections: Array = _scene_graph.get_outgoing_connections(block.get("uuid", ""))
 
@@ -305,16 +370,16 @@ func _advance_to_next_block(block: Dictionary, context: Variant) -> void:
 		else:
 			async_connections.append(conn)
 
+	# Clear pre-resolved cache before spawning async tracks to prevent
+	# an async track from consuming the main track's cached character.
+	_has_pre_resolved_character = false
+	_pre_resolved_next_character = null
+
 	# Spawn async tracks
 	for conn in async_connections:
 		var target_block: Variant = _scene_graph.get_block(conn.get("toId", ""))
 		if target_block != null:
-			_async_tracks.append(AsyncTrack.new(_scene_graph, self, target_block))
-
-	# Notify follow-narrative tracks
-	for track in _async_tracks:
-		if track.is_follow_narrative():
-			track.notify_main_advance()
+			_spawn_async_track(target_block, -1)
 
 	# Continue main track
 	if main_connection != null:
@@ -330,6 +395,7 @@ func _advance_to_next_block(block: Dictionary, context: Variant) -> void:
 	_end_scene()
 
 func _end_scene() -> void:
+	_pending_waits.clear()
 	for track in _async_tracks:
 		track.cancel()
 	_async_tracks.clear()
@@ -402,12 +468,18 @@ func _get_resolve_character_fn() -> Callable:
 	return func(chars: Array) -> Variant: return chars[0] if chars.size() > 0 else null
 
 func _create_context(block: Dictionary) -> Variant:
-	var characters: Array = []
-	var metadata: Variant = block.get("metadata")
-	if metadata is Dictionary:
-		characters = metadata.get("characters", [])
-	var resolver_fn: Callable = _get_resolve_character_fn()
-	var resolved_character: Variant = resolver_fn.call(characters) if resolver_fn.is_valid() else null
+	var resolved_character: Variant = null
+	if _has_pre_resolved_character:
+		resolved_character = _pre_resolved_next_character
+		_has_pre_resolved_character = false
+		_pre_resolved_next_character = null
+	else:
+		var characters: Array = []
+		var metadata: Variant = block.get("metadata")
+		if metadata is Dictionary:
+			characters = metadata.get("characters", [])
+		var resolver_fn: Callable = _get_resolve_character_fn()
+		resolved_character = resolver_fn.call(characters) if resolver_fn.is_valid() else null
 
 	match block.get("type", ""):
 		"DIALOG":
@@ -438,21 +510,49 @@ static func _combine_cleanups(a: Callable, b: Callable) -> Callable:
 # ─── AsyncTrack ───────────────────────────────────────────────────────────
 
 ## Parallel execution branch spawned from async connections.
+## Supports sub-track spawning, waitForBlocks synchronization, and cancel cascade.
 class AsyncTrack extends RefCounted:
 	var _running: bool = true
 	var _current_block: Variant = null
 	var _previous_cleanup: Callable
-	var _follow_narrative: bool = false
 	var _pending_advance: Callable
+	var _child_track_ids: Array = []
+
+	## Unique auto-incremented identifier for this track within the scene.
+	var id: int
+	## ID of the parent track (-1 = spawned by main).
+	var parent_track_id: int
+	## UUID of the block that started this track.
+	var start_block_uuid: String
+
+	var _start_block: Dictionary
 	var _scene_graph: LsdeGraph.SceneGraph
 	var _parent: LsdeSceneHandle
 
-	func _init(scene_graph: LsdeGraph.SceneGraph, parent: LsdeSceneHandle, start_block: Dictionary) -> void:
+	func _init(scene_graph: LsdeGraph.SceneGraph, parent: LsdeSceneHandle, start_block: Dictionary, track_id: int, parent_id: int) -> void:
 		_scene_graph = scene_graph
 		_parent = parent
-		var np: Variant = start_block.get("nativeProperties")
-		_follow_narrative = np is Dictionary and np.get("followNarrative", false)
-		_process_block(start_block)
+		_start_block = start_block
+		id = track_id
+		parent_track_id = parent_id
+		start_block_uuid = start_block.get("uuid", "")
+
+	## Begin track execution. Must be called after the track is added to the pool.
+	func start() -> void:
+		var np: Variant = _start_block.get("nativeProperties")
+		if np is Dictionary:
+			var wait_blocks: Array = np.get("waitForBlocks", [])
+			if wait_blocks.size() > 0:
+				var all_visited: bool = true
+				for uuid in wait_blocks:
+					if not _parent._is_visited(uuid):
+						all_visited = false
+						break
+				if not all_visited:
+					_pending_advance = func() -> void: _process_block(_start_block)
+					_parent._register_wait_for_blocks(self, wait_blocks)
+					return
+		_process_block(_start_block)
 
 	func cancel() -> void:
 		if not _running:
@@ -463,23 +563,30 @@ class AsyncTrack extends RefCounted:
 			_previous_cleanup = Callable()
 		_current_block = null
 		_pending_advance = Callable()
+		for child_id in _child_track_ids:
+			_parent._cancel_track(child_id)
+		_child_track_ids.clear()
 
 	func is_running() -> bool:
 		return _running
 
-	func is_follow_narrative() -> bool:
-		return _follow_narrative
-
-	## Called by the main track when it advances. Triggers pending follow-narrative advance.
-	func notify_main_advance() -> void:
-		if not _running or not _follow_narrative:
+	## Called by the parent handle when all waitForBlocks UUIDs have been visited.
+	func notify_wait_satisfied() -> void:
+		if not _running or not _pending_advance.is_valid():
 			return
-		if _pending_advance.is_valid():
-			var advance: Callable = _pending_advance
-			_pending_advance = Callable()
-			advance.call()
-		else:
-			_force_advance()
+		var advance: Callable = _pending_advance
+		_pending_advance = Callable()
+		advance.call()
+
+	## Build a read-only snapshot of this track's state for the public API.
+	func get_track_info() -> Dictionary:
+		return {
+			"id": id,
+			"parentTrackId": parent_track_id,
+			"startBlockUuid": start_block_uuid,
+			"currentBlockUuid": _current_block.get("uuid", "") if _current_block != null else "",
+			"running": _running
+		}
 
 	func _process_block(block: Dictionary) -> void:
 		if not _running:
@@ -495,7 +602,17 @@ class AsyncTrack extends RefCounted:
 			return
 		_current_block = block
 		_parent._add_visited(block.get("uuid", ""))
-		_execute_block_handler(block)
+
+		# Fire onBeforeBlock — same gate pattern as SceneHandleImpl._process_block
+		var registry: LsdeHandlerRegistry = _parent._get_global_registry()
+		if registry.before_block_handler.is_valid():
+			registry.before_block_handler.call({
+				"block": block, "scene": _parent,
+				"context": {"nativeProperties": block.get("nativeProperties")},
+				"resolve": func() -> void: _execute_block_handler(block)
+			})
+		else:
+			_execute_block_handler(block)
 
 	func _execute_block_handler(block: Dictionary) -> void:
 		if not _running:
@@ -510,12 +627,11 @@ class AsyncTrack extends RefCounted:
 		var scene_handler: Callable = resolved["scene_handler"]
 		var global_handler: Callable = resolved["global_handler"]
 
-		# No handler → advance silently (handlers are validated at start())
 		if not scene_handler.is_valid() and not global_handler.is_valid():
 			_advance_to_next_block(block, context)
 			return
 
-		var state: Array = [false, true]  # [next_called, sync_phase]
+		var state: Array = [false, true, false]  # [next_called, sync_phase, has_pending]
 		var scene_cleanup: Callable
 		var global_cleanup: Callable
 
@@ -523,9 +639,23 @@ class AsyncTrack extends RefCounted:
 			if state[0]:
 				return
 			state[0] = true
-			if _follow_narrative:
-				_pending_advance = func() -> void: _advance_to_next_block(block, context)
-				return
+
+			# waitForBlocks: defer advance until all required blocks are visited
+			var np: Variant = block.get("nativeProperties")
+			if np is Dictionary:
+				var wait_blocks: Array = np.get("waitForBlocks", [])
+				if wait_blocks.size() > 0:
+					var all_visited: bool = true
+					for uuid in wait_blocks:
+						if not _parent._is_visited(uuid):
+							all_visited = false
+							break
+					if not all_visited:
+						_pending_advance = func() -> void: _advance_to_next_block(block, context)
+						_parent._register_wait_for_blocks(self, wait_blocks)
+						state[2] = true  # has_pending
+						return
+
 			if state[1]:
 				return
 			_advance_to_next_block(block, context)
@@ -542,7 +672,7 @@ class AsyncTrack extends RefCounted:
 		_previous_cleanup = LsdeSceneHandle._combine_cleanups(scene_cleanup, global_cleanup)
 
 		state[1] = false
-		if state[0] and not _follow_narrative:
+		if state[0] and not state[2]:  # next_called and not has_pending
 			_advance_to_next_block(block, context)
 
 	func _advance_to_next_block(block: Dictionary, context: Variant) -> void:
@@ -560,9 +690,30 @@ class AsyncTrack extends RefCounted:
 			input["characterPortIndex"] = context.character_port_index
 		var resolved_conns: Array = LsdePortResolver.resolve_port(input)
 
-		if resolved_conns.size() > 0:
-			var conn: Dictionary = resolved_conns[0]
-			var next_block: Variant = _scene_graph.get_block(conn.get("toId", ""))
+		# Separate main (first non-async) from async connections
+		var main_connection: Variant = null
+		var async_connections: Array = []
+
+		for conn in resolved_conns:
+			var target_block: Variant = _scene_graph.get_block(conn.get("toId", ""))
+			if target_block == null:
+				continue
+			var tnp: Variant = target_block.get("nativeProperties")
+			var is_async: bool = tnp is Dictionary and tnp.get("isAsync", false)
+			if main_connection == null and not is_async:
+				main_connection = conn
+			else:
+				async_connections.append(conn)
+
+		# Spawn sub-tracks
+		for conn in async_connections:
+			var target_block: Variant = _scene_graph.get_block(conn.get("toId", ""))
+			if target_block != null:
+				var track_id: int = _parent._spawn_async_track(target_block, self.id)
+				_child_track_ids.append(track_id)
+
+		if main_connection != null:
+			var next_block: Variant = _scene_graph.get_block(main_connection.get("toId", ""))
 			if next_block != null:
 				var cleanup_to_run: Callable = _previous_cleanup
 				_previous_cleanup = Callable()
@@ -572,19 +723,11 @@ class AsyncTrack extends RefCounted:
 				return
 		_end_track()
 
-	func _force_advance() -> void:
-		if not _running or _current_block == null:
-			return
-		var block: Dictionary = _current_block
-		if _previous_cleanup.is_valid():
-			_previous_cleanup.call()
-			_previous_cleanup = Callable()
-		_advance_to_next_block(block, null)
-
 	func _end_track() -> void:
 		if _previous_cleanup.is_valid():
 			_previous_cleanup.call()
 			_previous_cleanup = Callable()
+		# Child tracks survive — only explicit cancel() cascades
 		_running = false
 		_current_block = null
 		_parent._remove_track(self)
