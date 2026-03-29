@@ -253,19 +253,6 @@ All blocks share these base fields:
 | `label` | `string?` | Human-readable name |
 | `properties` | `BlockProperty[]` | Key-value properties |
 | `userProperties` | `Record?` | Free-form user properties |
-| `nativeProperties` | `NativeProperties?` | Execution properties (async, delay, etc.) |
+| `nativeProperties` | `NativeProperties?` | Execution properties — see [Lifecycle & Validation](lifecycle#nativeproperties) |
 | `metadata` | `BlockMetadata?` | Display metadata (characters, tags, color) |
 | `isStartBlock` | `boolean?` | Marks the entry block |
-
-### NativeProperties
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `isAsync` | `boolean?` | Execute on a parallel async track |
-| `delay` | `number?` | Delay before execution (consumed by `onBeforeBlock`) |
-| `timeout` | `number?` | Execution timeout |
-| `portPerCharacter` | `boolean?` | One output port per character in metadata |
-| `skipIfMissingActor` | `boolean?` | Skip block if referenced actor is absent |
-| `debug` | `boolean?` | Debug flag for editor use |
-| `waitForBlocks` | `string[]?` | Block UUIDs that must be visited before this block can progress |
-| `waitInput` | `boolean?` | Passive flag for explicit player input control |

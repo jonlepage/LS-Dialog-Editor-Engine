@@ -698,22 +698,9 @@ All blocks share these base fields:
 | `label` | `string?` | Human-readable name |
 | `properties` | `BlockProperty[]` | Key-value properties |
 | `userProperties` | `Record?` | Free-form user properties |
-| `nativeProperties` | `NativeProperties?` | Execution properties (async, delay, etc.) |
+| `nativeProperties` | `NativeProperties?` | Execution properties — see [Lifecycle & Validation](lifecycle#nativeproperties) |
 | `metadata` | `BlockMetadata?` | Display metadata (characters, tags, color) |
 | `isStartBlock` | `boolean?` | Marks the entry block |
-
-### NativeProperties
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `isAsync` | `boolean?` | Execute on a parallel async track |
-| `delay` | `number?` | Delay before execution (consumed by `onBeforeBlock`) |
-| `timeout` | `number?` | Execution timeout |
-| `portPerCharacter` | `boolean?` | One output port per character in metadata |
-| `skipIfMissingActor` | `boolean?` | Skip block if referenced actor is absent |
-| `debug` | `boolean?` | Debug flag for editor use |
-| `waitForBlocks` | `string[]?` | Block UUIDs that must be visited before this block can progress |
-| `waitInput` | `boolean?` | Passive flag for explicit player input control |
 
 ================================================================================
 
@@ -1000,7 +987,7 @@ The `scene` parameter enables automatic `choice:` condition resolution. Without 
 
 ================================================================================
 
-# Handlers & Lifecycle
+# Handlers
 
 ## Required Handlers
 
@@ -1186,7 +1173,7 @@ handle.on_resolve_character(func(chars):
 )
 ```
 
-The resolved character is available as `context.character` in all handlers.
+The resolved character is available as `context.character` in all block handlers, and as `nextContext.character` / `fromContext.character` in [`onValidateNextBlock`](lifecycle#onvalidatenextblock).
 
 ## Choice History
 
@@ -1215,185 +1202,6 @@ handle->onExit([](auto* scene, auto*) {
 handle.on_exit(func(args):
     var history = args["scene"].get_choice_history()
     var picks = args["scene"].get_choice("block-uuid-123") # Array or null
-)
-```
-
-## Full Lifecycle
-
-### Execution Order for Each Block
-
-1. `onValidateNextBlock` — Validation before execution
-2. **Previous block cleanup** — The cleanup function returned by the *previous* block's handler
-3. `onBeforeBlock` — Pre-processing (must call `resolve()` to continue)
-4. Type handler (Tier 2 then Tier 1)
-
-### Scene Events
-
-
-```ts [TypeScript]
-engine.onSceneEnter(({ scene, context }) => {
-  // Called when handle.start() is executed
-});
-
-engine.onSceneExit(({ scene, context }) => {
-  // Called when the scene ends (naturally or via cancel)
-});
-```
-```csharp [C#]
-engine.OnSceneEnter(args => {
-    // Called when handle.Start() is executed
-});
-
-engine.OnSceneExit(args => {
-    // Called when the scene ends (naturally or via cancel)
-});
-```
-```cpp [C++]
-engine.onSceneEnter([](auto* scene, auto*) {
-    // Called when handle->start() is executed
-});
-
-engine.onSceneExit([](auto* scene, auto*) {
-    // Called when the scene ends (naturally or via cancel)
-});
-```
-```gdscript [GDScript]
-engine.on_scene_enter(func(args):
-    pass # Called when handle.start() is executed
-)
-
-engine.on_scene_exit(func(args):
-    pass # Called when the scene ends (naturally or via cancel)
-)
-```
-
-## onValidateNextBlock
-
-Intercepts each block transition for validation:
-
-
-```ts [TypeScript]
-engine.onValidateNextBlock(({ nextBlock, fromBlock, port }) => {
-  return { valid: true };
-});
-
-engine.onInvalidateBlock(({ scene, reason }) => {
-  console.error('Invalid block:', reason);
-  scene.cancel();
-});
-```
-```csharp [C#]
-engine.OnValidateNextBlock(args => {
-    return new ValidationResult { Valid = true };
-});
-
-engine.OnInvalidateBlock(args => {
-    Console.Error.WriteLine($"Invalid block: {args.Reason}");
-    args.Scene.Cancel();
-});
-```
-```cpp [C++]
-engine.onValidateNextBlock([](const auto& args) {
-    return ValidationResult{true};
-});
-
-engine.onInvalidateBlock([](auto* scene, const auto& reason) {
-    std::cerr << "Invalid block: " << reason << "\n";
-    scene->cancel();
-});
-```
-```gdscript [GDScript]
-engine.on_validate_next_block(func(args):
-    return {"valid": true}
-)
-
-engine.on_invalidate_block(func(args):
-    printerr("Invalid block: %s" % args["reason"])
-    args["scene"].cancel()
-)
-```
-
-## onBeforeBlock
-
-Called before each block. **Must call `resolve()`** to continue:
-
-
-```ts [TypeScript]
-engine.onBeforeBlock(({ block, resolve }) => {
-  const delay = block.nativeProperties?.delay;
-  if (delay) {
-    setTimeout(resolve, delay * 1000);
-  } else {
-    resolve();
-  }
-});
-```
-```csharp [C#]
-engine.OnBeforeBlock(args => {
-    var delay = args.Block.NativeProperties?.Delay;
-    if (delay.HasValue)
-        Task.Delay((int)(delay.Value * 1000)).ContinueWith(_ => args.Resolve());
-    else
-        args.Resolve();
-    return null;
-});
-```
-```cpp [C++]
-engine.onBeforeBlock([](auto* block, auto resolve) {
-    auto delay = block->nativeProperties ? block->nativeProperties->delay : std::nullopt;
-    if (delay.has_value()) {
-        scheduleTimer(delay.value() * 1000, [resolve]() { resolve(); });
-    } else {
-        resolve();
-    }
-});
-```
-```gdscript [GDScript]
-engine.on_before_block(func(args):
-    var delay = args["block"].get("nativeProperties", {}).get("delay", 0)
-    if delay > 0:
-        await get_tree().create_timer(delay).timeout
-    args["resolve"].call()
-)
-```
-
-## Cleanup Functions
-
-A handler can return a cleanup function, called when leaving the block:
-
-
-```ts [TypeScript]
-engine.onDialog(({ block, next }) => {
-  const element = showDialogUI(block);
-  next();
-
-  return () => {
-    element.remove(); // Called when the next block takes over
-  };
-});
-```
-```csharp [C#]
-engine.OnDialog(args => {
-    var element = ShowDialogUI(args.Block);
-    args.Next();
-
-    return () => element.SetActive(false);
-});
-```
-```cpp [C++]
-engine.onDialog([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
-    auto* element = showDialogUI(block);
-    next();
-
-    return [element]() { element->remove(); };
-});
-```
-```gdscript [GDScript]
-engine.on_dialog(func(args):
-    var element = show_dialog_ui(args["block"])
-    args["next"].call()
-
-    return func(): element.queue_free()
 )
 ```
 
@@ -1430,184 +1238,21 @@ handle.on_block("block-uuid-123", func(args):
 )
 ```
 
-## Error Boundaries
+## Visual Reference
 
-Every handler call is wrapped in a try/catch. If a handler throws:
+### Two-Tier Handler Dispatch
 
-- The error does not corrupt engine state
-- For the main track: the scene ends cleanly
-- For async tracks: only the affected track is terminated — other tracks and the main flow continue
-
-This is cross-language compatible (try/catch in TS, C#, C++, GDScript).
-
-## cancel()
-
-Calling `scene.cancel()` triggers this sequence:
-
-1. All **async tracks** are cancelled
-2. The **cleanup function** of the current block is executed
-3. The `onSceneExit` handler is called
-4. The scene is marked as finished
-
-
-```ts [TypeScript]
-engine.onInvalidateBlock(({ scene, reason }) => {
-  console.error('Validation failed:', reason);
-  scene.cancel();
-});
+```mermaid
+flowchart TD
+    A[block dispatched] --> B{"onBlock(uuid)?\nblock-specific override"}
+    B -- found --> Z[call handler]
+    B -- not found --> C{"Tier 2 (scene)\nhandle.onDialog() etc."}
+    C -- registered --> D{preventGlobalHandler?}
+    C -- not registered --> E
+    D -- yes --> Z
+    D -- no --> E["Tier 1 (global)\nengine.onDialog() etc."]
+    E --> Z
 ```
-```csharp [C#]
-engine.OnInvalidateBlock(args => {
-    Console.Error.WriteLine($"Validation failed: {args.Reason}");
-    args.Scene.Cancel();
-});
-```
-```cpp [C++]
-engine.onInvalidateBlock([](auto* scene, const auto& reason) {
-    std::cerr << "Validation failed: " << reason << "\n";
-    scene->cancel();
-});
-```
-```gdscript [GDScript]
-engine.on_invalidate_block(func(args):
-    printerr("Validation failed: %s" % args["reason"])
-    args["scene"].cancel()
-)
-```
-
-## Async Tracks
-
-When a block has `nativeProperties.isAsync = true`, the engine creates a **parallel track** that runs independently of the main flow.
-
-### How Tracks are Created
-
-During port resolution, if multiple outgoing connections exist:
-- The **first non-async connection** becomes the continuation of the current flow
-- The **other connections** (to blocks with `isAsync`) become new parallel tracks
-
-This applies to both the main track **and** async tracks — an async track can spawn sub-tracks from its own outgoing async connections, creating a hierarchy of parallel execution.
-
-### Track Lifecycle
-
-- `onBeforeBlock` is called for **all blocks** (main and async tracks)
-- Async tracks separate outgoing connections into main vs async, just like the main track
-- Tracks are automatically cancelled when the scene ends or `cancel()` is called
-- When a track finishes naturally (no more connections), its sub-tracks **continue to live** independently
-- When a track is explicitly cancelled (`cancel()`), the cancellation **cascades** to all child tracks
-
-### waitForBlocks — Track Synchronization
-
-Use `nativeProperties.waitForBlocks` to synchronize parallel tracks. It accepts an array of block UUIDs that must be visited before the block can proceed:
-
-- **On the start block**: The entire track waits before even beginning execution. `onBeforeBlock` is not called until all required blocks are visited.
-- **On any other block**: When the handler calls `next()`, the advance is deferred until the condition is met.
-
-The full execution sequence with `delay` and `waitForBlocks`:
-
-```
-spawn → waitForBlocks gate → onBeforeBlock (delay) → handler → next()
-```
-
-This replaces the previous `followNarrative` approach with a more flexible, declarative model. Instead of blindly syncing with the main track's pace, each block declares exactly which blocks it depends on.
-
-### waitInput — Player Input Flag
-
-`nativeProperties.waitInput` is a **passive flag** — the engine exposes it but does not interpret it. Your game handler reads it to decide whether to wait for explicit player input (e.g., a second controller, a custom event, or an NPC auto-selection).
-
-### TrackInfo API — Observability
-
-Use `scene.getTrackInfos()` to inspect running async tracks. Returns a read-only snapshot of each track's state:
-
-```ts
-const tracks = scene.getTrackInfos();
-for (const track of tracks) {
-  console.log(`Track ${track.id} (parent: ${track.parentTrackId}) at block ${track.currentBlockUuid}`);
-}
-```
-
-Each `TrackInfo` contains: `id`, `parentTrackId`, `startBlockUuid`, `currentBlockUuid`, `running`. Use this for debug overlays, play-mode renderers, or validation.
-
-### What Works in Async Tracks (and What Doesn't)
-
-Async tracks are great for things that happen *alongside* the main conversation — ambient effects, parallel animations, companion reactions. But they have limits.
-
-**DO — parallel content:**
-| Use case | Why it works |
-|---|---|
-| NPC ambient dialogue ("barks") | Dialog blocks on an async track — NPCs comment, react, or banter while the main conversation continues |
-| Character reactions synced to events | Use `waitForBlocks` to trigger a reaction when a specific block is reached |
-| Play ambient sounds or music | Action block, no player interaction needed |
-| Trigger camera movements | Action block, runs in parallel |
-| Delayed effects | Combine `waitForBlocks` + `delay` for precise timing |
-
-**DON'T — player interaction or game logic branching:**
-| Use case | Why it breaks |
-|---|---|
-| CHOICE block in async track | The player is already interacting with the main track — who answers the async choice? |
-| Critical game state changes | If the async track is cancelled (scene ends), the action never executes |
-
-> WARNING:
-A CHOICE block in an async track implies the player should make a selection while already engaged with the main dialogue. The only valid scenario is an AI-driven "choice" (e.g., a companion NPC auto-selects based on personality). If an async track hits a CHOICE block without a scene-level handler that auto-selects, the flow will stall or end silently.
-
-### Multiple Scenes in Parallel
-
-The engine supports running multiple scenes simultaneously. Each `SceneHandle` has its own state, visited blocks, and async tracks. Global handlers (Tier 1) are shared — use the `scene` argument to know which scene is calling:
-
-
-```ts [TypeScript]
-engine.onDialog(({ scene, block, context, next }) => {
-  if (scene === mainDialogue) showMainUI(block);
-  else if (scene === tutorialOverlay) showTutorialBubble(block);
-  next();
-});
-
-const mainDialogue = engine.scene('main-quest');
-const tutorialOverlay = engine.scene('tutorial-hints');
-mainDialogue.start();
-tutorialOverlay.start();
-```
-```csharp [C#]
-engine.OnDialog(args => {
-    if (args.Scene == mainDialogue) ShowMainUI(args.Block);
-    else if (args.Scene == tutorialOverlay) ShowTutorialBubble(args.Block);
-    args.Next();
-    return null;
-});
-
-var mainDialogue = engine.Scene("main-quest");
-var tutorialOverlay = engine.Scene("tutorial-hints");
-mainDialogue.Start();
-tutorialOverlay.Start();
-```
-```cpp [C++]
-engine.onDialog([&](auto* scene, auto* block, auto*, auto next) -> CleanupFn {
-    if (scene == mainDialogue) showMainUI(block);
-    else if (scene == tutorialOverlay) showTutorialBubble(block);
-    next();
-    return {};
-});
-
-auto mainDialogue = engine.scene("main-quest");
-auto tutorialOverlay = engine.scene("tutorial-hints");
-mainDialogue->start();
-tutorialOverlay->start();
-```
-```gdscript [GDScript]
-engine.on_dialog(func(args):
-    if args["scene"] == main_dialogue: show_main_ui(args["block"])
-    elif args["scene"] == tutorial_overlay: show_tutorial_bubble(args["block"])
-    args["next"].call()
-    return Callable()
-)
-
-var main_dialogue = engine.scene("main-quest")
-var tutorial_overlay = engine.scene("tutorial-hints")
-main_dialogue.start()
-tutorial_overlay.start()
-```
-
-> TIP:
-For many concurrent scenes, consider registering scene-level (Tier 2) handlers on each handle instead of routing in the global handler. Cleaner separation, no `if/else` chains.
 
 ================================================================================
 
@@ -1932,6 +1577,7 @@ engine.on_action(func(args):
 | `onAction` | "Execute these effects" | Set flags, give items, play sounds |
 | `onResolveCharacter` | "Which character is active?" | Party system, battle formation |
 | `setChoiceFilter` | "Is this condition true for visibility?" | Check inventory, flags, quest state |
+| `onValidateNextBlock` | "This block is next — is it allowed?" | Character gating, status checks, transition rules |
 | `onBeforeBlock` | "Block is about to execute" | Handle delays, transitions, fade-ins |
 
 ## Pro Tips

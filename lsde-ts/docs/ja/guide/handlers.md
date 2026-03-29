@@ -1,4 +1,4 @@
-# Handler とライフサイクル
+# ハンドラー
 
 ## 必須 Handler
 
@@ -188,238 +188,85 @@ handle.on_resolve_character(func(chars):
 ```
 :::
 
-解決されたキャラクターは、すべての block handler 内で `context.character` として、また [`onValidateNextBlock`](#onvalidatenextblock) では `nextContext.character` / `fromContext.character` として利用できます。
+解決されたキャラクターは、すべての block handler 内で `context.character` として、また [`onValidateNextBlock`](lifecycle#onvalidatenextblock) では `nextContext.character` / `fromContext.character` として利用できます。
 
 ## Choice 履歴
 
 engine は scene 中のプレイヤーのすべての choice を追跡します。この履歴は `choice:` condition の評価に内部的に使用され、ホストアプリケーション側のコードからもアクセスできます：
 
-```ts
+::: code-group
+```ts [TypeScript]
 handle.onExit(({ scene }) => {
-  // Map of blockUuid → [choiceUuid, ...]
-  const history = scene.getChoiceHistory();
-
-  // Get choices for a specific block
+  const history = scene.getChoiceHistory();       // Map of blockUuid → [choiceUuid, ...]
   const picks = scene.getChoice('block-uuid-123'); // string[] | undefined
 });
 ```
-
-## 完全なライフサイクル
-
-### 各 Block の実行順序
-
-1. `onValidateNextBlock` — 実行前の検証
-2. **前の block のクリーンアップ** — *前の* block の handler が返したクリーンアップ関数
-3. `onBeforeBlock` — 前処理（続行するには `resolve()` を呼び出す必要あり）
-4. タイプ handler（Tier 2、次に Tier 1）
-
-### Scene イベント
-
-```ts
-engine.onSceneEnter(({ scene, context }) => {
-  // Called when handle.start() is executed
-});
-
-engine.onSceneExit(({ scene, context }) => {
-  // Called when the scene ends (naturally or via cancel)
+```csharp [C#]
+handle.OnExit(args => {
+    var history = args.Scene.GetChoiceHistory();
+    var picks = args.Scene.GetChoice("block-uuid-123"); // List<string>?
 });
 ```
-
-## onValidateNextBlock
-
-各 block 遷移をインターセプトして検証します。handler は次の block (`nextContext`) と前の block (`fromContext`) の**解決されたキャラクター**を受け取ります：
-
-```ts
-engine.onValidateNextBlock(({ nextBlock, fromBlock, nextContext, fromContext }) => {
-  return { valid: true };
-});
-
-engine.onInvalidateBlock(({ scene, reason }) => {
-  console.error('Invalid block:', reason);
-  scene.cancel();
+```cpp [C++]
+handle->onExit([](auto* scene, auto*) {
+    auto history = scene->getChoiceHistory();
+    auto picks = scene->getChoice("block-uuid-123"); // std::vector<std::string>*
 });
 ```
-
-### Character Gating
-
-`nextContext.character` を使用して、ゲームの状態に基づいて block の実行を制御します：
-
-```ts
-engine.onValidateNextBlock(({ nextContext }) => {
-  const { character } = nextContext;
-  if (!character) return { valid: false, reason: 'no_character' };
-  if (game.characterHasStatus(character, 'stunned'))
-    return { valid: false, reason: 'character_stunned' };
-  return { valid: true };
-});
+```gdscript [GDScript]
+handle.on_exit(func(args):
+    var history = args["scene"].get_choice_history()
+    var picks = args["scene"].get_choice("block-uuid-123") # Array or null
+)
 ```
-
-`fromContext.character` を使用してキャラクター間の遷移を検証できます（例：関係チェック、クールダウン）。`fromContext` はシーンの最初の block では `null` です。
-
-## onBeforeBlock
-
-各 block の前に呼び出されます。続行するには**必ず `resolve()` を呼び出す**必要があります：
-
-```ts
-engine.onBeforeBlock(({ block, resolve }) => {
-  const delay = block.nativeProperties?.delay;
-  if (delay) {
-    setTimeout(resolve, delay * 1000);
-  } else {
-    resolve();
-  }
-});
-```
-
-## クリーンアップ関数
-
-handler はクリーンアップ関数を返すことができ、block から離れる際に呼び出されます：
-
-```ts
-engine.onDialog(({ block, next }) => {
-  const element = showDialogUI(block);
-  next();
-
-  return () => {
-    // Called when the next block takes over
-    element.remove();
-  };
-});
-```
+:::
 
 ## Block オーバーライド
 
 `SceneHandle` は UUID で特定の block をオーバーライドすることもできます：
 
-```ts
+::: code-group
+```ts [TypeScript]
 const handle = engine.scene(sceneId);
 handle.onBlock('block-uuid-123', ({ block, context, next }) => {
-  // Handler specific to this block only
   next();
 });
 ```
-
-## エラー境界
-
-すべての handler 呼び出しは try/catch でラップされています。handler がスローした場合：
-
-- エラーは engine のステートを破壊しません
-- メイントラックの場合：scene はクリーンに終了します
-- async トラックの場合：影響を受けたトラックのみが終了し、他のトラックとメインフローは継続します
-
-これはクロス言語互換です（TS、C#、C++、GDScript の try/catch）。
-
-## cancel()
-
-`scene.cancel()` を呼び出すと、以下のシーケンスがトリガーされます：
-
-1. すべての **async トラック** がキャンセルされます
-2. 現在の block の**クリーンアップ関数**が実行されます
-3. `onSceneExit` handler が呼び出されます
-4. scene が完了としてマークされます
-
-```ts
-engine.onInvalidateBlock(({ scene, reason }) => {
-  console.error('Validation failed:', reason);
-  scene.cancel(); // Cleanup + onSceneExit are called
+```csharp [C#]
+var handle = engine.Scene(sceneId);
+handle.OnBlock("block-uuid-123", args => {
+    args.Next();
+    return null;
 });
 ```
-
-## Async トラック
-
-block に `nativeProperties.isAsync = true` が設定されている場合、engine はメインフローとは独立して動作する**並列トラック**を作成します。
-
-### トラックの作成方法
-
-port 解決中に複数の送出 connection が存在する場合：
-- **最初の非 async connection** が現在のフローの継続となります
-- **その他の connection**（`isAsync` を持つ block へ）が新しい並列トラックになります
-
-これはメイントラック**と** async トラックの両方に適用されます — async トラックは独自の async connection からサブトラックを spawn でき、並列実行の階層を作成できます。
-
-### トラックのライフサイクル
-
-- `onBeforeBlock` は**すべての block** で呼び出されます（メインおよび async トラック）
-- async トラックはメイントラックと同様に、送出 connection をメイン vs async に分離します
-- トラックは scene 終了時または `cancel()` 呼び出し時に自動的にキャンセルされます
-- トラックが自然に終了した場合（connection がなくなった）、サブトラックは**独立して存続**します
-- トラックが明示的にキャンセルされた場合（`cancel()`）、キャンセルはすべての子トラックに**カスケード**します
-
-### waitForBlocks — トラック同期
-
-`nativeProperties.waitForBlocks` を使用して並列トラックを同期します。block が進行する前に訪問済みでなければならない block UUID の配列を受け入れます：
-
-- **開始 block の場合**：トラック全体が実行開始前に待機します。必要な block がすべて訪問されるまで `onBeforeBlock` は呼び出されません。
-- **その他の block の場合**：handler が `next()` を呼び出すと、条件が満たされるまで進行が延期されます。
-
-`delay` と `waitForBlocks` を使用した完全な実行シーケンス：
-
-```
-spawn → waitForBlocks ゲート → onBeforeBlock (delay) → handler → next()
-```
-
-### waitInput — プレイヤー入力フラグ
-
-`nativeProperties.waitInput` は**パッシブフラグ**です — engine はそれを公開しますが解釈しません。ゲーム handler がそれを読み取り、明示的なプレイヤー入力を待つかどうかを決定します。
-
-### TrackInfo API — 可観測性
-
-`scene.getTrackInfos()` を使用して実行中の async トラックを検査します。各トラックの状態の読み取り専用スナップショットを返します：
-
-```ts
-const tracks = scene.getTrackInfos();
-for (const track of tracks) {
-  console.log(`Track ${track.id} (parent: ${track.parentTrackId}) at block ${track.currentBlockUuid}`);
-}
-```
-
-各 `TrackInfo` には `id`、`parentTrackId`、`startBlockUuid`、`currentBlockUuid`、`running` が含まれます。
-
-### Async トラックで動作するもの（と動作しないもの）
-
-async トラックは、メインの会話と*並行して*起こること — 環境エフェクト、並列アニメーション、仲間の反応 — に最適です。ただし制限があります。
-
-**推奨 — 並列コンテンツ：**
-| ユースケース | 動作する理由 |
-|---|---|
-| NPC の環境セリフ（「バーク」） | async トラック上の dialog block — NPC がメインの会話の進行中にコメント、反応、掛け合いを行います |
-| イベントに同期したキャラクター反応 | `waitForBlocks` を使用して特定の block に到達したときに反応をトリガー |
-| 環境音やBGMの再生 | action block、プレイヤーのインタラクション不要 |
-| カメラ移動のトリガー | action block、並列実行 |
-| 精密なタイミングのエフェクト | `waitForBlocks` + `delay` を組み合わせて精密なタイミングを実現 |
-
-**非推奨 — プレイヤーインタラクションやゲームロジック分岐：**
-| ユースケース | 問題となる理由 |
-|---|---|
-| async トラック内の CHOICE block | プレイヤーは既にメイントラックとインタラクション中 — 誰が async の choice に応答するのか？ |
-| 重要なゲームステート変更 | async トラックがキャンセルされた場合（scene 終了）、action は実行されません |
-
-::: warning async トラック内の choice
-async トラック内の CHOICE block は、プレイヤーがメインの対話に既に参加している間に選択を行うべきことを意味します。有効なシナリオは AI 駆動の「choice」（例：仲間の NPC がパーソナリティに基づいて自動選択する）のみです。async トラックが自動選択する scene レベル handler なしで CHOICE block に到達した場合、フローは停止するか無言で終了します。
-:::
-
-### 複数の Scene の並列実行
-
-engine は複数の scene の同時実行をサポートしています。各 `SceneHandle` は独自のステート、訪問済み block、async トラックを持ちます。グローバル handler（Tier 1）は共有されます — どの scene が呼び出しているかは `scene` 引数で判別できます：
-
-```ts
-engine.onDialog(({ scene, block, context, next }) => {
-  // scene tells you WHO is calling
-  if (scene === mainDialogue) {
-    showMainUI(block);
-  } else if (scene === tutorialOverlay) {
-    showTutorialBubble(block);
-  }
-  next();
+```cpp [C++]
+auto handle = engine.scene(sceneId);
+handle->onBlock("block-uuid-123", [](auto*, auto*, auto*, auto next) -> CleanupFn {
+    next();
+    return {};
 });
-
-// Start two scenes at once
-const mainDialogue = engine.scene('main-quest');
-const tutorialOverlay = engine.scene('tutorial-hints');
-mainDialogue.start();
-tutorialOverlay.start();
 ```
-
-::: tip Scene ごとのルーティング
-並行する scene が多い場合は、グローバル handler 内でルーティングする代わりに、各ハンドルに scene レベル（Tier 2）の handler を登録することを検討してください。よりクリーンな分離が実現でき、`if/else` チェーンが不要になります。
+```gdscript [GDScript]
+var handle = engine.scene(scene_id)
+handle.on_block("block-uuid-123", func(args):
+    args["next"].call()
+    return Callable()
+)
+```
 :::
+
+## Visual Reference
+
+### Two-Tier Handler Dispatch
+
+```mermaid
+flowchart TD
+    A[block dispatched] --> B{"onBlock(uuid)?\nblock-specific override"}
+    B -- found --> Z[call handler]
+    B -- not found --> C{"Tier 2 (scene)\nhandle.onDialog() etc."}
+    C -- registered --> D{preventGlobalHandler?}
+    C -- not registered --> E
+    D -- yes --> Z
+    D -- no --> E["Tier 1 (global)\nengine.onDialog() etc."]
+    E --> Z
+```

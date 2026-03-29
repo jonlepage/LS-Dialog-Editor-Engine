@@ -4,6 +4,7 @@ declare const game: any;
 declare const GAME_CHARACTER_ID: any;
 import { DialogueEngine, LsdeUtils } from "./index.js";
 import type { BlueprintExport, RuntimeChoiceItem } from "./index.js";
+// @ts-ignore — JSON outside rootDir; file excluded from build
 import blueprintJson from "../../blueprints/blueprint.json";
 
 const testData = blueprintJson as unknown as BlueprintExport;

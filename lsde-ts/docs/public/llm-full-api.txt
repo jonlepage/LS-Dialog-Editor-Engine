@@ -55,7 +55,9 @@ Source: lsde-ts/docs/api-ref/**/*.md
 - [SceneHandle](interfaces/SceneHandle.md)
 - [SceneLifecycleArgs](interfaces/SceneLifecycleArgs.md)
 - [SignatureParam](interfaces/SignatureParam.md)
+- [TrackInfo](interfaces/TrackInfo.md)
 - [ValidateNextBlockArgs](interfaces/ValidateNextBlockArgs.md)
+- [ValidateNextBlockContext](interfaces/ValidateNextBlockContext.md)
 - [ValidationResult](interfaces/ValidationResult.md)
 
 ## Type Aliases
@@ -79,7 +81,7 @@ Source: lsde-ts/docs/api-ref/**/*.md
 
 # Class: DialogueEngine
 
-Defined in: [engine.ts:25](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/engine.ts#L25)
+Defined in: [engine.ts:25](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/engine.ts#L25)
 
 LSDE Dialog Engine — callback-driven graph dispatcher.
 
@@ -103,7 +105,7 @@ LSDE Dialog Engine — callback-driven graph dispatcher.
 
 > **getActiveScenes**(): [`SceneHandle`](../interfaces/SceneHandle.md)[]
 
-Defined in: [engine.ts:140](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/engine.ts#L140)
+Defined in: [engine.ts:140](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/engine.ts#L140)
 
 Get all currently active scene handles.
 
@@ -121,7 +123,7 @@ Get all currently active scene handles.
 
 > **getCurrentBlocks**(): [`BlueprintBlock`](../type-aliases/BlueprintBlock.md)[]
 
-Defined in: [engine.ts:144](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/engine.ts#L144)
+Defined in: [engine.ts:144](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/engine.ts#L144)
 
 Get the current block of every active scene.
 
@@ -139,7 +141,7 @@ Get the current block of every active scene.
 
 > **getSceneConnections**(`sceneId`): [`BlueprintConnection`](../interfaces/BlueprintConnection.md)[]
 
-Defined in: [engine.ts:153](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/engine.ts#L153)
+Defined in: [engine.ts:153](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/engine.ts#L153)
 
 Get connections for a scene (for inter-scene navigation).
 
@@ -163,7 +165,7 @@ Get connections for a scene (for inter-scene navigation).
 
 > **init**(`options`): [`DiagnosticReport`](../interfaces/DiagnosticReport.md)
 
-Defined in: [engine.ts:41](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/engine.ts#L41)
+Defined in: [engine.ts:41](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/engine.ts#L41)
 
 Validate blueprint data, build internal graph, return diagnostic report.
 
@@ -187,7 +189,7 @@ Validate blueprint data, build internal graph, return diagnostic report.
 
 > **isRunning**(): `boolean`
 
-Defined in: [engine.ts:136](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/engine.ts#L136)
+Defined in: [engine.ts:136](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/engine.ts#L136)
 
 True if at least one scene is active.
 
@@ -205,7 +207,7 @@ True if at least one scene is active.
 
 > **onAction**(`handler`): `void`
 
-Defined in: [engine.ts:97](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/engine.ts#L97)
+Defined in: [engine.ts:97](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/engine.ts#L97)
 
 Register a global handler for ACTION blocks. The developer MUST handle execution in this handler.
 
@@ -229,7 +231,7 @@ Register a global handler for ACTION blocks. The developer MUST handle execution
 
 > **onBeforeBlock**(`handler`): `void`
 
-Defined in: [engine.ts:81](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/engine.ts#L81)
+Defined in: [engine.ts:81](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/engine.ts#L81)
 
 Register a handler called before every block. Must call resolve() to continue.
 
@@ -253,7 +255,7 @@ Register a handler called before every block. Must call resolve() to continue.
 
 > **onChoice**(`handler`): `void`
 
-Defined in: [engine.ts:89](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/engine.ts#L89)
+Defined in: [engine.ts:89](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/engine.ts#L89)
 
 Register a global handler for CHOICE blocks. All choices are provided, tagged with `visible` when `setChoiceFilter()` is configured.
 
@@ -277,7 +279,7 @@ Register a global handler for CHOICE blocks. All choices are provided, tagged wi
 
 > **onCondition**(`handler`): `void`
 
-Defined in: [engine.ts:93](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/engine.ts#L93)
+Defined in: [engine.ts:93](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/engine.ts#L93)
 
 Register a global handler for CONDITION blocks. The developer MUST handle evaluation in this handler.
 
@@ -301,7 +303,7 @@ Register a global handler for CONDITION blocks. The developer MUST handle evalua
 
 > **onDialog**(`handler`): `void`
 
-Defined in: [engine.ts:85](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/engine.ts#L85)
+Defined in: [engine.ts:85](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/engine.ts#L85)
 
 Register a global handler for DIALOG blocks. May return a cleanup function.
 
@@ -325,7 +327,7 @@ Register a global handler for DIALOG blocks. May return a cleanup function.
 
 > **onInvalidateBlock**(`handler`): `void`
 
-Defined in: [engine.ts:77](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/engine.ts#L77)
+Defined in: [engine.ts:77](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/engine.ts#L77)
 
 Register a handler called when a block fails validation.
 
@@ -349,7 +351,7 @@ Register a handler called when a block fails validation.
 
 > **onResolveCharacter**(`fn`): `void`
 
-Defined in: [engine.ts:65](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/engine.ts#L65)
+Defined in: [engine.ts:65](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/engine.ts#L65)
 
 Register a global character resolver. Called for every block with `metadata.characters`.
 
@@ -373,7 +375,7 @@ Register a global character resolver. Called for every block with `metadata.char
 
 > **onSceneEnter**(`handler`): `void`
 
-Defined in: [engine.ts:101](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/engine.ts#L101)
+Defined in: [engine.ts:101](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/engine.ts#L101)
 
 Register a handler called when any scene starts.
 
@@ -397,7 +399,7 @@ Register a handler called when any scene starts.
 
 > **onSceneExit**(`handler`): `void`
 
-Defined in: [engine.ts:105](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/engine.ts#L105)
+Defined in: [engine.ts:105](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/engine.ts#L105)
 
 Register a handler called when any scene ends (natural or cancelled).
 
@@ -421,7 +423,7 @@ Register a handler called when any scene ends (natural or cancelled).
 
 > **onValidateNextBlock**(`handler`): `void`
 
-Defined in: [engine.ts:73](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/engine.ts#L73)
+Defined in: [engine.ts:73](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/engine.ts#L73)
 
 Register a handler called before each block to validate it.
 
@@ -445,7 +447,7 @@ Register a handler called before each block to validate it.
 
 > **scene**(`sceneId`): [`SceneHandle`](../interfaces/SceneHandle.md)
 
-Defined in: [engine.ts:109](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/engine.ts#L109)
+Defined in: [engine.ts:109](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/engine.ts#L109)
 
 Create a scene handle. Does NOT start the flow — call handle.start().
 
@@ -469,7 +471,7 @@ Create a scene handle. Does NOT start the flow — call handle.start().
 
 > **setChoiceFilter**(`evaluator`): `void`
 
-Defined in: [engine.ts:69](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/engine.ts#L69)
+Defined in: [engine.ts:69](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/engine.ts#L69)
 
 Install a condition evaluator for choice visibility tagging.
 When set, the engine evaluates each choice's `visibilityConditions` before calling `onChoice`,
@@ -496,7 +498,7 @@ internally via choice history — this callback evaluates game-state conditions 
 
 > **setLocale**(`locale`): `void`
 
-Defined in: [engine.ts:52](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/engine.ts#L52)
+Defined in: [engine.ts:52](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/engine.ts#L52)
 
 Set the active locale for text resolution.
 
@@ -520,7 +522,7 @@ Set the active locale for text resolution.
 
 > **stop**(): `void`
 
-Defined in: [engine.ts:130](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/engine.ts#L130)
+Defined in: [engine.ts:130](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/engine.ts#L130)
 
 Stop all active scenes.
 
@@ -538,7 +540,7 @@ Stop all active scenes.
 
 # Class: LsdeUtils
 
-Defined in: [lsde-utils.ts:8](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/lsde-utils.ts#L8)
+Defined in: [lsde-utils.ts:8](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/lsde-utils.ts#L8)
 
 Public utility class exposing common helpers for game developers integrating the LSDE engine.
 
@@ -558,7 +560,7 @@ Public utility class exposing common helpers for game developers integrating the
 
 > `static` **evaluateConditionChain**: (`conditions`, `evaluator`) => `boolean`
 
-Defined in: [lsde-utils.ts:75](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/lsde-utils.ts#L75)
+Defined in: [lsde-utils.ts:75](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/lsde-utils.ts#L75)
 
 Evaluates a chain of conditions with `&` (AND) / `|` (OR) chaining.
 Left-to-right evaluation, no operator precedence. Empty array returns `true`.
@@ -596,7 +598,7 @@ A callback that evaluates a single condition.
 
 > `static` **filterVisibleChoices**: (`choices`, `evaluator`, `scene?`) => [`ChoiceItem`](../interfaces/ChoiceItem.md)[]
 
-Defined in: [lsde-utils.ts:86](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/lsde-utils.ts#L86)
+Defined in: [lsde-utils.ts:86](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/lsde-utils.ts#L86)
 
 Filters choice items by their visibility conditions.
 Choices without `visibilityConditions` are always visible.
@@ -646,7 +648,7 @@ Optional [SceneHandle](../interfaces/SceneHandle.md). When provided, `choice:` c
 
 > `static` **isActionBlock**: (`block`) => `block is ActionBlock`
 
-Defined in: [lsde-utils.ts:22](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/lsde-utils.ts#L22)
+Defined in: [lsde-utils.ts:22](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/lsde-utils.ts#L22)
 
 Returns `true` if the block is an [ActionBlock](../interfaces/ActionBlock.md).
 
@@ -666,7 +668,7 @@ Returns `true` if the block is an [ActionBlock](../interfaces/ActionBlock.md).
 
 > `static` **isChoiceBlock**: (`block`) => `block is ChoiceBlock`
 
-Defined in: [lsde-utils.ts:18](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/lsde-utils.ts#L18)
+Defined in: [lsde-utils.ts:18](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/lsde-utils.ts#L18)
 
 Returns `true` if the block is a [ChoiceBlock](../interfaces/ChoiceBlock.md).
 
@@ -686,7 +688,7 @@ Returns `true` if the block is a [ChoiceBlock](../interfaces/ChoiceBlock.md).
 
 > `static` **isConditionBlock**: (`block`) => `block is ConditionBlock`
 
-Defined in: [lsde-utils.ts:20](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/lsde-utils.ts#L20)
+Defined in: [lsde-utils.ts:20](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/lsde-utils.ts#L20)
 
 Returns `true` if the block is a [ConditionBlock](../interfaces/ConditionBlock.md).
 
@@ -706,7 +708,7 @@ Returns `true` if the block is a [ConditionBlock](../interfaces/ConditionBlock.m
 
 > `static` **isDialogBlock**: (`block`) => `block is DialogBlock`
 
-Defined in: [lsde-utils.ts:16](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/lsde-utils.ts#L16)
+Defined in: [lsde-utils.ts:16](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/lsde-utils.ts#L16)
 
 Returns `true` if the block is a [DialogBlock](../interfaces/DialogBlock.md).
 
@@ -726,7 +728,7 @@ Returns `true` if the block is a [DialogBlock](../interfaces/DialogBlock.md).
 
 > `static` **isNoteBlock**: (`block`) => `block is NoteBlock`
 
-Defined in: [lsde-utils.ts:24](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/lsde-utils.ts#L24)
+Defined in: [lsde-utils.ts:24](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/lsde-utils.ts#L24)
 
 Returns `true` if the block is a [NoteBlock](../interfaces/NoteBlock.md).
 
@@ -746,7 +748,7 @@ Returns `true` if the block is a [NoteBlock](../interfaces/NoteBlock.md).
 
 > `static` **locale**: `string` \| `null` = `null`
 
-Defined in: [lsde-utils.ts:11](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/lsde-utils.ts#L11)
+Defined in: [lsde-utils.ts:11](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/lsde-utils.ts#L11)
 
 Current locale set by `engine.setLocale()`. Used as default by `getLocalizedText()`.
 
@@ -756,7 +758,7 @@ Current locale set by `engine.setLocale()`. Used as default by `getLocalizedText
 
 > `static` **getBlockLabel**(`block`): `string`
 
-Defined in: [lsde-utils.ts:29](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/lsde-utils.ts#L29)
+Defined in: [lsde-utils.ts:29](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/lsde-utils.ts#L29)
 
 Returns the block's label, or the first 8 characters of its UUID as fallback.
 
@@ -776,7 +778,7 @@ Returns the block's label, or the first 8 characters of its UUID as fallback.
 
 > `static` **getChoiceConditionBlockUuid**(`condition`): `string` \| `undefined`
 
-Defined in: [lsde-utils.ts:65](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/lsde-utils.ts#L65)
+Defined in: [lsde-utils.ts:65](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/lsde-utils.ts#L65)
 
 Extracts the referenced choice block UUID from a choice condition.
 
@@ -798,7 +800,7 @@ The block UUID, or `undefined` if the condition is not a choice condition.
 
 > `static` **getLocalizedText**(`dialogueText`, `locale?`): `string` \| `undefined`
 
-Defined in: [lsde-utils.ts:42](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/lsde-utils.ts#L42)
+Defined in: [lsde-utils.ts:42](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/lsde-utils.ts#L42)
 
 Looks up a localized text value from a `dialogueText` map.
 Works with both `DialogBlock.dialogueText` and `ChoiceItem.dialogueText`.
@@ -834,7 +836,7 @@ If no locale is set (neither via parameter nor `engine.setLocale()`).
 
 > `static` **isChoiceCondition**(`condition`): `boolean`
 
-Defined in: [lsde-utils.ts:57](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/lsde-utils.ts#L57)
+Defined in: [lsde-utils.ts:57](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/lsde-utils.ts#L57)
 
 Returns `true` if the condition references a previous choice selection.
 Choice conditions use the key format `"choice:<blockUuid>"` and are
@@ -856,7 +858,7 @@ evaluated internally by the engine against the scene's choice history.
 
 # Interface: ActionBlock
 
-Defined in: [types.ts:361](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L361)
+Defined in: [types.ts:374](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L374)
 
 Action block — triggers game state changes.
 
@@ -900,7 +902,7 @@ engine.onAction(({ block, context, next }) => {
 
 > `optional` **actions?**: [`ExportAction`](ExportAction.md)[]
 
-Defined in: [types.ts:364](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L364)
+Defined in: [types.ts:377](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L377)
 
 Actions to execute. Each references an `ActionSignature` via `actionId`.
 
@@ -910,7 +912,7 @@ Actions to execute. Each references an `ActionSignature` via `actionId`.
 
 > `optional` **isStartBlock?**: `boolean`
 
-Defined in: [types.ts:226](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L226)
+Defined in: [types.ts:239](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L239)
 
 When true, this block is the entry point of the scene. Only one per scene.
 
@@ -924,7 +926,7 @@ When true, this block is the entry point of the scene. Only one per scene.
 
 > `optional` **label?**: `string`
 
-Defined in: [types.ts:214](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L214)
+Defined in: [types.ts:227](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L227)
 
 Display label assigned in the editor.
 
@@ -938,7 +940,7 @@ Display label assigned in the editor.
 
 > `optional` **metadata?**: [`BlockMetadata`](BlockMetadata.md)
 
-Defined in: [types.ts:224](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L224)
+Defined in: [types.ts:237](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L237)
 
 Non-logic metadata for display and organization.
 
@@ -952,7 +954,7 @@ Non-logic metadata for display and organization.
 
 > `optional` **nativeProperties?**: [`NativeProperties`](NativeProperties.md)
 
-Defined in: [types.ts:222](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L222)
+Defined in: [types.ts:235](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L235)
 
 LSDE native execution properties (async, delay, portPerCharacter, etc.).
 
@@ -966,7 +968,7 @@ LSDE native execution properties (async, delay, portPerCharacter, etc.).
 
 > `optional` **note?**: `string`
 
-Defined in: [types.ts:366](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L366)
+Defined in: [types.ts:379](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L379)
 
 Designer note. Not displayed to players.
 
@@ -976,7 +978,7 @@ Designer note. Not displayed to players.
 
 > `optional` **parentLabels?**: `string`[]
 
-Defined in: [types.ts:216](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L216)
+Defined in: [types.ts:229](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L229)
 
 Hierarchy of parent folder labels providing structural context.
 
@@ -990,7 +992,7 @@ Hierarchy of parent folder labels providing structural context.
 
 > **properties**: [`BlockProperty`](BlockProperty.md)[]
 
-Defined in: [types.ts:218](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L218)
+Defined in: [types.ts:231](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L231)
 
 Custom key-value properties defined by block configuration.
 
@@ -1004,7 +1006,7 @@ Custom key-value properties defined by block configuration.
 
 > **type**: `"ACTION"`
 
-Defined in: [types.ts:362](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L362)
+Defined in: [types.ts:375](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L375)
 
 Block type determining behavior and rendering.
 
@@ -1018,7 +1020,7 @@ Block type determining behavior and rendering.
 
 > `optional` **userProperties?**: `Record`\<`string`, `string` \| `number` \| `boolean`\>
 
-Defined in: [types.ts:220](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L220)
+Defined in: [types.ts:233](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L233)
 
 User-defined custom properties dictionary set by the narrative designer.
 
@@ -1032,7 +1034,7 @@ User-defined custom properties dictionary set by the narrative designer.
 
 > **uuid**: `string`
 
-Defined in: [types.ts:210](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L210)
+Defined in: [types.ts:223](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L223)
 
 Unique block identifier.
 
@@ -1046,7 +1048,7 @@ Unique block identifier.
 
 # Interface: ActionContext
 
-Defined in: [types.ts:611](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L611)
+Defined in: [types.ts:624](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L624)
 
 Context for ACTION block handlers.
 
@@ -1060,7 +1062,7 @@ Context for ACTION block handlers.
 
 > **character**: [`BlockCharacter`](BlockCharacter.md) \| `undefined`
 
-Defined in: [types.ts:581](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L581)
+Defined in: [types.ts:594](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L594)
 
 Character resolved by the `onResolveCharacter` callback for this block, or `undefined` if none.
 
@@ -1074,7 +1076,7 @@ Character resolved by the `onResolveCharacter` callback for this block, or `unde
 
 > **preventGlobalHandler**: () => `void`
 
-Defined in: [types.ts:583](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L583)
+Defined in: [types.ts:596](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L596)
 
 Prevent the global (Tier 1) handler from executing after this scene handler.
 
@@ -1092,7 +1094,7 @@ Prevent the global (Tier 1) handler from executing after this scene handler.
 
 > **reject**: (`error`) => `void`
 
-Defined in: [types.ts:615](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L615)
+Defined in: [types.ts:628](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L628)
 
 Mark action as failed. Engine follows the `catch` port (fallback `then` if no catch port exists).
 
@@ -1112,7 +1114,7 @@ Mark action as failed. Engine follows the `catch` port (fallback `then` if no ca
 
 > **resolve**: () => `void`
 
-Defined in: [types.ts:613](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L613)
+Defined in: [types.ts:626](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L626)
 
 Mark action as succeeded. Engine follows the `then` port.
 
@@ -1126,7 +1128,7 @@ Mark action as succeeded. Engine follows the `then` port.
 
 # Interface: ActionSignature
 
-Defined in: [types.ts:453](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L453)
+Defined in: [types.ts:466](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L466)
 
 Action signature defining a reusable action type. Map `id` to your engine's action handlers.
 
@@ -1136,7 +1138,7 @@ Action signature defining a reusable action type. Map `id` to your engine's acti
 
 > **id**: `string`
 
-Defined in: [types.ts:457](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L457)
+Defined in: [types.ts:470](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L470)
 
 Short action type identifier (e.g. "set_flag"). Referenced by `ExportAction.actionId`.
 
@@ -1146,7 +1148,7 @@ Short action type identifier (e.g. "set_flag"). Referenced by `ExportAction.acti
 
 > `optional` **label?**: `string`
 
-Defined in: [types.ts:459](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L459)
+Defined in: [types.ts:472](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L472)
 
 Human-readable description of what this action does.
 
@@ -1156,7 +1158,7 @@ Human-readable description of what this action does.
 
 > **params**: [`SignatureParam`](SignatureParam.md)[]
 
-Defined in: [types.ts:461](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L461)
+Defined in: [types.ts:474](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L474)
 
 Parameter definitions describing the expected inputs.
 
@@ -1166,7 +1168,7 @@ Parameter definitions describing the expected inputs.
 
 > **uuid**: `string`
 
-Defined in: [types.ts:455](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L455)
+Defined in: [types.ts:468](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L468)
 
 Unique identifier for this signature.
 
@@ -1176,7 +1178,7 @@ Unique identifier for this signature.
 
 # Interface: BaseBlockContext
 
-Defined in: [types.ts:579](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L579)
+Defined in: [types.ts:592](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L592)
 
 Base context available to all block handlers.
 
@@ -1193,7 +1195,7 @@ Base context available to all block handlers.
 
 > **character**: [`BlockCharacter`](BlockCharacter.md) \| `undefined`
 
-Defined in: [types.ts:581](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L581)
+Defined in: [types.ts:594](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L594)
 
 Character resolved by the `onResolveCharacter` callback for this block, or `undefined` if none.
 
@@ -1203,7 +1205,7 @@ Character resolved by the `onResolveCharacter` callback for this block, or `unde
 
 > **preventGlobalHandler**: () => `void`
 
-Defined in: [types.ts:583](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L583)
+Defined in: [types.ts:596](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L596)
 
 Prevent the global (Tier 1) handler from executing after this scene handler.
 
@@ -1217,7 +1219,7 @@ Prevent the global (Tier 1) handler from executing after this scene handler.
 
 # Interface: BeforeBlockArgs
 
-Defined in: [types.ts:716](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L716)
+Defined in: [types.ts:775](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L775)
 
 Arguments for the onBeforeBlock handler.
 
@@ -1227,7 +1229,7 @@ Arguments for the onBeforeBlock handler.
 
 > **block**: [`BlueprintBlock`](../type-aliases/BlueprintBlock.md)
 
-Defined in: [types.ts:717](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L717)
+Defined in: [types.ts:776](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L776)
 
 ***
 
@@ -1235,7 +1237,7 @@ Defined in: [types.ts:717](https://github.com/jonlepage/LS-Dialog-Editor-Engine/
 
 > **context**: [`BeforeBlockContext`](BeforeBlockContext.md)
 
-Defined in: [types.ts:719](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L719)
+Defined in: [types.ts:778](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L778)
 
 ***
 
@@ -1243,7 +1245,7 @@ Defined in: [types.ts:719](https://github.com/jonlepage/LS-Dialog-Editor-Engine/
 
 > **resolve**: () => `void`
 
-Defined in: [types.ts:720](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L720)
+Defined in: [types.ts:779](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L779)
 
 #### Returns
 
@@ -1255,7 +1257,7 @@ Defined in: [types.ts:720](https://github.com/jonlepage/LS-Dialog-Editor-Engine/
 
 > **scene**: [`SceneHandle`](SceneHandle.md)
 
-Defined in: [types.ts:718](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L718)
+Defined in: [types.ts:777](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L777)
 
 ================================================================================
 
@@ -1263,7 +1265,7 @@ Defined in: [types.ts:718](https://github.com/jonlepage/LS-Dialog-Editor-Engine/
 
 # Interface: BeforeBlockContext
 
-Defined in: [types.ts:619](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L619)
+Defined in: [types.ts:632](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L632)
 
 Context passed to onBeforeBlock handler.
 
@@ -1273,7 +1275,7 @@ Context passed to onBeforeBlock handler.
 
 > **nativeProperties**: [`NativeProperties`](NativeProperties.md) \| `undefined`
 
-Defined in: [types.ts:620](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L620)
+Defined in: [types.ts:633](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L633)
 
 ================================================================================
 
@@ -1281,7 +1283,7 @@ Defined in: [types.ts:620](https://github.com/jonlepage/LS-Dialog-Editor-Engine/
 
 # Interface: BlockCharacter
 
-Defined in: [types.ts:148](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L148)
+Defined in: [types.ts:161](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L161)
 
 Character (actor) assigned to a block.
 
@@ -1291,7 +1293,7 @@ Character (actor) assigned to a block.
 
 > `optional` **emotion?**: `string`
 
-Defined in: [types.ts:156](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L156)
+Defined in: [types.ts:169](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L169)
 
 Emotion label for the character in this block (e.g. "happy", "angry", "sad").
 
@@ -1301,7 +1303,7 @@ Emotion label for the character in this block (e.g. "happy", "angry", "sad").
 
 > `optional` **emotionIntensity?**: `number`
 
-Defined in: [types.ts:158](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L158)
+Defined in: [types.ts:171](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L171)
 
 Emotion intensity (e.g. 0 = neutral, higher = stronger).
 
@@ -1311,7 +1313,7 @@ Emotion intensity (e.g. 0 = neutral, higher = stronger).
 
 > **id**: `string`
 
-Defined in: [types.ts:152](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L152)
+Defined in: [types.ts:165](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L165)
 
 Game-side character identifier. Use this to look up the character in your game engine.
 
@@ -1321,7 +1323,7 @@ Game-side character identifier. Use this to look up the character in your game e
 
 > **name**: `string`
 
-Defined in: [types.ts:154](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L154)
+Defined in: [types.ts:167](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L167)
 
 Display name for debugging and editor preview. Not intended for in-game display.
 
@@ -1331,7 +1333,7 @@ Display name for debugging and editor preview. Not intended for in-game display.
 
 > **uuid**: `string`
 
-Defined in: [types.ts:150](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L150)
+Defined in: [types.ts:163](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L163)
 
 Internal UUID used by the dialog engine.
 
@@ -1341,7 +1343,7 @@ Internal UUID used by the dialog engine.
 
 # Interface: BlockHandlerArgs\<B, C\>
 
-Defined in: [types.ts:651](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L651)
+Defined in: [types.ts:664](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L664)
 
 Arguments passed to any block handler.
 
@@ -1382,7 +1384,7 @@ A block-specific override via `handle.onBlock(uuid, handler)` takes highest prio
 
 > **block**: `B`
 
-Defined in: [types.ts:655](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L655)
+Defined in: [types.ts:668](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L668)
 
 The block being executed, typed to match the handler (e.g. `DialogBlock` for `onDialog`).
 
@@ -1392,7 +1394,7 @@ The block being executed, typed to match the handler (e.g. `DialogBlock` for `on
 
 > **context**: `C`
 
-Defined in: [types.ts:657](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L657)
+Defined in: [types.ts:670](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L670)
 
 Type-specific context providing actions for this block (e.g. selectChoice, resolve).
 
@@ -1402,7 +1404,7 @@ Type-specific context providing actions for this block (e.g. selectChoice, resol
 
 > **next**: () => `void`
 
-Defined in: [types.ts:659](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L659)
+Defined in: [types.ts:672](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L672)
 
 Advance the flow to the next block. Must be called exactly once to continue traversal.
 
@@ -1416,7 +1418,7 @@ Advance the flow to the next block. Must be called exactly once to continue trav
 
 > **scene**: [`SceneHandle`](SceneHandle.md)
 
-Defined in: [types.ts:653](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L653)
+Defined in: [types.ts:666](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L666)
 
 The scene handle that owns this block. Use it to inspect state, cancel the scene, etc.
 
@@ -1426,7 +1428,7 @@ The scene handle that owns this block. Use it to inspect state, cancel the scene
 
 # Interface: BlockMetadata
 
-Defined in: [types.ts:170](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L170)
+Defined in: [types.ts:183](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L183)
 
 Non-logic metadata for display and organization. Should not affect game logic.
 
@@ -1436,7 +1438,7 @@ Non-logic metadata for display and organization. Should not affect game logic.
 
 > `optional` **characters?**: [`BlockCharacter`](BlockCharacter.md)[]
 
-Defined in: [types.ts:180](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L180)
+Defined in: [types.ts:193](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L193)
 
 Characters (actors) assigned to this block.
 
@@ -1446,7 +1448,7 @@ Characters (actors) assigned to this block.
 
 > `optional` **color?**: `string`
 
-Defined in: [types.ts:172](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L172)
+Defined in: [types.ts:185](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L185)
 
 Visual color coding (hex) assigned by the designer.
 
@@ -1456,7 +1458,7 @@ Visual color coding (hex) assigned by the designer.
 
 > `optional` **comments?**: `string`
 
-Defined in: [types.ts:174](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L174)
+Defined in: [types.ts:187](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L187)
 
 Free-form designer notes. Not displayed to players.
 
@@ -1466,7 +1468,7 @@ Free-form designer notes. Not displayed to players.
 
 > `optional` **others?**: `Record`\<`string`, `string` \| `number` \| `boolean` \| (`string` \| `number` \| `boolean`)[]\>
 
-Defined in: [types.ts:182](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L182)
+Defined in: [types.ts:195](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L195)
 
 Additional designer-defined metadata key-value pairs.
 
@@ -1476,7 +1478,7 @@ Additional designer-defined metadata key-value pairs.
 
 > `optional` **screenShots?**: [`BlockScreenshot`](BlockScreenshot.md)[]
 
-Defined in: [types.ts:178](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L178)
+Defined in: [types.ts:191](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L191)
 
 Screenshots captured from the editor for this block.
 
@@ -1486,7 +1488,7 @@ Screenshots captured from the editor for this block.
 
 > `optional` **tags?**: `string`[]
 
-Defined in: [types.ts:176](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L176)
+Defined in: [types.ts:189](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L189)
 
 Contextual tags for categorization and filtering.
 
@@ -1496,7 +1498,7 @@ Contextual tags for categorization and filtering.
 
 # Interface: BlockProperty
 
-Defined in: [types.ts:30](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L30)
+Defined in: [types.ts:30](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L30)
 
 Generic key-value property attached to a block.
 
@@ -1506,7 +1508,7 @@ Generic key-value property attached to a block.
 
 > **key**: `string`
 
-Defined in: [types.ts:32](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L32)
+Defined in: [types.ts:32](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L32)
 
 Property name or identifier.
 
@@ -1516,7 +1518,7 @@ Property name or identifier.
 
 > **value**: `string` \| `number` \| `boolean`
 
-Defined in: [types.ts:34](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L34)
+Defined in: [types.ts:34](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L34)
 
 Property value.
 
@@ -1526,7 +1528,7 @@ Property value.
 
 # Interface: BlockScreenshot
 
-Defined in: [types.ts:162](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L162)
+Defined in: [types.ts:175](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L175)
 
 Screenshot or image captured from the editor for documentation.
 
@@ -1536,7 +1538,7 @@ Screenshot or image captured from the editor for documentation.
 
 > `optional` **note?**: `string`
 
-Defined in: [types.ts:166](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L166)
+Defined in: [types.ts:179](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L179)
 
 Optional caption or description.
 
@@ -1546,7 +1548,7 @@ Optional caption or description.
 
 > **src**: `string`
 
-Defined in: [types.ts:164](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L164)
+Defined in: [types.ts:177](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L177)
 
 Image source as a data URL (base64) or file path.
 
@@ -1556,7 +1558,7 @@ Image source as a data URL (base64) or file path.
 
 # Interface: BlueprintBlockBase
 
-Defined in: [types.ts:208](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L208)
+Defined in: [types.ts:221](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L221)
 
 Common properties shared by all block types.
 
@@ -1597,7 +1599,7 @@ that doesn't fit the structured property model.
 
 > `optional` **isStartBlock?**: `boolean`
 
-Defined in: [types.ts:226](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L226)
+Defined in: [types.ts:239](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L239)
 
 When true, this block is the entry point of the scene. Only one per scene.
 
@@ -1607,7 +1609,7 @@ When true, this block is the entry point of the scene. Only one per scene.
 
 > `optional` **label?**: `string`
 
-Defined in: [types.ts:214](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L214)
+Defined in: [types.ts:227](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L227)
 
 Display label assigned in the editor.
 
@@ -1617,7 +1619,7 @@ Display label assigned in the editor.
 
 > `optional` **metadata?**: [`BlockMetadata`](BlockMetadata.md)
 
-Defined in: [types.ts:224](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L224)
+Defined in: [types.ts:237](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L237)
 
 Non-logic metadata for display and organization.
 
@@ -1627,7 +1629,7 @@ Non-logic metadata for display and organization.
 
 > `optional` **nativeProperties?**: [`NativeProperties`](NativeProperties.md)
 
-Defined in: [types.ts:222](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L222)
+Defined in: [types.ts:235](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L235)
 
 LSDE native execution properties (async, delay, portPerCharacter, etc.).
 
@@ -1637,7 +1639,7 @@ LSDE native execution properties (async, delay, portPerCharacter, etc.).
 
 > `optional` **parentLabels?**: `string`[]
 
-Defined in: [types.ts:216](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L216)
+Defined in: [types.ts:229](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L229)
 
 Hierarchy of parent folder labels providing structural context.
 
@@ -1647,7 +1649,7 @@ Hierarchy of parent folder labels providing structural context.
 
 > **properties**: [`BlockProperty`](BlockProperty.md)[]
 
-Defined in: [types.ts:218](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L218)
+Defined in: [types.ts:231](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L231)
 
 Custom key-value properties defined by block configuration.
 
@@ -1657,7 +1659,7 @@ Custom key-value properties defined by block configuration.
 
 > **type**: [`BlockType`](../type-aliases/BlockType.md)
 
-Defined in: [types.ts:212](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L212)
+Defined in: [types.ts:225](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L225)
 
 Block type determining behavior and rendering.
 
@@ -1667,7 +1669,7 @@ Block type determining behavior and rendering.
 
 > `optional` **userProperties?**: `Record`\<`string`, `string` \| `number` \| `boolean`\>
 
-Defined in: [types.ts:220](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L220)
+Defined in: [types.ts:233](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L233)
 
 User-defined custom properties dictionary set by the narrative designer.
 
@@ -1677,7 +1679,7 @@ User-defined custom properties dictionary set by the narrative designer.
 
 > **uuid**: `string`
 
-Defined in: [types.ts:210](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L210)
+Defined in: [types.ts:223](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L223)
 
 Unique block identifier.
 
@@ -1687,7 +1689,7 @@ Unique block identifier.
 
 # Interface: BlueprintConnection
 
-Defined in: [types.ts:14](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L14)
+Defined in: [types.ts:14](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L14)
 
 Directed connection between two blocks in the blueprint. Connections define the dialogue flow by linking output ports of source blocks to input ports of target blocks.
 
@@ -1697,7 +1699,7 @@ Directed connection between two blocks in the blueprint. Connections define the 
 
 > **fromId**: `string`
 
-Defined in: [types.ts:18](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L18)
+Defined in: [types.ts:18](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L18)
 
 UUID of the source block.
 
@@ -1707,7 +1709,7 @@ UUID of the source block.
 
 > **fromPort**: `string`
 
-Defined in: [types.ts:22](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L22)
+Defined in: [types.ts:22](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L22)
 
 Output port identifier on the source block. For CHOICE blocks: the selected choice UUID. For ACTION blocks: `"then"` or `"catch"`.
 
@@ -1717,7 +1719,7 @@ Output port identifier on the source block. For CHOICE blocks: the selected choi
 
 > `optional` **fromPortIndex?**: `number`
 
-Defined in: [types.ts:26](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L26)
+Defined in: [types.ts:26](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L26)
 
 Zero-based index of the output port. For CONDITION blocks: 0 = true, 1 = false. For DIALOG with `portPerCharacter`: index of the character.
 
@@ -1727,7 +1729,7 @@ Zero-based index of the output port. For CONDITION blocks: 0 = true, 1 = false. 
 
 > **id**: `string`
 
-Defined in: [types.ts:16](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L16)
+Defined in: [types.ts:16](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L16)
 
 Unique identifier for this connection.
 
@@ -1737,7 +1739,7 @@ Unique identifier for this connection.
 
 > **toId**: `string`
 
-Defined in: [types.ts:20](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L20)
+Defined in: [types.ts:20](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L20)
 
 UUID of the target block.
 
@@ -1747,7 +1749,7 @@ UUID of the target block.
 
 > **toPort**: `string`
 
-Defined in: [types.ts:24](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L24)
+Defined in: [types.ts:24](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L24)
 
 Input port identifier on the target block.
 
@@ -1757,7 +1759,7 @@ Input port identifier on the target block.
 
 # Interface: BlueprintExport
 
-Defined in: [types.ts:502](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L502)
+Defined in: [types.ts:515](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L515)
 
 Root container for exported blueprint data.
 
@@ -1806,7 +1808,7 @@ if (report.errors.length > 0) {
 
 > `optional` **dictionaries?**: [`Dictionary`](Dictionary.md)[]
 
-Defined in: [types.ts:514](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L514)
+Defined in: [types.ts:527](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L527)
 
 Dictionary groups for conditions and action parameters.
 
@@ -1816,7 +1818,7 @@ Dictionary groups for conditions and action parameters.
 
 > **exportDate**: `string`
 
-Defined in: [types.ts:506](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L506)
+Defined in: [types.ts:519](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L519)
 
 ISO 8601 timestamp of when this export was generated.
 
@@ -1826,7 +1828,7 @@ ISO 8601 timestamp of when this export was generated.
 
 > **locales**: `string`[]
 
-Defined in: [types.ts:512](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L512)
+Defined in: [types.ts:525](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L525)
 
 All language locale codes included in this export.
 
@@ -1836,7 +1838,7 @@ All language locale codes included in this export.
 
 > `optional` **primaryLanguage?**: `string`
 
-Defined in: [types.ts:510](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L510)
+Defined in: [types.ts:523](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L523)
 
 Primary language locale code (e.g. "fr", "en").
 
@@ -1846,7 +1848,7 @@ Primary language locale code (e.g. "fr", "en").
 
 > `optional` **projectName?**: `string`
 
-Defined in: [types.ts:508](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L508)
+Defined in: [types.ts:521](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L521)
 
 Name of the LSDE project.
 
@@ -1856,7 +1858,7 @@ Name of the LSDE project.
 
 > **scenes**: [`BlueprintScene`](BlueprintScene.md)[]
 
-Defined in: [types.ts:518](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L518)
+Defined in: [types.ts:531](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L531)
 
 All exported scenes.
 
@@ -1866,7 +1868,7 @@ All exported scenes.
 
 > `optional` **signatures?**: [`ActionSignature`](ActionSignature.md)[]
 
-Defined in: [types.ts:516](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L516)
+Defined in: [types.ts:529](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L529)
 
 Action signature definitions describing available action types.
 
@@ -1876,7 +1878,7 @@ Action signature definitions describing available action types.
 
 > **version**: `string`
 
-Defined in: [types.ts:504](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L504)
+Defined in: [types.ts:517](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L517)
 
 Schema version of this export format.
 
@@ -1886,7 +1888,7 @@ Schema version of this export format.
 
 # Interface: BlueprintScene
 
-Defined in: [types.ts:403](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L403)
+Defined in: [types.ts:416](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L416)
 
 A scene — an independent dialogue subgraph with its own entry point.
 
@@ -1923,7 +1925,7 @@ handle.start();
 
 > **blocks**: [`BlueprintBlock`](../type-aliases/BlueprintBlock.md)[]
 
-Defined in: [types.ts:415](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L415)
+Defined in: [types.ts:428](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L428)
 
 All blocks contained within this scene.
 
@@ -1933,7 +1935,7 @@ All blocks contained within this scene.
 
 > **connections**: [`BlueprintConnection`](BlueprintConnection.md)[]
 
-Defined in: [types.ts:417](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L417)
+Defined in: [types.ts:430](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L430)
 
 All connections defining the dialogue flow in this scene.
 
@@ -1943,7 +1945,7 @@ All connections defining the dialogue flow in this scene.
 
 > **date**: `string`
 
-Defined in: [types.ts:413](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L413)
+Defined in: [types.ts:426](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L426)
 
 Scene creation or last modification date.
 
@@ -1953,7 +1955,7 @@ Scene creation or last modification date.
 
 > `optional` **entryBlockId?**: `string`
 
-Defined in: [types.ts:411](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L411)
+Defined in: [types.ts:424](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L424)
 
 UUID of the entry block for this scene.
 
@@ -1963,7 +1965,7 @@ UUID of the entry block for this scene.
 
 > **label**: `string`
 
-Defined in: [types.ts:407](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L407)
+Defined in: [types.ts:420](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L420)
 
 Scene name assigned by the designer.
 
@@ -1973,7 +1975,7 @@ Scene name assigned by the designer.
 
 > `optional` **note?**: `string`
 
-Defined in: [types.ts:409](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L409)
+Defined in: [types.ts:422](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L422)
 
 Scene-level designer notes.
 
@@ -1983,7 +1985,7 @@ Scene-level designer notes.
 
 > **uuid**: `string`
 
-Defined in: [types.ts:405](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L405)
+Defined in: [types.ts:418](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L418)
 
 Unique scene identifier.
 
@@ -1993,7 +1995,7 @@ Unique scene identifier.
 
 # Interface: CheckOptions
 
-Defined in: [types.ts:550](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L550)
+Defined in: [types.ts:563](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L563)
 
 Options for cross-validating blueprint data against game capabilities. When provided, the engine warns about blueprint references that don't match your game's known capabilities.
 
@@ -2003,7 +2005,7 @@ Options for cross-validating blueprint data against game capabilities. When prov
 
 > `optional` **characters?**: `string`[]
 
-Defined in: [types.ts:556](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L556)
+Defined in: [types.ts:569](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L569)
 
 Known character names in your game. Blueprint blocks referencing unknown characters will produce warnings.
 
@@ -2013,7 +2015,7 @@ Known character names in your game. Blueprint blocks referencing unknown charact
 
 > `optional` **dictionaries?**: `Record`\<`string`, `string`[]\>
 
-Defined in: [types.ts:554](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L554)
+Defined in: [types.ts:567](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L567)
 
 Known dictionary groups and their row keys. Blueprint references to unknown groups/keys will produce warnings.
 
@@ -2023,7 +2025,7 @@ Known dictionary groups and their row keys. Blueprint references to unknown grou
 
 > `optional` **signatures?**: `string`[]
 
-Defined in: [types.ts:552](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L552)
+Defined in: [types.ts:565](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L565)
 
 Known action signature IDs in your game. Blueprint actions referencing unknown IDs will produce warnings.
 
@@ -2033,7 +2035,7 @@ Known action signature IDs in your game. Blueprint actions referencing unknown I
 
 # Interface: ChoiceBlock
 
-Defined in: [types.ts:293](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L293)
+Defined in: [types.ts:306](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L306)
 
 Choice block — presents selectable options to the player.
 
@@ -2078,7 +2080,7 @@ engine.onChoice(({ context, next }) => {
 
 > `optional` **choices?**: [`ChoiceItem`](ChoiceItem.md)[]
 
-Defined in: [types.ts:296](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L296)
+Defined in: [types.ts:309](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L309)
 
 Available player choices. Visibility is filtered at runtime via `visibilityConditions`.
 
@@ -2088,7 +2090,7 @@ Available player choices. Visibility is filtered at runtime via `visibilityCondi
 
 > `optional` **isStartBlock?**: `boolean`
 
-Defined in: [types.ts:226](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L226)
+Defined in: [types.ts:239](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L239)
 
 When true, this block is the entry point of the scene. Only one per scene.
 
@@ -2102,7 +2104,7 @@ When true, this block is the entry point of the scene. Only one per scene.
 
 > `optional` **label?**: `string`
 
-Defined in: [types.ts:214](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L214)
+Defined in: [types.ts:227](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L227)
 
 Display label assigned in the editor.
 
@@ -2116,7 +2118,7 @@ Display label assigned in the editor.
 
 > `optional` **metadata?**: [`BlockMetadata`](BlockMetadata.md)
 
-Defined in: [types.ts:224](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L224)
+Defined in: [types.ts:237](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L237)
 
 Non-logic metadata for display and organization.
 
@@ -2130,7 +2132,7 @@ Non-logic metadata for display and organization.
 
 > `optional` **nativeProperties?**: [`NativeProperties`](NativeProperties.md)
 
-Defined in: [types.ts:222](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L222)
+Defined in: [types.ts:235](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L235)
 
 LSDE native execution properties (async, delay, portPerCharacter, etc.).
 
@@ -2144,7 +2146,7 @@ LSDE native execution properties (async, delay, portPerCharacter, etc.).
 
 > `optional` **note?**: `string`
 
-Defined in: [types.ts:298](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L298)
+Defined in: [types.ts:311](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L311)
 
 Designer note. Not displayed to players.
 
@@ -2154,7 +2156,7 @@ Designer note. Not displayed to players.
 
 > `optional` **parentLabels?**: `string`[]
 
-Defined in: [types.ts:216](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L216)
+Defined in: [types.ts:229](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L229)
 
 Hierarchy of parent folder labels providing structural context.
 
@@ -2168,7 +2170,7 @@ Hierarchy of parent folder labels providing structural context.
 
 > **properties**: [`BlockProperty`](BlockProperty.md)[]
 
-Defined in: [types.ts:218](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L218)
+Defined in: [types.ts:231](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L231)
 
 Custom key-value properties defined by block configuration.
 
@@ -2182,7 +2184,7 @@ Custom key-value properties defined by block configuration.
 
 > **type**: `"CHOICE"`
 
-Defined in: [types.ts:294](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L294)
+Defined in: [types.ts:307](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L307)
 
 Block type determining behavior and rendering.
 
@@ -2196,7 +2198,7 @@ Block type determining behavior and rendering.
 
 > `optional` **userProperties?**: `Record`\<`string`, `string` \| `number` \| `boolean`\>
 
-Defined in: [types.ts:220](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L220)
+Defined in: [types.ts:233](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L233)
 
 User-defined custom properties dictionary set by the narrative designer.
 
@@ -2210,7 +2212,7 @@ User-defined custom properties dictionary set by the narrative designer.
 
 > **uuid**: `string`
 
-Defined in: [types.ts:210](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L210)
+Defined in: [types.ts:223](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L223)
 
 Unique block identifier.
 
@@ -2224,7 +2226,7 @@ Unique block identifier.
 
 # Interface: ChoiceContext
 
-Defined in: [types.ts:593](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L593)
+Defined in: [types.ts:606](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L606)
 
 Context for CHOICE block handlers.
 
@@ -2238,7 +2240,7 @@ Context for CHOICE block handlers.
 
 > **character**: [`BlockCharacter`](BlockCharacter.md) \| `undefined`
 
-Defined in: [types.ts:581](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L581)
+Defined in: [types.ts:594](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L594)
 
 Character resolved by the `onResolveCharacter` callback for this block, or `undefined` if none.
 
@@ -2252,7 +2254,7 @@ Character resolved by the `onResolveCharacter` callback for this block, or `unde
 
 > **choices**: [`RuntimeChoiceItem`](RuntimeChoiceItem.md)[]
 
-Defined in: [types.ts:599](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L599)
+Defined in: [types.ts:612](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L612)
 
 All choices with optional visibility tags. When `engine.setChoiceFilter()` is configured,
 each choice is tagged `visible: true | false`. Filter with `choices.filter(c => c.visible !== false)`.
@@ -2264,7 +2266,7 @@ Without a filter, `visible` is `undefined` and all choices pass.
 
 > **preventGlobalHandler**: () => `void`
 
-Defined in: [types.ts:583](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L583)
+Defined in: [types.ts:596](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L596)
 
 Prevent the global (Tier 1) handler from executing after this scene handler.
 
@@ -2282,7 +2284,7 @@ Prevent the global (Tier 1) handler from executing after this scene handler.
 
 > **selectChoice**: (`choiceUuid`) => `void`
 
-Defined in: [types.ts:601](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L601)
+Defined in: [types.ts:614](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L614)
 
 Select a choice by UUID. The engine follows the matching port.
 
@@ -2302,7 +2304,7 @@ Select a choice by UUID. The engine follows the matching port.
 
 # Interface: ChoiceItem
 
-Defined in: [types.ts:83](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L83)
+Defined in: [types.ts:83](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L83)
 
 Player choice option within a choice block.
 
@@ -2316,7 +2318,7 @@ Player choice option within a choice block.
 
 > `optional` **dialogueText?**: `Record`\<`string`, `string`\>
 
-Defined in: [types.ts:91](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L91)
+Defined in: [types.ts:91](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L91)
 
 Localized text map: `{ locale -> text }`.
 
@@ -2326,7 +2328,7 @@ Localized text map: `{ locale -> text }`.
 
 > `optional` **label?**: `string`
 
-Defined in: [types.ts:89](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L89)
+Defined in: [types.ts:89](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L89)
 
 Display label for editor reference.
 
@@ -2336,7 +2338,7 @@ Display label for editor reference.
 
 > **structureKey**: `string`
 
-Defined in: [types.ts:87](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L87)
+Defined in: [types.ts:87](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L87)
 
 Hierarchical key for localization lookup.
 
@@ -2346,7 +2348,7 @@ Hierarchical key for localization lookup.
 
 > **uuid**: `string`
 
-Defined in: [types.ts:85](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L85)
+Defined in: [types.ts:85](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L85)
 
 Unique identifier for this choice.
 
@@ -2356,7 +2358,7 @@ Unique identifier for this choice.
 
 > `optional` **visibilityConditions?**: [`ExportCondition`](ExportCondition.md)[]
 
-Defined in: [types.ts:93](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L93)
+Defined in: [types.ts:93](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L93)
 
 Conditions controlling whether this choice is visible. If all pass (or none set), the choice is shown.
 
@@ -2366,7 +2368,7 @@ Conditions controlling whether this choice is visible. If all pass (or none set)
 
 # Interface: ConditionBlock
 
-Defined in: [types.ts:324](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L324)
+Defined in: [types.ts:337](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L337)
 
 Condition block — evaluates logic to branch the dialogue flow.
 
@@ -2404,7 +2406,7 @@ engine.onCondition(({ block, context, next }) => {
 
 > `optional` **conditions?**: [`ExportCondition`](ExportCondition.md)[]
 
-Defined in: [types.ts:327](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L327)
+Defined in: [types.ts:340](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L340)
 
 Conditions to evaluate. Chained left-to-right with `chain` operators.
 
@@ -2414,7 +2416,7 @@ Conditions to evaluate. Chained left-to-right with `chain` operators.
 
 > `optional` **isStartBlock?**: `boolean`
 
-Defined in: [types.ts:226](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L226)
+Defined in: [types.ts:239](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L239)
 
 When true, this block is the entry point of the scene. Only one per scene.
 
@@ -2428,7 +2430,7 @@ When true, this block is the entry point of the scene. Only one per scene.
 
 > `optional` **label?**: `string`
 
-Defined in: [types.ts:214](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L214)
+Defined in: [types.ts:227](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L227)
 
 Display label assigned in the editor.
 
@@ -2442,7 +2444,7 @@ Display label assigned in the editor.
 
 > `optional` **metadata?**: [`BlockMetadata`](BlockMetadata.md)
 
-Defined in: [types.ts:224](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L224)
+Defined in: [types.ts:237](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L237)
 
 Non-logic metadata for display and organization.
 
@@ -2456,7 +2458,7 @@ Non-logic metadata for display and organization.
 
 > `optional` **nativeProperties?**: [`NativeProperties`](NativeProperties.md)
 
-Defined in: [types.ts:222](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L222)
+Defined in: [types.ts:235](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L235)
 
 LSDE native execution properties (async, delay, portPerCharacter, etc.).
 
@@ -2470,7 +2472,7 @@ LSDE native execution properties (async, delay, portPerCharacter, etc.).
 
 > `optional` **note?**: `string`
 
-Defined in: [types.ts:329](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L329)
+Defined in: [types.ts:342](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L342)
 
 Designer note. Not displayed to players.
 
@@ -2480,7 +2482,7 @@ Designer note. Not displayed to players.
 
 > `optional` **parentLabels?**: `string`[]
 
-Defined in: [types.ts:216](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L216)
+Defined in: [types.ts:229](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L229)
 
 Hierarchy of parent folder labels providing structural context.
 
@@ -2494,7 +2496,7 @@ Hierarchy of parent folder labels providing structural context.
 
 > **properties**: [`BlockProperty`](BlockProperty.md)[]
 
-Defined in: [types.ts:218](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L218)
+Defined in: [types.ts:231](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L231)
 
 Custom key-value properties defined by block configuration.
 
@@ -2508,7 +2510,7 @@ Custom key-value properties defined by block configuration.
 
 > **type**: `"CONDITION"`
 
-Defined in: [types.ts:325](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L325)
+Defined in: [types.ts:338](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L338)
 
 Block type determining behavior and rendering.
 
@@ -2522,7 +2524,7 @@ Block type determining behavior and rendering.
 
 > `optional` **userProperties?**: `Record`\<`string`, `string` \| `number` \| `boolean`\>
 
-Defined in: [types.ts:220](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L220)
+Defined in: [types.ts:233](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L233)
 
 User-defined custom properties dictionary set by the narrative designer.
 
@@ -2536,7 +2538,7 @@ User-defined custom properties dictionary set by the narrative designer.
 
 > **uuid**: `string`
 
-Defined in: [types.ts:210](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L210)
+Defined in: [types.ts:223](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L223)
 
 Unique block identifier.
 
@@ -2550,7 +2552,7 @@ Unique block identifier.
 
 # Interface: ConditionContext
 
-Defined in: [types.ts:605](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L605)
+Defined in: [types.ts:618](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L618)
 
 Context for CONDITION block handlers.
 
@@ -2564,7 +2566,7 @@ Context for CONDITION block handlers.
 
 > **character**: [`BlockCharacter`](BlockCharacter.md) \| `undefined`
 
-Defined in: [types.ts:581](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L581)
+Defined in: [types.ts:594](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L594)
 
 Character resolved by the `onResolveCharacter` callback for this block, or `undefined` if none.
 
@@ -2578,7 +2580,7 @@ Character resolved by the `onResolveCharacter` callback for this block, or `unde
 
 > **preventGlobalHandler**: () => `void`
 
-Defined in: [types.ts:583](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L583)
+Defined in: [types.ts:596](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L596)
 
 Prevent the global (Tier 1) handler from executing after this scene handler.
 
@@ -2596,7 +2598,7 @@ Prevent the global (Tier 1) handler from executing after this scene handler.
 
 > **resolve**: (`result`) => `void`
 
-Defined in: [types.ts:607](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L607)
+Defined in: [types.ts:620](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L620)
 
 Resolve the condition: true → port index 0, false → port index 1.
 
@@ -2616,7 +2618,7 @@ Resolve the condition: true → port index 0, false → port index 1.
 
 # Interface: DiagnosticEntry
 
-Defined in: [types.ts:524](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L524)
+Defined in: [types.ts:537](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L537)
 
 Single diagnostic entry (error or warning).
 
@@ -2626,7 +2628,7 @@ Single diagnostic entry (error or warning).
 
 > `optional` **blockId?**: `string`
 
-Defined in: [types.ts:532](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L532)
+Defined in: [types.ts:545](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L545)
 
 UUID of the block where the issue was found, if applicable.
 
@@ -2636,7 +2638,7 @@ UUID of the block where the issue was found, if applicable.
 
 > **code**: `string`
 
-Defined in: [types.ts:526](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L526)
+Defined in: [types.ts:539](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L539)
 
 Machine-readable error/warning code (e.g. "NO_ENTRY_BLOCK", "ORPHAN_CONNECTION").
 
@@ -2646,7 +2648,7 @@ Machine-readable error/warning code (e.g. "NO_ENTRY_BLOCK", "ORPHAN_CONNECTION")
 
 > **message**: `string`
 
-Defined in: [types.ts:528](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L528)
+Defined in: [types.ts:541](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L541)
 
 Human-readable description of the issue.
 
@@ -2656,7 +2658,7 @@ Human-readable description of the issue.
 
 > `optional` **sceneId?**: `string`
 
-Defined in: [types.ts:530](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L530)
+Defined in: [types.ts:543](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L543)
 
 UUID of the scene where the issue was found, if applicable.
 
@@ -2666,7 +2668,7 @@ UUID of the scene where the issue was found, if applicable.
 
 # Interface: DiagnosticReport
 
-Defined in: [types.ts:543](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L543)
+Defined in: [types.ts:556](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L556)
 
 Result of `engine.init()` — validation report.
 
@@ -2676,7 +2678,7 @@ Result of `engine.init()` — validation report.
 
 > **errors**: [`DiagnosticEntry`](DiagnosticEntry.md)[]
 
-Defined in: [types.ts:544](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L544)
+Defined in: [types.ts:557](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L557)
 
 ***
 
@@ -2684,7 +2686,7 @@ Defined in: [types.ts:544](https://github.com/jonlepage/LS-Dialog-Editor-Engine/
 
 > **stats**: [`DiagnosticStats`](DiagnosticStats.md)
 
-Defined in: [types.ts:546](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L546)
+Defined in: [types.ts:559](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L559)
 
 ***
 
@@ -2692,7 +2694,7 @@ Defined in: [types.ts:546](https://github.com/jonlepage/LS-Dialog-Editor-Engine/
 
 > **warnings**: [`DiagnosticEntry`](DiagnosticEntry.md)[]
 
-Defined in: [types.ts:545](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L545)
+Defined in: [types.ts:558](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L558)
 
 ================================================================================
 
@@ -2700,7 +2702,7 @@ Defined in: [types.ts:545](https://github.com/jonlepage/LS-Dialog-Editor-Engine/
 
 # Interface: DiagnosticStats
 
-Defined in: [types.ts:536](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L536)
+Defined in: [types.ts:549](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L549)
 
 Aggregate statistics from blueprint validation.
 
@@ -2710,7 +2712,7 @@ Aggregate statistics from blueprint validation.
 
 > **blockCount**: `number`
 
-Defined in: [types.ts:538](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L538)
+Defined in: [types.ts:551](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L551)
 
 ***
 
@@ -2718,7 +2720,7 @@ Defined in: [types.ts:538](https://github.com/jonlepage/LS-Dialog-Editor-Engine/
 
 > **connectionCount**: `number`
 
-Defined in: [types.ts:539](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L539)
+Defined in: [types.ts:552](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L552)
 
 ***
 
@@ -2726,7 +2728,7 @@ Defined in: [types.ts:539](https://github.com/jonlepage/LS-Dialog-Editor-Engine/
 
 > **sceneCount**: `number`
 
-Defined in: [types.ts:537](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L537)
+Defined in: [types.ts:550](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L550)
 
 ================================================================================
 
@@ -2734,7 +2736,7 @@ Defined in: [types.ts:537](https://github.com/jonlepage/LS-Dialog-Editor-Engine/
 
 # Interface: DialogBlock
 
-Defined in: [types.ts:253](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L253)
+Defined in: [types.ts:266](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L266)
 
 Dialog block — displays text spoken by a character.
 
@@ -2773,7 +2775,7 @@ engine.onDialog(({ block, context, next }) => {
 
 > `optional` **content?**: `string`
 
-Defined in: [types.ts:258](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L258)
+Defined in: [types.ts:271](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L271)
 
 Raw text content in the primary language.
 
@@ -2783,7 +2785,7 @@ Raw text content in the primary language.
 
 > `optional` **dialogueText?**: `Record`\<`string`, `string`\>
 
-Defined in: [types.ts:260](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L260)
+Defined in: [types.ts:273](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L273)
 
 Localized text map: `{ locale -> text }`.
 
@@ -2793,7 +2795,7 @@ Localized text map: `{ locale -> text }`.
 
 > `optional` **isStartBlock?**: `boolean`
 
-Defined in: [types.ts:226](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L226)
+Defined in: [types.ts:239](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L239)
 
 When true, this block is the entry point of the scene. Only one per scene.
 
@@ -2807,7 +2809,7 @@ When true, this block is the entry point of the scene. Only one per scene.
 
 > `optional` **label?**: `string`
 
-Defined in: [types.ts:214](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L214)
+Defined in: [types.ts:227](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L227)
 
 Display label assigned in the editor.
 
@@ -2821,7 +2823,7 @@ Display label assigned in the editor.
 
 > `optional` **metadata?**: [`BlockMetadata`](BlockMetadata.md)
 
-Defined in: [types.ts:224](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L224)
+Defined in: [types.ts:237](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L237)
 
 Non-logic metadata for display and organization.
 
@@ -2835,7 +2837,7 @@ Non-logic metadata for display and organization.
 
 > `optional` **nativeProperties?**: [`NativeProperties`](NativeProperties.md)
 
-Defined in: [types.ts:222](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L222)
+Defined in: [types.ts:235](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L235)
 
 LSDE native execution properties (async, delay, portPerCharacter, etc.).
 
@@ -2849,7 +2851,7 @@ LSDE native execution properties (async, delay, portPerCharacter, etc.).
 
 > `optional` **parentLabels?**: `string`[]
 
-Defined in: [types.ts:216](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L216)
+Defined in: [types.ts:229](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L229)
 
 Hierarchy of parent folder labels providing structural context.
 
@@ -2863,7 +2865,7 @@ Hierarchy of parent folder labels providing structural context.
 
 > **properties**: [`BlockProperty`](BlockProperty.md)[]
 
-Defined in: [types.ts:218](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L218)
+Defined in: [types.ts:231](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L231)
 
 Custom key-value properties defined by block configuration.
 
@@ -2877,7 +2879,7 @@ Custom key-value properties defined by block configuration.
 
 > `optional` **structureKey?**: `string`
 
-Defined in: [types.ts:256](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L256)
+Defined in: [types.ts:269](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L269)
 
 Hierarchical key for tree navigation and localization lookup.
 
@@ -2887,7 +2889,7 @@ Hierarchical key for tree navigation and localization lookup.
 
 > **type**: `"DIALOG"`
 
-Defined in: [types.ts:254](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L254)
+Defined in: [types.ts:267](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L267)
 
 Block type determining behavior and rendering.
 
@@ -2901,7 +2903,7 @@ Block type determining behavior and rendering.
 
 > `optional` **userProperties?**: `Record`\<`string`, `string` \| `number` \| `boolean`\>
 
-Defined in: [types.ts:220](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L220)
+Defined in: [types.ts:233](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L233)
 
 User-defined custom properties dictionary set by the narrative designer.
 
@@ -2915,7 +2917,7 @@ User-defined custom properties dictionary set by the narrative designer.
 
 > **uuid**: `string`
 
-Defined in: [types.ts:210](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L210)
+Defined in: [types.ts:223](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L223)
 
 Unique block identifier.
 
@@ -2929,7 +2931,7 @@ Unique block identifier.
 
 # Interface: DialogContext
 
-Defined in: [types.ts:587](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L587)
+Defined in: [types.ts:600](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L600)
 
 Context for DIALOG block handlers.
 
@@ -2943,7 +2945,7 @@ Context for DIALOG block handlers.
 
 > **character**: [`BlockCharacter`](BlockCharacter.md) \| `undefined`
 
-Defined in: [types.ts:581](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L581)
+Defined in: [types.ts:594](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L594)
 
 Character resolved by the `onResolveCharacter` callback for this block, or `undefined` if none.
 
@@ -2957,7 +2959,7 @@ Character resolved by the `onResolveCharacter` callback for this block, or `unde
 
 > **preventGlobalHandler**: () => `void`
 
-Defined in: [types.ts:583](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L583)
+Defined in: [types.ts:596](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L596)
 
 Prevent the global (Tier 1) handler from executing after this scene handler.
 
@@ -2975,7 +2977,7 @@ Prevent the global (Tier 1) handler from executing after this scene handler.
 
 > **resolveCharacterPort**: (`characterUuid`) => `void`
 
-Defined in: [types.ts:589](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L589)
+Defined in: [types.ts:602](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L602)
 
 When portPerCharacter is enabled, specify which character port to follow.
 
@@ -2995,7 +2997,7 @@ When portPerCharacter is enabled, specify which character port to follow.
 
 # Interface: Dictionary
 
-Defined in: [types.ts:429](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L429)
+Defined in: [types.ts:442](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L442)
 
 Dictionary group defining reusable key-value pairs for conditions and actions.
 
@@ -3005,7 +3007,7 @@ Dictionary group defining reusable key-value pairs for conditions and actions.
 
 > `optional` **label?**: `string`
 
-Defined in: [types.ts:433](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L433)
+Defined in: [types.ts:446](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L446)
 
 Display name, used as prefix in condition keys (e.g. `"groupLabel.rowKey"`).
 
@@ -3015,7 +3017,7 @@ Display name, used as prefix in condition keys (e.g. `"groupLabel.rowKey"`).
 
 > **rows**: [`DictionaryRow`](DictionaryRow.md)[]
 
-Defined in: [types.ts:437](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L437)
+Defined in: [types.ts:450](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L450)
 
 All entries in this dictionary group.
 
@@ -3025,7 +3027,7 @@ All entries in this dictionary group.
 
 > **uuid**: `string`
 
-Defined in: [types.ts:431](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L431)
+Defined in: [types.ts:444](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L444)
 
 Unique identifier for this dictionary group.
 
@@ -3035,7 +3037,7 @@ Unique identifier for this dictionary group.
 
 > **valueType**: `"string"` \| `"number"` \| `"boolean"`
 
-Defined in: [types.ts:435](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L435)
+Defined in: [types.ts:448](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L448)
 
 Data type of values in this dictionary. Determines how condition values are parsed.
 
@@ -3045,7 +3047,7 @@ Data type of values in this dictionary. Determines how condition values are pars
 
 # Interface: DictionaryRow
 
-Defined in: [types.ts:421](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L421)
+Defined in: [types.ts:434](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L434)
 
 A single entry in a dictionary group.
 
@@ -3055,7 +3057,7 @@ A single entry in a dictionary group.
 
 > **key**: `string`
 
-Defined in: [types.ts:423](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L423)
+Defined in: [types.ts:436](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L436)
 
 Key identifier referenced in conditions and action parameters.
 
@@ -3065,7 +3067,7 @@ Key identifier referenced in conditions and action parameters.
 
 > `optional` **note?**: `string`
 
-Defined in: [types.ts:425](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L425)
+Defined in: [types.ts:438](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L438)
 
 Optional description for this dictionary entry.
 
@@ -3075,7 +3077,7 @@ Optional description for this dictionary entry.
 
 # Interface: ExportAction
 
-Defined in: [types.ts:71](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L71)
+Defined in: [types.ts:71](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L71)
 
 Action triggered during block execution.
 
@@ -3085,7 +3087,7 @@ Action triggered during block execution.
 
 > **actionId**: `string`
 
-Defined in: [types.ts:77](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L77)
+Defined in: [types.ts:77](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L77)
 
 Action type identifier matching an `ActionSignature.id` (e.g. "set_flag", "play_sound"). The dev maps this to game-side functions.
 
@@ -3095,7 +3097,7 @@ Action type identifier matching an `ActionSignature.id` (e.g. "set_flag", "play_
 
 > **params**: (`string` \| `number` \| `boolean`)[]
 
-Defined in: [types.ts:79](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L79)
+Defined in: [types.ts:79](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L79)
 
 Ordered parameter values for the action, as defined by the matching `ActionSignature.params`.
 
@@ -3105,7 +3107,7 @@ Ordered parameter values for the action, as defined by the matching `ActionSigna
 
 > `optional` **signatureUuid?**: `string`
 
-Defined in: [types.ts:75](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L75)
+Defined in: [types.ts:75](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L75)
 
 UUID of the `ActionSignature` this action references.
 
@@ -3115,7 +3117,7 @@ UUID of the `ActionSignature` this action references.
 
 > **uuid**: `string`
 
-Defined in: [types.ts:73](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L73)
+Defined in: [types.ts:73](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L73)
 
 Unique identifier for this action instance.
 
@@ -3125,7 +3127,7 @@ Unique identifier for this action instance.
 
 # Interface: ExportCondition
 
-Defined in: [types.ts:57](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L57)
+Defined in: [types.ts:57](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L57)
 
 Condition evaluated to control dialogue flow or choice visibility.
 
@@ -3155,7 +3157,7 @@ the game state via the `onCondition` handler — the engine only handles the cha
 
 > `optional` **chain?**: "\|" \| `"&"`
 
-Defined in: [types.ts:63](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L63)
+Defined in: [types.ts:63](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L63)
 
 Logical chaining with the previous condition: `'|'` (OR) or `'&'` (AND). Defaults to AND if omitted. Ignored on the first condition in a chain.
 
@@ -3165,7 +3167,7 @@ Logical chaining with the previous condition: `'|'` (OR) or `'&'` (AND). Default
 
 > **key**: `string`
 
-Defined in: [types.ts:61](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L61)
+Defined in: [types.ts:61](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L61)
 
 State key to evaluate (e.g. "has_item", "player_level"). Interpreted by the `onCondition` handler.
 
@@ -3175,7 +3177,7 @@ State key to evaluate (e.g. "has_item", "player_level"). Interpreted by the `onC
 
 > **operator**: `string`
 
-Defined in: [types.ts:65](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L65)
+Defined in: [types.ts:65](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L65)
 
 Comparison operator (e.g. "==", "!=", ">", "<", ">=", "<="). Interpretation is up to the `onCondition` handler.
 
@@ -3185,7 +3187,7 @@ Comparison operator (e.g. "==", "!=", ">", "<", ">=", "<="). Interpretation is u
 
 > **uuid**: `string`
 
-Defined in: [types.ts:59](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L59)
+Defined in: [types.ts:59](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L59)
 
 Unique identifier for this condition instance.
 
@@ -3195,7 +3197,7 @@ Unique identifier for this condition instance.
 
 > **value**: `string`
 
-Defined in: [types.ts:67](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L67)
+Defined in: [types.ts:67](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L67)
 
 Value to compare against. Always a string — the developer is responsible for type coercion.
 
@@ -3205,7 +3207,7 @@ Value to compare against. Always a string — the developer is responsible for t
 
 # Interface: IDialogueEngine
 
-Defined in: [types.ts:824](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L824)
+Defined in: [types.ts:907](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L907)
 
 Public interface for the dialogue engine facade.
 
@@ -3224,7 +3226,7 @@ global handler registration, and scene creation. Use [SceneHandle](SceneHandle.m
 
 > **getActiveScenes**(): [`SceneHandle`](SceneHandle.md)[]
 
-Defined in: [types.ts:889](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L889)
+Defined in: [types.ts:972](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L972)
 
 Get all currently active scene handles.
 
@@ -3238,7 +3240,7 @@ Get all currently active scene handles.
 
 > **getCurrentBlocks**(): [`BlueprintBlock`](../type-aliases/BlueprintBlock.md)[]
 
-Defined in: [types.ts:891](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L891)
+Defined in: [types.ts:974](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L974)
 
 Get the current block of every active scene.
 
@@ -3252,7 +3254,7 @@ Get the current block of every active scene.
 
 > **getSceneConnections**(`sceneId`): [`BlueprintConnection`](BlueprintConnection.md)[]
 
-Defined in: [types.ts:893](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L893)
+Defined in: [types.ts:976](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L976)
 
 Get connections for a scene (for inter-scene navigation).
 
@@ -3272,7 +3274,7 @@ Get connections for a scene (for inter-scene navigation).
 
 > **init**(`options`): [`DiagnosticReport`](DiagnosticReport.md)
 
-Defined in: [types.ts:828](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L828)
+Defined in: [types.ts:911](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L911)
 
 Validate blueprint data, build internal graph, return diagnostic report.
 
@@ -3292,7 +3294,7 @@ Validate blueprint data, build internal graph, return diagnostic report.
 
 > **isRunning**(): `boolean`
 
-Defined in: [types.ts:887](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L887)
+Defined in: [types.ts:970](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L970)
 
 True if at least one scene is active.
 
@@ -3306,7 +3308,7 @@ True if at least one scene is active.
 
 > **onAction**(`handler`): `void`
 
-Defined in: [types.ts:853](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L853)
+Defined in: [types.ts:936](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L936)
 
 Register a global handler for ACTION blocks. The developer MUST handle execution in this handler.
 
@@ -3326,7 +3328,7 @@ Register a global handler for ACTION blocks. The developer MUST handle execution
 
 > **onBeforeBlock**(`handler`): `void`
 
-Defined in: [types.ts:842](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L842)
+Defined in: [types.ts:925](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L925)
 
 Register a handler called before every block. Must call resolve() to continue.
 
@@ -3346,7 +3348,7 @@ Register a handler called before every block. Must call resolve() to continue.
 
 > **onChoice**(`handler`): `void`
 
-Defined in: [types.ts:849](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L849)
+Defined in: [types.ts:932](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L932)
 
 Register a global handler for CHOICE blocks. All choices are provided, tagged with `visible` when `setChoiceFilter()` is configured.
 
@@ -3366,7 +3368,7 @@ Register a global handler for CHOICE blocks. All choices are provided, tagged wi
 
 > **onCondition**(`handler`): `void`
 
-Defined in: [types.ts:851](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L851)
+Defined in: [types.ts:934](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L934)
 
 Register a global handler for CONDITION blocks. The developer MUST handle evaluation in this handler.
 
@@ -3386,7 +3388,7 @@ Register a global handler for CONDITION blocks. The developer MUST handle evalua
 
 > **onDialog**(`handler`): `void`
 
-Defined in: [types.ts:847](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L847)
+Defined in: [types.ts:930](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L930)
 
 Register a global handler for DIALOG blocks. May return a cleanup function.
 
@@ -3406,7 +3408,7 @@ Register a global handler for DIALOG blocks. May return a cleanup function.
 
 > **onInvalidateBlock**(`handler`): `void`
 
-Defined in: [types.ts:837](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L837)
+Defined in: [types.ts:920](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L920)
 
 Register a handler called when a block fails validation.
 
@@ -3426,7 +3428,7 @@ Register a handler called when a block fails validation.
 
 > **onResolveCharacter**(`fn`): `void`
 
-Defined in: [types.ts:858](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L858)
+Defined in: [types.ts:941](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L941)
 
 Register a global character resolver. Called for every block with `metadata.characters`.
 
@@ -3446,7 +3448,7 @@ Register a global character resolver. Called for every block with `metadata.char
 
 > **onSceneEnter**(`handler`): `void`
 
-Defined in: [types.ts:873](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L873)
+Defined in: [types.ts:956](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L956)
 
 Register a handler called when any scene starts.
 
@@ -3466,7 +3468,7 @@ Register a handler called when any scene starts.
 
 > **onSceneExit**(`handler`): `void`
 
-Defined in: [types.ts:875](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L875)
+Defined in: [types.ts:958](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L958)
 
 Register a handler called when any scene ends (natural or cancelled).
 
@@ -3486,7 +3488,7 @@ Register a handler called when any scene ends (natural or cancelled).
 
 > **onValidateNextBlock**(`handler`): `void`
 
-Defined in: [types.ts:835](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L835)
+Defined in: [types.ts:918](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L918)
 
 Register a handler called before each block to validate it.
 
@@ -3506,7 +3508,7 @@ Register a handler called before each block to validate it.
 
 > **scene**(`sceneId`): [`SceneHandle`](SceneHandle.md)
 
-Defined in: [types.ts:880](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L880)
+Defined in: [types.ts:963](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L963)
 
 Create a scene handle. Does NOT start the flow — call handle.start().
 
@@ -3526,7 +3528,7 @@ Create a scene handle. Does NOT start the flow — call handle.start().
 
 > **setChoiceFilter**(`evaluator`): `void`
 
-Defined in: [types.ts:868](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L868)
+Defined in: [types.ts:951](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L951)
 
 Install a condition evaluator for choice visibility tagging.
 When set, the engine evaluates each choice's `visibilityConditions` before calling `onChoice`,
@@ -3549,7 +3551,7 @@ internally via choice history — this callback evaluates game-state conditions 
 
 > **setLocale**(`locale`): `void`
 
-Defined in: [types.ts:830](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L830)
+Defined in: [types.ts:913](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L913)
 
 Set the active locale for text resolution.
 
@@ -3569,7 +3571,7 @@ Set the active locale for text resolution.
 
 > **stop**(): `void`
 
-Defined in: [types.ts:885](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L885)
+Defined in: [types.ts:968](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L968)
 
 Stop all active scenes.
 
@@ -3583,7 +3585,7 @@ Stop all active scenes.
 
 # Interface: InitOptions
 
-Defined in: [types.ts:560](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L560)
+Defined in: [types.ts:573](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L573)
 
 Options passed to `engine.init()`.
 
@@ -3593,7 +3595,7 @@ Options passed to `engine.init()`.
 
 > `optional` **check?**: [`CheckOptions`](CheckOptions.md)
 
-Defined in: [types.ts:562](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L562)
+Defined in: [types.ts:575](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L575)
 
 ***
 
@@ -3601,7 +3603,7 @@ Defined in: [types.ts:562](https://github.com/jonlepage/LS-Dialog-Editor-Engine/
 
 > **data**: [`BlueprintExport`](BlueprintExport.md)
 
-Defined in: [types.ts:561](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L561)
+Defined in: [types.ts:574](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L574)
 
 ================================================================================
 
@@ -3609,7 +3611,7 @@ Defined in: [types.ts:561](https://github.com/jonlepage/LS-Dialog-Editor-Engine/
 
 # Interface: InvalidateBlockArgs
 
-Defined in: [types.ts:707](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L707)
+Defined in: [types.ts:766](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L766)
 
 Arguments for the onInvalidateBlock handler.
 
@@ -3619,7 +3621,7 @@ Arguments for the onInvalidateBlock handler.
 
 > **reason**: `string`
 
-Defined in: [types.ts:709](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L709)
+Defined in: [types.ts:768](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L768)
 
 ***
 
@@ -3627,7 +3629,7 @@ Defined in: [types.ts:709](https://github.com/jonlepage/LS-Dialog-Editor-Engine/
 
 > **scene**: [`SceneHandle`](SceneHandle.md)
 
-Defined in: [types.ts:708](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L708)
+Defined in: [types.ts:767](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L767)
 
 ================================================================================
 
@@ -3635,7 +3637,7 @@ Defined in: [types.ts:708](https://github.com/jonlepage/LS-Dialog-Editor-Engine/
 
 # Interface: NativeProperties
 
-Defined in: [types.ts:130](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L130)
+Defined in: [types.ts:130](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L130)
 
 LSDE native execution properties controlling how a block is dispatched by the engine.
 
@@ -3644,13 +3646,12 @@ LSDE native execution properties controlling how a block is dispatched by the en
 These properties affect the engine's execution flow, not the block's content:
 
 - **Async tracks**: When `isAsync = true`, the block runs on a parallel track independent
-  of the main flow. Async tracks call `onBeforeBlock` like the main track, can spawn
-  sub-tracks from outgoing async connections, and are automatically cancelled when the scene ends.
+  of the main flow. Async tracks skip `onBeforeBlock`, follow only one connection, and are
+  automatically cancelled when the scene ends.
 
-- **waitForBlocks**: When set on an async block, the track defers execution until all
-  listed block UUIDs have been visited. If set on the start block, the entire track waits
-  before even calling `onBeforeBlock`. Combined with `delay`, the sequence is:
-  spawn → waitForBlocks → onBeforeBlock (delay) → handler → next().
+- **waitForBlocks**: When set, the block defers its advance until ALL listed block UUIDs
+  have been visited in the scene. This enables precise synchronization between parallel
+  async branches (e.g. a character waits for another to finish before reacting).
 
 - **delay**: Consumed by `onBeforeBlock` — the engine does not enforce it automatically.
   Your `onBeforeBlock` handler should read `block.nativeProperties.delay` and call
@@ -3671,7 +3672,7 @@ These properties affect the engine's execution flow, not the block's content:
 
 > `optional` **debug?**: `boolean`
 
-Defined in: [types.ts:138](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L138)
+Defined in: [types.ts:138](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L138)
 
 Enable debug mode for this block (editor use).
 
@@ -3681,7 +3682,7 @@ Enable debug mode for this block (editor use).
 
 > `optional` **delay?**: `number`
 
-Defined in: [types.ts:134](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L134)
+Defined in: [types.ts:134](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L134)
 
 Delay in seconds before the block is executed. Applied by the `onBeforeBlock` handler.
 
@@ -3691,7 +3692,7 @@ Delay in seconds before the block is executed. Applied by the `onBeforeBlock` ha
 
 > `optional` **isAsync?**: `boolean`
 
-Defined in: [types.ts:132](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L132)
+Defined in: [types.ts:132](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L132)
 
 Execute this block on a separate async track running in parallel with the main flow.
 
@@ -3701,7 +3702,7 @@ Execute this block on a separate async track running in parallel with the main f
 
 > `optional` **portPerCharacter?**: `boolean`
 
-Defined in: [types.ts:140](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L140)
+Defined in: [types.ts:140](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L140)
 
 One output port per character in `metadata.characters`. The handler calls `resolveCharacterPort()` to pick which port to follow.
 
@@ -3711,7 +3712,7 @@ One output port per character in `metadata.characters`. The handler calls `resol
 
 > `optional` **skipIfMissingActor?**: `boolean`
 
-Defined in: [types.ts:142](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L142)
+Defined in: [types.ts:142](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L142)
 
 Skip this block entirely if the assigned actor/character is missing at runtime.
 
@@ -3721,7 +3722,7 @@ Skip this block entirely if the assigned actor/character is missing at runtime.
 
 > `optional` **timeout?**: `number`
 
-Defined in: [types.ts:136](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L136)
+Defined in: [types.ts:136](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L136)
 
 Timeout in seconds for block execution.
 
@@ -3731,12 +3732,13 @@ Timeout in seconds for block execution.
 
 > `optional` **waitForBlocks?**: `string`[]
 
+Defined in: [types.ts:150](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L150)
+
 UUIDs of blocks that must have been visited before this block can progress.
 When `next()` is called and not all listed blocks are in `visitedBlocks`,
 the block defers its advance. Once the last required block is visited
 anywhere in the scene (main or async track), the deferred advance fires.
-If set on the start block of an async track, the entire track waits before
-even beginning execution (`onBeforeBlock` is not called until satisfied).
+Enables precise synchronization of parallel async branches.
 
 ***
 
@@ -3744,10 +3746,12 @@ even beginning execution (`onBeforeBlock` is not called until satisfied).
 
 > `optional` **waitInput?**: `boolean`
 
+Defined in: [types.ts:157](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L157)
+
 Passive flag indicating this block should wait for explicit player input
 or an engine-specific signal before proceeding. The engine does NOT
-interpret this flag — it is exposed as-is to game handlers via
-`block.nativeProperties.waitInput`.
+interpret this flag — it is exposed as-is to game handlers.
+Use case: second player controller, custom input events, etc.
 
 ================================================================================
 
@@ -3755,7 +3759,7 @@ interpret this flag — it is exposed as-is to game handlers via
 
 # Interface: NoteBlock
 
-Defined in: [types.ts:370](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L370)
+Defined in: [types.ts:383](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L383)
 
 Note block — designer documentation, never executed at runtime.
 
@@ -3769,7 +3773,7 @@ Note block — designer documentation, never executed at runtime.
 
 > `optional` **isStartBlock?**: `boolean`
 
-Defined in: [types.ts:226](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L226)
+Defined in: [types.ts:239](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L239)
 
 When true, this block is the entry point of the scene. Only one per scene.
 
@@ -3783,7 +3787,7 @@ When true, this block is the entry point of the scene. Only one per scene.
 
 > `optional` **label?**: `string`
 
-Defined in: [types.ts:214](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L214)
+Defined in: [types.ts:227](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L227)
 
 Display label assigned in the editor.
 
@@ -3797,7 +3801,7 @@ Display label assigned in the editor.
 
 > `optional` **metadata?**: [`BlockMetadata`](BlockMetadata.md)
 
-Defined in: [types.ts:224](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L224)
+Defined in: [types.ts:237](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L237)
 
 Non-logic metadata for display and organization.
 
@@ -3811,7 +3815,7 @@ Non-logic metadata for display and organization.
 
 > `optional` **nativeProperties?**: [`NativeProperties`](NativeProperties.md)
 
-Defined in: [types.ts:222](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L222)
+Defined in: [types.ts:235](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L235)
 
 LSDE native execution properties (async, delay, portPerCharacter, etc.).
 
@@ -3825,7 +3829,7 @@ LSDE native execution properties (async, delay, portPerCharacter, etc.).
 
 > `optional` **parentLabels?**: `string`[]
 
-Defined in: [types.ts:216](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L216)
+Defined in: [types.ts:229](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L229)
 
 Hierarchy of parent folder labels providing structural context.
 
@@ -3839,7 +3843,7 @@ Hierarchy of parent folder labels providing structural context.
 
 > **properties**: [`BlockProperty`](BlockProperty.md)[]
 
-Defined in: [types.ts:218](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L218)
+Defined in: [types.ts:231](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L231)
 
 Custom key-value properties defined by block configuration.
 
@@ -3853,7 +3857,7 @@ Custom key-value properties defined by block configuration.
 
 > **type**: `"NOTE"`
 
-Defined in: [types.ts:371](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L371)
+Defined in: [types.ts:384](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L384)
 
 Block type determining behavior and rendering.
 
@@ -3867,7 +3871,7 @@ Block type determining behavior and rendering.
 
 > `optional` **userProperties?**: `Record`\<`string`, `string` \| `number` \| `boolean`\>
 
-Defined in: [types.ts:220](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L220)
+Defined in: [types.ts:233](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L233)
 
 User-defined custom properties dictionary set by the narrative designer.
 
@@ -3881,7 +3885,7 @@ User-defined custom properties dictionary set by the narrative designer.
 
 > **uuid**: `string`
 
-Defined in: [types.ts:210](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L210)
+Defined in: [types.ts:223](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L223)
 
 Unique block identifier.
 
@@ -3895,7 +3899,7 @@ Unique block identifier.
 
 # Interface: PortResolutionInput
 
-Defined in: [types.ts:899](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L899)
+Defined in: [types.ts:982](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L982)
 
 Input data for port resolution.
 
@@ -3905,7 +3909,7 @@ Input data for port resolution.
 
 > `optional` **actionRejected?**: `boolean`
 
-Defined in: [types.ts:909](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L909)
+Defined in: [types.ts:992](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L992)
 
 ACTION blocks only — if `true`, the resolver looks for a `catch` port before falling back to `then`.
 
@@ -3915,7 +3919,7 @@ ACTION blocks only — if `true`, the resolver looks for a `catch` port before f
 
 > **block**: [`BlueprintBlock`](../type-aliases/BlueprintBlock.md)
 
-Defined in: [types.ts:901](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L901)
+Defined in: [types.ts:984](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L984)
 
 The block whose output port is being resolved. Its `type` determines the routing rules.
 
@@ -3925,7 +3929,7 @@ The block whose output port is being resolved. Its `type` determines the routing
 
 > `optional` **characterPortIndex?**: `number`
 
-Defined in: [types.ts:911](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L911)
+Defined in: [types.ts:994](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L994)
 
 DIALOG blocks with `portPerCharacter` — character index in metadata.characters to match against `connection.fromPortIndex`.
 
@@ -3935,7 +3939,7 @@ DIALOG blocks with `portPerCharacter` — character index in metadata.characters
 
 > `optional` **conditionResult?**: `boolean`
 
-Defined in: [types.ts:907](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L907)
+Defined in: [types.ts:990](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L990)
 
 CONDITION blocks only — evaluation result. `true` → port index 0, `false` → port index 1.
 
@@ -3945,7 +3949,7 @@ CONDITION blocks only — evaluation result. `true` → port index 0, `false` �
 
 > **connections**: [`BlueprintConnection`](BlueprintConnection.md)[]
 
-Defined in: [types.ts:903](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L903)
+Defined in: [types.ts:986](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L986)
 
 All outgoing connections from this block. The resolver picks the one to follow.
 
@@ -3955,7 +3959,7 @@ All outgoing connections from this block. The resolver picks the one to follow.
 
 > `optional` **selectedChoiceUuid?**: `string`
 
-Defined in: [types.ts:905](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L905)
+Defined in: [types.ts:988](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L988)
 
 CHOICE blocks only — UUID of the selected choice. Matches `connection.fromPort`.
 
@@ -3965,7 +3969,7 @@ CHOICE blocks only — UUID of the selected choice. Matches `connection.fromPort
 
 # Interface: PortResolutionResult
 
-Defined in: [types.ts:915](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L915)
+Defined in: [types.ts:998](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L998)
 
 Result of port resolution — all matching connections.
 
@@ -3975,7 +3979,7 @@ Result of port resolution — all matching connections.
 
 > **connections**: [`BlueprintConnection`](BlueprintConnection.md)[]
 
-Defined in: [types.ts:916](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L916)
+Defined in: [types.ts:999](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L999)
 
 ================================================================================
 
@@ -3983,7 +3987,7 @@ Defined in: [types.ts:916](https://github.com/jonlepage/LS-Dialog-Editor-Engine/
 
 # Interface: RuntimeChoiceItem
 
-Defined in: [types.ts:100](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L100)
+Defined in: [types.ts:100](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L100)
 
 Choice item with runtime visibility tag, set by the engine when `setChoiceFilter()` is configured.
 Use `choices.filter(c => c.visible !== false)` to get visible choices.
@@ -3998,7 +4002,7 @@ Use `choices.filter(c => c.visible !== false)` to get visible choices.
 
 > `optional` **dialogueText?**: `Record`\<`string`, `string`\>
 
-Defined in: [types.ts:91](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L91)
+Defined in: [types.ts:91](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L91)
 
 Localized text map: `{ locale -> text }`.
 
@@ -4012,7 +4016,7 @@ Localized text map: `{ locale -> text }`.
 
 > `optional` **label?**: `string`
 
-Defined in: [types.ts:89](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L89)
+Defined in: [types.ts:89](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L89)
 
 Display label for editor reference.
 
@@ -4026,7 +4030,7 @@ Display label for editor reference.
 
 > **structureKey**: `string`
 
-Defined in: [types.ts:87](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L87)
+Defined in: [types.ts:87](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L87)
 
 Hierarchical key for localization lookup.
 
@@ -4040,7 +4044,7 @@ Hierarchical key for localization lookup.
 
 > **uuid**: `string`
 
-Defined in: [types.ts:85](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L85)
+Defined in: [types.ts:85](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L85)
 
 Unique identifier for this choice.
 
@@ -4054,7 +4058,7 @@ Unique identifier for this choice.
 
 > `optional` **visibilityConditions?**: [`ExportCondition`](ExportCondition.md)[]
 
-Defined in: [types.ts:93](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L93)
+Defined in: [types.ts:93](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L93)
 
 Conditions controlling whether this choice is visible. If all pass (or none set), the choice is shown.
 
@@ -4068,7 +4072,7 @@ Conditions controlling whether this choice is visible. If all pass (or none set)
 
 > `optional` **visible?**: `boolean`
 
-Defined in: [types.ts:102](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L102)
+Defined in: [types.ts:102](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L102)
 
 `true` = visible, `false` = hidden, `undefined` = no filter installed (treat as visible).
 
@@ -4078,7 +4082,7 @@ Defined in: [types.ts:102](https://github.com/jonlepage/LS-Dialog-Editor-Engine/
 
 # Interface: SceneContext
 
-Defined in: [types.ts:624](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L624)
+Defined in: [types.ts:637](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L637)
 
 Context passed to scene lifecycle handlers.
 
@@ -4088,7 +4092,7 @@ Context passed to scene lifecycle handlers.
 
 # Interface: SceneHandle
 
-Defined in: [types.ts:771](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L771)
+Defined in: [types.ts:852](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L852)
 
 Public interface for controlling a running scene.
 
@@ -4133,7 +4137,7 @@ handle.start();
 
 > **cancel**(): `void`
 
-Defined in: [types.ts:775](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L775)
+Defined in: [types.ts:856](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L856)
 
 Cancel the scene flow.
 
@@ -4147,7 +4151,7 @@ Cancel the scene flow.
 
 > **evaluateCondition**(`condition`): `boolean`
 
-Defined in: [types.ts:808](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L808)
+Defined in: [types.ts:891](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L891)
 
 Evaluate a condition. Handles `choice:` conditions via internal choice history. Returns `false` for non-choice conditions.
 
@@ -4167,7 +4171,7 @@ Evaluate a condition. Handles `choice:` conditions via internal choice history. 
 
 > **getActiveTracks**(): `number`
 
-Defined in: [types.ts:800](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L800)
+Defined in: [types.ts:881](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L881)
 
 Get the number of async tracks currently running in parallel.
 
@@ -4177,25 +4181,11 @@ Get the number of async tracks currently running in parallel.
 
 ***
 
-### getTrackInfos()
-
-> **getTrackInfos**(): readonly [`TrackInfo`](TrackInfo.md)[]
-
-Get detailed info for all currently running async tracks. Returns a read-only
-snapshot of each track's state including its ID, parent track, current block,
-and running status. Useful for debug overlays, play-mode renderers, and validation tools.
-
-#### Returns
-
-readonly [`TrackInfo`](TrackInfo.md)[]
-
-***
-
 ### getChoice()
 
 > **getChoice**(`blockUuid`): readonly `string`[] \| `undefined`
 
-Defined in: [types.ts:805](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L805)
+Defined in: [types.ts:888](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L888)
 
 Get the choice(s) selected at a specific block. Returns undefined if block never visited as choice.
 
@@ -4215,7 +4205,7 @@ readonly `string`[] \| `undefined`
 
 > **getChoiceHistory**(): `ReadonlyMap`\<`string`, readonly `string`[]\>
 
-Defined in: [types.ts:803](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L803)
+Defined in: [types.ts:886](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L886)
 
 Get the full choice history for this scene. Keys are block UUIDs, values are arrays of selected choice UUIDs.
 
@@ -4229,7 +4219,7 @@ Get the full choice history for this scene. Keys are block UUIDs, values are arr
 
 > **getCurrentBlock**(): [`BlueprintBlock`](../type-aliases/BlueprintBlock.md) \| `null`
 
-Defined in: [types.ts:794](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L794)
+Defined in: [types.ts:875](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L875)
 
 Get the block currently being executed.
 
@@ -4239,11 +4229,25 @@ Get the block currently being executed.
 
 ***
 
+### getTrackInfos()
+
+> **getTrackInfos**(): readonly [`TrackInfo`](TrackInfo.md)[]
+
+Defined in: [types.ts:883](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L883)
+
+Get detailed info for all currently running async tracks. Useful for debug, rendering, and validation.
+
+#### Returns
+
+readonly [`TrackInfo`](TrackInfo.md)[]
+
+***
+
 ### getVisitedBlocks()
 
 > **getVisitedBlocks**(): `ReadonlySet`\<`string`\>
 
-Defined in: [types.ts:796](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L796)
+Defined in: [types.ts:877](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L877)
 
 Get UUIDs of all blocks visited so far.
 
@@ -4257,7 +4261,7 @@ Get UUIDs of all blocks visited so far.
 
 > **isRunning**(): `boolean`
 
-Defined in: [types.ts:798](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L798)
+Defined in: [types.ts:879](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L879)
 
 Check if the scene flow is currently active.
 
@@ -4271,7 +4275,7 @@ Check if the scene flow is currently active.
 
 > **onAction**(`handler`): `void`
 
-Defined in: [types.ts:791](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L791)
+Defined in: [types.ts:872](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L872)
 
 Override all ACTION blocks for this scene.
 
@@ -4291,7 +4295,7 @@ Override all ACTION blocks for this scene.
 
 > **onBlock**(`blockUuid`, `handler`): `void`
 
-Defined in: [types.ts:783](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L783)
+Defined in: [types.ts:864](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L864)
 
 Override a specific block by UUID.
 
@@ -4315,7 +4319,7 @@ Override a specific block by UUID.
 
 > **onChoice**(`handler`): `void`
 
-Defined in: [types.ts:787](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L787)
+Defined in: [types.ts:868](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L868)
 
 Override all CHOICE blocks for this scene.
 
@@ -4335,7 +4339,7 @@ Override all CHOICE blocks for this scene.
 
 > **onCondition**(`handler`): `void`
 
-Defined in: [types.ts:789](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L789)
+Defined in: [types.ts:870](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L870)
 
 Override all CONDITION blocks for this scene.
 
@@ -4355,7 +4359,7 @@ Override all CONDITION blocks for this scene.
 
 > **onDialog**(`handler`): `void`
 
-Defined in: [types.ts:785](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L785)
+Defined in: [types.ts:866](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L866)
 
 Override all DIALOG blocks for this scene.
 
@@ -4375,7 +4379,7 @@ Override all DIALOG blocks for this scene.
 
 > **onEnter**(`handler`): `void`
 
-Defined in: [types.ts:778](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L778)
+Defined in: [types.ts:859](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L859)
 
 Override the global onSceneEnter for this scene.
 
@@ -4395,7 +4399,7 @@ Override the global onSceneEnter for this scene.
 
 > **onExit**(`handler`): `void`
 
-Defined in: [types.ts:780](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L780)
+Defined in: [types.ts:861](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L861)
 
 Override the global onSceneExit for this scene.
 
@@ -4415,7 +4419,7 @@ Override the global onSceneExit for this scene.
 
 > **onResolveCharacter**(`fn`): `void`
 
-Defined in: [types.ts:810](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L810)
+Defined in: [types.ts:893](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L893)
 
 Override character resolution for this scene. Defaults to engine-level resolver.
 
@@ -4435,7 +4439,7 @@ Override character resolution for this scene. Defaults to engine-level resolver.
 
 > **start**(): `void`
 
-Defined in: [types.ts:773](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L773)
+Defined in: [types.ts:854](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L854)
 
 Start the scene flow from the entry block.
 
@@ -4449,7 +4453,7 @@ Start the scene flow from the entry block.
 
 # Interface: SceneLifecycleArgs
 
-Defined in: [types.ts:727](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L727)
+Defined in: [types.ts:786](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L786)
 
 Arguments for scene lifecycle handlers.
 
@@ -4459,7 +4463,7 @@ Arguments for scene lifecycle handlers.
 
 > **context**: [`SceneContext`](SceneContext.md)
 
-Defined in: [types.ts:729](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L729)
+Defined in: [types.ts:788](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L788)
 
 ***
 
@@ -4467,7 +4471,7 @@ Defined in: [types.ts:729](https://github.com/jonlepage/LS-Dialog-Editor-Engine/
 
 > **scene**: [`SceneHandle`](SceneHandle.md)
 
-Defined in: [types.ts:728](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L728)
+Defined in: [types.ts:787](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L787)
 
 ================================================================================
 
@@ -4475,7 +4479,7 @@ Defined in: [types.ts:728](https://github.com/jonlepage/LS-Dialog-Editor-Engine/
 
 # Interface: SignatureParam
 
-Defined in: [types.ts:441](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L441)
+Defined in: [types.ts:454](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L454)
 
 Parameter definition for an action signature.
 
@@ -4485,7 +4489,7 @@ Parameter definition for an action signature.
 
 > `optional` **dictionaryGroupUuid?**: `string`
 
-Defined in: [types.ts:447](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L447)
+Defined in: [types.ts:460](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L460)
 
 UUID of the dictionary group this parameter references. Only when `type` is `"dictionary"`.
 
@@ -4495,7 +4499,7 @@ UUID of the dictionary group this parameter references. Only when `type` is `"di
 
 > `optional` **enumOptions?**: `object`[]
 
-Defined in: [types.ts:449](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L449)
+Defined in: [types.ts:462](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L462)
 
 Available options when `type` is `"enum"`.
 
@@ -4513,7 +4517,7 @@ Available options when `type` is `"enum"`.
 
 > `optional` **label?**: `string`
 
-Defined in: [types.ts:443](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L443)
+Defined in: [types.ts:456](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L456)
 
 Display label for this parameter.
 
@@ -4523,7 +4527,7 @@ Display label for this parameter.
 
 > **type**: `"string"` \| `"number"` \| `"boolean"` \| `"enum"` \| `"dictionary"`
 
-Defined in: [types.ts:445](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L445)
+Defined in: [types.ts:458](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L458)
 
 Data type of this parameter.
 
@@ -4533,25 +4537,31 @@ Data type of this parameter.
 
 # Interface: TrackInfo
 
-Defined in: types.ts
+Defined in: [types.ts:803](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L803)
 
 Read-only snapshot of an async track's state.
-Returned by [`SceneHandle.getTrackInfos()`](SceneHandle.md#gettrackinfosfn) for debug, rendering, and validation.
-
-## Remarks
+Returned by [SceneHandle.getTrackInfos](SceneHandle.md#gettrackinfos) for debug, rendering, and validation.
 
 Track IDs are auto-incremented integers starting at 1. The main track is implicit (id 0)
-and never appears in the track info list. Use `parentTrackId` to reconstruct the track
-hierarchy: `null` means spawned by the main track, otherwise it references the parent
-async track's id.
-
-Tracks that have ended naturally or been cancelled are excluded from `getTrackInfos()`.
+and never appears in the track info list.
 
 ## Properties
+
+### currentBlockUuid
+
+> `readonly` **currentBlockUuid**: `string` \| `null`
+
+Defined in: [types.ts:811](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L811)
+
+UUID of the block currently being processed, or `null` if the track has ended.
+
+***
 
 ### id
 
 > `readonly` **id**: `number`
+
+Defined in: [types.ts:805](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L805)
 
 Unique auto-incremented identifier for this track within the scene. Main track is implicit (id 0).
 
@@ -4561,24 +4571,9 @@ Unique auto-incremented identifier for this track within the scene. Main track i
 
 > `readonly` **parentTrackId**: `number` \| `null`
 
+Defined in: [types.ts:807](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L807)
+
 ID of the track that spawned this one. `null` means spawned directly by the main track.
-
-***
-
-### startBlockUuid
-
-> `readonly` **startBlockUuid**: `string`
-
-UUID of the first block that started this track's execution.
-
-***
-
-### currentBlockUuid
-
-> `readonly` **currentBlockUuid**: `string` \| `null`
-
-UUID of the block currently being processed, or `null` if the track has not yet started
-(e.g. waiting for `waitForBlocks` to be satisfied).
 
 ***
 
@@ -4586,7 +4581,19 @@ UUID of the block currently being processed, or `null` if the track has not yet 
 
 > `readonly` **running**: `boolean`
 
+Defined in: [types.ts:813](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L813)
+
 Whether this track is still actively executing.
+
+***
+
+### startBlockUuid
+
+> `readonly` **startBlockUuid**: `string`
+
+Defined in: [types.ts:809](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L809)
+
+UUID of the first block that started this track's execution.
 
 ================================================================================
 
@@ -4594,25 +4601,55 @@ Whether this track is still actively executing.
 
 # Interface: ValidateNextBlockArgs
 
-Defined in: [types.ts:696](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L696)
+Defined in: [types.ts:749](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L749)
 
 Arguments for the onValidateNextBlock handler.
 
+## Remarks
+
+Called before each block is executed. Provides the resolved character for both
+the upcoming block (`nextContext`) and the previously executed block (`fromContext`).
+This enables game-side validation such as character authorization, status checks,
+or transition rules between characters.
+
+`fromContext` is `null` for the first block of a scene (no previous block exists).
+
+## Example
+
+```ts
+engine.onValidateNextBlock(({ nextBlock, nextContext, fromContext }) => {
+  const { character } = nextContext;
+  if (!character) return { valid: false, reason: 'no_character' };
+  if (game.characterHasStatus(character, 'stunned'))
+    return { valid: false, reason: 'character_stunned' };
+  return { valid: true };
+});
+```
+
+## See
+
+ - [ValidateNextBlockContext](ValidateNextBlockContext.md) for per-block context details
+ - [BlockCharacter](BlockCharacter.md) for character data
+
 ## Properties
-
-### context
-
-> **context**: [`SceneContext`](SceneContext.md)
-
-Defined in: [types.ts:700](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L700)
-
-***
 
 ### fromBlock
 
 > **fromBlock**: [`BlueprintBlock`](../type-aliases/BlueprintBlock.md) \| `null`
 
-Defined in: [types.ts:698](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L698)
+Defined in: [types.ts:753](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L753)
+
+The block that was just executed, or `null` for the first block of the scene.
+
+***
+
+### fromContext
+
+> **fromContext**: [`ValidateNextBlockContext`](ValidateNextBlockContext.md) \| `null`
+
+Defined in: [types.ts:757](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L757)
+
+Context for the previous block, or `null` if this is the first block.
 
 ***
 
@@ -4620,7 +4657,19 @@ Defined in: [types.ts:698](https://github.com/jonlepage/LS-Dialog-Editor-Engine/
 
 > **nextBlock**: [`BlueprintBlock`](../type-aliases/BlueprintBlock.md)
 
-Defined in: [types.ts:697](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L697)
+Defined in: [types.ts:751](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L751)
+
+The block about to be executed.
+
+***
+
+### nextContext
+
+> **nextContext**: [`ValidateNextBlockContext`](ValidateNextBlockContext.md)
+
+Defined in: [types.ts:755](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L755)
+
+Context for the upcoming block (character, etc.).
 
 ***
 
@@ -4628,7 +4677,40 @@ Defined in: [types.ts:697](https://github.com/jonlepage/LS-Dialog-Editor-Engine/
 
 > **port**: `string` \| `null`
 
-Defined in: [types.ts:699](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L699)
+Defined in: [types.ts:759](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L759)
+
+The port that was followed to reach `nextBlock` (reserved for future use).
+
+================================================================================
+
+[LSDE Dialog Engine](../index.md) / ValidateNextBlockContext
+
+# Interface: ValidateNextBlockContext
+
+Defined in: [types.ts:719](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L719)
+
+Context attached to a block inside [ValidateNextBlockArgs](ValidateNextBlockArgs.md).
+
+## Remarks
+
+The character is resolved by the `onResolveCharacter` callback **before** the
+validation handler is invoked. If the block has no characters in its metadata,
+or the resolver returns nothing, `character` will be `undefined`.
+
+## See
+
+ - [BlockCharacter](BlockCharacter.md) for character data
+ - [ValidateNextBlockArgs](ValidateNextBlockArgs.md) for usage
+
+## Properties
+
+### character
+
+> **character**: [`BlockCharacter`](BlockCharacter.md) \| `undefined`
+
+Defined in: [types.ts:721](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L721)
+
+Character resolved for this block, or `undefined` if none.
 
 ================================================================================
 
@@ -4636,7 +4718,7 @@ Defined in: [types.ts:699](https://github.com/jonlepage/LS-Dialog-Editor-Engine/
 
 # Interface: ValidationResult
 
-Defined in: [types.ts:566](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L566)
+Defined in: [types.ts:579](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L579)
 
 Result of block validation.
 
@@ -4646,7 +4728,7 @@ Result of block validation.
 
 > `optional` **reason?**: `string`
 
-Defined in: [types.ts:570](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L570)
+Defined in: [types.ts:583](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L583)
 
 Reason for validation failure. Passed to `InvalidateBlockArgs.reason` when `valid` is `false`.
 
@@ -4656,7 +4738,7 @@ Reason for validation failure. Passed to `InvalidateBlockArgs.reason` when `vali
 
 > **valid**: `boolean`
 
-Defined in: [types.ts:568](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L568)
+Defined in: [types.ts:581](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L581)
 
 Whether the block passed validation. When `false`, the `onInvalidateBlock` handler is called.
 
@@ -4668,7 +4750,7 @@ Whether the block passed validation. When `false`, the `onInvalidateBlock` handl
 
 > **ActionHandler** = [`BlockHandler`](BlockHandler.md)\<[`ActionBlock`](../interfaces/ActionBlock.md), [`ActionContext`](../interfaces/ActionContext.md)\>
 
-Defined in: [types.ts:693](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L693)
+Defined in: [types.ts:706](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L706)
 
 Handler for ACTION blocks. Shorthand for `BlockHandler<ActionBlock, ActionContext>`.
 
@@ -4680,7 +4762,7 @@ Handler for ACTION blocks. Shorthand for `BlockHandler<ActionBlock, ActionContex
 
 > **BeforeBlockHandler** = (`args`) => `void`
 
-Defined in: [types.ts:724](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L724)
+Defined in: [types.ts:783](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L783)
 
 Handler called before every block. Must call resolve() to continue.
 
@@ -4702,7 +4784,7 @@ Handler called before every block. Must call resolve() to continue.
 
 > **BlockHandler**\<`B`, `C`\> = (`args`) => [`CleanupFn`](CleanupFn.md) \| `void`
 
-Defined in: [types.ts:684](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L684)
+Defined in: [types.ts:697](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L697)
 
 A block handler function. May return a cleanup function.
 
@@ -4757,7 +4839,7 @@ engine.onDialog(({ block, next }) => {
 
 > **BlockType** = `"DIALOG"` \| `"CHOICE"` \| `"CONDITION"` \| `"ACTION"` \| `"NOTE"`
 
-Defined in: [types.ts:11](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L11)
+Defined in: [types.ts:11](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L11)
 
 All possible block types in a blueprint.
 
@@ -4769,7 +4851,7 @@ All possible block types in a blueprint.
 
 > **BlueprintBlock** = [`DialogBlock`](../interfaces/DialogBlock.md) \| [`ChoiceBlock`](../interfaces/ChoiceBlock.md) \| [`ConditionBlock`](../interfaces/ConditionBlock.md) \| [`ActionBlock`](../interfaces/ActionBlock.md) \| [`NoteBlock`](../interfaces/NoteBlock.md)
 
-Defined in: [types.ts:375](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L375)
+Defined in: [types.ts:388](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L388)
 
 Discriminated union of all block types. Narrow on the `type` field.
 
@@ -4781,7 +4863,7 @@ Discriminated union of all block types. Narrow on the `type` field.
 
 > **ChoiceHandler** = [`BlockHandler`](BlockHandler.md)\<[`ChoiceBlock`](../interfaces/ChoiceBlock.md), [`ChoiceContext`](../interfaces/ChoiceContext.md)\>
 
-Defined in: [types.ts:689](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L689)
+Defined in: [types.ts:702](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L702)
 
 Handler for CHOICE blocks. Shorthand for `BlockHandler<ChoiceBlock, ChoiceContext>`.
 
@@ -4793,7 +4875,7 @@ Handler for CHOICE blocks. Shorthand for `BlockHandler<ChoiceBlock, ChoiceContex
 
 > **CleanupFn** = () => `void`
 
-Defined in: [types.ts:574](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L574)
+Defined in: [types.ts:587](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L587)
 
 Cleanup function returned by a block handler, called when leaving the block.
 
@@ -4809,7 +4891,7 @@ Cleanup function returned by a block handler, called when leaving the block.
 
 > **ConditionHandler** = [`BlockHandler`](BlockHandler.md)\<[`ConditionBlock`](../interfaces/ConditionBlock.md), [`ConditionContext`](../interfaces/ConditionContext.md)\>
 
-Defined in: [types.ts:691](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L691)
+Defined in: [types.ts:704](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L704)
 
 Handler for CONDITION blocks. Shorthand for `BlockHandler<ConditionBlock, ConditionContext>`.
 
@@ -4821,7 +4903,7 @@ Handler for CONDITION blocks. Shorthand for `BlockHandler<ConditionBlock, Condit
 
 > **DialogHandler** = [`BlockHandler`](BlockHandler.md)\<[`DialogBlock`](../interfaces/DialogBlock.md), [`DialogContext`](../interfaces/DialogContext.md)\>
 
-Defined in: [types.ts:687](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L687)
+Defined in: [types.ts:700](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L700)
 
 Handler for DIALOG blocks. Shorthand for `BlockHandler<DialogBlock, DialogContext>`.
 
@@ -4833,7 +4915,7 @@ Handler for DIALOG blocks. Shorthand for `BlockHandler<DialogBlock, DialogContex
 
 > **InvalidateBlockHandler** = (`args`) => `void`
 
-Defined in: [types.ts:713](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L713)
+Defined in: [types.ts:772](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L772)
 
 Handler called when a block fails validation.
 
@@ -4855,7 +4937,7 @@ Handler called when a block fails validation.
 
 > **SceneLifecycleHandler** = (`args`) => `void`
 
-Defined in: [types.ts:733](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L733)
+Defined in: [types.ts:792](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L792)
 
 Handler for scene enter/exit events.
 
@@ -4877,7 +4959,7 @@ Handler for scene enter/exit events.
 
 > **ValidateNextBlockHandler** = (`args`) => [`ValidationResult`](../interfaces/ValidationResult.md)
 
-Defined in: [types.ts:704](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/e101d7493555147a54b555c0fa1964135b0eff98/lsde-ts/src/types.ts#L704)
+Defined in: [types.ts:763](https://github.com/jonlepage/LS-Dialog-Editor-Engine/blob/873e016d7bb1a45f5c26eb9de7cf5cae9ae5918b/lsde-ts/src/types.ts#L763)
 
 Handler for block validation.
 

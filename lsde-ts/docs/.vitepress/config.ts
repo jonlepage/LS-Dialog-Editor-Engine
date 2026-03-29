@@ -1,4 +1,5 @@
 import { defineConfig, type DefaultTheme } from "vitepress";
+import { withMermaid } from "vitepress-plugin-mermaid";
 import typedocSidebar from "../api-ref/typedoc-sidebar.json";
 
 const labels: Record<string, Record<string, string>> = {
@@ -9,9 +10,12 @@ const labels: Record<string, Record<string, string>> = {
 		concepts: "Concepts",
 		blueprints: "Blueprints & Scenes",
 		blockTypes: "Block Types",
-		choiceVisibility: "Choice Visibility",
-		handlers: "Handlers & Lifecycle",
+		handlers: "Handlers",
 		integration: "Game Engine Integration",
+		advanced: "Advanced",
+		lifecycle: "Lifecycle & Validation",
+		choiceVisibility: "Choice Visibility",
+		asyncTracks: "Async Tracks",
 		navGuide: "Guide",
 		navApi: "API Reference",
 		navLlm: "RAW Guide (for LLM)",
@@ -23,9 +27,12 @@ const labels: Record<string, Record<string, string>> = {
 		concepts: "コンセプト",
 		blueprints: "ブループリントとシーン",
 		blockTypes: "ブロックタイプ",
-		choiceVisibility: "選択肢の表示制御",
-		handlers: "ハンドラーとライフサイクル",
+		handlers: "ハンドラー",
 		integration: "ゲームエンジン統合",
+		advanced: "応用",
+		lifecycle: "ライフサイクルと検証",
+		choiceVisibility: "選択肢の表示制御",
+		asyncTracks: "非同期トラック",
 		navGuide: "ガイド",
 		navApi: "APIリファレンス",
 		navLlm: "RAWガイド (LLM用)",
@@ -37,9 +44,12 @@ const labels: Record<string, Record<string, string>> = {
 		concepts: "概念",
 		blueprints: "蓝图与场景",
 		blockTypes: "区块类型",
-		choiceVisibility: "选项可见性",
-		handlers: "处理器与生命周期",
+		handlers: "处理器",
 		integration: "游戏引擎集成",
+		advanced: "进阶",
+		lifecycle: "生命周期与验证",
+		choiceVisibility: "选项可见性",
+		asyncTracks: "异步轨道",
 		navGuide: "指南",
 		navApi: "API 参考",
 		navLlm: "RAW 指南 (LLM用)",
@@ -51,9 +61,12 @@ const labels: Record<string, Record<string, string>> = {
 		concepts: "Concepts",
 		blueprints: "Blueprints & Scènes",
 		blockTypes: "Types de blocs",
-		choiceVisibility: "Visibilité des choix",
-		handlers: "Handlers & Lifecycle",
+		handlers: "Handlers",
 		integration: "Intégration game engine",
+		advanced: "Avancé",
+		lifecycle: "Lifecycle & Validation",
+		choiceVisibility: "Visibilité des choix",
+		asyncTracks: "Async Tracks",
 		navGuide: "Guide",
 		navApi: "Référence API",
 		navLlm: "Guide RAW (pour LLM)",
@@ -75,9 +88,16 @@ const guideSidebar = (prefix: string) => {
 			items: [
 				{ text: l.blueprints, link: `${prefix}/guide/blueprints` },
 				{ text: l.blockTypes, link: `${prefix}/guide/block-types` },
-				{ text: l.choiceVisibility, link: `${prefix}/guide/choice-visibility` },
 				{ text: l.handlers, link: `${prefix}/guide/handlers` },
 				{ text: l.integration, link: `${prefix}/guide/integration` },
+			],
+		},
+		{
+			text: l.advanced,
+			items: [
+				{ text: l.lifecycle, link: `${prefix}/guide/lifecycle` },
+				{ text: l.choiceVisibility, link: `${prefix}/guide/choice-visibility` },
+				{ text: l.asyncTracks, link: `${prefix}/guide/async-tracks` },
 			],
 		},
 	];
@@ -92,7 +112,7 @@ const localeNav = (prefix: string): DefaultTheme.NavItem[] => {
 	];
 };
 
-export default defineConfig({
+export default withMermaid(defineConfig({
 	title: "LSDEDE",
 	description:
 		"Callback-driven graph dispatcher for interactive dialogue blueprints",
@@ -145,4 +165,4 @@ export default defineConfig({
 		outline: { level: [2, 3] },
 		search: { provider: "local" },
 	},
-});
+}));
