@@ -4,81 +4,37 @@ declare const game: any;
 declare const GAME_CHARACTER_ID: any;
 declare const LSDE_BLOCKS: any;
 declare const LABELS: any;
-import { DialogueEngine, LsdeUtils } from "./index.js";
-import type { BlueprintExport, RuntimeChoiceItem } from "./index.js";
+import { type BlueprintExport, DialogueEngine, LsdeUtils } from "./index.js";
 // @ts-ignore — JSON outside rootDir; file excluded from build
 import blueprintJson from "../../blueprints/blueprint.json";
 
-const testData = blueprintJson as unknown as BlueprintExport;
 const engine = new DialogueEngine();
 
-engine.init({ data: testData });
-engine.setLocale("en");
+engine.init({ data: blueprintJson });
+// engine.setLocale("en"); // TODO: remove plus besoin !?
 
-// Si vous utilisez un system de personnage pour le block
-// votre jeux dois renvoyez un des personnage dans la liste pour que le block sois autoriser a ce lancer.
+// optional: install your game character resolver to map blueprint character references 
 engine.onResolveCharacter((characters) => game.getActorsInParty(characters));
 
-// si vous utilisez le system de conditionnel dans les block de choix
-// pour devez evaluer vos conditions avec votre moteur de jeux
-// les choix receveront le tag : .visible = true/false pour etre exploiter dans les block de choix.
+// optional: install your game state condition evaluator to control choice visibility
 engine.setChoiceFilter((cond) => game.evaluateGameStateCondition(cond));
 
-// vous pouvez gerer les block dialog de facon generique pour votre jeux
-engine.onDialog(({ block, context, next }) => {
-	const { dialogueText, nativeProperties } = block;
-	const { character, resolveCharacterPort } = context;
-	const text = game.getLocalizedText(dialogueText);
-	const emotion = game.getCharacterEmotion(character);
-
-	character && resolveCharacterPort(character.uuid);
-
-	game.moveCameraToCharacter(character);
-	game.animateCharacter(character, emotion);
-
-	const dialog = game.createDialog(text, character, emotion);
-	const shouldWaitInput = game.shouldWaitPlayerInputForDialog(nativeProperties);
-
-	if (shouldWaitInput) {
-		dialog.onInput(() => next(), { once: true });
-	} else {
-		dialog.then(() =>
-			game.wait(nativeProperties?.timeout ?? 0).then(() => next()),
-		);
-	}
-
-	// la fonction de retour permet de nettoyer votre jeux des effects de bord du block
-	return () => {
-		dialog.destroy();
-		game.animateCharacter(character, false);
-	};
+//#generic game handlers for dialog, choice, condition, action blocks
+engine.onDialog(({ scene, block, context, next }) => {
+	game
+		.createDialogAuto(block, context)
+		.catch(() => scene.cancel())
+		.finally(() => next());
 });
 
 
 // vous pouvez gerer les block choix de facon generique pour votre jeux
 // l'objectif est dafficher des choix utilisateur et apres une interaction, poursuivre le flow selon le choix.
-engine.onChoice(({ block, context, next }) => {
-	const { nativeProperties } = block;
-	const { choices, selectChoice } = context;
-
-	// Nous pouvon recuperez les choix visible pour les afficher dans l'ui du jeux
-	const visible = choices.filter((c) => c.visible !== false);
-	const dialog = game.createChoice(visible);
-
-	//TODO:  bug: onChange ou onSelect
-	// Quand le joueur fait un choix dans votre moteur de jeux, on continu
-	dialog.then((selected: any) => selectChoice(selected)).finally(() => next());
-
-	//Si on souhait support les timeout de choix
-	// on utilise un timer du moteur de votre jeux
-	if (nativeProperties?.timeout) {
-		const timeout = game.wait(nativeProperties.timeout).then(() => next());
-		dialog.finally(() => timeout.cancel());
-	}
-
-	return () => {
-		dialog.destroy();
-	};
+engine.onChoice(({ scene, block, context, next }) => {
+	game
+		.createChoiceAuto(block, context)
+		.catch(() => scene.cancel())
+		.finally(() => next());
 });
 
 // vous pouvez gerer les block condition de facon generique pour votre jeux
@@ -87,6 +43,7 @@ engine.onCondition(({ scene, block, context, next }) => {
 	const { conditions } = block;
 	game
 		.evaluateGameStateConditions(conditions)
+		.catch(() => scene.cancel())
 		.then((result: any) => context.resolve(result))
 		.finally(() => next());
 });
@@ -96,7 +53,8 @@ engine.onCondition(({ scene, block, context, next }) => {
 // idealement vous allez vouloir mapper les id d'action avec ceux de votre jeux
 engine.onAction(({ block, context, next }) => {
 	const { actions } = block;
-	game.executeActionsList(actions)
+	game
+		.executeActionsList(actions)
 		.catch((err: any) => context.reject(err))
 		.finally(() => next());
 });
@@ -104,14 +62,18 @@ engine.onAction(({ block, context, next }) => {
 // vous pouvez vouloir gerer certaine chose avant que un block commence?
 // ex: le delay, des animation, des effets de transition etc..
 engine.onBeforeBlock(({ block, resolve }) => {
-	const { nativeProperties } = block;
-	game.playBlockEntryAnimation(block);
-	game.wait(nativeProperties?.delay ?? 0).then(() => resolve());
-	return () => game.stopBlockEntryAnimation(block);
+	const delay = block.nativeProperties?.delay ?? 0;
+
+	game
+		.runAsyncEvents(
+			game.playBlockEntryAnimation(block),
+			game.wait(delay),
+		)
+		.finally(() => resolve());
 });
 
 // vous pouvez vouloir gerer certaine au demmarage de la scene flow?
-engine.onSceneEnter(({ scene }) => {
+engine.onSceneEnter(() => {
 	game.cinemaMode(true);
 	game.stopNpcMovements();
 });
@@ -124,12 +86,9 @@ engine.onSceneExit(() => {
 
 // vous pouvez vouloir gerer la logique de validation des block pour controler le flow de votre scene
 // l'objectif est de pouvoir valider ou non le block qui doit suivre dans le flow, selon la logique de votre jeux
-engine.onValidateNextBlock(({ nextContext }) => {
-	const { character } = nextContext;
-	if (game.characterHasStatus(character, "stunned")) {
-		return { valid: false, reason: "character_stunned_status" };
-	}
-	return { valid: true };
+engine.onValidateNextBlock(({ nextContext, fromContext, nextBlock }) => {
+	const invalidateReason = game.canProceedToNextBlock(nextContext, fromContext, nextBlock);
+	return invalidateReason ?? { valid: true };
 });
 
 engine.onInvalidateBlock(({ scene, reason }) => {
