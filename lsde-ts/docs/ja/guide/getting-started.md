@@ -2,31 +2,7 @@
 
 ## インストール
 
-::: code-group
-```bash [TypeScript]
-npm install @lsde/dialog-engine
-```
-```bash [C#]
-dotnet add package LsdeDialogEngine
-```
-```bash [C++]
-# git submodule として追加
-git submodule add https://github.com/jonlepage/LS-Dialog-Editor-Engine.git deps/lsde
-
-# CMakeLists.txt
-add_subdirectory(deps/lsde/lsde-cpp)
-target_link_libraries(your_target PRIVATE lsde)
-```
-```bash [GDScript]
-# リポジトリをクローン
-git clone https://github.com/jonlepage/LS-Dialog-Editor-Engine.git
-
-# addon を Godot プロジェクトにコピー
-mkdir -p addons
-cp -r LS-Dialog-Editor-Engine/lsde-gdscript/addons/lsde addons/lsde
-rm -rf LS-Dialog-Editor-Engine
-```
-:::
+<!--@include: ../../_shared/install-tabs.md-->
 
 ## 基本的な使い方
 
