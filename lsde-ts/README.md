@@ -16,30 +16,56 @@ npm run build
 ```
 
 ```typescript
-import { DialogueEngine } from '@lsde/dialog-engine';
-import type { StateBridge } from '@lsde/dialog-engine';
+import { DialogueEngine, LsdeUtils } from '@lsde/dialog-engine';
 
 const engine = new DialogueEngine();
 const report = engine.init({ data: blueprintJson });
 
 engine.setLocale('en');
-engine.setStateBridge({
-  evaluateCondition: (c) => true,
-  executeAction: (a) => {},
-  resolveDictionary: (group, key) => '',
+
+// Character resolver (optional — default: first character in list)
+engine.onResolveCharacter((chars) => chars[0]);
+
+// Choice visibility filter (optional — tags each choice with visible = true/false)
+engine.setChoiceFilter((condition) => {
+  return gameState.evaluate(condition);
 });
 
+// ─── 4 Required Handlers ────────────────────────────────────────
+
 engine.onDialog(({ block, context, next }) => {
-  const text = block.dialogueText?.['en'] ?? '';
-  console.log(`${context.character?.name}: ${text}`);
+  const text = LsdeUtils.getLocalizedText(block.dialogueText);
+  console.log(`${context.character?.name}: ${text ?? '—'}`);
   next();
+  return () => { /* cleanup when leaving this block */ };
 });
 
 engine.onChoice(({ context, next }) => {
-  // Show choices to the player, then:
-  context.selectChoice(context.choices[0].uuid);
+  const visible = context.choices.filter((c) => c.visible !== false);
+  context.selectChoice(visible[0].uuid);
   next();
 });
+
+engine.onCondition(({ scene, block, context, next }) => {
+  const result = LsdeUtils.evaluateConditionChain(
+    block.conditions,
+    (cond) => LsdeUtils.isChoiceCondition(cond)
+      ? scene.evaluateCondition(cond)
+      : gameState.evaluate(cond),
+  );
+  context.resolve(result);
+  next();
+});
+
+engine.onAction(({ block, context, next }) => {
+  for (const a of block.actions) {
+    console.log(`Action: ${a.actionId}`);
+  }
+  context.resolve();
+  next();
+});
+
+// ─── Run ─────────────────────────────────────────────────────────
 
 const handle = engine.scene('scene-uuid');
 handle.start();
@@ -72,7 +98,8 @@ src/
 ├── graph.ts              # Scene + Blueprint indexing
 ├── validator.ts          # Blueprint validation + diagnostics
 ├── types.ts              # All interfaces and type definitions
-└── utils.ts              # Type guards, helpers
+├── lsde-utils.ts         # Localization, condition helpers, type guards
+└── utils.ts              # Internal utilities
 ```
 
 ---
@@ -85,20 +112,35 @@ src/
 |--------|-------------|
 | `engine.init({ data })` | Validate blueprint, build graph. Returns `DiagnosticReport`. |
 | `engine.setLocale(locale)` | Set active locale for text resolution. |
-| `engine.setStateBridge(bridge)` | Connect engine to game state. |
 | `engine.scene(sceneId)` | Create a scene handle (does not start). |
 | `engine.stop()` | Cancel all active scenes. |
+| `engine.isRunning()` | True if at least one scene is active. |
+| `engine.getActiveScenes()` | Get all running scene handles. |
+| `engine.getCurrentBlocks()` | Get current block of every active scene. |
+| `engine.getSceneConnections(sceneId)` | Get all connections for a scene. |
 
 ### Handler Registration (Tier 1 — Global)
+
+All 4 type handlers are **required** — the engine will throw if a scene starts without them.
 
 | Method | Description |
 |--------|-------------|
 | `engine.onDialog(handler)` | Handle DIALOG blocks. |
-| `engine.onChoice(handler)` | Handle CHOICE blocks (choices pre-filtered by visibility). |
-| `engine.onCondition(handler)` | Handle CONDITION blocks. Auto-evaluates via StateBridge if absent. |
-| `engine.onAction(handler)` | Handle ACTION blocks. Auto-executes via StateBridge if absent. |
+| `engine.onChoice(handler)` | Handle CHOICE blocks (choices tagged with `visible` when `setChoiceFilter` is set). |
+| `engine.onCondition(handler)` | Handle CONDITION blocks. Developer **must** call `context.resolve(bool)`. |
+| `engine.onAction(handler)` | Handle ACTION blocks. Developer **must** call `context.resolve()` or `context.reject()`. |
+
+### Optional Handlers
+
+| Method | Description |
+|--------|-------------|
+| `engine.onResolveCharacter(fn)` | Character resolver. Default: first character in the list. |
+| `engine.setChoiceFilter(fn)` | Install choice visibility evaluator (game-state conditions). |
 | `engine.onBeforeBlock(handler)` | Pre-execution gate. Must call `resolve()` to continue. |
 | `engine.onValidateNextBlock(handler)` | Validate before entering a block. |
+| `engine.onInvalidateBlock(handler)` | Called when a block fails validation. |
+| `engine.onSceneEnter(handler)` | Called when any scene starts. |
+| `engine.onSceneExit(handler)` | Called when any scene ends. |
 
 ### Scene Handle (Tier 2 — Per-Scene)
 
@@ -107,9 +149,21 @@ src/
 | `handle.start()` | Begin traversal from the entry block. |
 | `handle.cancel()` | Stop the scene and all async tracks. |
 | `handle.onDialog(handler)` | Override global DIALOG handler for this scene. |
+| `handle.onChoice(handler)` | Override global CHOICE handler for this scene. |
+| `handle.onCondition(handler)` | Override global CONDITION handler for this scene. |
+| `handle.onAction(handler)` | Override global ACTION handler for this scene. |
 | `handle.onBlock(uuid, handler)` | Override handler for a specific block by UUID. |
-| `handle.getVisitedBlocks()` | Set of all visited block UUIDs. |
+| `handle.onEnter(handler)` | Override global `onSceneEnter` for this scene. |
+| `handle.onExit(handler)` | Override global `onSceneExit` for this scene. |
+| `handle.onResolveCharacter(fn)` | Override character resolver for this scene. |
+| `handle.getCurrentBlock()` | Get the block currently being executed, or `null`. |
+| `handle.getVisitedBlocks()` | Set of visited block UUIDs. |
+| `handle.getChoiceHistory()` | Map of block UUID → selected choice UUIDs. |
+| `handle.getChoice(blockUuid)` | Get choice(s) selected at a specific block. |
+| `handle.evaluateCondition(cond)` | Evaluate a `choice:` condition against history. |
 | `handle.isRunning()` | Whether the scene is still active. |
+| `handle.getActiveTracks()` | Number of active async tracks. |
+| `handle.getTrackInfos()` | Snapshot of all track states. |
 
 ### Handler Pattern
 
@@ -125,6 +179,23 @@ engine.onDialog(({ block, context, next }) => {
   };
 });
 ```
+
+### Utilities (`LsdeUtils`)
+
+| Method | Description |
+|--------|-------------|
+| `LsdeUtils.locale` | Current locale, synced by `engine.setLocale()`. |
+| `LsdeUtils.isDialogBlock(block)` | Type guard: true if block is a `DialogBlock`. |
+| `LsdeUtils.isChoiceBlock(block)` | Type guard: true if block is a `ChoiceBlock`. |
+| `LsdeUtils.isConditionBlock(block)` | Type guard: true if block is a `ConditionBlock`. |
+| `LsdeUtils.isActionBlock(block)` | Type guard: true if block is an `ActionBlock`. |
+| `LsdeUtils.isNoteBlock(block)` | Type guard: true if block is a `NoteBlock`. |
+| `LsdeUtils.getBlockLabel(block)` | Block label, or first 8 chars of UUID as fallback. |
+| `LsdeUtils.getLocalizedText(dialogueText, locale?)` | Lookup localized text. Uses engine locale by default. |
+| `LsdeUtils.isChoiceCondition(condition)` | True if condition references a previous choice (`choice:<uuid>`). |
+| `LsdeUtils.getChoiceConditionBlockUuid(condition)` | Extract block UUID from a choice condition. |
+| `LsdeUtils.evaluateConditionChain(conditions, evaluator)` | Evaluate AND/OR condition chain. Empty = `true`. |
+| `LsdeUtils.filterVisibleChoices(choices, evaluator, scene?)` | Filter choices by visibility conditions. |
 
 ---
 
