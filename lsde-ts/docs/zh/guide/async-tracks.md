@@ -75,59 +75,7 @@ async 轨道中的 CHOICE block 意味着玩家应该在已经参与主对话的
 
 engine 支持同时运行多个 scene。每个 `SceneHandle` 拥有自己的状态、已访问的 block 和异步轨道。全局 handler（第 1 层）是共享的 — 使用 `scene` 参数来判断是哪个 scene 在调用：
 
-::: code-group
-```ts [TypeScript]
-engine.onDialog(({ scene, block, context, next }) => {
-  if (scene === mainDialogue) showMainUI(block);
-  else if (scene === tutorialOverlay) showTutorialBubble(block);
-  next();
-});
-
-const mainDialogue = engine.scene('main-quest');
-const tutorialOverlay = engine.scene('tutorial-hints');
-mainDialogue.start();
-tutorialOverlay.start();
-```
-```csharp [C#]
-engine.OnDialog(args => {
-    if (args.Scene == mainDialogue) ShowMainUI(args.Block);
-    else if (args.Scene == tutorialOverlay) ShowTutorialBubble(args.Block);
-    args.Next();
-    return null;
-});
-
-var mainDialogue = engine.Scene("main-quest");
-var tutorialOverlay = engine.Scene("tutorial-hints");
-mainDialogue.Start();
-tutorialOverlay.Start();
-```
-```cpp [C++]
-engine.onDialog([&](auto* scene, auto* block, auto*, auto next) -> CleanupFn {
-    if (scene == mainDialogue) showMainUI(block);
-    else if (scene == tutorialOverlay) showTutorialBubble(block);
-    next();
-    return {};
-});
-
-auto mainDialogue = engine.scene("main-quest");
-auto tutorialOverlay = engine.scene("tutorial-hints");
-mainDialogue->start();
-tutorialOverlay->start();
-```
-```gdscript [GDScript]
-engine.on_dialog(func(args):
-    if args["scene"] == main_dialogue: show_main_ui(args["block"])
-    elif args["scene"] == tutorial_overlay: show_tutorial_bubble(args["block"])
-    args["next"].call()
-    return Callable()
-)
-
-var main_dialogue = engine.scene("main-quest")
-var tutorial_overlay = engine.scene("tutorial-hints")
-main_dialogue.start()
-tutorial_overlay.start()
-```
-:::
+<!--@include: ../../_shared/async-dialog-track.md-->
 
 ::: tip 按 scene 路由
 如果有多个并发 scene，建议在每个 handle 上注册 scene 级（第 2 层）handler，而不是在全局 handler 中进行路由。更清晰的分离，没有 `if/else` 链。

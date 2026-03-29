@@ -2,6 +2,7 @@
 // This file is excluded from build (tsconfig.json exclude).
 declare const game: any;
 declare const GAME_CHARACTER_ID: any;
+declare const LSDE_BLOCKS: any;
 import { DialogueEngine, LsdeUtils } from "./index.js";
 import type { BlueprintExport, RuntimeChoiceItem } from "./index.js";
 // @ts-ignore — JSON outside rootDir; file excluded from build
@@ -52,6 +53,7 @@ engine.onDialog(({ block, context, next }) => {
 	};
 });
 
+
 // vous pouvez gerer les block choix de facon generique pour votre jeux
 // l'objectif est dafficher des choix utilisateur et apres une interaction, poursuivre le flow selon le choix.
 engine.onChoice(({ block, context, next }) => {
@@ -64,7 +66,7 @@ engine.onChoice(({ block, context, next }) => {
 
 	//TODO:  bug: onChange ou onSelect
 	// Quand le joueur fait un choix dans votre moteur de jeux, on continu
-	dialog.then((selected) => selectChoice(selected)).finally(() => next());
+	dialog.then((selected: any) => selectChoice(selected)).finally(() => next());
 
 	//Si on souhait support les timeout de choix
 	// on utilise un timer du moteur de votre jeux
@@ -84,16 +86,18 @@ engine.onCondition(({ scene, block, context, next }) => {
 	const { conditions } = block;
 	game
 		.evaluateGameStateConditions(conditions)
-		.then((result) => context.resolve(result))
+		.then((result: any) => context.resolve(result))
 		.finally(() => next());
 });
 
 // vous pouvez gerer les block action de facon generique pour votre jeux
 // l'objectif est simplement d'executer les actions definie dans le block, puis poursuivre le flow
 // idealement vous allez vouloir mapper les id d'action avec ceux de votre jeux
-engine.onAction(({ block, next }) => {
+engine.onAction(({ block, context, next }) => {
 	const { actions } = block;
-	game.executeActionsList(actions).finally(() => next());
+	game.executeActionsList(actions)
+		.catch((err: any) => context.reject(err))
+		.finally(() => next());
 });
 
 // vous pouvez vouloir gerer certaine chose avant que un block commence?
@@ -132,22 +136,41 @@ engine.onInvalidateBlock(({ scene, reason }) => {
 	scene.cancel();
 });
 
-function GameScript_001(id, resolve) {
+
+
+
+
+function GameScript_001(id: string, resolve: () => void) {
 	const scene = engine.scene(id);
 	scene.start();
 	scene.onExit(resolve);
 
 	// vous pouvez vouloir gerer les block dialog de facon personalisé pour chaque script/events de votre jeux
 	// l'objectif est de remplacer le comportement generique de cette scene pour repondre a un scenario specifique.
-
-	scene.onDialog(({ block, context, next }) => {
+	scene.onDialog(({ context }) => {
 		// empêche le handler global de s'exécuter si vous souhaitez recrire tous le comportement du block dialog pour cette scene
+		// tres peut de chance que vous souhaitiez faire ca, mais c'est possible si vous avez besoin d'un controle total sur le block dialog pour cette scene
 		// context.preventGlobalHandler();
 
-		const { character, resolveCharacterPort } = context;
+		const { character } = context;
 		if (game.isCharacterId(character, GAME_CHARACTER_ID.boss1)) {
 			game.playSound("roar");
 			game.shakeCamera();
 		}
 	});
+
+	// LSDE blueprint peut exporter les key des blocks pour vous aidez a cibler un block en particulier
+	// - ideal si vous voulez pas deleguer la logique de certain aspect thecnique au narrative designer
+	// - le dev peut ainsi controller chaque block et ajoutez ca logique et deleger a LSDE juste le narratif
+	// - ces un usecase acceptable pour un jeux casuel simple et sans complexiter narrative
+	scene.onBlock(LSDE_BLOCKS.newSceneAction001, ({ block, context, next }) => {
+
+		const { actions } = block;
+		game.executeActionsList(actions)
+			.catch((err: any) => context.reject(err))
+			.finally(() => next());
+	});
+
+
+
 }

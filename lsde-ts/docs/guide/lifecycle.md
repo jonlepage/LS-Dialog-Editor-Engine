@@ -9,140 +9,19 @@
 
 ## Scene Events
 
-::: code-group
-```ts [TypeScript]
-engine.onSceneEnter(({ scene, context }) => {
-  // Called when handle.start() is executed
-});
-
-engine.onSceneExit(({ scene, context }) => {
-  // Called when the scene ends (naturally or via cancel)
-});
-```
-```csharp [C#]
-engine.OnSceneEnter(args => {
-    // Called when handle.Start() is executed
-});
-
-engine.OnSceneExit(args => {
-    // Called when the scene ends (naturally or via cancel)
-});
-```
-```cpp [C++]
-engine.onSceneEnter([](auto* scene, auto*) {
-    // Called when handle->start() is executed
-});
-
-engine.onSceneExit([](auto* scene, auto*) {
-    // Called when the scene ends (naturally or via cancel)
-});
-```
-```gdscript [GDScript]
-engine.on_scene_enter(func(args):
-    pass # Called when handle.start() is executed
-)
-
-engine.on_scene_exit(func(args):
-    pass # Called when the scene ends (naturally or via cancel)
-)
-```
-:::
+<!--@include: ../_shared/lifecycle-scene-events.md-->
 
 ## onValidateNextBlock
 
 Intercepts each block transition for validation. The handler receives the **resolved character** for both the upcoming block (`nextContext`) and the previously executed block (`fromContext`):
 
-::: code-group
-```ts [TypeScript]
-engine.onValidateNextBlock(({ nextBlock, fromBlock, nextContext, fromContext }) => {
-  return { valid: true };
-});
-
-engine.onInvalidateBlock(({ scene, reason }) => {
-  console.error('Invalid block:', reason);
-  scene.cancel();
-});
-```
-```csharp [C#]
-engine.OnValidateNextBlock(args => {
-    // args.NextContext.Character, args.FromContext?.Character
-    return new ValidationResult { Valid = true };
-});
-
-engine.OnInvalidateBlock(args => {
-    Console.Error.WriteLine($"Invalid block: {args.Reason}");
-    args.Scene.Cancel();
-});
-```
-```cpp [C++]
-engine.onValidateNextBlock([](const auto& args) {
-    // args.nextContext.character, args.fromContext.character (check args.hasFromContext)
-    return ValidationResult{true};
-});
-
-engine.onInvalidateBlock([](auto* scene, const auto& reason) {
-    std::cerr << "Invalid block: " << reason << "\n";
-    scene->cancel();
-});
-```
-```gdscript [GDScript]
-engine.on_validate_next_block(func(args):
-    # args["nextContext"]["character"], args["fromContext"]["character"]
-    return {"valid": true}
-)
-
-engine.on_invalidate_block(func(args):
-    printerr("Invalid block: %s" % args["reason"])
-    args["scene"].cancel()
-)
-```
-:::
+<!--@include: ../_shared/lifecycle-validate.md-->
 
 ### Character Gating
 
 Use `nextContext.character` to control which blocks are allowed to execute based on game state:
 
-::: code-group
-```ts [TypeScript]
-// Block if the character is stunned
-engine.onValidateNextBlock(({ nextContext }) => {
-  const { character } = nextContext;
-  if (!character) return { valid: false, reason: 'no_character' };
-  if (game.characterHasStatus(character, 'stunned'))
-    return { valid: false, reason: 'character_stunned' };
-  return { valid: true };
-});
-```
-```csharp [C#]
-engine.OnValidateNextBlock(args => {
-    var character = args.NextContext.Character;
-    if (character == null)
-        return ValidationResult.Fail("no_character");
-    if (game.CharacterHasStatus(character, "stunned"))
-        return ValidationResult.Fail("character_stunned");
-    return ValidationResult.Ok();
-});
-```
-```cpp [C++]
-engine.onValidateNextBlock([&game](const auto& args) {
-    auto* character = args.nextContext.character;
-    if (!character) return ValidationResult{false, "no_character"};
-    if (game.characterHasStatus(character, "stunned"))
-        return ValidationResult{false, "character_stunned"};
-    return ValidationResult{true};
-});
-```
-```gdscript [GDScript]
-engine.on_validate_next_block(func(args):
-    var character = args["nextContext"]["character"]
-    if character == null:
-        return {"valid": false, "reason": "no_character"}
-    if game.character_has_status(character, "stunned"):
-        return {"valid": false, "reason": "character_stunned"}
-    return {"valid": true}
-)
-```
-:::
+<!--@include: ../_shared/lifecycle-validate-stunned.md-->
 
 Use `fromContext.character` to validate transitions between characters (e.g. relationship checks, cooldowns). `fromContext` is `null` for the first block of a scene.
 
@@ -150,87 +29,13 @@ Use `fromContext.character` to validate transitions between characters (e.g. rel
 
 Called before each block. **Must call `resolve()`** to continue:
 
-::: code-group
-```ts [TypeScript]
-engine.onBeforeBlock(({ block, resolve }) => {
-  const delay = block.nativeProperties?.delay;
-  if (delay) {
-    setTimeout(resolve, delay * 1000);
-  } else {
-    resolve();
-  }
-});
-```
-```csharp [C#]
-engine.OnBeforeBlock(args => {
-    var delay = args.Block.NativeProperties?.Delay;
-    if (delay.HasValue)
-        Task.Delay((int)(delay.Value * 1000)).ContinueWith(_ => args.Resolve());
-    else
-        args.Resolve();
-    return null;
-});
-```
-```cpp [C++]
-engine.onBeforeBlock([](auto* block, auto resolve) {
-    auto delay = block->nativeProperties ? block->nativeProperties->delay : std::nullopt;
-    if (delay.has_value()) {
-        scheduleTimer(delay.value() * 1000, [resolve]() { resolve(); });
-    } else {
-        resolve();
-    }
-});
-```
-```gdscript [GDScript]
-engine.on_before_block(func(args):
-    var delay = args["block"].get("nativeProperties", {}).get("delay", 0)
-    if delay > 0:
-        await get_tree().create_timer(delay).timeout
-    args["resolve"].call()
-)
-```
-:::
+<!--@include: ../_shared/lifecycle-before-block.md-->
 
 ## Cleanup Functions
 
 A handler can return a cleanup function, called when leaving the block:
 
-::: code-group
-```ts [TypeScript]
-engine.onDialog(({ block, next }) => {
-  const element = showDialogUI(block);
-  next();
-
-  return () => {
-    element.remove(); // Called when the next block takes over
-  };
-});
-```
-```csharp [C#]
-engine.OnDialog(args => {
-    var element = ShowDialogUI(args.Block);
-    args.Next();
-
-    return () => element.SetActive(false);
-});
-```
-```cpp [C++]
-engine.onDialog([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
-    auto* element = showDialogUI(block);
-    next();
-
-    return [element]() { element->remove(); };
-});
-```
-```gdscript [GDScript]
-engine.on_dialog(func(args):
-    var element = show_dialog_ui(args["block"])
-    args["next"].call()
-
-    return func(): element.queue_free()
-)
-```
-:::
+<!--@include: ../_shared/lifecycle-cleanup.md-->
 
 ## Error Boundaries
 
@@ -251,32 +56,7 @@ Calling `scene.cancel()` triggers this sequence:
 3. The `onSceneExit` handler is called
 4. The scene is marked as finished
 
-::: code-group
-```ts [TypeScript]
-engine.onInvalidateBlock(({ scene, reason }) => {
-  console.error('Validation failed:', reason);
-  scene.cancel();
-});
-```
-```csharp [C#]
-engine.OnInvalidateBlock(args => {
-    Console.Error.WriteLine($"Validation failed: {args.Reason}");
-    args.Scene.Cancel();
-});
-```
-```cpp [C++]
-engine.onInvalidateBlock([](auto* scene, const auto& reason) {
-    std::cerr << "Validation failed: " << reason << "\n";
-    scene->cancel();
-});
-```
-```gdscript [GDScript]
-engine.on_invalidate_block(func(args):
-    printerr("Validation failed: %s" % args["reason"])
-    args["scene"].cancel()
-)
-```
-:::
+<!--@include: ../_shared/lifecycle-invalidate.md-->
 
 ## NativeProperties
 

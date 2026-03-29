@@ -56,259 +56,13 @@ Chaque runtime suit le même pattern de **callback-driven graph dispatcher** :
 
 ## Installation
 
-
-```bash [TypeScript]
-npm install @lsde/dialog-engine
-```
-```bash [C#]
-dotnet add package LsdeDialogEngine
-```
-```bash [C++]
-# Ajouter en git submodule
-git submodule add https://github.com/jonlepage/LS-Dialog-Editor-Engine.git deps/lsde
-
-# CMakeLists.txt
-add_subdirectory(deps/lsde/lsde-cpp)
-target_link_libraries(your_target PRIVATE lsde)
-```
-```bash [GDScript]
-# Cloner le repository
-git clone https://github.com/jonlepage/LS-Dialog-Editor-Engine.git
-
-# Copier l'addon dans le projet Godot
-mkdir -p addons
-cp -r LS-Dialog-Editor-Engine/lsde-gdscript/addons/lsde addons/lsde
-rm -rf LS-Dialog-Editor-Engine
-```
+<!--@include: ../../_shared/install-tabs.md-->
 
 ## Usage minimal
 
 Le engine est une machine de traversée de graphe — il dispatch les blocks aux handlers enregistrés qui leur donnent un sens. Sans handlers, le engine n'a aucun output.
 
-
-```ts [TypeScript]
-import { DialogueEngine, LsdeUtils } from '@lsde/dialog-engine';
-import type { BlueprintExport } from '@lsde/dialog-engine';
-import blueprintJson from './blueprint.json';
-
-const data = blueprintJson as unknown as BlueprintExport;
-const engine = new DialogueEngine();
-const report = engine.init({ data });
-
-if (report.errors.length > 0) {
-  console.error('Invalid blueprint:', report.errors);
-}
-
-engine.setLocale('en');
-engine.onResolveCharacter((characters) => characters[0]);
-
-// 4 required handlers
-engine.onDialog(({ block, context, next }) => {
-  const text = LsdeUtils.getLocalizedText(block.dialogueText);
-  console.log(`${context.character?.name ?? '???'}: ${text ?? '—'}`);
-  next();
-});
-
-engine.onChoice(({ context, next }) => {
-  const visible = context.choices.filter(c => c.visible !== false);
-  context.selectChoice(visible[0].uuid);
-  next();
-});
-
-engine.onCondition(({ scene, block, context, next }) => {
-  const result = LsdeUtils.evaluateConditionChain(
-    block.conditions ?? [],
-    (cond) => LsdeUtils.isChoiceCondition(cond)
-      ? scene.evaluateCondition(cond)
-      : true, // your game-state logic here
-  );
-  context.resolve(result);
-  next();
-});
-
-engine.onAction(({ block, context, next }) => {
-  for (const action of block.actions ?? []) {
-    console.log(`Action: ${action.actionId}`);
-  }
-  context.resolve();
-  next();
-});
-
-// Run
-const handle = engine.scene(data.scenes[0].uuid);
-handle.start();
-```
-```csharp [C#]
-using LsdeDialogEngine;
-
-var blueprint = LoadBlueprint(); // your JSON deserialization
-var engine = new DialogueEngine();
-var report = engine.Init(new InitOptions { Data = blueprint });
-
-if (report.Errors.Count > 0)
-    throw new Exception("Invalid blueprint");
-
-engine.SetLocale("en");
-engine.OnResolveCharacter(chars => chars.Count > 0 ? chars[0] : null);
-
-// 4 required handlers
-engine.OnDialog(args => {
-    var text = LsdeUtils.GetLocalizedText(args.Block.DialogueText);
-    Console.WriteLine($"{args.Context.Character?.Name ?? "???"}: {text ?? "—"}");
-    args.Next();
-    return null;
-});
-
-engine.OnChoice(args => {
-    var visible = args.Context.Choices
-        .Where(c => c.Visible != false).ToList();
-    args.Context.SelectChoice(visible[0].Uuid);
-    args.Next();
-    return null;
-});
-
-engine.OnCondition(args => {
-    var result = LsdeUtils.EvaluateConditionChain(
-        args.Block.Conditions ?? new(),
-        cond => LsdeUtils.IsChoiceCondition(cond)
-            ? args.Scene.EvaluateCondition(cond)
-            : true
-    );
-    args.Context.Resolve(result);
-    args.Next();
-    return null;
-});
-
-engine.OnAction(args => {
-    foreach (var action in args.Block.Actions ?? new())
-        Console.WriteLine($"Action: {action.ActionId}");
-    args.Context.Resolve();
-    args.Next();
-    return null;
-});
-
-// Run
-var handle = engine.Scene(blueprint.Scenes[0].Uuid);
-handle.Start();
-```
-```cpp [C++]
-#include <lsde/engine.h>
-#include <lsde/utils.h>
-
-using namespace lsde;
-
-auto blueprint = loadBlueprint(); // your JSON deserialization
-DialogueEngine engine;
-auto report = engine.init({blueprint});
-
-engine.setLocale("en");
-engine.onResolveCharacter([](const auto& chars) {
-    return chars.empty() ? nullptr : &chars[0];
-});
-
-// 4 required handlers
-engine.onDialog([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
-    auto text = LsdeUtils::GetLocalizedText(block->dialogueText);
-    auto* ch = ctx->character();
-    std::cout << (ch ? ch->name : "???") << ": " << text.value_or("—") << "\n";
-    next();
-    return {};
-});
-
-engine.onChoice([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
-    const auto& choices = ctx->choices();
-    for (const auto& c : choices) {
-        if (!c.visible.has_value() || c.visible.value()) {
-            ctx->selectChoice(c.uuid);
-            break;
-        }
-    }
-    next();
-    return {};
-});
-
-engine.onCondition([](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn {
-    auto* cb = dynamic_cast<const ConditionBlock*>(block);
-    auto result = LsdeUtils::EvaluateConditionChain(
-        cb->conditions,
-        [scene](const auto& cond) {
-            return isChoiceCondition(cond) ? scene->evaluateCondition(cond) : true;
-        });
-    ctx->resolve(result);
-    next();
-    return {};
-});
-
-engine.onAction([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
-    auto* ab = dynamic_cast<const ActionBlock*>(block);
-    for (const auto& a : ab->actions)
-        std::cout << "Action: " << a.actionId << "\n";
-    ctx->resolve();
-    next();
-    return {};
-});
-
-// Run
-auto handle = engine.scene(blueprint.scenes[0].uuid);
-handle->start();
-```
-```gdscript [GDScript]
-var blueprint = load_blueprint() # your JSON parsing
-var engine = LsdeDialogueEngine.new()
-var report = engine.init({"data": blueprint})
-
-if report["errors"].size() > 0:
-    push_error("Invalid blueprint")
-
-engine.set_locale("en")
-engine.on_resolve_character(func(chars):
-    return chars[0] if chars.size() > 0 else null
-)
-
-# 4 required handlers
-engine.on_dialog(func(args):
-    var text = LsdeUtils.get_localized_text(args["block"].get("dialogueText"))
-    var ch = args["context"].character
-    print("%s: %s" % [ch.get("name", "???") if ch else "???", text if text else "—"])
-    args["next"].call()
-    return Callable()
-)
-
-engine.on_choice(func(args):
-    var visible = []
-    for c in args["context"].choices:
-        if c.get("visible") != false:
-            visible.append(c)
-    args["context"].select_choice(visible[0]["uuid"])
-    args["next"].call()
-    return Callable()
-)
-
-engine.on_condition(func(args):
-    var result = LsdeUtils.evaluate_condition_chain(
-        args["block"].get("conditions", []),
-        func(cond):
-            if LsdeUtils.is_choice_condition(cond):
-                return args["scene"].evaluate_condition(cond)
-            return true
-    )
-    args["context"].resolve(result)
-    args["next"].call()
-    return Callable()
-)
-
-engine.on_action(func(args):
-    for action in args["block"].get("actions", []):
-        print("Action: %s" % action.get("actionId", ""))
-    args["context"].resolve()
-    args["next"].call()
-    return Callable()
-)
-
-# Run
-var handle = engine.scene(blueprint["scenes"][0]["uuid"])
-handle.start()
-```
+<!--@include: ../../_shared/getting-started-usage.md-->
 
 > TIP:
 Le engine est une pure machine de traversée de graphe — il walk les nodes et call le code des handlers. Sans handlers, les blocks seraient visités en silence sans aucun output. La validation au `start()` catch ça early pour éviter qu'une scene run sans produire aucun résultat.
@@ -325,42 +79,7 @@ Le engine est une pure machine de traversée de graphe — il walk les nodes et 
 
 Il est aussi possible de fournir `check` pour cross-valider avec les capabilities du jeu :
 
-
-```ts [TypeScript]
-engine.init({
-  data,
-  check: {
-    signatures: ['set_flag', 'play_sound'],
-    dictionaries: { items: ['sword', 'shield'] },
-    characters: ['Alice', 'Bob'],
-  },
-});
-```
-```csharp [C#]
-engine.Init(new InitOptions {
-    Data = blueprint,
-    Check = new CheckOptions {
-        Signatures = new() { "set_flag", "play_sound" },
-        Characters = new() { "Alice", "Bob" },
-    },
-});
-```
-```cpp [C++]
-engine.init({blueprint, CheckOptions{
-    {"set_flag", "play_sound"},  // signatures
-    {},                           // dictionaries
-    {"Alice", "Bob"},             // characters
-}});
-```
-```gdscript [GDScript]
-engine.init({
-    "data": blueprint,
-    "check": {
-        "signatures": ["set_flag", "play_sound"],
-        "characters": ["Alice", "Bob"],
-    },
-})
-```
+<!--@include: ../../_shared/getting-started-validation.md-->
 
 ## La suite
 
@@ -458,63 +177,7 @@ Les 4 handlers de blocks de contenu (`onDialog`, `onChoice`, `onCondition`, `onA
 
 Affiche du texte dit par un personnage. Le personnage est résolu par le callback `onResolveCharacter`.
 
-
-```ts [TypeScript]
-engine.onDialog(({ block, context, next }) => {
-  const char = context.character;  // BlockCharacter | undefined
-  const text = LsdeUtils.getLocalizedText(block.dialogueText);
-
-  showDialogUI(char?.name, text);
-
-  // If portPerCharacter is enabled:
-  if (block.nativeProperties?.portPerCharacter && char) {
-    context.resolveCharacterPort(char.uuid);
-  }
-  next();
-});
-```
-```csharp [C#]
-engine.OnDialog(args => {
-    var ch = args.Context.Character;
-    var text = LsdeUtils.GetLocalizedText(args.Block.DialogueText);
-
-    ShowDialogUI(ch?.Name, text);
-
-    if (args.Block.NativeProperties?.PortPerCharacter == true && ch != null)
-        args.Context.ResolveCharacterPort(ch.Uuid);
-    args.Next();
-    return null;
-});
-```
-```cpp [C++]
-engine.onDialog([](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn {
-    auto* ch = ctx->character();
-    auto text = LsdeUtils::GetLocalizedText(block->dialogueText);
-
-    showDialogUI(ch ? ch->name : "", text.value_or(""));
-
-    if (block->nativeProperties && block->nativeProperties->portPerCharacter
-        && *block->nativeProperties->portPerCharacter && ch) {
-        ctx->resolveCharacterPort(ch->uuid);
-    }
-    next();
-    return {};
-});
-```
-```gdscript [GDScript]
-engine.on_dialog(func(args):
-    var ch = args["context"].character
-    var text = LsdeUtils.get_localized_text(args["block"].get("dialogueText"))
-
-    show_dialog_ui(ch.get("name", "") if ch else "", text)
-
-    var np = args["block"].get("nativeProperties")
-    if np is Dictionary and np.get("portPerCharacter", false) and ch:
-        args["context"].resolve_character_port(ch.get("uuid", ""))
-    args["next"].call()
-    return Callable()
-)
-```
+<!--@include: ../../_shared/block-dialog.md-->
 
 `resolveCharacterPort()` match par **UUID du personnage en premier**, puis par **nom** comme fallback.
 
@@ -522,57 +185,7 @@ engine.on_dialog(func(args):
 
 Présente des options sélectionnables au joueur. Quand [`setChoiceFilter()`](/fr/guide/choice-visibility) est configuré, chaque choice est taggé avec `visible: true | false`.
 
-
-```ts [TypeScript]
-engine.onChoice(({ block, context, next }) => {
-  const visible = context.choices.filter(c => c.visible !== false);
-
-  showChoicesUI(visible, (uuid) => {
-    context.selectChoice(uuid);
-    next();
-  });
-});
-```
-```csharp [C#]
-engine.OnChoice(args => {
-    var visible = args.Context.Choices
-        .Where(c => c.Visible != false).ToList();
-
-    ShowChoicesUI(visible, uuid => {
-        args.Context.SelectChoice(uuid);
-        args.Next();
-    });
-    return null;
-});
-```
-```cpp [C++]
-engine.onChoice([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
-    std::vector<const RuntimeChoiceItem*> visible;
-    for (const auto& c : ctx->choices())
-        if (!c.visible.has_value() || c.visible.value())
-            visible.push_back(&c);
-
-    showChoicesUI(visible, [ctx, next](auto& uuid) {
-        ctx->selectChoice(uuid);
-        next();
-    });
-    return {};
-});
-```
-```gdscript [GDScript]
-engine.on_choice(func(args):
-    var visible = []
-    for c in args["context"].choices:
-        if c.get("visible") != false:
-            visible.append(c)
-
-    show_choices_ui(visible, func(uuid):
-        args["context"].select_choice(uuid)
-        args["next"].call()
-    )
-    return Callable()
-)
-```
+<!--@include: ../../_shared/block-choice.md-->
 
 Voir [Choice Visibility](/fr/guide/choice-visibility) pour le système complet de tagging opt-in.
 
@@ -580,61 +193,7 @@ Voir [Choice Visibility](/fr/guide/choice-visibility) pour le système complet d
 
 Évalue de la logique pour brancher le flow. Le handler **doit** appeler `resolve(result)` — `true` suit le port index 0, `false` suit le port index 1.
 
-
-```ts [TypeScript]
-engine.onCondition(({ scene, block, context, next }) => {
-  const result = LsdeUtils.evaluateConditionChain(
-    block.conditions ?? [],
-    (cond) => LsdeUtils.isChoiceCondition(cond)
-      ? scene.evaluateCondition(cond)
-      : gameState.check(cond.key, cond.operator, cond.value),
-  );
-  context.resolve(result);
-  next();
-});
-```
-```csharp [C#]
-engine.OnCondition(args => {
-    var result = LsdeUtils.EvaluateConditionChain(
-        args.Block.Conditions ?? new(),
-        cond => LsdeUtils.IsChoiceCondition(cond)
-            ? args.Scene.EvaluateCondition(cond)
-            : GameState.Check(cond.Key, cond.Operator, cond.Value)
-    );
-    args.Context.Resolve(result);
-    args.Next();
-    return null;
-});
-```
-```cpp [C++]
-engine.onCondition([](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn {
-    auto* cb = dynamic_cast<const ConditionBlock*>(block);
-    auto result = LsdeUtils::EvaluateConditionChain(
-        cb->conditions,
-        [scene](const auto& cond) {
-            return isChoiceCondition(cond)
-                ? scene->evaluateCondition(cond)
-                : gameState.check(cond.key, cond.op, cond.value);
-        });
-    ctx->resolve(result);
-    next();
-    return {};
-});
-```
-```gdscript [GDScript]
-engine.on_condition(func(args):
-    var result = LsdeUtils.evaluate_condition_chain(
-        args["block"].get("conditions", []),
-        func(cond):
-            if LsdeUtils.is_choice_condition(cond):
-                return args["scene"].evaluate_condition(cond)
-            return game_state.check(cond)
-    )
-    args["context"].resolve(result)
-    args["next"].call()
-    return Callable()
-)
-```
+<!--@include: ../../_shared/block-condition.md-->
 
 > TIP:
 Les conditions avec des clés qui commencent par `choice:` font référence à une sélection précédente du joueur. Utilise `scene.evaluateCondition(cond)` pour les résoudre — le engine check son historique de choix interne automatiquement.
@@ -643,45 +202,7 @@ Les conditions avec des clés qui commencent par `choice:` font référence à u
 
 Trigger des changements de game state. Appeler `resolve()` pour le succès ou `reject(error)` pour un échec.
 
-
-```ts [TypeScript]
-engine.onAction(({ block, context, next }) => {
-  for (const action of block.actions ?? []) {
-    gameState.execute(action.actionId, action.params);
-  }
-  context.resolve();   // → "then" port
-  // or context.reject(err); → "catch" port (fallback "then" if no catch exists)
-  next();
-});
-```
-```csharp [C#]
-engine.OnAction(args => {
-    foreach (var action in args.Block.Actions ?? new())
-        GameState.Execute(action.ActionId, action.Params);
-    args.Context.Resolve();
-    args.Next();
-    return null;
-});
-```
-```cpp [C++]
-engine.onAction([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
-    auto* ab = dynamic_cast<const ActionBlock*>(block);
-    for (const auto& a : ab->actions)
-        gameState.execute(a.actionId, a.params);
-    ctx->resolve();
-    next();
-    return {};
-});
-```
-```gdscript [GDScript]
-engine.on_action(func(args):
-    for action in args["block"].get("actions", []):
-        game_state.execute(action)
-    args["context"].resolve()
-    args["next"].call()
-    return Callable()
-)
-```
+<!--@include: ../../_shared/block-action.md-->
 
 ## NOTE
 
@@ -729,29 +250,7 @@ Pour du filtrage de visibilité (ex. cacher des choix basés sur le game state o
 
 Enregistre un choice filter sur le engine — une seule fois, avant de starter n'importe quelle scene :
 
-
-```ts [TypeScript]
-engine.setChoiceFilter((condition) => {
-  // Evaluate game-state conditions only.
-  // choice: conditions are handled internally by the engine.
-  return gameState.check(condition.key, condition.operator, condition.value);
-});
-```
-```csharp [C#]
-engine.SetChoiceFilter(cond => {
-    return GameState.Check(cond.Key, cond.Operator, cond.Value);
-});
-```
-```cpp [C++]
-engine.setChoiceFilter([](const ExportCondition& cond) {
-    return gameState.check(cond.key, cond.op, cond.value);
-});
-```
-```gdscript [GDScript]
-engine.set_choice_filter(func(cond):
-    return game_state.check(cond)
-)
-```
+<!--@include: ../../_shared/choice-filter-setup.md-->
 
 Quand le filter est installé, le engine évalue les `visibilityConditions` de chaque choix **avant** d'appeler `onChoice` :
 
@@ -763,53 +262,7 @@ Quand le filter est installé, le engine évalue les `visibilityConditions` de c
 
 Dans le handler, le filtrage se fait avec une seule ligne :
 
-
-```ts [TypeScript]
-engine.onChoice(({ block, context, next }) => {
-  const visible = context.choices.filter(c => c.visible !== false);
-  showChoicesUI(visible, (uuid) => {
-    context.selectChoice(uuid);
-    next();
-  });
-});
-```
-```csharp [C#]
-engine.OnChoice(args => {
-    var visible = args.Context.Choices
-        .Where(c => c.Visible != false).ToList();
-    ShowChoicesUI(visible, uuid => {
-        args.Context.SelectChoice(uuid);
-        args.Next();
-    });
-    return null;
-});
-```
-```cpp [C++]
-engine.onChoice([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
-    std::vector<const RuntimeChoiceItem*> visible;
-    for (const auto& c : ctx->choices())
-        if (!c.visible.has_value() || c.visible.value())
-            visible.push_back(&c);
-    showChoicesUI(visible, [ctx, next](auto& uuid) {
-        ctx->selectChoice(uuid);
-        next();
-    });
-    return {};
-});
-```
-```gdscript [GDScript]
-engine.on_choice(func(args):
-    var visible = []
-    for c in args["context"].choices:
-        if c.get("visible") != false:
-            visible.append(c)
-    show_choices_ui(visible, func(uuid):
-        args["context"].select_choice(uuid)
-        args["next"].call()
-    )
-    return Callable()
-)
-```
+<!--@include: ../../_shared/choice-visibility-handler.md-->
 
 ### Pourquoi `visible !== false` et pas `=== true`?
 
@@ -900,84 +353,7 @@ tutorial.onChoice(({ context, next }) => {
 
 Le jeu évalue probablement les conditions à un seul endroit — un système d'inventaire, un flag manager, un quest tracker. Il est possible de partager la **même fonction d'évaluation** entre `setChoiceFilter` et `onCondition` pour que la logique reste au même endroit :
 
-
-```ts [TypeScript]
-// Define once, use everywhere
-const evaluateGameCondition = (cond: ExportCondition) =>
-  gameState.check(cond.key, cond.operator, cond.value);
-
-// Choice visibility — uses your evaluator for game-state conditions
-engine.setChoiceFilter(evaluateGameCondition);
-
-// Condition blocks — same evaluator, plus choice: handling
-engine.onCondition(({ scene, block, context, next }) => {
-  const result = LsdeUtils.evaluateConditionChain(
-    block.conditions ?? [],
-    (cond) => LsdeUtils.isChoiceCondition(cond)
-      ? scene.evaluateCondition(cond)  // engine handles choice history
-      : evaluateGameCondition(cond),   // your shared function
-  );
-  context.resolve(result);
-  next();
-});
-```
-```csharp [C# — Unity]
-// One evaluator to rule them all
-Func<ExportCondition, bool> evalGameCond = cond =>
-    GameState.Instance.Evaluate(cond.Key, cond.Operator, cond.Value);
-
-engine.SetChoiceFilter(evalGameCond);
-
-engine.OnCondition(args => {
-    var result = LsdeUtils.EvaluateConditionChain(
-        args.Block.Conditions ?? new(),
-        cond => LsdeUtils.IsChoiceCondition(cond)
-            ? args.Scene.EvaluateCondition(cond)
-            : evalGameCond(cond));
-    args.Context.Resolve(result);
-    args.Next();
-    return null;
-});
-```
-```cpp [C++ — Unreal]
-// Shared lambda — capture your game state once
-auto evalGameCond = [this](const ExportCondition& cond) {
-    return GetGameState()->Evaluate(cond.key, cond.op, cond.value);
-};
-
-engine.setChoiceFilter(evalGameCond);
-
-engine.onCondition([this, evalGameCond](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn {
-    auto* cb = dynamic_cast<const ConditionBlock*>(block);
-    auto result = LsdeUtils::EvaluateConditionChain(cb->conditions,
-        [scene, &evalGameCond](const auto& cond) {
-            return isChoiceCondition(cond) ? scene->evaluateCondition(cond) : evalGameCond(cond);
-        });
-    ctx->resolve(result);
-    next();
-    return {};
-});
-```
-```gdscript [GDScript — Godot]
-# One function, two uses
-var eval_game_cond = func(cond):
-    return GameState.evaluate(cond.get("key"), cond.get("operator"), cond.get("value"))
-
-engine.set_choice_filter(eval_game_cond)
-
-engine.on_condition(func(args):
-    var result = LsdeUtils.evaluate_condition_chain(
-        args["block"].get("conditions", []),
-        func(cond):
-            if LsdeUtils.is_choice_condition(cond):
-                return args["scene"].evaluate_condition(cond)
-            return eval_game_cond.call(cond)
-    )
-    args["context"].resolve(result)
-    args["next"].call()
-    return Callable()
-)
-```
+<!--@include: ../../_shared/choice-reusable-filter.md-->
 
 > TIP:
 Sans ce pattern, la même logique `gameState.check(...)` se retrouve à deux places. Quand l'API de game state change, un seul côté est corrigé et l'autre est oublié. Une seule fonction, deux registrations, zéro drift.
@@ -1013,43 +389,7 @@ Le engine est une machine de traversée de graphe — il walk les nodes et les d
 
 À l'appel de `handle.start()`, le engine valide que les 4 sont enregistrés (soit au niveau du engine ou de la scene). S'il en manque, il throw une erreur descriptive qui liste les handlers manquants.
 
-
-```ts [TypeScript]
-engine.onDialog(handler);
-engine.onChoice(handler);
-engine.onCondition(handler);
-engine.onAction(handler);
-
-const handle = engine.scene(sceneId);
-handle.start(); // ✓ All 4 registered — scene starts
-```
-```csharp [C#]
-engine.OnDialog(handler);
-engine.OnChoice(handler);
-engine.OnCondition(handler);
-engine.OnAction(handler);
-
-var handle = engine.Scene(sceneId);
-handle.Start(); // ✓ All 4 registered — scene starts
-```
-```cpp [C++]
-engine.onDialog(handler);
-engine.onChoice(handler);
-engine.onCondition(handler);
-engine.onAction(handler);
-
-auto handle = engine.scene(sceneId);
-handle->start(); // ✓ All 4 registered — scene starts
-```
-```gdscript [GDScript]
-engine.on_dialog(handler)
-engine.on_choice(handler)
-engine.on_condition(handler)
-engine.on_action(handler)
-
-var handle = engine.scene(scene_id)
-handle.start() # ✓ All 4 registered — scene starts
-```
+<!--@include: ../../_shared/handler-basic.md-->
 
 ## Système de handlers two-tier
 
@@ -1062,77 +402,7 @@ Quand un block est dispatché :
 1. Le scene handler (Tier 2) est callé en premier, s'il existe.
 2. Le global handler (Tier 1) est ensuite callé, **sauf si** le scene handler a callé `context.preventGlobalHandler()`.
 
-
-```ts [TypeScript]
-// Tier 1 — global
-engine.onDialog(({ block, context, next }) => {
-  console.log('Global dialog handler');
-  next();
-});
-
-// Tier 2 — scene-specific
-const handle = engine.scene(sceneId);
-handle.onDialog(({ block, context, next }) => {
-  console.log('Scene-specific dialog handler');
-  context.preventGlobalHandler();
-  next();
-});
-handle.start();
-```
-```csharp [C#]
-// Tier 1 — global
-engine.OnDialog(args => {
-    Console.WriteLine("Global dialog handler");
-    args.Next();
-    return null;
-});
-
-// Tier 2 — scene-specific
-var handle = engine.Scene(sceneId);
-handle.OnDialog(args => {
-    Console.WriteLine("Scene-specific dialog handler");
-    args.Context.PreventGlobalHandler();
-    args.Next();
-    return null;
-});
-handle.Start();
-```
-```cpp [C++]
-// Tier 1 — global
-engine.onDialog([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
-    std::cout << "Global dialog handler\n";
-    next();
-    return {};
-});
-
-// Tier 2 — scene-specific
-auto handle = engine.scene(sceneId);
-handle->onDialog([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
-    std::cout << "Scene-specific dialog handler\n";
-    ctx->preventGlobalHandler();
-    next();
-    return {};
-});
-handle->start();
-```
-```gdscript [GDScript]
-# Tier 1 — global
-engine.on_dialog(func(args):
-    print("Global dialog handler")
-    args["next"].call()
-    return Callable()
-)
-
-# Tier 2 — scene-specific
-var handle = engine.scene(scene_id)
-handle.on_dialog(func(args):
-    print("Scene-specific dialog handler")
-    args["context"].prevent_global_handler()
-    args["next"].call()
-    return Callable()
-)
-handle.start()
-```
+<!--@include: ../../_shared/handler-tier1.md-->
 
 > INFO:
 Quand un block est dispatché, le engine résout le handler dans cet ordre de priorité :
@@ -1146,45 +416,7 @@ Si un scene handler (Tier 2) existe, le global handler (Tier 1) est aussi callé
 
 Le engine résout un personnage pour chaque block qui a `metadata.characters`. Le défaut retourne le premier personnage de la liste.
 
-
-```ts [TypeScript]
-// Engine-level — applies to all scenes
-engine.onResolveCharacter((characters) => {
-  return party.getActiveLeader(characters);
-});
-
-// Scene-level override
-const handle = engine.scene(sceneId);
-handle.onResolveCharacter((characters) => {
-  return battle.getActiveUnit(characters);
-});
-```
-```csharp [C#]
-engine.OnResolveCharacter(chars => party.GetActiveLeader(chars));
-
-var handle = engine.Scene(sceneId);
-handle.OnResolveCharacter(chars => battle.GetActiveUnit(chars));
-```
-```cpp [C++]
-engine.onResolveCharacter([](const auto& chars) {
-    return party.getActiveLeader(chars);
-});
-
-auto handle = engine.scene(sceneId);
-handle->onResolveCharacter([](const auto& chars) {
-    return battle.getActiveUnit(chars);
-});
-```
-```gdscript [GDScript]
-engine.on_resolve_character(func(chars):
-    return party.get_active_leader(chars)
-)
-
-var handle = engine.scene(scene_id)
-handle.on_resolve_character(func(chars):
-    return battle.get_active_unit(chars)
-)
-```
+<!--@include: ../../_shared/handler-character.md-->
 
 Le personnage résolu est disponible via `context.character` dans tous les block handlers, et via `nextContext.character` / `fromContext.character` dans [`onValidateNextBlock`](lifecycle#onvalidatenextblock).
 
@@ -1192,64 +424,13 @@ Le personnage résolu est disponible via `context.character` dans tous les block
 
 Le engine track chaque choix que le joueur fait pendant une scene. Cet historique est utilisé en interne pour l'évaluation des conditions `choice:`, et est aussi disponible pour le code appelant :
 
-
-```ts [TypeScript]
-handle.onExit(({ scene }) => {
-  const history = scene.getChoiceHistory();       // Map of blockUuid → [choiceUuid, ...]
-  const picks = scene.getChoice('block-uuid-123'); // string[] | undefined
-});
-```
-```csharp [C#]
-handle.OnExit(args => {
-    var history = args.Scene.GetChoiceHistory();
-    var picks = args.Scene.GetChoice("block-uuid-123"); // List<string>?
-});
-```
-```cpp [C++]
-handle->onExit([](auto* scene, auto*) {
-    auto history = scene->getChoiceHistory();
-    auto picks = scene->getChoice("block-uuid-123"); // std::vector<std::string>*
-});
-```
-```gdscript [GDScript]
-handle.on_exit(func(args):
-    var history = args["scene"].get_choice_history()
-    var picks = args["scene"].get_choice("block-uuid-123") # Array or null
-)
-```
+<!--@include: ../../_shared/handler-on-exit.md-->
 
 ## Block Override
 
 Un `SceneHandle` peut aussi override un block spécifique par UUID :
 
-
-```ts [TypeScript]
-const handle = engine.scene(sceneId);
-handle.onBlock('block-uuid-123', ({ block, context, next }) => {
-  next();
-});
-```
-```csharp [C#]
-var handle = engine.Scene(sceneId);
-handle.OnBlock("block-uuid-123", args => {
-    args.Next();
-    return null;
-});
-```
-```cpp [C++]
-auto handle = engine.scene(sceneId);
-handle->onBlock("block-uuid-123", [](auto*, auto*, auto*, auto next) -> CleanupFn {
-    next();
-    return {};
-});
-```
-```gdscript [GDScript]
-var handle = engine.scene(scene_id)
-handle.on_block("block-uuid-123", func(args):
-    args["next"].call()
-    return Callable()
-)
-```
+<!--@include: ../../_shared/handler-block-override.md-->
 
 ## Visual Reference
 
@@ -1287,78 +468,7 @@ Le engine ne touche jamais à l'UI, au state ou à l'audio. Il indique juste *ce
 
 Le handler le plus simple — affiche du texte et attend que le joueur continue.
 
-
-```ts [TypeScript]
-// The engine says "show this text". You decide where, how, and when to move on.
-engine.onDialog(({ block, context, next }) => {
-  const text = LsdeUtils.getLocalizedText(block.dialogueText);
-  const char = context.character;
-
-  const el = document.getElementById('dialog')!;
-  el.innerHTML = `<strong>${char?.name ?? ''}</strong>: ${text ?? ''}`;
-  el.style.display = 'block';
-
-  // Player clicks → flow continues. Your pace, your rules.
-  const handler = () => { next(); el.removeEventListener('click', handler); };
-  el.addEventListener('click', handler);
-
-  // Cleanup: hide when the next block takes over
-  return () => { el.style.display = 'none'; };
-});
-```
-```csharp [C# — Unity]
-// Drag your UI references in the Inspector, wire the rest in code.
-engine.OnDialog(args => {
-    var text = LsdeUtils.GetLocalizedText(args.Block.DialogueText);
-    var ch = args.Context.Character;
-
-    dialogText.text = $"{ch?.Name ?? ""}: {text ?? "—"}";
-    dialogText.gameObject.SetActive(true);
-
-    // Store next() — call it when the player clicks the "continue" button.
-    pendingNext = args.Next;
-
-    // Cleanup: hide the dialog panel
-    return () => dialogText.gameObject.SetActive(false);
-});
-
-// Somewhere in your UI button handler:
-public void OnContinueClick() {
-    pendingNext?.Invoke();
-    pendingNext = null;
-}
-```
-```cpp [C++ — Unreal]
-// UMG widget does the heavy lifting. The engine just says "go".
-engine.onDialog([this](auto*, auto* block, auto* ctx, auto next) -> lsde::CleanupFn {
-    auto text = lsde::LsdeUtils::GetLocalizedText(block->dialogueText);
-    auto* ch = ctx->character();
-
-    DialogWidget->SetText(FString(ch ? ch->name.c_str() : ""),
-                          FString(text.value_or("").c_str()));
-    DialogWidget->SetVisibility(ESlateVisibility::Visible);
-
-    // Store next — triggered by a UI button delegate
-    PendingNext = std::move(next);
-
-    return [this]() { DialogWidget->SetVisibility(ESlateVisibility::Collapsed); };
-});
-```
-```gdscript [GDScript — Godot]
-# BBCode in RichTextLabel? Fancy. The engine doesn't judge.
-engine.on_dialog(func(args):
-    var text = LsdeUtils.get_localized_text(args["block"].get("dialogueText"))
-    var ch = args["context"].character
-    dialog_label.text = "[b]%s:[/b] %s" % [ch.get("name", "") if ch else "", text]
-    dialog_label.visible = true
-
-    # Wait for player input — your signal, your timer, your call
-    await player_clicked  # or await get_tree().create_timer(2.0).timeout
-    args["next"].call()
-
-    return func(): dialog_label.visible = false
-)
-```
+<!--@include: ../../_shared/integration-dialog.md-->
 
 > TIP:
 Appeler `next()` instantanément pour du dialogue rapide, ou le stocker et l'appeler plus tard — après une animation, un timer, un click du joueur... whatever qui fit le jeu. Le engine attend patiemment.
@@ -1367,218 +477,19 @@ Appeler `next()` instantanément pour du dialogue rapide, ou le stocker et l'app
 
 Spawner des éléments UI dynamiquement, laisser le joueur choisir, et indiquer au engine ce qui a été sélectionné.
 
-
-```ts [TypeScript]
-engine.onChoice(({ context, next }) => {
-  const panel = document.getElementById('choices')!;
-  const visible = context.choices.filter(c => c.visible !== false);
-
-  for (const choice of visible) {
-    const btn = document.createElement('button');
-    btn.textContent = LsdeUtils.getLocalizedText(choice.dialogueText) ?? choice.label ?? '';
-    btn.onclick = () => {
-      context.selectChoice(choice.uuid); // Tell the engine which path to take
-      next();
-    };
-    panel.appendChild(btn);
-  }
-
-  // Cleanup: wipe the buttons when leaving this block
-  return () => { panel.innerHTML = ''; };
-});
-```
-```csharp [C# — Unity]
-engine.OnChoice(args => {
-    var visible = args.Context.Choices
-        .Where(c => c.Visible != false).ToList();
-
-    // Spawn a button per visible choice — your prefab, your layout
-    foreach (var choice in visible)
-    {
-        var btn = Instantiate(choiceButtonPrefab, choicePanel);
-        btn.GetComponentInChildren<Text>().text =
-            LsdeUtils.GetLocalizedText(choice.DialogueText) ?? choice.Label ?? "";
-
-        var uuid = choice.Uuid; // capture for closure
-        btn.onClick.AddListener(() => {
-            args.Context.SelectChoice(uuid);
-            args.Next();
-        });
-    }
-
-    // Cleanup: destroy spawned buttons
-    return () => {
-        foreach (Transform child in choicePanel)
-            Destroy(child.gameObject);
-    };
-});
-```
-```cpp [C++ — Unreal]
-engine.onChoice([this](auto*, auto* block, auto* ctx, auto next) -> lsde::CleanupFn {
-    const auto& choices = ctx->choices();
-    for (const auto& c : choices) {
-        if (!c.visible.has_value() || c.visible.value()) {
-            auto text = lsde::LsdeUtils::GetLocalizedText(c.dialogueText);
-            ChoiceWidget->AddOption(c.uuid, text.value_or(""));
-        }
-    }
-
-    // Store context — your UI delegate calls selectChoice + next
-    ChoiceCtx = ctx;
-    ChoiceNext = std::move(next);
-
-    return [this]() { ChoiceWidget->ClearOptions(); };
-});
-
-// Called from your UMG button delegate
-void OnChoiceSelected(const std::string& uuid) {
-    ChoiceCtx->selectChoice(uuid);
-    ChoiceNext();
-}
-```
-```gdscript [GDScript — Godot]
-engine.on_choice(func(args):
-    var visible = []
-    for c in args["context"].choices:
-        if c.get("visible") != false:
-            visible.append(c)
-
-    # One button per choice — connect the pressed signal
-    for c in visible:
-        var btn = Button.new()
-        btn.text = LsdeUtils.get_localized_text(c.get("dialogueText")) or c.get("label", "")
-        btn.pressed.connect(func():
-            args["context"].select_choice(c["uuid"])
-            args["next"].call()
-        )
-        choice_container.add_child(btn)
-
-    # Cleanup: free the buttons when leaving
-    return func():
-        for child in choice_container.get_children():
-            child.queue_free()
-)
-```
+<!--@include: ../../_shared/integration-choice.md-->
 
 ## Évaluer les conditions
 
 Le game state, les règles du jeu. Le engine a juste besoin d'un `true` ou `false`.
 
-
-```ts [TypeScript]
-engine.onCondition(({ scene, block, context, next }) => {
-  const result = LsdeUtils.evaluateConditionChain(
-    block.conditions ?? [],
-    (cond) => LsdeUtils.isChoiceCondition(cond)
-      ? scene.evaluateCondition(cond) // choice history — engine handles it
-      : gameState.check(cond.key, cond.operator, cond.value), // your logic
-  );
-  context.resolve(result); // true → port 0, false → port 1
-  next();
-});
-```
-```csharp [C# — Unity]
-engine.OnCondition(args => {
-    var result = LsdeUtils.EvaluateConditionChain(
-        args.Block.Conditions ?? new(),
-        cond => LsdeUtils.IsChoiceCondition(cond)
-            ? args.Scene.EvaluateCondition(cond)
-            : GameState.Instance.Evaluate(cond.Key, cond.Operator, cond.Value));
-    args.Context.Resolve(result);
-    args.Next();
-    return null;
-});
-```
-```cpp [C++ — Unreal]
-engine.onCondition([this](auto* scene, auto* block, auto* ctx, auto next) -> lsde::CleanupFn {
-    auto* cb = dynamic_cast<const lsde::ConditionBlock*>(block);
-    auto result = lsde::LsdeUtils::EvaluateConditionChain(
-        cb->conditions,
-        [scene, this](const auto& cond) {
-            return lsde::isChoiceCondition(cond)
-                ? scene->evaluateCondition(cond)
-                : GetGameState()->Evaluate(cond);
-        });
-    ctx->resolve(result);
-    next();
-    return {};
-});
-```
-```gdscript [GDScript — Godot]
-engine.on_condition(func(args):
-    var result = LsdeUtils.evaluate_condition_chain(
-        args["block"].get("conditions", []),
-        func(cond):
-            if LsdeUtils.is_choice_condition(cond):
-                return args["scene"].evaluate_condition(cond)
-            return GameState.evaluate(cond)
-    )
-    args["context"].resolve(result)
-    args["next"].call()
-    return Callable()
-)
-```
+<!--@include: ../../_shared/integration-condition.md-->
 
 ## Exécuter des actions
 
 C'est ici que le jeu prend vie — jouer des sons, donner des items, set des flags, trigger des cutscenes.
 
-
-```ts [TypeScript]
-engine.onAction(({ block, context, next }) => {
-  for (const { actionId, params } of block.actions ?? []) {
-    switch (actionId) {
-      case 'set_flag':   gameState.setFlag(params[0], params[1]); break;
-      case 'play_sound': audio.play(params[0] as string); break;
-      case 'give_item':  inventory.add(params[0] as string); break;
-    }
-  }
-  context.resolve();    // success → "then" port
-  // context.reject(err); // failure → "catch" port (fallback "then")
-  next();
-});
-```
-```csharp [C# — Unity]
-engine.OnAction(args => {
-    foreach (var action in args.Block.Actions ?? new())
-    {
-        switch (action.ActionId)
-        {
-            case "set_flag":   GameState.Instance.SetFlag(action.Params); break;
-            case "play_sound": AudioManager.Play(action.Params[0].ToString()); break;
-            case "give_item":  Inventory.Add(action.Params[0].ToString()); break;
-        }
-    }
-    args.Context.Resolve();
-    args.Next();
-    return null;
-});
-```
-```cpp [C++ — Unreal]
-engine.onAction([this](auto*, auto* block, auto* ctx, auto next) -> lsde::CleanupFn {
-    auto* ab = dynamic_cast<const lsde::ActionBlock*>(block);
-    for (const auto& a : ab->actions) {
-        if (a.actionId == "set_flag")   GetGameState()->SetFlag(a.params);
-        if (a.actionId == "play_sound") GetAudioManager()->Play(a.params);
-        if (a.actionId == "give_item")  GetInventory()->Add(a.params);
-    }
-    ctx->resolve();
-    next();
-    return {};
-});
-```
-```gdscript [GDScript — Godot]
-engine.on_action(func(args):
-    for action in args["block"].get("actions", []):
-        match action.get("actionId"):
-            "set_flag":   GameState.set_flag(action["params"][0], action["params"][1])
-            "play_sound": AudioManager.play(action["params"][0])
-            "give_item":  Inventory.add(action["params"][0])
-    args["context"].resolve()
-    args["next"].call()
-    return Callable()
-)
-```
+<!--@include: ../../_shared/integration-action.md-->
 
 ## Ce qui connecte où
 
