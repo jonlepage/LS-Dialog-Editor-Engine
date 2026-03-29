@@ -434,9 +434,19 @@ namespace LsdeDialogEngine
             _sceneRegistry.DialogHandler = handler;
         }
 
+        public void OnDialog(Action<BlockHandlerArgs<DialogBlock, IDialogContext>> handler)
+        {
+            _sceneRegistry.DialogHandler = args => { handler(args); return null; };
+        }
+
         public void OnChoice(BlockHandler<ChoiceBlock, IChoiceContext> handler)
         {
             _sceneRegistry.ChoiceHandler = handler;
+        }
+
+        public void OnChoice(Action<BlockHandlerArgs<ChoiceBlock, IChoiceContext>> handler)
+        {
+            _sceneRegistry.ChoiceHandler = args => { handler(args); return null; };
         }
 
         public void OnCondition(BlockHandler<ConditionBlock, IConditionContext> handler)
@@ -444,9 +454,19 @@ namespace LsdeDialogEngine
             _sceneRegistry.ConditionHandler = handler;
         }
 
+        public void OnCondition(Action<BlockHandlerArgs<ConditionBlock, IConditionContext>> handler)
+        {
+            _sceneRegistry.ConditionHandler = args => { handler(args); return null; };
+        }
+
         public void OnAction(BlockHandler<ActionBlock, IActionContext> handler)
         {
             _sceneRegistry.ActionHandler = handler;
+        }
+
+        public void OnAction(Action<BlockHandlerArgs<ActionBlock, IActionContext>> handler)
+        {
+            _sceneRegistry.ActionHandler = args => { handler(args); return null; };
         }
 
         public BlueprintBlock? GetCurrentBlock() => _currentBlock;

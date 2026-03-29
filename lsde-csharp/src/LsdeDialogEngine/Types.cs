@@ -163,12 +163,16 @@ namespace LsdeDialogEngine
     {
         /// <summary>Unique auto-incremented identifier for this track within the scene. Main track is implicit (id 0).</summary>
         public int Id { get; set; }
+
         /// <summary>ID of the track that spawned this one. Null means spawned directly by the main track.</summary>
         public int? ParentTrackId { get; set; }
+
         /// <summary>UUID of the first block that started this track's execution.</summary>
         public string StartBlockUuid { get; set; } = "";
+
         /// <summary>UUID of the block currently being processed, or null if the track has not yet started.</summary>
         public string? CurrentBlockUuid { get; set; }
+
         /// <summary>Whether this track is still actively executing.</summary>
         public bool Running { get; set; }
     }
@@ -603,6 +607,20 @@ namespace LsdeDialogEngine
             Block = block;
             Context = context;
             Next = next;
+        }
+
+        /// <summary>Enables deconstruction: var (scene, block, context, next) = args;</summary>
+        public void Deconstruct(
+            out ISceneHandle scene,
+            out TBlock block,
+            out TContext context,
+            out Action next
+        )
+        {
+            scene = Scene;
+            block = Block;
+            context = Context;
+            next = Next;
         }
     }
 

@@ -547,6 +547,26 @@ using TypedBlockHandler = std::function<CleanupFn(
     std::function<void()> next
 )>;
 
+/// Void handler variant — no cleanup return needed.
+template<typename TBlock, typename TContext>
+using VoidBlockHandler = std::function<void(
+    ISceneHandle* scene,
+    const TBlock* block,
+    TContext* context,
+    std::function<void()> next
+)>;
+
+/// Wrap a void handler into a typed handler that returns an empty cleanup.
+template<typename TBlock, typename TContext>
+TypedBlockHandler<TBlock, TContext> wrapVoidHandler(VoidBlockHandler<TBlock, TContext> handler) {
+    return [h = std::move(handler)](
+        ISceneHandle* scene, const TBlock* block, TContext* ctx, std::function<void()> next
+    ) -> CleanupFn {
+        h(scene, block, ctx, std::move(next));
+        return {};
+    };
+}
+
 /// Wrap a typed handler into the internal non-generic type via static_cast.
 template<typename TBlock, typename TContext>
 InternalBlockHandler wrapHandler(TypedBlockHandler<TBlock, TContext> handler) {
@@ -671,14 +691,22 @@ public:
 
     /// Override a specific block by UUID. Takes highest priority over type handlers.
     virtual void onBlock(const std::string& blockUuid, InternalBlockHandler handler) = 0;
-    /// Override all DIALOG blocks for this scene (Tier 2).
+    /// Override all DIALOG blocks for this scene (Tier 2, with cleanup).
     virtual void onDialog(TypedBlockHandler<DialogBlock, IDialogContext> handler) = 0;
-    /// Override all CHOICE blocks for this scene (Tier 2).
+    /// Override all DIALOG blocks for this scene (Tier 2, no cleanup).
+    virtual void onDialog(VoidBlockHandler<DialogBlock, IDialogContext> handler) { onDialog(wrapVoidHandler(std::move(handler))); }
+    /// Override all CHOICE blocks for this scene (Tier 2, with cleanup).
     virtual void onChoice(TypedBlockHandler<ChoiceBlock, IChoiceContext> handler) = 0;
-    /// Override all CONDITION blocks for this scene (Tier 2).
+    /// Override all CHOICE blocks for this scene (Tier 2, no cleanup).
+    virtual void onChoice(VoidBlockHandler<ChoiceBlock, IChoiceContext> handler) { onChoice(wrapVoidHandler(std::move(handler))); }
+    /// Override all CONDITION blocks for this scene (Tier 2, with cleanup).
     virtual void onCondition(TypedBlockHandler<ConditionBlock, IConditionContext> handler) = 0;
-    /// Override all ACTION blocks for this scene (Tier 2).
+    /// Override all CONDITION blocks for this scene (Tier 2, no cleanup).
+    virtual void onCondition(VoidBlockHandler<ConditionBlock, IConditionContext> handler) { onCondition(wrapVoidHandler(std::move(handler))); }
+    /// Override all ACTION blocks for this scene (Tier 2, with cleanup).
     virtual void onAction(TypedBlockHandler<ActionBlock, IActionContext> handler) = 0;
+    /// Override all ACTION blocks for this scene (Tier 2, no cleanup).
+    virtual void onAction(VoidBlockHandler<ActionBlock, IActionContext> handler) { onAction(wrapVoidHandler(std::move(handler))); }
 
     /// Get the block currently being executed, or nullptr if scene is not running.
     virtual const BlueprintBlock* getCurrentBlock() const = 0;

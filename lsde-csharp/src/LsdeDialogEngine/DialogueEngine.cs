@@ -88,28 +88,52 @@ namespace LsdeDialogEngine
 
         // ─── Type handlers ───────────────────────────────────────────────
 
-        /// <summary>Register a global handler for DIALOG blocks.</summary>
+        /// <summary>Register a global handler for DIALOG blocks (with optional cleanup).</summary>
         public void OnDialog(BlockHandler<DialogBlock, IDialogContext> handler)
         {
             _globalRegistry.DialogHandler = handler;
         }
 
-        /// <summary>Register a global handler for CHOICE blocks.</summary>
+        /// <summary>Register a global handler for DIALOG blocks (no cleanup).</summary>
+        public void OnDialog(Action<BlockHandlerArgs<DialogBlock, IDialogContext>> handler)
+        {
+            _globalRegistry.DialogHandler = args => { handler(args); return null; };
+        }
+
+        /// <summary>Register a global handler for CHOICE blocks (with optional cleanup).</summary>
         public void OnChoice(BlockHandler<ChoiceBlock, IChoiceContext> handler)
         {
             _globalRegistry.ChoiceHandler = handler;
         }
 
-        /// <summary>Register a global handler for CONDITION blocks.</summary>
+        /// <summary>Register a global handler for CHOICE blocks (no cleanup).</summary>
+        public void OnChoice(Action<BlockHandlerArgs<ChoiceBlock, IChoiceContext>> handler)
+        {
+            _globalRegistry.ChoiceHandler = args => { handler(args); return null; };
+        }
+
+        /// <summary>Register a global handler for CONDITION blocks (with optional cleanup).</summary>
         public void OnCondition(BlockHandler<ConditionBlock, IConditionContext> handler)
         {
             _globalRegistry.ConditionHandler = handler;
         }
 
-        /// <summary>Register a global handler for ACTION blocks.</summary>
+        /// <summary>Register a global handler for CONDITION blocks (no cleanup).</summary>
+        public void OnCondition(Action<BlockHandlerArgs<ConditionBlock, IConditionContext>> handler)
+        {
+            _globalRegistry.ConditionHandler = args => { handler(args); return null; };
+        }
+
+        /// <summary>Register a global handler for ACTION blocks (with optional cleanup).</summary>
         public void OnAction(BlockHandler<ActionBlock, IActionContext> handler)
         {
             _globalRegistry.ActionHandler = handler;
+        }
+
+        /// <summary>Register a global handler for ACTION blocks (no cleanup).</summary>
+        public void OnAction(Action<BlockHandlerArgs<ActionBlock, IActionContext>> handler)
+        {
+            _globalRegistry.ActionHandler = args => { handler(args); return null; };
         }
 
         // ─── Scene lifecycle ─────────────────────────────────────────────

@@ -1,225 +1,147 @@
 ::: code-group
 ```ts [TypeScript]
-import { DialogueEngine, LsdeUtils } from '@lsde/dialog-engine';
-import type { BlueprintExport } from '@lsde/dialog-engine';
+import { DialogueEngine } from '@lsde/dialog-engine';
 import blueprintJson from './blueprint.json';
 
-const data = blueprintJson as unknown as BlueprintExport;
 const engine = new DialogueEngine();
-const report = engine.init({ data });
+engine.init({ data: blueprintJson });
 
-if (report.errors.length > 0) {
-  console.error('Invalid blueprint:', report.errors);
-}
-
-engine.setLocale('en');
-engine.onResolveCharacter((characters) => characters[0]);
-
-// 4 required handlers
-engine.onDialog(({ block, context, next }) => {
-  const text = LsdeUtils.getLocalizedText(block.dialogueText);
-  console.log(`${context.character?.name ?? '???'}: ${text ?? '—'}`);
-  next();
+// 4 required handlers — bridge between the engine and your game
+engine.onDialog(({ scene, block, context, next }) => {
+  game
+    .createDialogAuto(block, context)
+    .catch(() => scene.cancel())
+    .finally(() => next());
 });
 
-engine.onChoice(({ context, next }) => {
-  const visible = context.choices.filter(c => c.visible !== false);
-  context.selectChoice(visible[0].uuid);
-  next();
+engine.onChoice(({ scene, block, context, next }) => {
+  game
+    .createChoiceAuto(block, context)
+    .catch(() => scene.cancel())
+    .finally(() => next());
 });
 
 engine.onCondition(({ scene, block, context, next }) => {
-  const result = LsdeUtils.evaluateConditionChain(
-    block.conditions ?? [],
-    (cond) => LsdeUtils.isChoiceCondition(cond)
-      ? scene.evaluateCondition(cond)
-      : true, // your game-state logic here
-  );
-  context.resolve(result);
-  next();
+  game
+    .evaluateConditions(block.conditions)
+    .catch(() => scene.cancel())
+    .then((result) => context.resolve(result))
+    .finally(() => next());
 });
 
 engine.onAction(({ block, context, next }) => {
-  for (const action of block.actions ?? []) {
-    console.log(`Action: ${action.actionId}`);
-  }
-  context.resolve();
-  next();
+  game
+    .executeActions(block.actions)
+    .catch((err) => context.reject(err))
+    .finally(() => next());
 });
 
-// Run
-const handle = engine.scene(data.scenes[0].uuid);
-handle.start();
+// Start a scene anywhere in your game code
+function myGameScript(sceneId: string) {
+  const scene = engine.scene(sceneId);
+  scene.start();
+}
 ```
 ```csharp [C#]
 using LsdeDialogEngine;
 
-var blueprint = LoadBlueprint(); // your JSON deserialization
 var engine = new DialogueEngine();
-var report = engine.Init(new InitOptions { Data = blueprint });
+engine.Init(new InitOptions { Data = blueprint });
 
-if (report.Errors.Count > 0)
-    throw new Exception("Invalid blueprint");
-
-engine.SetLocale("en");
-engine.OnResolveCharacter(chars => chars.Count > 0 ? chars[0] : null);
-
-// 4 required handlers
+// 4 required handlers — bridge between the engine and your game
 engine.OnDialog(args => {
-    var text = LsdeUtils.GetLocalizedText(args.Block.DialogueText);
-    Console.WriteLine($"{args.Context.Character?.Name ?? "???"}: {text ?? "—"}");
-    args.Next();
-    return null;
+    var (scene, block, context, next) = args;
+    Game.ShowDialog(block, context, onComplete: next);
 });
 
 engine.OnChoice(args => {
-    var visible = args.Context.Choices
-        .Where(c => c.Visible != false).ToList();
-    args.Context.SelectChoice(visible[0].Uuid);
-    args.Next();
-    return null;
+    var (scene, block, context, next) = args;
+    Game.ShowChoices(block, context, onSelected: next);
 });
 
 engine.OnCondition(args => {
-    var result = LsdeUtils.EvaluateConditionChain(
-        args.Block.Conditions ?? new(),
-        cond => LsdeUtils.IsChoiceCondition(cond)
-            ? args.Scene.EvaluateCondition(cond)
-            : true
-    );
-    args.Context.Resolve(result);
-    args.Next();
-    return null;
+    var (scene, block, context, next) = args;
+    var result = Game.EvaluateConditions(block.Conditions);
+    context.Resolve(result);
+    next();
 });
 
 engine.OnAction(args => {
-    foreach (var action in args.Block.Actions ?? new())
-        Console.WriteLine($"Action: {action.ActionId}");
-    args.Context.Resolve();
-    args.Next();
-    return null;
+    var (scene, block, context, next) = args;
+    Game.ExecuteActions(block.Actions);
+    context.Resolve();
+    next();
 });
 
-// Run
-var handle = engine.Scene(blueprint.Scenes[0].Uuid);
-handle.Start();
+// Start a scene anywhere in your game code
+void MyGameScript(string sceneId) {
+    var scene = engine.Scene(sceneId);
+    scene.Start();
+}
 ```
 ```cpp [C++]
 #include <lsde/engine.h>
-#include <lsde/utils.h>
 
 using namespace lsde;
 
-auto blueprint = loadBlueprint(); // your JSON deserialization
 DialogueEngine engine;
-auto report = engine.init({blueprint});
+engine.init({blueprint});
 
-engine.setLocale("en");
-engine.onResolveCharacter([](const auto& chars) {
-    return chars.empty() ? nullptr : &chars[0];
+// 4 required handlers — bridge between the engine and your game
+engine.onDialog([](auto* scene, auto* block, auto* ctx, auto next) {
+    game->showDialog(block, ctx, [next]() { next(); });
 });
 
-// 4 required handlers
-engine.onDialog([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
-    auto text = LsdeUtils::GetLocalizedText(block->dialogueText);
-    auto* ch = ctx->character();
-    std::cout << (ch ? ch->name : "???") << ": " << text.value_or("—") << "\n";
-    next();
-    return {};
+engine.onChoice([](auto* scene, auto* block, auto* ctx, auto next) {
+    game->showChoices(block, ctx, [next]() { next(); });
 });
 
-engine.onChoice([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
-    const auto& choices = ctx->choices();
-    for (const auto& c : choices) {
-        if (!c.visible.has_value() || c.visible.value()) {
-            ctx->selectChoice(c.uuid);
-            break;
-        }
-    }
-    next();
-    return {};
-});
-
-engine.onCondition([](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn {
-    auto* cb = dynamic_cast<const ConditionBlock*>(block);
-    auto result = LsdeUtils::EvaluateConditionChain(
-        cb->conditions,
-        [scene](const auto& cond) {
-            return isChoiceCondition(cond) ? scene->evaluateCondition(cond) : true;
-        });
+engine.onCondition([](auto* scene, auto* block, auto* ctx, auto next) {
+    auto result = game->evaluateConditions(block->conditions);
     ctx->resolve(result);
     next();
-    return {};
 });
 
-engine.onAction([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
-    auto* ab = dynamic_cast<const ActionBlock*>(block);
-    for (const auto& a : ab->actions)
-        std::cout << "Action: " << a.actionId << "\n";
+engine.onAction([](auto*, auto* block, auto* ctx, auto next) {
+    game->executeActions(block->actions);
     ctx->resolve();
     next();
-    return {};
 });
 
-// Run
-auto handle = engine.scene(blueprint.scenes[0].uuid);
-handle->start();
+// Start a scene anywhere in your game code
+auto scene = engine.scene(sceneId);
+scene->start();
 ```
 ```gdscript [GDScript]
-var blueprint = load_blueprint() # your JSON parsing
 var engine = LsdeDialogueEngine.new()
-var report = engine.init({"data": blueprint})
+engine.init({"data": blueprint})
 
-if report["errors"].size() > 0:
-    push_error("Invalid blueprint")
-
-engine.set_locale("en")
-engine.on_resolve_character(func(chars):
-    return chars[0] if chars.size() > 0 else null
-)
-
-# 4 required handlers
+# 4 required handlers — bridge between the engine and your game
 engine.on_dialog(func(args):
-    var text = LsdeUtils.get_localized_text(args["block"].get("dialogueText"))
-    var ch = args["context"].character
-    print("%s: %s" % [ch.get("name", "???") if ch else "???", text if text else "—"])
+    await game.show_dialog(args["block"], args["context"])
     args["next"].call()
-    return Callable()
 )
 
 engine.on_choice(func(args):
-    var visible = []
-    for c in args["context"].choices:
-        if c.get("visible") != false:
-            visible.append(c)
-    args["context"].select_choice(visible[0]["uuid"])
+    await game.show_choices(args["block"], args["context"])
     args["next"].call()
-    return Callable()
 )
 
 engine.on_condition(func(args):
-    var result = LsdeUtils.evaluate_condition_chain(
-        args["block"].get("conditions", []),
-        func(cond):
-            if LsdeUtils.is_choice_condition(cond):
-                return args["scene"].evaluate_condition(cond)
-            return true
-    )
+    var result = game.evaluate_conditions(args["block"].conditions)
     args["context"].resolve(result)
     args["next"].call()
-    return Callable()
 )
 
 engine.on_action(func(args):
-    for action in args["block"].get("actions", []):
-        print("Action: %s" % action.get("actionId", ""))
+    game.execute_actions(args["block"].actions)
     args["context"].resolve()
     args["next"].call()
-    return Callable()
 )
 
-# Run
-var handle = engine.scene(blueprint["scenes"][0]["uuid"])
-handle.start()
+# Start a scene anywhere in your game code
+func my_game_script(scene_id: String):
+    var scene = engine.scene(scene_id)
+    scene.start()
 ```
 :::

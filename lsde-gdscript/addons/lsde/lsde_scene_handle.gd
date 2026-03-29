@@ -307,8 +307,8 @@ func _execute_block_handler(block: Dictionary) -> void:
 		return
 
 	var state: Array = [false, true]  # [next_called, sync_phase]
-	var scene_cleanup: Callable
-	var global_cleanup: Callable
+	var scene_cleanup: Variant
+	var global_cleanup: Variant
 
 	var next_fn: Callable = func() -> void:
 		if state[0]:  # next_called
@@ -498,13 +498,18 @@ func _create_context(block: Dictionary) -> Variant:
 			return LsdeBlockContext.create_action_context(resolved_character)
 	return null
 
-static func _combine_cleanups(a: Callable, b: Callable) -> Callable:
-	if a.is_valid() and b.is_valid():
-		return func() -> void: a.call(); b.call()
-	if a.is_valid():
-		return a
-	if b.is_valid():
-		return b
+static func _safe_cleanup(v: Variant) -> Callable:
+	return v if v is Callable and v.is_valid() else Callable()
+
+static func _combine_cleanups(a: Variant, b: Variant) -> Callable:
+	var ca: Callable = _safe_cleanup(a)
+	var cb: Callable = _safe_cleanup(b)
+	if ca.is_valid() and cb.is_valid():
+		return func() -> void: ca.call(); cb.call()
+	if ca.is_valid():
+		return ca
+	if cb.is_valid():
+		return cb
 	return Callable()
 
 # ─── AsyncTrack ───────────────────────────────────────────────────────────
@@ -632,8 +637,8 @@ class AsyncTrack extends RefCounted:
 			return
 
 		var state: Array = [false, true, false]  # [next_called, sync_phase, has_pending]
-		var scene_cleanup: Callable
-		var global_cleanup: Callable
+		var scene_cleanup: Variant
+		var global_cleanup: Variant
 
 		var next_fn: Callable = func() -> void:
 			if state[0]:
