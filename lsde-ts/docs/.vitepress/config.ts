@@ -147,6 +147,7 @@ export default withMermaid(defineConfig({
 	},
 
 	themeConfig: {
+		logo: '/lsde-64x64.webp',
 		sidebar: {
 			"/guide/": guideSidebar(""),
 			"/ja/guide/": guideSidebar("/ja"),

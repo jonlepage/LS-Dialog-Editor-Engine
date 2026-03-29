@@ -1,57 +1,93 @@
 /* Sharp corners — kill all rounded borders globally */
 :root {
-  --vp-border-radius: 1px;
+	--vp-border-radius: 1px;
 }
 
 /* Nuclear option: override every border-radius in VitePress */
 *,
 *::before,
 *::after {
-  border-radius: 1px !important;
+	border-radius: 1px !important;
 }
 
 /* Scrollbar — thin, sharp, no round thumb */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+	width: 8px;
+	height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--vp-c-bg-soft);
-  border-radius: 0 !important;
+	background: var(--vp-c-bg-soft);
+	border-radius: 0 !important;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--vp-c-divider);
-  border-radius: 0 !important;
+	background: var(--vp-c-divider);
+	border-radius: 0 !important;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--vp-c-text-3);
+	background: var(--vp-c-text-3);
 }
 
 /* Firefox scrollbar */
 * {
-  scrollbar-width: thin;
-  scrollbar-color: var(--vp-c-divider) var(--vp-c-bg-soft);
+	scrollbar-width: thin;
+	scrollbar-color: var(--vp-c-divider) var(--vp-c-bg-soft);
 }
 
 /* Hide language switcher on API reference pages */
 .is-api-ref .VPNavBarTranslations,
 .is-api-ref .VPNavScreenTranslations {
-  display: none !important;
+	display: none !important;
 }
 
 /* VPSwitch (dark mode toggle) — rectangle, not pill */
 .VPSwitch {
-  border-radius: 1px !important;
+	border-radius: 1px !important;
 }
 
 .VPSwitch .check {
-  border-radius: 1px !important;
+	border-radius: 1px !important;
 }
 
 .VPSwitchAppearance .sun,
 .VPSwitchAppearance .moon {
-  border-radius: 0 !important;
+	border-radius: 0 !important;
+}
+
+/* ─── Home: blueprint grid bg — fades out from center-right ─── */
+.VPHome .VPHero {
+	position: relative;
+	overflow: visible;
+}
+
+.VPHome .VPHero::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background-image:
+		linear-gradient(rgba(99, 102, 241, 0.2) 1px, transparent 1px),
+		linear-gradient(90deg, rgba(99, 102, 241, 0.2) 1px, transparent 1px);
+	background-size: 48px 48px;
+	mask-image: linear-gradient(
+		to right,
+		transparent 10%,
+		rgba(0, 0, 0, 0.25) 50%,
+		rgba(0, 0, 0, 0.1) 100%
+	);
+	-webkit-mask-image: linear-gradient(
+		to right,
+		transparent 10%,
+		rgba(0, 0, 0, 0.2) 30%,
+		rgba(0, 0, 0, 0.1) 100%
+	);
+	-webkit-mask-image: linear-gradient(
+		to right,
+		transparent 10%,
+		rgba(0, 0, 0, 0.35) 40%,
+		rgba(0, 0, 0, 0.1) 100%
+	);
+	pointer-events: none;
+	z-index: 0;
 }
