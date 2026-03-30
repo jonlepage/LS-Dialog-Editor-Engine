@@ -1,47 +1,53 @@
 # ハンドラー
 
-## 必須 Handler
+## Handler
 
-engine はグラフ走査マシンです — ノードを辿り、登録されたコードにディスパッチします。4つのコンテンツ handler は、それなしでは engine が何も出力しないため、必須です：
+handler は engine とゲームを繋ぐ橋です。オブザーバーのように機能します — 関数を登録すると、対応するイベントが発生した時に engine がそれを呼び出します。テキストの表示、アニメーションの再生、状態の評価など、ゲームエンジンで適切な動作をトリガーするのは handler を通じて行います。
 
-- `onDialog` — 対話テキストに反応する
-- `onChoice` — プレイヤーに選択肢を提示する
-- `onCondition` — condition を評価してフローを分岐する
-- `onAction` — ゲーム側のエフェクトを実行する
+engine は以下の handler を公開しています：
 
-`handle.start()` を呼び出すと、engine は4つすべてが登録されているか（engine レベルまたは scene レベルで）検証します。いずれかが欠けている場合、欠けている handler の一覧を含む記述的なエラーがスローされます。
+| Handler | レベル | 説明 |
+|---------|--------|------|
+| [`onDialog`](/api-ref/classes/DialogueEngine#ondialog) | global / scene | dialog block — テキスト表示 |
+| [`onChoice`](/api-ref/classes/DialogueEngine#onchoice) | global / scene | choice block — 選択肢の提示 |
+| [`onCondition`](/api-ref/classes/DialogueEngine#oncondition) | global / scene | condition block — 評価と分岐 |
+| [`onAction`](/api-ref/classes/DialogueEngine#onaction) | global / scene | action block — 副作用のトリガー |
+| [`onResolveCharacter`](/api-ref/classes/DialogueEngine#onresolvecharacter) | global / scene | どのキャラクターが話しているかを解決 |
+| [`onBeforeBlock`](/api-ref/classes/DialogueEngine#onbeforeblock) | global | 各 block の前（delay、開始アニメーション…） |
+| [`onValidateNextBlock`](/api-ref/classes/DialogueEngine#onvalidatenextblock) | global | block に進む前のバリデーション |
+| [`onInvalidateBlock`](/api-ref/classes/DialogueEngine#oninvalidateblock) | global | バリデーション失敗時の処理 |
+| [`onSceneEnter`](/api-ref/classes/DialogueEngine#onsceneenter) | global / scene | scene の開始 |
+| [`onSceneExit`](/api-ref/classes/DialogueEngine#onsceneexit) | global / scene | scene の終了 |
+| [`onBlock`](/api-ref/interfaces/SceneHandle#onblock) | scene | UUID で特定の block をオーバーライド |
+| [`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter) | global | choice の可視性エバリュエーター |
+
+最初の4つ（`onDialog`、`onChoice`、`onCondition`、`onAction`）は**必須**です — `start()` 呼び出し時に engine がその存在を検証し、欠けている場合は記述的なエラーをスローします。
 
 <!--@include: ../../_shared/handler-basic.md-->
 
-## 2階層 Handler システム
+## Two-Tier Handler System
 
-engine は2レベルの handler システムを使用します：
+engine は handler を2つの階層で解決します：
 
-1. **Tier 1 — グローバル（engine レベル）**: `DialogueEngine` に `onDialog()`、`onChoice()` などで登録。
-2. **Tier 2 — Scene レベル**: `SceneHandle` に `handle.onDialog()` などで登録。
+- **Global handler** — engine に登録され、すべての scene のデフォルト動作を定義します。ほとんどの場合これだけで十分です。
+- **Scene handler** — 特定の [`SceneHandle`](/api-ref/interfaces/SceneHandle) に登録され、scene が異なるレンダリングや制御フローを必要とする場合にデフォルト動作をオーバーライドまたは拡張できます。まれですが、利用可能です。
 
-block がディスパッチされると：
-1. scene handler（Tier 2）が存在すれば、最初に呼び出されます。
-2. 次にグローバル handler（Tier 1）が呼び出されます。**ただし**、scene handler が `context.preventGlobalHandler()` を呼び出した場合を除きます。
+block がディスパッチされると、engine は以下の順序で handler を解決します：
+1. `handle.onBlock(uuid)` — block 固有のオーバーライド
+2. `handle.onDialog()` / `handle.onChoice()` / ... — scene レベルのタイプ handler
+3. `engine.onDialog()` / `engine.onChoice()` / ... — global handler
+
+両方の階層が存在する場合、両方が順番に実行されます — scene が先、次に global — ただし scene handler が `context.preventGlobalHandler()` を呼び出して global パスを抑制した場合を除きます。
 
 <!--@include: ../../_shared/handler-tier1.md-->
 
-::: info Handler の優先順位
-block がディスパッチされると、engine は以下の優先順位で handler を解決します：
-1. `handle.onBlock(uuid)` — UUID による block 固有のオーバーライド
-2. `handle.onDialog()` / `handle.onChoice()` / ... — scene のタイプオーバーライド
-3. `engine.onDialog()` / `engine.onChoice()` / ... — グローバル handler
+## Character Resolution
 
-scene handler（Tier 2）が存在する場合、`context.preventGlobalHandler()` が呼び出されない限り、グローバル handler（Tier 1）も**その後に**呼び出されます。
-:::
+キャラクター解決はオプションです。`onResolveCharacter` callback を登録すると、engine は `metadata.characters` にキャラクターを持つすべての block の前にそれを呼び出します。callback は block に割り当てられたキャラクターのリストを受け取り、アクティブにすべきキャラクターを返します — 利用可能なキャラクターがいない場合は `undefined` を返します。解決されたキャラクターは、すべての handler で `context.character` としてアクセスできます。
 
-## キャラクター解決
-
-engine は `metadata.characters` を持つすべての block に対してキャラクターを解決します。デフォルトではリスト内の最初のキャラクターを返します。
+これはゲーム状態を照会するための理想的な統合ポイントです：キャラクターがシーンに存在するか、生存しているか、カメラ範囲内にいるかなどを確認できます。`undefined` を返すことで、[`skipIfMissingActor`](/api-ref/interfaces/NativeProperties#skipifmissingactor) による block スキップ、`handle.cancel()` による scene キャンセル、handler 内での直接処理など、複数の戦略が可能になります。
 
 <!--@include: ../../_shared/handler-character.md-->
-
-解決されたキャラクターは、すべての block handler 内で `context.character` として、また [`onValidateNextBlock`](lifecycle#onvalidatenextblock) では `nextContext.character` / `fromContext.character` として利用できます。
 
 ## Choice 履歴
 
