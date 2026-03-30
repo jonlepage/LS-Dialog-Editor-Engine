@@ -31,8 +31,6 @@ The full execution sequence with `delay` and `waitForBlocks`:
 spawn → waitForBlocks gate → onBeforeBlock (delay) → handler → next()
 ```
 
-This replaces the previous `followNarrative` approach with a more flexible, declarative model. Instead of blindly syncing with the main track's pace, each block declares exactly which blocks it depends on.
-
 ## waitInput — Player Input Flag
 
 `nativeProperties.waitInput` is a **passive flag** — the engine exposes it but does not interpret it. Your game handler reads it to decide whether to wait for explicit player input (e.g., a second controller, a custom event, or an NPC auto-selection).

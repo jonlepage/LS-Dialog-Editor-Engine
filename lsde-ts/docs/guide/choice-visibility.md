@@ -124,7 +124,7 @@ Without this pattern, the same `gameState.check(...)` logic ends up in two place
 If a global filter is not desired, `LsdeUtils` provides a low-level utility:
 
 ```ts
-import { LsdeUtils } from 'lsde';
+import { LsdeUtils } from '@lsde/dialog-engine';
 
 const visible = LsdeUtils.filterVisibleChoices(
   block.choices ?? [],

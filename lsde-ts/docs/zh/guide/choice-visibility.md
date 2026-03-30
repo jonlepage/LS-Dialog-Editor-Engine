@@ -124,7 +124,7 @@ tutorial.onChoice(({ context, next }) => {
 如果不需要安装全局 filter，`LsdeUtils` 提供了一个底层工具函数：
 
 ```ts
-import { LsdeUtils } from 'lsde';
+import { LsdeUtils } from '@lsde/dialog-engine';
 
 const visible = LsdeUtils.filterVisibleChoices(
   block.choices ?? [],

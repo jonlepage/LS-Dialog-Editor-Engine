@@ -2,7 +2,7 @@
 ```ts [TypeScript — Phaser]
 // Phaser 3.80+ — overlay scene for dialogue
 import Phaser from 'phaser';
-import { type DialogueEngine, LsdeUtils } from 'lsde';
+import { type DialogueEngine, LsdeUtils } from '@lsde/dialog-engine';
 
 export class DialogueUI extends Phaser.Scene {
   private pendingNext: (() => void) | null = null;

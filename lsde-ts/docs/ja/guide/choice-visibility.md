@@ -124,7 +124,7 @@ tutorial.onChoice(({ context, next }) => {
 グローバルフィルターをインストールしたくない場合、`LsdeUtils` がローレベルのユーティリティを提供します：
 
 ```ts
-import { LsdeUtils } from 'lsde';
+import { LsdeUtils } from '@lsde/dialog-engine';
 
 const visible = LsdeUtils.filterVisibleChoices(
   block.choices ?? [],
