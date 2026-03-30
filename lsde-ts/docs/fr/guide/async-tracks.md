@@ -12,7 +12,7 @@ Ceci s'applique au main track **et** aux async tracks — un async track peut cr
 
 ## Cycle de vie des tracks
 
-- `onBeforeBlock` est appelé pour **tous les blocks** (main et async tracks)
+- `onBeforeBlock` est appelé pour **tous les blocks** (main et async tracks) — voir [Lifecycle](./lifecycle) pour le détail de `resolve()`
 - Les async tracks séparent les connections sortantes en main vs async, comme le main track
 - Les tracks sont automatiquement annulés quand la scène se termine ou que `cancel()` est appelé
 - Quand un track se termine naturellement (plus de connections), ses sub-tracks **continuent de vivre** indépendamment
@@ -39,12 +39,35 @@ spawn → waitForBlocks gate → onBeforeBlock (delay) → handler → next()
 
 Utilisez `scene.getTrackInfos()` pour inspecter les async tracks en cours. Retourne un snapshot readonly de l'état de chaque track :
 
-```ts
+::: code-group
+```ts [TypeScript]
 const tracks = scene.getTrackInfos();
 for (const track of tracks) {
   console.log(`Track ${track.id} (parent: ${track.parentTrackId}) at block ${track.currentBlockUuid}`);
 }
 ```
+```csharp [C#]
+var tracks = scene.GetTrackInfos();
+foreach (var track in tracks)
+{
+    Console.WriteLine($"Track {track.Id} (parent: {track.ParentTrackId}) at block {track.CurrentBlockUuid}");
+}
+```
+```cpp [C++]
+auto tracks = scene->getTrackInfos();
+for (const auto& track : tracks) {
+    std::cout << "Track " << track.id
+              << " (parent: " << track.parentTrackId << ")"
+              << " at block " << track.currentBlockUuid << "\n";
+}
+```
+```gdscript [GDScript]
+var tracks = scene.get_track_infos()
+for track in tracks:
+    print("Track %d (parent: %s) at block %s" % [
+        track["id"], str(track["parentTrackId"]), track["currentBlockUuid"]])
+```
+:::
 
 Chaque `TrackInfo` contient : `id`, `parentTrackId`, `startBlockUuid`, `currentBlockUuid`, `running`.
 
@@ -68,7 +91,7 @@ Les async tracks sont conçus pour du contenu qui se déroule *en parallèle* de
 | Changements critiques de game state | Si le async track est annulé (la scène se termine), l'action ne s'exécute jamais |
 
 ::: warning Choices dans les async tracks
-Un block CHOICE dans un async track implique que le joueur devrait faire une sélection pendant qu'il est déjà engagé avec le dialogue principal. Le seul scénario valide c'est un "choix" piloté par l'IA (ex. un compagnon NPC auto-sélectionne basé sur sa personnalité). Si un async track atteint un block CHOICE sans scene-level handler qui auto-sélectionne, le flow va se bloquer silencieusement.
+Un block CHOICE dans un async track implique que le joueur devrait faire une sélection pendant qu'il est déjà engagé avec le dialogue principal. Le scénario le plus courant est un "choix" piloté par l'IA (ex. un compagnon NPC auto-sélectionne basé sur sa personnalité). Si un async track atteint un block CHOICE sans scene-level handler qui auto-sélectionne, le flow va se bloquer silencieusement.
 :::
 
 ## Plusieurs scènes en parallèle
@@ -81,7 +104,7 @@ Le engine supporte l'exécution de plusieurs scènes en même temps. Chaque `Sce
 Avec plusieurs scènes concurrentes, il est préférable d'enregistrer des handlers scene-level (Tier 2) sur chaque handle au lieu de router dans le handler global. Meilleure séparation, pas de chaînes `if/else`.
 :::
 
-## Visual Reference
+## Référence visuelle
 
 ```mermaid
 flowchart LR

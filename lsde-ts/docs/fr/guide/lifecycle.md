@@ -75,9 +75,9 @@ Propriétés d'exécution qui contrôlent comment un block est dispatché par le
 | `waitForBlocks` | `string[]?` | UUIDs de blocks qui doivent avoir été visités avant que ce block puisse progresser |
 | `waitInput` | `boolean?` | Flag passif pour contrôle explicite de l'input joueur |
 
-## Visual Reference
+## Référence visuelle
 
-### Block Execution Flow
+### Flow d'exécution des blocks
 
 ```mermaid
 flowchart TD
@@ -93,7 +93,7 @@ flowchart TD
     J --> K["next() → advance"]
 ```
 
-### Character Gating Flow
+### Flow de Character Gating
 
 ```mermaid
 flowchart TD

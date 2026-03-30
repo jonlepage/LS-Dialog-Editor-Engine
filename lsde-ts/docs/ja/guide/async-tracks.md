@@ -12,7 +12,7 @@ port 解決中に複数の送出 connection が存在する場合：
 
 ## トラックのライフサイクル
 
-- `onBeforeBlock` は**すべての block** で呼び出されます（メインおよび async トラック）
+- `onBeforeBlock` は**すべての block** で呼び出されます（メインおよび async トラック） — `resolve()` の詳細は [Lifecycle](./lifecycle) を参照
 - async トラックはメイントラックと同様に、送出 connection をメイン vs async に分離します
 - トラックは scene 終了時または `cancel()` 呼び出し時に自動的にキャンセルされます
 - トラックが自然に終了した場合（connection がなくなった）、サブトラックは**独立して存続**します
@@ -39,12 +39,35 @@ spawn → waitForBlocks ゲート → onBeforeBlock (delay) → handler → next
 
 `scene.getTrackInfos()` を使用して実行中の async トラックを検査します。各トラックの状態の読み取り専用スナップショットを返します：
 
-```ts
+::: code-group
+```ts [TypeScript]
 const tracks = scene.getTrackInfos();
 for (const track of tracks) {
   console.log(`Track ${track.id} (parent: ${track.parentTrackId}) at block ${track.currentBlockUuid}`);
 }
 ```
+```csharp [C#]
+var tracks = scene.GetTrackInfos();
+foreach (var track in tracks)
+{
+    Console.WriteLine($"Track {track.Id} (parent: {track.ParentTrackId}) at block {track.CurrentBlockUuid}");
+}
+```
+```cpp [C++]
+auto tracks = scene->getTrackInfos();
+for (const auto& track : tracks) {
+    std::cout << "Track " << track.id
+              << " (parent: " << track.parentTrackId << ")"
+              << " at block " << track.currentBlockUuid << "\n";
+}
+```
+```gdscript [GDScript]
+var tracks = scene.get_track_infos()
+for track in tracks:
+    print("Track %d (parent: %s) at block %s" % [
+        track["id"], str(track["parentTrackId"]), track["currentBlockUuid"]])
+```
+:::
 
 各 `TrackInfo` には `id`、`parentTrackId`、`startBlockUuid`、`currentBlockUuid`、`running` が含まれます。デバッグオーバーレイ、プレイモードレンダラー、検証に使用します。
 
@@ -68,7 +91,7 @@ async トラックは、メインの会話と*並行して*起こること — �
 | 重要なゲームステート変更 | async トラックがキャンセルされた場合（scene 終了）、action は実行されません |
 
 ::: warning async トラック内の choice
-async トラック内の CHOICE block は、プレイヤーがメインの対話に既に参加している間に選択を行うべきことを意味します。有効なシナリオは AI 駆動の「choice」（例：仲間の NPC がパーソナリティに基づいて自動選択する）のみです。async トラックが自動選択する scene レベル handler なしで CHOICE block に到達した場合、フローは停止するか無言で終了します。
+async トラック内の CHOICE block は、プレイヤーがメインの対話に既に参加している間に選択を行うべきことを意味します。最も一般的なシナリオは AI 駆動の「choice」（例：仲間の NPC がパーソナリティに基づいて自動選択する）です。async トラックが自動選択する scene レベル handler なしで CHOICE block に到達した場合、フローは停止するか無言で終了します。
 :::
 
 ## 複数の Scene の並列実行

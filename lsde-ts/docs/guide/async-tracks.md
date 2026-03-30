@@ -12,7 +12,7 @@ This applies to both the main track **and** async tracks — an async track can 
 
 ## Track Lifecycle
 
-- `onBeforeBlock` is called for **all blocks** (main and async tracks)
+- `onBeforeBlock` is called for **all blocks** (main and async tracks) — see [Lifecycle](./lifecycle) for `resolve()` details
 - Async tracks separate outgoing connections into main vs async, just like the main track
 - Tracks are automatically cancelled when the scene ends or `cancel()` is called
 - When a track finishes naturally (no more connections), its sub-tracks **continue to live** independently
@@ -39,12 +39,35 @@ spawn → waitForBlocks gate → onBeforeBlock (delay) → handler → next()
 
 Use `scene.getTrackInfos()` to inspect running async tracks. Returns a read-only snapshot of each track's state:
 
-```ts
+::: code-group
+```ts [TypeScript]
 const tracks = scene.getTrackInfos();
 for (const track of tracks) {
   console.log(`Track ${track.id} (parent: ${track.parentTrackId}) at block ${track.currentBlockUuid}`);
 }
 ```
+```csharp [C#]
+var tracks = scene.GetTrackInfos();
+foreach (var track in tracks)
+{
+    Console.WriteLine($"Track {track.Id} (parent: {track.ParentTrackId}) at block {track.CurrentBlockUuid}");
+}
+```
+```cpp [C++]
+auto tracks = scene->getTrackInfos();
+for (const auto& track : tracks) {
+    std::cout << "Track " << track.id
+              << " (parent: " << track.parentTrackId << ")"
+              << " at block " << track.currentBlockUuid << "\n";
+}
+```
+```gdscript [GDScript]
+var tracks = scene.get_track_infos()
+for track in tracks:
+    print("Track %d (parent: %s) at block %s" % [
+        track["id"], str(track["parentTrackId"]), track["currentBlockUuid"]])
+```
+:::
 
 Each `TrackInfo` contains: `id`, `parentTrackId`, `startBlockUuid`, `currentBlockUuid`, `running`. Use this for debug overlays, play-mode renderers, or validation.
 
@@ -68,7 +91,7 @@ Async tracks are great for things that happen *alongside* the main conversation 
 | Critical game state changes | If the async track is cancelled (scene ends), the action never executes |
 
 ::: warning Choices in async tracks
-A CHOICE block in an async track implies the player should make a selection while already engaged with the main dialogue. The only valid scenario is an AI-driven "choice" (e.g., a companion NPC auto-selects based on personality). If an async track hits a CHOICE block without a scene-level handler that auto-selects, the flow will stall or end silently.
+A CHOICE block in an async track implies the player should make a selection while already engaged with the main dialogue. The most common scenario is an AI-driven "choice" (e.g., a companion NPC auto-selects based on personality). If an async track hits a CHOICE block without a scene-level handler that auto-selects, the flow will stall or end silently.
 :::
 
 ## Multiple Scenes in Parallel

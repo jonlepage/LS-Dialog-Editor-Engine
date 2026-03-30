@@ -1,9 +1,14 @@
 ::: code-group
 ```ts [TypeScript]
 engine.onDialog(({ scene, block, context, next }) => {
-  if (scene === mainDialogue) showMainUI(block);
-  else if (scene === tutorialOverlay) showTutorialBubble(block);
-  next();
+  if (scene === mainDialogue) {
+    showMainUI(block);
+    // next() called later — by player input
+  } else if (scene === tutorialOverlay) {
+    showTutorialBubble(block);
+    // auto-advance after display
+    next();
+  }
 });
 
 const mainDialogue = engine.scene('main-quest');
@@ -13,9 +18,17 @@ tutorialOverlay.start();
 ```
 ```csharp [C#]
 engine.OnDialog(args => {
-    if (args.Scene == mainDialogue) ShowMainUI(args.Block);
-    else if (args.Scene == tutorialOverlay) ShowTutorialBubble(args.Block);
-    args.Next();
+    if (args.Scene == mainDialogue)
+    {
+        ShowMainUI(args.Block);
+        // next() called later — by player input
+    }
+    else if (args.Scene == tutorialOverlay)
+    {
+        ShowTutorialBubble(args.Block);
+        // auto-advance after display
+        args.Next();
+    }
     return null;
 });
 
@@ -26,9 +39,14 @@ tutorialOverlay.Start();
 ```
 ```cpp [C++]
 engine.onDialog([&](auto* scene, auto* block, auto*, auto next) -> CleanupFn {
-    if (scene == mainDialogue) showMainUI(block);
-    else if (scene == tutorialOverlay) showTutorialBubble(block);
-    next();
+    if (scene == mainDialogue.get()) {
+        showMainUI(block);
+        // next() called later — by player input
+    } else if (scene == tutorialOverlay.get()) {
+        showTutorialBubble(block);
+        // auto-advance after display
+        next();
+    }
     return {};
 });
 
@@ -39,9 +57,13 @@ tutorialOverlay->start();
 ```
 ```gdscript [GDScript]
 engine.on_dialog(func(args):
-    if args["scene"] == main_dialogue: show_main_ui(args["block"])
-    elif args["scene"] == tutorial_overlay: show_tutorial_bubble(args["block"])
-    args["next"].call()
+    if args["scene"] == main_dialogue:
+        show_main_ui(args["block"])
+        # next() called later — by player input
+    elif args["scene"] == tutorial_overlay:
+        show_tutorial_bubble(args["block"])
+        # auto-advance after display
+        args["next"].call()
     return Callable()
 )
 

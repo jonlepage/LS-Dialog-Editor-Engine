@@ -12,7 +12,7 @@
 
 ## 轨道生命周期
 
-- `onBeforeBlock` 会为**所有 block** 调用（主轨道和 async 轨道）
+- `onBeforeBlock` 会为**所有 block** 调用（主轨道和 async 轨道） — `resolve()` 的详细信息请参阅 [Lifecycle](./lifecycle)
 - async 轨道像主轨道一样将输出连接分为 main 和 async
 - 轨道在 scene 结束或调用 `cancel()` 时自动取消
 - 当轨道自然结束时（没有更多连接），其子轨道**继续独立存在**
@@ -39,12 +39,35 @@ spawn → waitForBlocks 门控 → onBeforeBlock (delay) → handler → next()
 
 使用 `scene.getTrackInfos()` 来检查运行中的 async 轨道。返回每个轨道状态的只读快照：
 
-```ts
+::: code-group
+```ts [TypeScript]
 const tracks = scene.getTrackInfos();
 for (const track of tracks) {
   console.log(`Track ${track.id} (parent: ${track.parentTrackId}) at block ${track.currentBlockUuid}`);
 }
 ```
+```csharp [C#]
+var tracks = scene.GetTrackInfos();
+foreach (var track in tracks)
+{
+    Console.WriteLine($"Track {track.Id} (parent: {track.ParentTrackId}) at block {track.CurrentBlockUuid}");
+}
+```
+```cpp [C++]
+auto tracks = scene->getTrackInfos();
+for (const auto& track : tracks) {
+    std::cout << "Track " << track.id
+              << " (parent: " << track.parentTrackId << ")"
+              << " at block " << track.currentBlockUuid << "\n";
+}
+```
+```gdscript [GDScript]
+var tracks = scene.get_track_infos()
+for track in tracks:
+    print("Track %d (parent: %s) at block %s" % [
+        track["id"], str(track["parentTrackId"]), track["currentBlockUuid"]])
+```
+:::
 
 每个 `TrackInfo` 包含：`id`、`parentTrackId`、`startBlockUuid`、`currentBlockUuid`、`running`。用于调试覆盖层、播放模式渲染器或验证。
 
@@ -68,7 +91,7 @@ async 轨道非常适合与主对话*并行*发生的事物 — 环境效果、�
 | 关键游戏状态变更 | 如果 async 轨道被取消（scene 结束），action 永远不会执行 |
 
 ::: warning async 轨道中的 choice
-async 轨道中的 CHOICE block 意味着玩家应该在已经参与主对话的同时进行选择。唯一有效的场景是 AI 驱动的"choice"（例如：同伴 NPC 基于个性自动选择）。如果 async 轨道在没有自动选择的 scene 级 handler 的情况下到达 CHOICE block，流程将停滞或静默结束。
+async 轨道中的 CHOICE block 意味着玩家应该在已经参与主对话的同时进行选择。最常见的场景是 AI 驱动的"choice"（例如：同伴 NPC 基于个性自动选择）。如果 async 轨道在没有自动选择的 scene 级 handler 的情况下到达 CHOICE block，流程将停滞或静默结束。
 :::
 
 ## 多个 Scene 并行运行
