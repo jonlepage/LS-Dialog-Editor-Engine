@@ -4,8 +4,8 @@
 
 ### 每个 Block 的执行顺序
 
-1. `onValidateNextBlock` — 执行前的验证
-2. **上一个 block 的清理** — *上一个* block 的 handler 返回的清理函数
+1. **上一个 block 的清理** — *上一个* block 的 handler 返回的清理函数在转换时执行（`next()` 被调用时）
+2. `onValidateNextBlock` — 执行前的验证
 3. `onBeforeBlock` — 预处理（必须调用 `resolve()` 才能继续）
 4. 类型 handler（先第 2 层，再第 1 层）
 
@@ -43,7 +43,7 @@ handler 可以返回一个清理函数，在离开 block 时调用：
 
 每个 handler 调用都包裹在 try/catch 中。如果 handler 抛出异常：
 
-- 错误不会破坏 engine 状态
+- 错误是**静默的** — 不会被记录或重新抛出。如果您的 scene 意外结束，请检查您的 handler。
 - 对于主轨道：scene 会干净地结束
 - 对于异步轨道：只有受影响的轨道被终止 — 其他轨道和主流程继续运行
 
@@ -62,18 +62,18 @@ handler 可以返回一个清理函数，在离开 block 时调用：
 
 ## NativeProperties
 
-Execution properties that control how a block is dispatched by the engine:
+控制 engine 如何调度 block 的执行属性：
 
-| Field | Type | Description |
+| 字段 | 类型 | 描述 |
 |-------|------|-------------|
-| `isAsync` | `boolean?` | Execute on a parallel async track |
-| `delay` | `number?` | Delay before execution (consumed by `onBeforeBlock`) |
-| `timeout` | `number?` | Execution timeout |
-| `portPerCharacter` | `boolean?` | One output port per character in metadata |
-| `skipIfMissingActor` | `boolean?` | Skip block if referenced actor is absent |
-| `debug` | `boolean?` | Debug flag for editor use |
-| `waitForBlocks` | `string[]?` | Block UUIDs that must be visited before this block can progress |
-| `waitInput` | `boolean?` | Passive flag for explicit player input control |
+| `isAsync` | `boolean?` | 在并行异步轨道上执行 |
+| `delay` | `number?` | 执行前的延迟（由 `onBeforeBlock` 消费） |
+| `timeout` | `number?` | 执行超时 |
+| `portPerCharacter` | `boolean?` | metadata 中每个角色一个输出端口 |
+| `skipIfMissingActor` | `boolean?` | 如果引用的角色不存在则跳过 block |
+| `debug` | `boolean?` | 编辑器调试标志 |
+| `waitForBlocks` | `string[]?` | 此 block 进展前必须已被访问的 block UUID |
+| `waitInput` | `boolean?` | 用于显式玩家输入控制的被动标志 |
 
 ## Visual Reference
 
@@ -81,14 +81,16 @@ Execution properties that control how a block is dispatched by the engine:
 
 ```mermaid
 flowchart TD
-    A[processBlock] --> B{NOTE block?}
-    B -- yes --> C[skip to next connection]
-    B -- no --> D["onValidateNextBlock\n• nextContext.character\n• fromContext.character"]
-    D --> E{valid?}
-    E -- no --> F[onInvalidateBlock\nscene stops]
-    E -- yes --> G["onBeforeBlock\nresolve()"]
-    G --> H[type handler\nTier 2 then Tier 1]
-    H --> I["next() → advance"]
+    A["next() called"] --> B["cleanup previous block"]
+    B --> C[processBlock]
+    C --> D{NOTE block?}
+    D -- yes --> E[skip to next connection]
+    D -- no --> F["onValidateNextBlock\n• nextContext.character\n• fromContext.character"]
+    F --> G{valid?}
+    G -- no --> H[onInvalidateBlock\nscene stops]
+    G -- yes --> I["onBeforeBlock\nresolve()"]
+    I --> J[type handler\nTier 2 then Tier 1]
+    J --> K["next() → advance"]
 ```
 
 ### Character Gating Flow

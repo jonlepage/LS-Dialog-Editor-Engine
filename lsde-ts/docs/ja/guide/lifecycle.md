@@ -4,8 +4,8 @@
 
 ### 各 Block の実行順序
 
-1. `onValidateNextBlock` — 実行前の検証
-2. **前の block のクリーンアップ** — *前の* block の handler が返したクリーンアップ関数
+1. **前の block のクリーンアップ** — *前の* block の handler が返したクリーンアップ関数が遷移時に実行されます（`next()` が呼ばれた時点）
+2. `onValidateNextBlock` — 実行前の検証
 3. `onBeforeBlock` — 前処理（続行するには `resolve()` を呼び出す必要あり）
 4. タイプ handler（Tier 2、次に Tier 1）
 
@@ -43,7 +43,7 @@ handler はクリーンアップ関数を返すことができ、block から離
 
 すべての handler 呼び出しは try/catch でラップされています。handler がスローした場合：
 
-- エラーは engine のステートを破壊しません
+- エラーは**サイレント**です — ログ出力や再スローは行われません。scene が予期せず終了した場合、handler を確認してください。
 - メイントラックの場合：scene はクリーンに終了します
 - async トラックの場合：影響を受けたトラックのみが終了し、他のトラックとメインフローは継続します
 
@@ -51,7 +51,7 @@ handler はクリーンアップ関数を返すことができ、block から離
 
 ## cancel()
 
-`scene.cancel()` を呼び出すと、以下のシーケンスがトリガーされます：
+`scene.cancel()` を呼び出すと、以下のシーケンスが実行されます：
 
 1. すべての **async トラック** がキャンセルされます
 2. 現在の block の**クリーンアップ関数**が実行されます
@@ -62,18 +62,18 @@ handler はクリーンアップ関数を返すことができ、block から離
 
 ## NativeProperties
 
-Execution properties that control how a block is dispatched by the engine:
+engine が block をディスパッチする方法を制御する実行プロパティ：
 
-| Field | Type | Description |
+| フィールド | 型 | 説明 |
 |-------|------|-------------|
-| `isAsync` | `boolean?` | Execute on a parallel async track |
-| `delay` | `number?` | Delay before execution (consumed by `onBeforeBlock`) |
-| `timeout` | `number?` | Execution timeout |
-| `portPerCharacter` | `boolean?` | One output port per character in metadata |
-| `skipIfMissingActor` | `boolean?` | Skip block if referenced actor is absent |
-| `debug` | `boolean?` | Debug flag for editor use |
-| `waitForBlocks` | `string[]?` | Block UUIDs that must be visited before this block can progress |
-| `waitInput` | `boolean?` | Passive flag for explicit player input control |
+| `isAsync` | `boolean?` | 並列 async トラックで実行 |
+| `delay` | `number?` | 実行前のディレイ（`onBeforeBlock` で消費） |
+| `timeout` | `number?` | 実行タイムアウト |
+| `portPerCharacter` | `boolean?` | metadata 内のキャラクターごとに出力ポートを作成 |
+| `skipIfMissingActor` | `boolean?` | 参照されたアクターが不在の場合、block をスキップ |
+| `debug` | `boolean?` | エディタ用デバッグフラグ |
+| `waitForBlocks` | `string[]?` | この block が進行する前に訪問済みでなければならない block の UUID |
+| `waitInput` | `boolean?` | 明示的なプレイヤー入力制御用のパッシブフラグ |
 
 ## Visual Reference
 
@@ -81,14 +81,16 @@ Execution properties that control how a block is dispatched by the engine:
 
 ```mermaid
 flowchart TD
-    A[processBlock] --> B{NOTE block?}
-    B -- yes --> C[skip to next connection]
-    B -- no --> D["onValidateNextBlock\n• nextContext.character\n• fromContext.character"]
-    D --> E{valid?}
-    E -- no --> F[onInvalidateBlock\nscene stops]
-    E -- yes --> G["onBeforeBlock\nresolve()"]
-    G --> H[type handler\nTier 2 then Tier 1]
-    H --> I["next() → advance"]
+    A["next() called"] --> B["cleanup previous block"]
+    B --> C[processBlock]
+    C --> D{NOTE block?}
+    D -- yes --> E[skip to next connection]
+    D -- no --> F["onValidateNextBlock\n• nextContext.character\n• fromContext.character"]
+    F --> G{valid?}
+    G -- no --> H[onInvalidateBlock\nscene stops]
+    G -- yes --> I["onBeforeBlock\nresolve()"]
+    I --> J[type handler\nTier 2 then Tier 1]
+    J --> K["next() → advance"]
 ```
 
 ### Character Gating Flow

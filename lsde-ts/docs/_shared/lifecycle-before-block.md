@@ -13,19 +13,25 @@ engine.onBeforeBlock(({ block, resolve }) => {
 engine.OnBeforeBlock(args => {
     var delay = args.Block.NativeProperties?.Delay;
     if (delay.HasValue)
-        Task.Delay((int)(delay.Value * 1000)).ContinueWith(_ => args.Resolve());
+    {
+        // use your engine's delay system (coroutine, DOTween, Invoke, etc.)
+        DelayThenCall((float)delay.Value, args.Resolve);
+    }
     else
+    {
         args.Resolve();
-    return null;
+    }
 });
 ```
 ```cpp [C++]
-engine.onBeforeBlock([](auto* block, auto resolve) {
-    auto delay = block->nativeProperties ? block->nativeProperties->delay : std::nullopt;
+engine.onBeforeBlock([](const auto& args) {
+    auto delay = args.block->nativeProperties
+        ? args.block->nativeProperties->delay : std::nullopt;
     if (delay.has_value()) {
-        scheduleTimer(delay.value() * 1000, [resolve]() { resolve(); });
+        // use your engine's timer system (FTimerManager, SDL_AddTimer, etc.)
+        scheduleDelay(delay.value(), [&args]() { args.resolve(); });
     } else {
-        resolve();
+        args.resolve();
     }
 });
 ```

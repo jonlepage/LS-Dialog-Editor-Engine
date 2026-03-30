@@ -8,7 +8,7 @@ Pour du filtrage de visibilité (ex. cacher des choix basés sur le game state o
 
 ## Setup
 
-Enregistre un choice filter sur le engine — une seule fois, avant de starter n'importe quelle scene :
+Enregistrez un choice filter sur le engine — une seule fois, avant de démarrer une scène :
 
 <!--@include: ../../_shared/choice-filter-setup.md-->
 
@@ -124,7 +124,7 @@ Sans ce pattern, la même logique `gameState.check(...)` se retrouve à deux pla
 Si un filter global n'est pas souhaité, `LsdeUtils` fournit un utilitaire low-level :
 
 ```ts
-import { LsdeUtils } from '@lsde/dialog-engine';
+import { LsdeUtils } from 'lsde';
 
 const visible = LsdeUtils.filterVisibleChoices(
   block.choices ?? [],

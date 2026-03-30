@@ -4,12 +4,12 @@
 
 ### Ordre d'exécution pour chaque block
 
-1. `onValidateNextBlock` — Validation avant exécution
-2. **Cleanup du block précédent** — La fonction de cleanup retournée par le handler du block *précédent*
-3. `onBeforeBlock` — Pré-traitement (doit call `resolve()` pour continuer)
+1. **Cleanup du block précédent** — La fonction de cleanup retournée par le handler du block *précédent* s'exécute au moment de la transition (quand `next()` est appelé)
+2. `onValidateNextBlock` — Validation avant exécution
+3. `onBeforeBlock` — Pré-traitement (doit appeler `resolve()` pour continuer)
 4. Handler de type (Tier 2 puis Tier 1)
 
-### Events de scene
+### Events de scène
 
 <!--@include: ../../_shared/lifecycle-scene-events.md-->
 
@@ -41,39 +41,39 @@ Un handler peut retourner une fonction de cleanup, appelée quand le block est q
 
 ## Error Boundaries
 
-Chaque call de handler est wrappé dans un try/catch. Si un handler throw :
+Chaque appel de handler est encapsulé dans un try/catch. Si un handler throw :
 
-- L'erreur ne corrompt pas le state du engine
-- Pour le main track : la scene finit proprement
-- Pour les async tracks : seulement le track affecté est terminé — les autres tracks et le flow principal continuent
+- L'erreur est **silencieuse** — elle n'est pas loguée ni re-throw. Si votre scène se termine de façon inattendue, vérifiez vos handlers.
+- Pour le main track : la scène se termine proprement
+- Pour les async tracks : seul le track affecté est terminé — les autres tracks et le flow principal continuent
 
 C'est compatible cross-language (try/catch en TS, C#, C++, GDScript).
 
 ## cancel()
 
-Appeler `scene.cancel()` trigger cette séquence :
+Appeler `scene.cancel()` déclenche cette séquence :
 
-1. Tous les **async tracks** sont cancelled
+1. Tous les **async tracks** sont annulés
 2. La **fonction de cleanup** du block courant est exécutée
-3. Le handler `onSceneExit` est callé
-4. La scene est marquée comme finished
+3. Le handler `onSceneExit` est appelé
+4. La scène est marquée comme terminée
 
 <!--@include: ../../_shared/lifecycle-invalidate.md-->
 
 ## NativeProperties
 
-Execution properties that control how a block is dispatched by the engine:
+Propriétés d'exécution qui contrôlent comment un block est dispatché par le engine :
 
-| Field | Type | Description |
+| Champ | Type | Description |
 |-------|------|-------------|
-| `isAsync` | `boolean?` | Execute on a parallel async track |
-| `delay` | `number?` | Delay before execution (consumed by `onBeforeBlock`) |
-| `timeout` | `number?` | Execution timeout |
-| `portPerCharacter` | `boolean?` | One output port per character in metadata |
-| `skipIfMissingActor` | `boolean?` | Skip block if referenced actor is absent |
-| `debug` | `boolean?` | Debug flag for editor use |
-| `waitForBlocks` | `string[]?` | Block UUIDs that must be visited before this block can progress |
-| `waitInput` | `boolean?` | Passive flag for explicit player input control |
+| `isAsync` | `boolean?` | Exécuter sur un track async parallèle |
+| `delay` | `number?` | Délai avant exécution (consommé par `onBeforeBlock`) |
+| `timeout` | `number?` | Timeout d'exécution |
+| `portPerCharacter` | `boolean?` | Un port de sortie par personnage dans metadata |
+| `skipIfMissingActor` | `boolean?` | Sauter le block si l'acteur référencé est absent |
+| `debug` | `boolean?` | Flag de debug pour l'éditeur |
+| `waitForBlocks` | `string[]?` | UUIDs de blocks qui doivent avoir été visités avant que ce block puisse progresser |
+| `waitInput` | `boolean?` | Flag passif pour contrôle explicite de l'input joueur |
 
 ## Visual Reference
 
@@ -81,14 +81,16 @@ Execution properties that control how a block is dispatched by the engine:
 
 ```mermaid
 flowchart TD
-    A[processBlock] --> B{NOTE block?}
-    B -- yes --> C[skip to next connection]
-    B -- no --> D["onValidateNextBlock\n• nextContext.character\n• fromContext.character"]
-    D --> E{valid?}
-    E -- no --> F[onInvalidateBlock\nscene stops]
-    E -- yes --> G["onBeforeBlock\nresolve()"]
-    G --> H[type handler\nTier 2 then Tier 1]
-    H --> I["next() → advance"]
+    A["next() called"] --> B["cleanup previous block"]
+    B --> C[processBlock]
+    C --> D{NOTE block?}
+    D -- yes --> E[skip to next connection]
+    D -- no --> F["onValidateNextBlock\n• nextContext.character\n• fromContext.character"]
+    F --> G{valid?}
+    G -- no --> H[onInvalidateBlock\nscene stops]
+    G -- yes --> I["onBeforeBlock\nresolve()"]
+    I --> J[type handler\nTier 2 then Tier 1]
+    J --> K["next() → advance"]
 ```
 
 ### Character Gating Flow

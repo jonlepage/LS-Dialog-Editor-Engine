@@ -2,8 +2,8 @@
 
 ## Execution Order for Each Block
 
-1. `onValidateNextBlock` — Validation before execution
-2. **Previous block cleanup** — The cleanup function returned by the *previous* block's handler
+1. **Previous block cleanup** — The cleanup function returned by the *previous* block's handler runs at transition time (when `next()` is called)
+2. `onValidateNextBlock` — Validation before execution
 3. `onBeforeBlock` — Pre-processing (must call `resolve()` to continue)
 4. Type handler (Tier 2 then Tier 1)
 
@@ -41,7 +41,7 @@ A handler can return a cleanup function, called when leaving the block:
 
 Every handler call is wrapped in a try/catch. If a handler throws:
 
-- The error does not corrupt engine state
+- The error is **silent** — it is not logged or re-thrown. If your scene ends unexpectedly, check your handlers.
 - For the main track: the scene ends cleanly
 - For async tracks: only the affected track is terminated — other tracks and the main flow continue
 
@@ -79,14 +79,16 @@ Execution properties that control how a block is dispatched by the engine:
 
 ```mermaid
 flowchart TD
-    A[processBlock] --> B{NOTE block?}
-    B -- yes --> C[skip to next connection]
-    B -- no --> D["onValidateNextBlock\n• nextContext.character\n• fromContext.character"]
-    D --> E{valid?}
-    E -- no --> F[onInvalidateBlock\nscene stops]
-    E -- yes --> G["onBeforeBlock\nresolve()"]
-    G --> H[type handler\nTier 2 then Tier 1]
-    H --> I["next() → advance"]
+    A["next() called"] --> B["cleanup previous block"]
+    B --> C[processBlock]
+    C --> D{NOTE block?}
+    D -- yes --> E[skip to next connection]
+    D -- no --> F["onValidateNextBlock\n• nextContext.character\n• fromContext.character"]
+    F --> G{valid?}
+    G -- no --> H[onInvalidateBlock\nscene stops]
+    G -- yes --> I["onBeforeBlock\nresolve()"]
+    I --> J[type handler\nTier 2 then Tier 1]
+    J --> K["next() → advance"]
 ```
 
 ### Character Gating Flow

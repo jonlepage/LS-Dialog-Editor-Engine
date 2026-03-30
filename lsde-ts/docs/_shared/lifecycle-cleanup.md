@@ -2,17 +2,19 @@
 ```ts [TypeScript]
 engine.onDialog(({ block, next }) => {
   const element = showDialogUI(block);
-  next();
+
+  // next() is called later — by player input, timer, etc.
 
   return () => {
-    element.remove(); // Called when the next block takes over
+    element.remove(); // called when the engine moves to the next block
   };
 });
 ```
 ```csharp [C#]
 engine.OnDialog(args => {
     var element = ShowDialogUI(args.Block);
-    args.Next();
+
+    // next() is called later — by player input, timer, etc.
 
     return () => element.SetActive(false);
 });
@@ -20,7 +22,8 @@ engine.OnDialog(args => {
 ```cpp [C++]
 engine.onDialog([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
     auto* element = showDialogUI(block);
-    next();
+
+    // next() is called later — by player input, timer, etc.
 
     return [element]() { element->remove(); };
 });
@@ -28,7 +31,8 @@ engine.onDialog([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
 ```gdscript [GDScript]
 engine.on_dialog(func(args):
     var element = show_dialog_ui(args["block"])
-    args["next"].call()
+
+    # next is called later — by player input, timer, etc.
 
     return func(): element.queue_free()
 )
