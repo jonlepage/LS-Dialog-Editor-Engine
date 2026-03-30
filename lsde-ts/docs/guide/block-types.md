@@ -4,7 +4,7 @@ Blocks are the building blocks of a dialogue scene — each node in the editor g
 
 There are 5 types: **Dialog**, **Choice**, **Condition**, **Action**, and **Note**. The first four are content blocks with a dedicated handler (`onDialog`, `onChoice`, `onCondition`, `onAction`) — all four are **required** and validated when `start()` is called. Note blocks are skipped automatically.
 
-Handlers come in two tiers: **global handlers** (registered on the engine) cover all scenes and are sufficient for most games. **Scene handlers** (registered on a [`SceneHandle`](/api-ref/classes/SceneHandle)) can supplement or override globals for a specific scene. See [Handlers](/guide/handlers) for details.
+Handlers come in two tiers: **global handlers** (registered on the engine) cover all scenes and are sufficient for most games. **Scene handlers** (registered on a [`SceneHandle`](/api-ref/interfaces/SceneHandle)) can supplement or override globals for a specific scene. See [Handlers](/guide/handlers) for details.
 
 ## DIALOG
 
