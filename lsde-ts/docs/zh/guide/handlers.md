@@ -49,15 +49,15 @@ engine 在两个层级上解析 handler：
 
 <!--@include: ../../_shared/handler-character.md-->
 
-## 选择历史
+## Scene Lifecycle
 
-engine 跟踪玩家在 scene 中做出的每个选择。此历史记录在内部用于 `choice:` condition 评估，同时也可供外部代码使用：
+`onSceneEnter` 和 `onSceneExit` callback 可以在 scene 开始和结束时做出反应 — 启用电影模式、冻结 NPC、准备 UI、清理资源等。它们在 global 级别（engine 上）和 scene 级别（通过 `handle.onEnter()` / `handle.onExit()`）都可用。如果定义了 scene handler，它会替代 global handler。
 
-<!--@include: ../../_shared/handler-on-exit.md-->
+<!--@include: ../../_shared/handler-lifecycle.md-->
 
-## Block 覆盖
+## Block Override
 
-`SceneHandle` 还可以按 UUID 覆盖特定的 block：
+`onBlock(uuid)` 可以通过标识符定位特定 block 并为其分配专用 handler。这是一个罕见的用例 — 通用 handler 覆盖了绝大多数需求 — 但对于个别 block 需要不同行为的非常特殊的场景，它是可用的。
 
 <!--@include: ../../_shared/handler-block-override.md-->
 
@@ -67,12 +67,14 @@ engine 跟踪玩家在 scene 中做出的每个选择。此历史记录在内部
 
 ```mermaid
 flowchart TD
-    A[block dispatched] --> B{"onBlock(uuid)?\nblock-specific override"}
-    B -- found --> Z[call handler]
-    B -- not found --> C{"Tier 2 (scene)\nhandle.onDialog() etc."}
-    C -- registered --> D{preventGlobalHandler?}
-    C -- not registered --> E
-    D -- yes --> Z
-    D -- no --> E["Tier 1 (global)\nengine.onDialog() etc."]
-    E --> Z
+    A[block dispatched] --> B{resolve scene handler}
+    B --> B1{"onBlock(uuid)?"}
+    B1 -- found --> S
+    B1 -- not found --> B2{"handle.onDialog() etc.?"}
+    B2 -- found --> S
+    B2 -- not found --> G
+    S[execute scene handler] --> D{preventGlobalHandler?}
+    D -- yes --> Z[done]
+    D -- no --> G["execute global handler\nengine.onDialog() etc."]
+    G --> Z
 ```

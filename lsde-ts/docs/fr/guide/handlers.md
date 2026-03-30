@@ -49,15 +49,15 @@ C'est le point d'intégration idéal pour interroger l'état de votre jeu : vér
 
 <!--@include: ../../_shared/handler-character.md-->
 
-## Historique des choix
+## Scene Lifecycle
 
-Le engine track chaque choix que le joueur fait pendant une scene. Cet historique est utilisé en interne pour l'évaluation des conditions `choice:`, et est aussi disponible pour le code appelant :
+Les callbacks `onSceneEnter` et `onSceneExit` permettent de réagir au démarrage et à la fin d'une scène — activer un mode cinématique, arrêter les NPC, préparer l'UI, nettoyer les ressources, etc. Ils sont disponibles au niveau global (sur le engine) et au niveau scène (via `handle.onEnter()` / `handle.onExit()`). Le scene handler remplace le global s'il est défini.
 
-<!--@include: ../../_shared/handler-on-exit.md-->
+<!--@include: ../../_shared/handler-lifecycle.md-->
 
 ## Block Override
 
-Un `SceneHandle` peut aussi override un block spécifique par UUID :
+`onBlock(uuid)` permet de cibler un block précis par son identifiant pour lui attribuer un handler dédié. C'est un cas d'usage rare — les handlers génériques couvrent la grande majorité des besoins — mais pour des scénarios très spécifiques où un block individuel nécessite un comportement distinct, c'est disponible.
 
 <!--@include: ../../_shared/handler-block-override.md-->
 
@@ -67,12 +67,14 @@ Un `SceneHandle` peut aussi override un block spécifique par UUID :
 
 ```mermaid
 flowchart TD
-    A[block dispatched] --> B{"onBlock(uuid)?\nblock-specific override"}
-    B -- found --> Z[call handler]
-    B -- not found --> C{"Tier 2 (scene)\nhandle.onDialog() etc."}
-    C -- registered --> D{preventGlobalHandler?}
-    C -- not registered --> E
-    D -- yes --> Z
-    D -- no --> E["Tier 1 (global)\nengine.onDialog() etc."]
-    E --> Z
+    A[block dispatched] --> B{resolve scene handler}
+    B --> B1{"onBlock(uuid)?"}
+    B1 -- found --> S
+    B1 -- not found --> B2{"handle.onDialog() etc.?"}
+    B2 -- found --> S
+    B2 -- not found --> G
+    S[execute scene handler] --> D{preventGlobalHandler?}
+    D -- yes --> Z[done]
+    D -- no --> G["execute global handler\nengine.onDialog() etc."]
+    G --> Z
 ```

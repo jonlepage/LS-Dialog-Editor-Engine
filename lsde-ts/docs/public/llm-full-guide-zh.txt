@@ -321,47 +321,54 @@ const visible = LsdeUtils.filterVisibleChoices(
 
 # 处理器
 
-## 必需的 Handler
+## Handler
 
-engine 是一个图遍历机器 — 它遍历节点并将其分发给已注册的 handler。4 个内容 handler 是必需的，因为没有它们 engine 就没有输出：
+handler 是 engine 与游戏之间的桥梁。它们像观察者一样工作 — 你注册一个函数，当对应事件发生时 engine 会调用它。显示文本、播放动画、评估状态等 — 都是通过 handler 在游戏引擎中触发相应行为。
 
-- `onDialog` — 响应对话文本
-- `onChoice` — 向玩家呈现选项
-- `onCondition` — 评估 condition 以分支流程
-- `onAction` — 执行游戏副作用
+engine 公开以下 handler：
 
-调用 `handle.start()` 时，engine 会验证所有 4 个 handler 是否已注册（在 engine 级别或 scene 级别）。如果有缺失，会抛出一个描述性错误，列出缺失的 handler。
+| Handler | 级别 | 描述 |
+|---------|------|------|
+| [`onDialog`](/api-ref/classes/DialogueEngine#ondialog) | global / scene | dialog block — 显示文本 |
+| [`onChoice`](/api-ref/classes/DialogueEngine#onchoice) | global / scene | choice block — 呈现选项 |
+| [`onCondition`](/api-ref/classes/DialogueEngine#oncondition) | global / scene | condition block — 评估和分支 |
+| [`onAction`](/api-ref/classes/DialogueEngine#onaction) | global / scene | action block — 触发副作用 |
+| [`onResolveCharacter`](/api-ref/classes/DialogueEngine#onresolvecharacter) | global / scene | 解析哪个角色在说话 |
+| [`onBeforeBlock`](/api-ref/classes/DialogueEngine#onbeforeblock) | global | 每个 block 之前（delay、入场动画…） |
+| [`onValidateNextBlock`](/api-ref/classes/DialogueEngine#onvalidatenextblock) | global | 进入 block 前的验证 |
+| [`onInvalidateBlock`](/api-ref/classes/DialogueEngine#oninvalidateblock) | global | 验证失败时的处理 |
+| [`onSceneEnter`](/api-ref/classes/DialogueEngine#onsceneenter) | global / scene | scene 开始 |
+| [`onSceneExit`](/api-ref/classes/DialogueEngine#onsceneexit) | global / scene | scene 结束 |
+| [`onBlock`](/api-ref/interfaces/SceneHandle#onblock) | scene | 按 UUID 覆盖特定 block |
+| [`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter) | global | choice 可见性评估器 |
+
+前 4 个（`onDialog`、`onChoice`、`onCondition`、`onAction`）是**必需的** — `start()` 调用时 engine 验证它们是否存在，缺失时抛出描述性错误。
 
 <!--@include: ../../_shared/handler-basic.md-->
 
-## 双层 Handler 系统
+## Two-Tier Handler System
 
-engine 使用两级 handler 系统：
+engine 在两个层级上解析 handler：
 
-1. **第 1 层 — 全局（engine 级别）**：通过 `onDialog()`、`onChoice()` 等注册在 `DialogueEngine` 上。
-2. **第 2 层 — Scene 级别**：通过 `handle.onDialog()` 等注册在 `SceneHandle` 上。
+- **Global handler** — 注册在 engine 上，定义每个 scene 的默认行为。大多数情况下这就够了。
+- **Scene handler** — 注册在特定的 [`SceneHandle`](/api-ref/interfaces/SceneHandle) 上，当 scene 需要不同的渲染或控制流程时，可以覆盖或扩展默认行为。这种情况很少见，但可用。
 
-当一个 block 被分发时：
-1. 如果存在 scene handler（第 2 层），则首先调用它。
-2. 然后调用全局 handler（第 1 层），**除非** scene handler 调用了 `context.preventGlobalHandler()`。
+当一个 block 被分发时，engine 按以下顺序解析 handler：
+1. `handle.onBlock(uuid)` — block 级别的覆盖
+2. `handle.onDialog()` / `handle.onChoice()` / ... — scene 级别的类型 handler
+3. `engine.onDialog()` / `engine.onChoice()` / ... — global handler
+
+当两个层级都存在时，两者按顺序执行 — 先 scene，再 global — 除非 scene handler 调用了 `context.preventGlobalHandler()` 来抑制 global 的执行。
 
 <!--@include: ../../_shared/handler-tier1.md-->
 
-> INFO:
-当一个 block 被分发时，engine 按以下优先级解析 handler：
-1. `handle.onBlock(uuid)` — 按 UUID 指定的 block 级别覆盖
-2. `handle.onDialog()` / `handle.onChoice()` / ... — scene 的类型覆盖
-3. `engine.onDialog()` / `engine.onChoice()` / ... — 全局 handler
+## Character Resolution
 
-如果存在 scene handler（第 2 层），全局 handler（第 1 层）也会在**之后**被调用，除非调用了 `context.preventGlobalHandler()`。
+角色解析是可选的。通过注册 `onResolveCharacter` callback，engine 会在每个 `metadata.characters` 中包含角色的 block 之前调用它。callback 接收分配给 block 的角色列表，返回应该激活的角色 — 如果没有可用角色则返回 `undefined`。解析后的角色可通过所有 handler 中的 `context.character` 访问。
 
-## 角色解析
-
-engine 会为每个具有 `metadata.characters` 的 block 解析角色。默认返回列表中的第一个角色。
+这是查询游戏状态的理想集成点：检查角色是否在场景中、是否存活、是否在镜头范围内等。返回 `undefined` 可以触发多种策略：通过 [`skipIfMissingActor`](/api-ref/interfaces/NativeProperties#skipifmissingactor) 跳过 block、通过 `handle.cancel()` 取消 scene、或直接在 handler 中处理。
 
 <!--@include: ../../_shared/handler-character.md-->
-
-解析后的角色可通过所有 block handler 中的 `context.character` 获取，也可在 [`onValidateNextBlock`](lifecycle#onvalidatenextblock) 中通过 `nextContext.character` / `fromContext.character` 获取。
 
 ## 选择历史
 

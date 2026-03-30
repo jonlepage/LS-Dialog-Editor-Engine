@@ -49,15 +49,15 @@ block がディスパッチされると、engine は以下の順序で handler �
 
 <!--@include: ../../_shared/handler-character.md-->
 
-## Choice 履歴
+## Scene Lifecycle
 
-engine は scene 中のプレイヤーのすべての choice を追跡します。この履歴は `choice:` condition の評価に内部的に使用され、ホストアプリケーション側のコードからもアクセスできます：
+`onSceneEnter` と `onSceneExit` callback で、scene の開始と終了に反応できます — シネマモードの有効化、NPC の停止、UI の準備、リソースのクリーンアップなど。global レベル（engine 上）と scene レベル（`handle.onEnter()` / `handle.onExit()` 経由）の両方で利用可能です。scene handler が定義されている場合、global を置き換えます。
 
-<!--@include: ../../_shared/handler-on-exit.md-->
+<!--@include: ../../_shared/handler-lifecycle.md-->
 
-## Block オーバーライド
+## Block Override
 
-`SceneHandle` は UUID で特定の block をオーバーライドすることもできます：
+`onBlock(uuid)` で特定の block をその識別子で指定し、専用の handler を割り当てることができます。これはまれなユースケースです — ジェネリック handler が大半のニーズをカバーします — ただし、個別の block が異なる動作を必要とする非常に特殊なシナリオでは利用可能です。
 
 <!--@include: ../../_shared/handler-block-override.md-->
 
@@ -67,12 +67,14 @@ engine は scene 中のプレイヤーのすべての choice を追跡します�
 
 ```mermaid
 flowchart TD
-    A[block dispatched] --> B{"onBlock(uuid)?\nblock-specific override"}
-    B -- found --> Z[call handler]
-    B -- not found --> C{"Tier 2 (scene)\nhandle.onDialog() etc."}
-    C -- registered --> D{preventGlobalHandler?}
-    C -- not registered --> E
-    D -- yes --> Z
-    D -- no --> E["Tier 1 (global)\nengine.onDialog() etc."]
-    E --> Z
+    A[block dispatched] --> B{resolve scene handler}
+    B --> B1{"onBlock(uuid)?"}
+    B1 -- found --> S
+    B1 -- not found --> B2{"handle.onDialog() etc.?"}
+    B2 -- found --> S
+    B2 -- not found --> G
+    S[execute scene handler] --> D{preventGlobalHandler?}
+    D -- yes --> Z[done]
+    D -- no --> G["execute global handler\nengine.onDialog() etc."]
+    G --> Z
 ```
