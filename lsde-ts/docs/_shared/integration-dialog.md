@@ -88,69 +88,151 @@ export class DialogueUI extends Phaser.Scene {
 // this.scene.launch('DialogueUI', { engine });
 ```
 ```csharp [C# — Unity]
-engine.OnDialog(args => {
-    var (_, block, context, next) = args;
-    var text = LsdeUtils.GetLocalizedText(block.DialogueText);
-    var ch = context.Character;
+// Unity 2021+ — MonoBehaviour that owns the dialogue UI
+using UnityEngine;
+using TMPro;
+using LsdeDialogEngine;
 
-    if (ch != null) context.ResolveCharacterPort(ch.Uuid);
+public class DialogueUI : MonoBehaviour
+{
+    [Header("UI References — assign in Inspector")]
+    [SerializeField] private GameObject dialogPanel;
+    [SerializeField] private TMP_Text speakerName;
+    [SerializeField] private TMP_Text dialogText;
 
-    speakerName.text = ch?.Name ?? "";
-    dialogText.text = text ?? "";
-    dialogPanel.SetActive(true);
+    private System.Action _pendingNext;
 
-    // next() tells the engine this block is done — store it for the Continue button
-    _pendingNext = next;
+    /// <summary>
+    /// Call once to wire LSDE handlers to this UI.
+    /// The engine must be initialized before calling this method.
+    /// </summary>
+    public void Register(DialogueEngine engine)
+    {
+        engine.OnDialog(args => {
+            var (_, block, context, next) = args;
+            var text = LsdeUtils.GetLocalizedText(block.DialogueText);
+            var ch = context.Character;
 
-    return () => {
-        dialogPanel.SetActive(false);
+            if (ch != null) context.ResolveCharacterPort(ch.Uuid);
+
+            // pass the block data to the UI
+            speakerName.text = ch?.Name ?? "";
+            dialogText.text = text ?? "";
+            dialogPanel.SetActive(true);
+
+            // next() signals the engine this block is done
+            // store it — the player advances via the Continue button
+            _pendingNext = next;
+
+            // cleanup: runs when the engine moves on or the scene is cancelled
+            return () => {
+                dialogPanel.SetActive(false);
+                _pendingNext = null;
+            };
+        });
+    }
+
+    /// <summary>Wire this to your Continue button's OnClick in the Inspector.</summary>
+    public void OnContinueClick()
+    {
+        if (_pendingNext == null) return;
+        _pendingNext();
         _pendingNext = null;
-    };
-});
+    }
+}
 ```
 ```cpp [C++ — Unreal]
-Engine.onDialog([this](auto* scene, auto* block, auto* ctx, auto next) -> lsde::CleanupFn {
-    const auto& text = block->dialogueText;
-    auto* ch = ctx->character();
-    auto localized = lsde::LsdeUtils::GetLocalizedText(text);
+// UE5 — GameInstanceSubsystem that bridges LSDE with your game
+// Engine is a lsde::DialogueEngine member initialized in Initialize()
+#include "lsde/engine.h"
+#include "lsde/utils.h"
+#include "DialogueSubsystem.h"
+#include "DialogueWidget.h"
 
-    if (ch) ctx->resolveCharacterPort(ch->uuid);
+void UDialogueSubsystem::RegisterHandlers()
+{
+    Engine.onDialog([this](auto* scene, const auto* block, auto* ctx, auto next) -> lsde::CleanupFn {
+        auto localized = lsde::LsdeUtils::GetLocalizedText(block->dialogueText);
+        auto* ch = ctx->character();
 
-    DialogWidget->SetDialogue(
-        FString(localized.value_or("").c_str()),
-        FString(ch ? ch->name.c_str() : ""));
-    DialogWidget->SetVisibility(ESlateVisibility::Visible);
+        if (ch) ctx->resolveCharacterPort(ch->uuid);
 
-    // next() tells the engine this block is done — store it for the UI delegate
-    PendingNext = std::move(next);
+        // pass the block data to the UMG widget
+        DialogWidget->SetDialogue(
+            FString(UTF8_TO_TCHAR(localized.value_or("").c_str())),
+            FString(UTF8_TO_TCHAR(ch ? ch->name.c_str() : "")));
+        DialogWidget->SetVisibility(ESlateVisibility::Visible);
 
-    return [this]() {
-        DialogWidget->SetVisibility(ESlateVisibility::Collapsed);
-        PendingNext = nullptr;
-    };
-});
+        // next() signals the engine this block is done
+        // store it — the player advances via a BlueprintCallable method
+        PendingNext = std::move(next);
+
+        // cleanup: runs when the engine moves on or the scene is cancelled
+        return [this]() {
+            DialogWidget->SetVisibility(ESlateVisibility::Collapsed);
+            PendingNext = nullptr;
+        };
+    });
+}
+
+// UFUNCTION(BlueprintCallable) — call from your UI button delegate
+void UDialogueSubsystem::AdvanceDialogue()
+{
+    if (PendingNext) { PendingNext(); PendingNext = nullptr; }
+}
 ```
 ```gdscript [GDScript — Godot]
-engine.on_dialog(func(args):
-    var block = args["block"]
-    var ctx = args["context"]
-    var next_fn = args["next"]
-    var ch = ctx.character
-    var text = LsdeUtils.get_localized_text(block.get("dialogueText"))
+# Godot 4.3+ — autoload node that owns the dialogue UI
+# Register as autoload in Project > Settings > Autoload
+extends Node
 
-    if ch:
-        ctx.resolve_character_port(ch.get("uuid", ""))
+@onready var dialogue_panel: PanelContainer = %DialoguePanel
+@onready var speaker_label: Label = %SpeakerLabel
+@onready var dialogue_label: RichTextLabel = %DialogueLabel
 
-    speaker_label.text = ch.get("name", "") if ch else ""
-    dialogue_label.text = text if text else ""
-    dialogue_panel.visible = true
+var _engine: LsdeDialogueEngine
+var _pending_next: Callable
 
-    # next_fn.call() tells the engine this block is done
-    _pending_next = next_fn
+func _ready() -> void:
+    # load and initialize the engine
+    var json = JSON.parse_string(FileAccess.open("res://data/blueprint.json", FileAccess.READ).get_as_text())
+    _engine = LsdeDialogueEngine.new()
+    _engine.init({"data": json})
+    _engine.set_locale("en")
 
-    return func():
-        dialogue_panel.visible = false
+    _register_handlers()
+
+func _register_handlers() -> void:
+    _engine.on_dialog(func(args):
+        var block = args["block"]
+        var ctx = args["context"]
+        var next_fn = args["next"]
+        var ch = ctx.character
+        var text = LsdeUtils.get_localized_text(block.get("dialogueText"))
+
+        if ch:
+            ctx.resolve_character_port(ch.get("uuid", ""))
+
+        # pass the block data to the UI
+        speaker_label.text = ch.get("name", "") if ch else ""
+        dialogue_label.text = text if text else ""
+        dialogue_panel.visible = true
+
+        # next_fn.call() signals the engine this block is done
+        # store it — the player advances via ui_accept input
+        _pending_next = next_fn
+
+        # cleanup: runs when the engine moves on or the scene is cancelled
+        return func():
+            dialogue_panel.visible = false
+            _pending_next = Callable()
+    )
+
+## Player input — advance dialogue on ui_accept (Space, Enter, gamepad A)
+func _unhandled_input(event: InputEvent) -> void:
+    if event.is_action_pressed("ui_accept") and _pending_next.is_valid():
+        _pending_next.call()
         _pending_next = Callable()
-)
+        get_viewport().set_input_as_handled()
 ```
 :::

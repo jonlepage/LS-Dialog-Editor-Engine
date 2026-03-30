@@ -1,61 +1,32 @@
 # 游戏引擎集成
 
-LSDE engine 是一个纯粹的图遍历机器 — 它遍历节点并调用已注册的 handler。**handler 是 engine 和游戏之间的桥梁。** 本页展示如何将它们接入真实的游戏引擎。
+LSDE 与引擎无关 — 不依赖任何游戏引擎、UI 框架或音频系统。它遍历图并调用注册的 handler。本页展示如何将其接入主流游戏引擎。
 
-## 模式
+handler 的详细实现请参阅 [Block Types](./block-types) 和 [Handlers](./handlers)。
 
-每次集成都遵循相同的 3 步流程：
+## 完整集成示例
 
-1. **初始化** — 将 blueprint JSON 输入 engine
-2. **连接** — 将 4 个 handler 接入游戏系统（UI、状态、音频...）
-3. **启动** — engine 调用 handler，由 handler 驱动游戏逻辑
+以下示例展示了在每个引擎中集成 LSDE 的一种方式。它将 4 个必需的 handler — dialog、choice、condition、action — 包含在一个类中，作为起点。
 
-engine 永远不会触碰 UI、状态或音频。它只通知*发生了什么*，由 handler 决定*如何响应*。可以将其理解为一个导演在读舞台指示 — 游戏就是演员、工作人员和舞台。
+每个游戏都有自己的需求。请根据项目调整结构、布局和 UI。
 
-## 显示对话
+<!--@include: ../../_shared/integration-complete.md-->
 
-最简单的 handler — 显示文本并等待玩家继续。
+## 4 个 Handler
 
-<!--@include: ../../_shared/integration-dialog.md-->
+每个 handler 接收 block 数据和 `next()` 回调。开发者在引擎中处理数据，block 处理完成后调用 `next()`。调用时机完全由游戏决定。
 
-::: tip next() 是流程控制器
-立即调用 `next()` 可以实现快速对话推进，或者保存它稍后调用 — 在动画结束后、计时器结束后、玩家点击后... 任何适合游戏的方式。engine 会耐心等待。
-:::
+- **Dialog** — 文本、角色、原生属性。在 UI 中显示对话，等待玩家输入或延迟，然后调用 `next()`。返回清理函数，在 engine 移到下一个 block 时隐藏 UI。
 
-## 呈现选项
+- **Choice** — 配置 `choiceFilter` 后带有 `visible` 标签的选项列表。创建对应的 UI 元素 — 按钮、列表、径向菜单。玩家选择后，`selectChoice(uuid)` 告诉 engine 走哪条分支，然后 `next()` 推进流程。
 
-动态生成 UI 元素，让玩家选择，然后告诉 engine 选了什么。
+- **Condition** — block 中定义的条件。用游戏逻辑评估 — 检查标记、任务、背包。`context.resolve(true)` 将流程发送到端口 0，`context.resolve(false)` 发送到端口 1。
 
-<!--@include: ../../_shared/integration-choice.md-->
-
-## 评估 Condition
-
-游戏状态逻辑完全由宿主应用程序控制。engine 只需要一个 `true` 或 `false`。
-
-<!--@include: ../../_shared/integration-condition.md-->
-
-## 执行 Action
-
-这是游戏真正活起来的地方 — 播放音效、给予物品、设置标记、触发过场动画。
-
-<!--@include: ../../_shared/integration-action.md-->
-
-## 各 Handler 的对应关系
-
-| Handler | engine 通知的内容 | 对应的处理方式 |
-|---|---|---|
-| `onDialog` | "显示这个角色的这段文本" | 显示 UI、播放语音、等待输入 |
-| `onChoice` | "这些是选项（标记了可见/隐藏）" | 生成按钮、处理选择 |
-| `onCondition` | "评估这些 condition" | 检查游戏状态，返回 true/false |
-| `onAction` | "执行这些效果" | 设置标记、给予物品、播放音效 |
-| `onResolveCharacter` | "哪个角色是活跃的？" | 队伍系统、战斗阵型 |
-| `setChoiceFilter` | "这个 condition 对可见性来说为真吗？" | 检查背包、标记、任务状态 |
-| `onValidateNextBlock` | "下一个 block — 允许执行吗？" | 角色门控、状态检查、转换规则 |
-| `onBeforeBlock` | "Block 即将执行" | 处理延迟、过渡、淡入效果 |
+- **Action** — block 中定义的动作。在引擎中执行 — 播放音效、给予物品、触发过场动画。`context.resolve()` 确认成功，`context.reject(err)` 通知失败。
 
 ## 实用技巧
 
-- **`next()` 是流程控制器。** 立即调用实现快速对话推进，或者保存它直到动画结束。engine 会等待 — 它没有时间概念。
-- **清理函数是免费的管家服务。** 从任何 handler 返回一个清理函数，engine 在移动到下一个 block 时会调用它。非常适合隐藏 UI、停止音频或释放生成的节点。
-- **`onBeforeBlock` 处理延迟。** engine 不强制执行 `delay` — 这由 `onBeforeBlock` handler 读取 `nativeProperties.delay` 并在计时器后调用 `resolve()` 来实现。完全由 handler 控制。
-- **异步轨道是并行故事线。** 如果过场动画需要同时进行对话和镜头移动，在编辑器中将 block 标记为 `isAsync`。每条轨道独立运行。
+- **`next()` 是遥控器。** 立即调用实现快速对话，或保留它直到动画结束。engine 会等待 — 它没有时间概念。
+- **清理函数负责善后。** 从任何 handler 返回一个函数，engine 在移到下一个 block 时会调用它。非常适合隐藏 UI、停止音频或释放节点。
+- **`onBeforeBlock` 处理 delay。** engine 不强制执行 `nativeProperties.delay` — 由 `onBeforeBlock` 读取它并在定时器后调用 `resolve()`。完全控制。
+- **async track 是并行流。** 当过场动画需要同时进行对话和摄像机移动时，在编辑器中标记为 `isAsync` 的 block 会在独立 track 上运行。

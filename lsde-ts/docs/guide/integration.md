@@ -1,61 +1,32 @@
 # Game Engine Integration
 
-The LSDE engine is a pure graph traversal machine — it walks nodes and calls registered handlers. **The handlers are the bridge between the engine and the host application.** This page shows how to wire them into real game engines.
+LSDE is engine-agnostic — no dependency on any game engine, UI framework, or audio system. It walks a graph and calls your handlers. This page shows how to wire it into the most common game engines.
 
-## The Pattern
+For detailed handler implementation, see [Block Types](./block-types) and [Handlers](./handlers).
 
-Every integration follows the same 3-step dance:
+## Full Integration
 
-1. **Initialize** — feed the engine the blueprint JSON
-2. **Connect** — plug the 4 handlers into the game systems (UI, state, audio...)
-3. **Start** — the engine calls the handlers, the host application takes it from there
+The following example shows one way to integrate LSDE into each engine. It covers the 4 required handlers — dialog, choice, condition, action — in a single class, as a starting point.
 
-The engine never touches the UI, game state, or audio. It only reports *what* happened. The reaction is up to the host application. Think of it as a director reading stage directions — the game is the cast, crew, and stage.
+Every game has its own needs. Adapt the structure, the layout, and the UI to your project.
 
-## Showing Dialogue
+<!--@include: ../_shared/integration-complete.md-->
 
-The simplest handler — display text and wait for the player to continue.
+## The 4 Handlers
 
-<!--@include: ../_shared/integration-dialog.md-->
+Each handler receives the block data and a `next()` callback. The developer processes the data in their engine, then calls `next()` when the block is done. The timing of that call belongs entirely to the game.
 
-::: tip next() is a remote control
-Call `next()` instantly for rapid-fire dialogue, or store it and call later — after an animation, a timer, a player click... whatever fits the game. The engine waits patiently.
-:::
+- **Dialog** — text, character, native properties. Display the dialogue in your UI, wait for player input or a delay, then call `next()`. Return a cleanup function to hide the UI when the engine moves to the next block.
 
-## Presenting Choices
+- **Choice** — list of choices tagged `visible` when a `choiceFilter` is configured. Create the corresponding UI elements — buttons, list, radial menu. On player selection, `selectChoice(uuid)` tells the engine which branch to follow, then `next()` advances the flow.
 
-Spawn UI elements dynamically, let the player pick, and tell the engine what was selected.
+- **Condition** — conditions defined in the block. Evaluate them with your game logic — check a flag, a quest, an inventory. `context.resolve(true)` sends the flow to port 0, `context.resolve(false)` to port 1.
 
-<!--@include: ../_shared/integration-choice.md-->
+- **Action** — actions defined in the block. Execute them in your engine — play a sound, give an item, trigger a cinematic. `context.resolve()` confirms success, `context.reject(err)` signals failure.
 
-## Evaluating Conditions
+## Tips
 
-The game state, the rules. The engine just needs a `true` or `false`.
-
-<!--@include: ../_shared/integration-condition.md-->
-
-## Executing Actions
-
-This is where the game comes alive — play sounds, give items, set flags, trigger cutscenes.
-
-<!--@include: ../_shared/integration-action.md-->
-
-## What Connects Where
-
-| Handler | What the engine reports | What the host application does |
-|---|---|---|
-| `onDialog` | "Show this text from this character" | Display UI, play voice, wait for input |
-| `onChoice` | "Here are the options (tagged visible/hidden)" | Spawn buttons, handle selection |
-| `onCondition` | "Evaluate these conditions" | Check game state, return true/false |
-| `onAction` | "Execute these effects" | Set flags, give items, play sounds |
-| `onResolveCharacter` | "Which character is active?" | Party system, battle formation |
-| `setChoiceFilter` | "Is this condition true for visibility?" | Check inventory, flags, quest state |
-| `onValidateNextBlock` | "This block is next — is it allowed?" | Character gating, status checks, transition rules |
-| `onBeforeBlock` | "Block is about to execute" | Handle delays, transitions, fade-ins |
-
-## Pro Tips
-
-- **`next()` is a remote control.** Call it instantly for rapid-fire dialogue, or hold it until an animation finishes. The engine waits — it has no concept of time.
-- **Cleanup functions are free housekeeping.** Return one from any handler and the engine calls it when moving to the next block. Perfect for hiding UI, stopping audio, or freeing spawned nodes.
-- **`onBeforeBlock` handles delays.** The engine does not enforce `delay` — the `onBeforeBlock` handler reads `nativeProperties.delay` and calls `resolve()` after a timer. Full control.
-- **Async tracks are parallel storylines.** If a cutscene needs dialogue and camera movement at the same time, mark blocks as `isAsync` in the editor. Each track runs independently.
+- **`next()` is the remote control.** Call it instantly for rapid-fire dialogue, or hold it until an animation finishes. The engine waits — it has no concept of time.
+- **Cleanup functions clean up after you.** Return a function from any handler — the engine calls it when moving to the next block. Perfect for hiding UI, stopping audio, or freeing nodes.
+- **`onBeforeBlock` handles delays.** The engine does not enforce `nativeProperties.delay` — `onBeforeBlock` reads it and calls `resolve()` after a timer. Full control.
+- **Async tracks are parallel flows.** When a cutscene needs dialogue and camera movement at the same time, blocks marked `isAsync` in the editor run on independent tracks.
