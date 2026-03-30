@@ -8,19 +8,21 @@ Chaque intégration suit la même danse en 3 étapes :
 
 1. **Initialiser** — feed le engine le blueprint JSON
 2. **Connecter** — plug les 4 handlers dans les systèmes de jeu (UI, state, audio...)
-3. **Starter** — le engine call les handlers, le code fait la magie
+3. **Starter** — le engine call les handlers, le code exécute la logique
 
 Le engine ne touche jamais à l'UI, au state ou à l'audio. Il indique juste *ce qui* s'est passé. Le code décide *comment* réagir. C'est comme un directeur qui lit les directions de scène — le jeu c'est le cast, le crew et la scène.
 
 ## Afficher le dialogue
 
-Le handler le plus simple — affiche du texte et attend que le joueur continue.
+Quand le engine atteint un block de type dialog, il appelle le handler `onDialog` en lui fournissant les données du block : texte, personnage, propriétés natives.
+
+C'est au développeur de récupérer ces données et de les exploiter dans son moteur de jeu — afficher une bulle de dialogue, animer un personnage, jouer une voix.
+
+L'appel à `next()` signale au engine que le block est traité et qu'il peut passer au suivant. Le moment de cet appel appartient entièrement au jeu : après un input joueur, à la fin d'une animation, au terme d'un délai.
+
+L'exemple suivant suppose un jeu qui affiche du dialogue textuel et progresse quand le joueur appuie sur un input.
 
 <!--@include: ../../_shared/integration-dialog.md-->
-
-::: tip next() est la télécommande
-Appeler `next()` instantanément pour du dialogue rapide, ou le stocker et l'appeler plus tard — après une animation, un timer, un click du joueur... whatever qui fit le jeu. Le engine attend patiemment.
-:::
 
 ## Présenter des choix
 

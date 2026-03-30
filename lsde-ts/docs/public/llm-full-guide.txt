@@ -370,15 +370,15 @@ This is the ideal integration point to query your game state: check if a charact
 
 <!--@include: ../_shared/handler-character.md-->
 
-## Choice History
+## Scene Lifecycle
 
-The engine tracks every choice the player makes during a scene. This history is used internally for `choice:` condition evaluation, and is also available to handler code:
+The `onSceneEnter` and `onSceneExit` callbacks let you react to a scene starting and ending — enable cinema mode, freeze NPCs, prepare the UI, clean up resources, etc. They are available at global level (on the engine) and at scene level (via `handle.onEnter()` / `handle.onExit()`). The scene handler replaces the global one if defined.
 
-<!--@include: ../_shared/handler-on-exit.md-->
+<!--@include: ../_shared/handler-lifecycle.md-->
 
 ## Block Override
 
-A `SceneHandle` can also override a specific block by UUID:
+`onBlock(uuid)` lets you target a specific block by its identifier and assign it a dedicated handler. This is a rare use case — generic handlers cover the vast majority of needs — but for very specific scenarios where an individual block requires distinct behavior, it is available.
 
 <!--@include: ../_shared/handler-block-override.md-->
 
@@ -388,14 +388,16 @@ A `SceneHandle` can also override a specific block by UUID:
 
 ```mermaid
 flowchart TD
-    A[block dispatched] --> B{"onBlock(uuid)?\nblock-specific override"}
-    B -- found --> Z[call handler]
-    B -- not found --> C{"Tier 2 (scene)\nhandle.onDialog() etc."}
-    C -- registered --> D{preventGlobalHandler?}
-    C -- not registered --> E
-    D -- yes --> Z
-    D -- no --> E["Tier 1 (global)\nengine.onDialog() etc."]
-    E --> Z
+    A[block dispatched] --> B{resolve scene handler}
+    B --> B1{"onBlock(uuid)?"}
+    B1 -- found --> S
+    B1 -- not found --> B2{"handle.onDialog() etc.?"}
+    B2 -- found --> S
+    B2 -- not found --> G
+    S[execute scene handler] --> D{preventGlobalHandler?}
+    D -- yes --> Z[done]
+    D -- no --> G["execute global handler\nengine.onDialog() etc."]
+    G --> Z
 ```
 
 ================================================================================
