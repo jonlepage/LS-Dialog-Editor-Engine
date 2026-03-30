@@ -135,12 +135,12 @@ static void crossValidate(
 
     if (!check.dictionaries.empty() && !data.dictionaries.empty()) {
         for (const auto& dict : data.dictionaries) {
-            std::string label = dict.label.value_or(dict.uuid);
-            auto it = check.dictionaries.find(label);
+            const std::string& id = dict.id;
+            auto it = check.dictionaries.find(id);
             if (it == check.dictionaries.end()) {
                 warnings.push_back({
                     "UNKNOWN_DICTIONARY_GROUP",
-                    "Blueprint uses dictionary group \"" + label + "\" which is not declared in the game."
+                    "Blueprint uses dictionary group \"" + id + "\" which is not declared in the game."
                 });
                 continue;
             }
@@ -149,7 +149,7 @@ static void crossValidate(
                 if (!gameKeySet.count(row.key)) {
                     warnings.push_back({
                         "UNKNOWN_DICTIONARY_KEY",
-                        "Dictionary group \"" + label + "\" uses key \"" + row.key + "\" not declared in the game."
+                        "Dictionary group \"" + id + "\" uses key \"" + row.key + "\" not declared in the game."
                     });
                 }
             }

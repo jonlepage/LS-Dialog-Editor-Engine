@@ -77,14 +77,14 @@ namespace LsdeDialogEngine
     {
         private readonly Dictionary<string, SceneGraph> _sceneGraphs;
         private readonly Dictionary<string, ActionSignature> _signaturesById;
-        private readonly Dictionary<string, LsdeDictionary> _dictionariesByLabel;
+        private readonly Dictionary<string, LsdeDictionary> _dictionariesById;
         private readonly List<string> _locales;
 
         public BlueprintGraph(BlueprintExport data)
         {
             _sceneGraphs = new Dictionary<string, SceneGraph>();
             _signaturesById = new Dictionary<string, ActionSignature>();
-            _dictionariesByLabel = new Dictionary<string, LsdeDictionary>();
+            _dictionariesById = new Dictionary<string, LsdeDictionary>();
             _locales = data.Locales ?? new List<string>();
 
             foreach (var scene in data.Scenes)
@@ -104,10 +104,7 @@ namespace LsdeDialogEngine
             {
                 foreach (var dict in data.Dictionaries)
                 {
-                    if (dict.Label != null)
-                    {
-                        _dictionariesByLabel[dict.Label] = dict;
-                    }
+                    _dictionariesById[dict.Id] = dict;
                 }
             }
         }
@@ -122,9 +119,9 @@ namespace LsdeDialogEngine
             return _signaturesById.TryGetValue(actionId, out var sig) ? sig : null;
         }
 
-        public LsdeDictionary? GetDictionary(string groupLabel)
+        public LsdeDictionary? GetDictionary(string groupId)
         {
-            return _dictionariesByLabel.TryGetValue(groupLabel, out var dict) ? dict : null;
+            return _dictionariesById.TryGetValue(groupId, out var dict) ? dict : null;
         }
 
         public List<string> GetAllSceneIds()

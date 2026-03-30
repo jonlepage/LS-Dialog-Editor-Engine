@@ -37,8 +37,8 @@ public:
     const SceneGraph* getSceneGraph(const std::string& sceneUuid) const;
     /// Get an action signature by its id, or nullptr if not found.
     const ActionSignature* getSignature(const std::string& actionId) const;
-    /// Get a dictionary by its label, or nullptr if not found.
-    const LsdeDictionary* getDictionary(const std::string& groupLabel) const;
+    /// Get a dictionary by its id, or nullptr if not found.
+    const LsdeDictionary* getDictionary(const std::string& groupId) const;
     /// Get all scene UUIDs.
     std::vector<std::string> getAllSceneIds() const;
     /// Get all connections for a scene.
@@ -50,7 +50,7 @@ private:
     BlueprintExport _data; // Owns the data
     std::unordered_map<std::string, SceneGraph> _sceneGraphs;
     std::unordered_map<std::string, const ActionSignature*> _signaturesById;
-    std::unordered_map<std::string, const LsdeDictionary*> _dictionariesByLabel;
+    std::unordered_map<std::string, const LsdeDictionary*> _dictionariesById;
 };
 
 } // namespace lsde

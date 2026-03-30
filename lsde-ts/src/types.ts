@@ -434,18 +434,14 @@ export interface BlueprintScene {
 export interface DictionaryRow {
 	/** Key identifier referenced in conditions and action parameters. */
 	key: string;
-	/** Optional description for this dictionary entry. */
-	note?: string;
 }
 
 /** Dictionary group defining reusable key-value pairs for conditions and actions. */
 export interface Dictionary {
 	/** Unique identifier for this dictionary group. */
 	uuid: string;
-	/** Display name, used as prefix in condition keys (e.g. `"groupLabel.rowKey"`). */
-	label?: string;
-	/** Data type of values in this dictionary. Determines how condition values are parsed. */
-	valueType: 'string' | 'number' | 'boolean';
+	/** Developer-defined identifier, used as prefix in condition keys (e.g. `"groupId.rowKey"`). */
+	id: string;
 	/** All entries in this dictionary group. */
 	rows: DictionaryRow[];
 }
@@ -468,8 +464,6 @@ export interface ActionSignature {
 	uuid: string;
 	/** Short action type identifier (e.g. "set_flag"). Referenced by `ExportAction.actionId`. */
 	id: string;
-	/** Human-readable description of what this action does. */
-	label?: string;
 	/** Parameter definitions describing the expected inputs. */
 	params: SignatureParam[];
 }

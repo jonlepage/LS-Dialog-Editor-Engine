@@ -64,22 +64,14 @@ public:
 
     // ─── Type handlers (Tier 1 — global) ─────────────────────────────
 
-    /// Register a global handler for DIALOG blocks (with cleanup).
+    /// Register a global handler for DIALOG blocks. May return a cleanup function.
     void onDialog(TypedBlockHandler<DialogBlock, IDialogContext> handler);
-    /// Register a global handler for DIALOG blocks (no cleanup).
-    void onDialog(VoidBlockHandler<DialogBlock, IDialogContext> handler) { onDialog(wrapVoidHandler(std::move(handler))); }
-    /// Register a global handler for CHOICE blocks (with cleanup).
+    /// Register a global handler for CHOICE blocks.
     void onChoice(TypedBlockHandler<ChoiceBlock, IChoiceContext> handler);
-    /// Register a global handler for CHOICE blocks (no cleanup).
-    void onChoice(VoidBlockHandler<ChoiceBlock, IChoiceContext> handler) { onChoice(wrapVoidHandler(std::move(handler))); }
-    /// Register a global handler for CONDITION blocks (with cleanup).
+    /// Register a global handler for CONDITION blocks.
     void onCondition(TypedBlockHandler<ConditionBlock, IConditionContext> handler);
-    /// Register a global handler for CONDITION blocks (no cleanup).
-    void onCondition(VoidBlockHandler<ConditionBlock, IConditionContext> handler) { onCondition(wrapVoidHandler(std::move(handler))); }
-    /// Register a global handler for ACTION blocks (with cleanup).
+    /// Register a global handler for ACTION blocks.
     void onAction(TypedBlockHandler<ActionBlock, IActionContext> handler);
-    /// Register a global handler for ACTION blocks (no cleanup).
-    void onAction(VoidBlockHandler<ActionBlock, IActionContext> handler) { onAction(wrapVoidHandler(std::move(handler))); }
 
     // ─── Scene lifecycle ─────────────────────────────────────────────
 

@@ -2,74 +2,34 @@
 
 ## Blueprint 结构
 
-`BlueprintExport` 是从 LS-Dialog 编辑器导出的 JSON 文件。它包含 engine 所需的全部数据。
+`BlueprintExport` 是从 [LSDE](https://lepasoft.com/zh/software/ls-dialog-editor "Lepasoft Dialog Editor") 编辑器导出的 JSON 文件。它包含 engine 所需的全部数据。
 
-```ts
-interface BlueprintExport {
-  version: string;
-  exportDate: string;
-  projectName?: string;
-  primaryLanguage?: string;
-  locales: string[];           // Available languages
-  dictionaries?: Dictionary[]; // Named value groups
-  signatures?: ActionSignature[]; // Reusable action signatures
-  scenes: BlueprintScene[];    // Dialogue scenes
-}
-```
+<!--@include: ../../_shared/blueprint-export-type.md-->
 
 ## Scene
 
-每个 scene 是一个独立的子图，拥有一个入口点：
+scene 是一个独立的对话序列 — 一段对话、一段过场动画、一个教程提示、一次商店交互。在游戏中，scene 通常由脚本事件触发：玩家与 NPC 对话、进入区域或拾取物品。
 
-```ts
-interface BlueprintScene {
-  uuid: string;
-  label: string;
-  note?: string;
-  entryBlockId?: string;       // First block to execute
-  date: string;
-  blocks: BlueprintBlock[];    // All blocks in the scene
-  connections: BlueprintConnection[]; // Graph edges
-}
-```
+每个 scene 拥有自己的入口 block、独立的流程和独立的状态。多个 scene 可以并行运行（例如：主对话和教程覆盖层）。scene 由 [`BlueprintScene`](/api-ref/interfaces/BlueprintScene) 接口定义：
+
+<!--@include: ../../_shared/blueprint-scene-type.md-->
 
 ## Connection
 
-Connection 将一个 block 的输出 port 连接到下一个 block 的输入 port：
+Connection 是 block 之间的连线 — 定义哪个 block 通向哪个 block。在编辑器中可视化绘制，导出后变为源 → 目标的扁平列表，由 [`BlueprintConnection`](/api-ref/interfaces/BlueprintConnection) 接口定义：
 
-```ts
-interface BlueprintConnection {
-  id: string;
-  fromId: string;              // Source block UUID
-  toId: string;                // Target block UUID
-  fromPort: string;            // Output port name
-  toPort: string;              // Input port name
-  fromPortIndex?: number;      // Port index (portPerCharacter)
-}
-```
+<!--@include: ../../_shared/blueprint-connection-type.md-->
+
+通常不需要直接检查 connection — engine 会在内部处理路由。如有需要，可以通过 [`onValidateNextBlock`](/api-ref/classes/DialogueEngine#onvalidatenextblock) 访问。
 
 ## Dictionary
 
-Dictionary 定义了 condition 和 action 参数所使用的命名值集合：
+Dictionary 描述游戏的寄存器 — 开关、变量、背包等。开发者在 [LSDE](https://lepasoft.com/zh/software/ls-dialog-editor "Lepasoft Dialog Editor") 编辑器中声明，向叙事设计师公开游戏中可用的变量。运行时，开发者将每个 dictionary 映射到游戏中对应的系统。[`condition`](/api-ref/interfaces/ExportCondition) 和 [`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter) 使用这些键来评估游戏状态。由 [`Dictionary`](/api-ref/interfaces/Dictionary) 接口定义：
 
-```ts
-interface Dictionary {
-  uuid: string;
-  label?: string;
-  valueType: 'string' | 'number' | 'boolean';
-  rows: DictionaryRow[];
-}
-```
+<!--@include: ../../_shared/blueprint-dictionary-type.md-->
 
 ## Action Signature
 
-Signature 描述了可复用的 action 类型及其参数：
+Signature 描述游戏中可用的动作类型 — `set_flag`、`play_sound`、`give_item`。开发者在 [LSDE](https://lepasoft.com/zh/software/ls-dialog-editor "Lepasoft Dialog Editor") 编辑器中声明，让叙事设计师使用类型化参数组合动作序列。运行时，开发者将 signature 的 `id` 映射到自己的系统。由 [`ActionSignature`](/api-ref/interfaces/ActionSignature) 接口定义：
 
-```ts
-interface ActionSignature {
-  uuid: string;
-  id: string;                  // Unique identifier (e.g. "set_flag")
-  label?: string;
-  params: SignatureParam[];
-}
-```
+<!--@include: ../../_shared/blueprint-signature-type.md-->

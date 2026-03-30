@@ -329,18 +329,14 @@ struct BlueprintScene {
 struct DictionaryRow {
     /// Key identifier referenced in conditions and action parameters.
     std::string key;
-    /// Optional description for this dictionary entry.
-    std::optional<std::string> note;
 };
 
 /// Dictionary group defining reusable key-value pairs for conditions and actions.
 struct LsdeDictionary {
     /// Unique identifier for this dictionary group.
     std::string uuid;
-    /// Display name, used as prefix in condition keys (e.g. "groupLabel.rowKey").
-    std::optional<std::string> label;
-    /// Data type of values in this dictionary. Determines how condition values are parsed.
-    std::string valueType = "string";
+    /// Identifier used as prefix in condition keys (e.g. "groupId.rowKey").
+    std::string id;
     /// All entries in this dictionary group.
     std::vector<DictionaryRow> rows;
 };
@@ -371,8 +367,6 @@ struct ActionSignature {
     std::string uuid;
     /// Short action type identifier (e.g. "set_flag"). Referenced by ExportAction.actionId.
     std::string id;
-    /// Human-readable description of what this action does.
-    std::optional<std::string> label;
     /// Parameter definitions describing the expected inputs.
     std::vector<SignatureParam> params;
 };
@@ -547,26 +541,6 @@ using TypedBlockHandler = std::function<CleanupFn(
     std::function<void()> next
 )>;
 
-/// Void handler variant — no cleanup return needed.
-template<typename TBlock, typename TContext>
-using VoidBlockHandler = std::function<void(
-    ISceneHandle* scene,
-    const TBlock* block,
-    TContext* context,
-    std::function<void()> next
-)>;
-
-/// Wrap a void handler into a typed handler that returns an empty cleanup.
-template<typename TBlock, typename TContext>
-TypedBlockHandler<TBlock, TContext> wrapVoidHandler(VoidBlockHandler<TBlock, TContext> handler) {
-    return [h = std::move(handler)](
-        ISceneHandle* scene, const TBlock* block, TContext* ctx, std::function<void()> next
-    ) -> CleanupFn {
-        h(scene, block, ctx, std::move(next));
-        return {};
-    };
-}
-
 /// Wrap a typed handler into the internal non-generic type via static_cast.
 template<typename TBlock, typename TContext>
 InternalBlockHandler wrapHandler(TypedBlockHandler<TBlock, TContext> handler) {
@@ -691,22 +665,14 @@ public:
 
     /// Override a specific block by UUID. Takes highest priority over type handlers.
     virtual void onBlock(const std::string& blockUuid, InternalBlockHandler handler) = 0;
-    /// Override all DIALOG blocks for this scene (Tier 2, with cleanup).
+    /// Override all DIALOG blocks for this scene (Tier 2).
     virtual void onDialog(TypedBlockHandler<DialogBlock, IDialogContext> handler) = 0;
-    /// Override all DIALOG blocks for this scene (Tier 2, no cleanup).
-    virtual void onDialog(VoidBlockHandler<DialogBlock, IDialogContext> handler) { onDialog(wrapVoidHandler(std::move(handler))); }
-    /// Override all CHOICE blocks for this scene (Tier 2, with cleanup).
+    /// Override all CHOICE blocks for this scene (Tier 2).
     virtual void onChoice(TypedBlockHandler<ChoiceBlock, IChoiceContext> handler) = 0;
-    /// Override all CHOICE blocks for this scene (Tier 2, no cleanup).
-    virtual void onChoice(VoidBlockHandler<ChoiceBlock, IChoiceContext> handler) { onChoice(wrapVoidHandler(std::move(handler))); }
-    /// Override all CONDITION blocks for this scene (Tier 2, with cleanup).
+    /// Override all CONDITION blocks for this scene (Tier 2).
     virtual void onCondition(TypedBlockHandler<ConditionBlock, IConditionContext> handler) = 0;
-    /// Override all CONDITION blocks for this scene (Tier 2, no cleanup).
-    virtual void onCondition(VoidBlockHandler<ConditionBlock, IConditionContext> handler) { onCondition(wrapVoidHandler(std::move(handler))); }
-    /// Override all ACTION blocks for this scene (Tier 2, with cleanup).
+    /// Override all ACTION blocks for this scene (Tier 2).
     virtual void onAction(TypedBlockHandler<ActionBlock, IActionContext> handler) = 0;
-    /// Override all ACTION blocks for this scene (Tier 2, no cleanup).
-    virtual void onAction(VoidBlockHandler<ActionBlock, IActionContext> handler) { onAction(wrapVoidHandler(std::move(handler))); }
 
     /// Get the block currently being executed, or nullptr if scene is not running.
     virtual const BlueprintBlock* getCurrentBlock() const = 0;

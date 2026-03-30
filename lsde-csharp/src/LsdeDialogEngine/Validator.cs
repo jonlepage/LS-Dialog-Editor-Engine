@@ -261,13 +261,13 @@ namespace LsdeDialogEngine
             {
                 foreach (var dict in data.Dictionaries)
                 {
-                    string label = dict.Label ?? dict.Uuid;
-                    if (!check.Dictionaries.TryGetValue(label, out var gameKeys))
+                    string id = dict.Id;
+                    if (!check.Dictionaries.TryGetValue(id, out var gameKeys))
                     {
                         warnings.Add(new DiagnosticEntry
                         {
                             Code = "UNKNOWN_DICTIONARY_GROUP",
-                            Message = $"Blueprint uses dictionary group \"{label}\" which is not declared in the game."
+                            Message = $"Blueprint uses dictionary group \"{id}\" which is not declared in the game."
                         });
                         continue;
                     }
@@ -279,7 +279,7 @@ namespace LsdeDialogEngine
                             warnings.Add(new DiagnosticEntry
                             {
                                 Code = "UNKNOWN_DICTIONARY_KEY",
-                                Message = $"Dictionary group \"{label}\" uses key \"{row.Key}\" not declared in the game."
+                                Message = $"Dictionary group \"{id}\" uses key \"{row.Key}\" not declared in the game."
                             });
                         }
                     }

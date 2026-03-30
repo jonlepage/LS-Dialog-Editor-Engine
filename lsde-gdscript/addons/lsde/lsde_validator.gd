@@ -122,16 +122,16 @@ static func _cross_validate(data: Dictionary, check: Dictionary, warnings: Array
 	var check_dicts: Variant = check.get("dictionaries")
 	if check_dicts is Dictionary:
 		for dict in data.get("dictionaries", []):
-			var label: String = dict.get("label", dict.get("uuid", ""))
-			if not check_dicts.has(label):
-				warnings.append({"code": "UNKNOWN_DICTIONARY_GROUP", "message": "Blueprint uses dictionary group \"%s\" which is not declared in the game." % label})
+			var dict_id: String = dict.get("id", dict.get("uuid", ""))
+			if not check_dicts.has(dict_id):
+				warnings.append({"code": "UNKNOWN_DICTIONARY_GROUP", "message": "Blueprint uses dictionary group \"%s\" which is not declared in the game." % dict_id})
 				continue
 			var game_keys: Dictionary = {}
-			for k in check_dicts[label]:
+			for k in check_dicts[dict_id]:
 				game_keys[k] = true
 			for row in dict.get("rows", []):
 				if not game_keys.has(row.get("key", "")):
-					warnings.append({"code": "UNKNOWN_DICTIONARY_KEY", "message": "Dictionary group \"%s\" uses key \"%s\" not declared in the game." % [label, row.get("key", "")]})
+					warnings.append({"code": "UNKNOWN_DICTIONARY_KEY", "message": "Dictionary group \"%s\" uses key \"%s\" not declared in the game." % [dict_id, row.get("key", "")]})
 
 	var check_chars: Variant = check.get("characters")
 	if check_chars is Array and check_chars.size() > 0:

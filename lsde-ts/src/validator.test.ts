@@ -124,7 +124,7 @@ describe( 'validateBlueprint', () => {
 
 		it( 'warns about unknown signatures', () => {
 			const data = makeExport( {
-				signatures: [{ uuid: 's1', id: 'give_item', label: 'Give', params: [] }],
+				signatures: [{ uuid: 's1', id: 'give_item', params: [] }],
 			} );
 			const report = validateBlueprint( { data, check: { signatures: ['play_sfx'] } } );
 			expect( report.warnings.some( w => w.code === 'UNKNOWN_SIGNATURE' ) ).toBe( true );
@@ -132,7 +132,7 @@ describe( 'validateBlueprint', () => {
 
 		it( 'no warning when all signatures match', () => {
 			const data = makeExport( {
-				signatures: [{ uuid: 's1', id: 'give_item', label: 'Give', params: [] }],
+				signatures: [{ uuid: 's1', id: 'give_item', params: [] }],
 			} );
 			const report = validateBlueprint( { data, check: { signatures: ['give_item'] } } );
 			expect( report.warnings.filter( w => w.code === 'UNKNOWN_SIGNATURE' ) ).toHaveLength( 0 );
@@ -140,7 +140,7 @@ describe( 'validateBlueprint', () => {
 
 		it( 'warns about unknown dictionary groups', () => {
 			const data = makeExport( {
-				dictionaries: [{ uuid: 'd1', label: 'questStatus', valueType: 'string', rows: [] }],
+				dictionaries: [{ uuid: 'd1', id: 'questStatus', rows: [] }],
 			} );
 			const report = validateBlueprint( { data, check: { dictionaries: { gameSwitches: ['a'] } } } );
 			expect( report.warnings.some( w => w.code === 'UNKNOWN_DICTIONARY_GROUP' ) ).toBe( true );
@@ -149,7 +149,7 @@ describe( 'validateBlueprint', () => {
 		it( 'warns about unknown dictionary keys', () => {
 			const data = makeExport( {
 				dictionaries: [{
-					uuid: 'd1', label: 'questStatus', valueType: 'string',
+					uuid: 'd1', id: 'questStatus',
 					rows: [{ key: 'active' }, { key: 'unknown_key' }],
 				}],
 			} );

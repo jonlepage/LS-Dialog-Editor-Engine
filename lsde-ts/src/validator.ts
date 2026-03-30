@@ -195,12 +195,12 @@ function crossValidate(
 	// Dictionaries
 	if ( check.dictionaries && data.dictionaries ) {
 		for ( const dict of data.dictionaries ) {
-			const label = dict.label ?? dict.uuid;
-			const gameKeys = check.dictionaries[label];
+			const id = dict.id;
+			const gameKeys = check.dictionaries[id];
 			if ( !gameKeys ) {
 				warnings.push( {
 					code: 'UNKNOWN_DICTIONARY_GROUP',
-					message: `Blueprint uses dictionary group "${ label }" which is not declared in the game.`,
+					message: `Blueprint uses dictionary group "${ id }" which is not declared in the game.`,
 				} );
 				continue;
 			}
@@ -209,7 +209,7 @@ function crossValidate(
 				if ( !gameKeySet.has( row.key ) ) {
 					warnings.push( {
 						code: 'UNKNOWN_DICTIONARY_KEY',
-						message: `Dictionary group "${ label }" uses key "${ row.key }" not declared in the game.`,
+						message: `Dictionary group "${ id }" uses key "${ row.key }" not declared in the game.`,
 					} );
 				}
 			}

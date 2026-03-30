@@ -86,10 +86,10 @@ describe( 'BlueprintGraph', () => {
 		locales: ['en'],
 		scenes: [scene],
 		signatures: [
-			{ uuid: 'sig-1', id: 'give_item', label: 'Give Item', params: [] },
+			{ uuid: 'sig-1', id: 'give_item', params: [] },
 		],
 		dictionaries: [
-			{ uuid: 'dict-1', label: 'questStatus', valueType: 'string', rows: [{ key: 'active' }] },
+			{ uuid: 'dict-1', id: 'questStatus', rows: [{ key: 'active' }] },
 		],
 	};
 
@@ -106,11 +106,11 @@ describe( 'BlueprintGraph', () => {
 
 	it( 'looks up signatures by id', () => {
 		const bg = new BlueprintGraph( exportData );
-		expect( bg.getSignature( 'give_item' )?.label ).toBe( 'Give Item' );
+		expect( bg.getSignature( 'give_item' )?.id ).toBe( 'give_item' );
 		expect( bg.getSignature( 'unknown' ) ).toBeUndefined();
 	} );
 
-	it( 'looks up dictionaries by label', () => {
+	it( 'looks up dictionaries by id', () => {
 		const bg = new BlueprintGraph( exportData );
 		expect( bg.getDictionary( 'questStatus' )?.rows ).toHaveLength( 1 );
 		expect( bg.getDictionary( 'unknown' ) ).toBeUndefined();

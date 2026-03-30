@@ -483,8 +483,6 @@ struct DictionaryRow {
 	 * Referenced in conditions and action parameters.
 	 */
 	std::string key;
-	/** @brief Optional description or documentation for this dictionary entry. */
-	std::string note;
 };
 
 /**
@@ -496,15 +494,10 @@ struct ExportDictionary {
 	/** @brief Unique identifier for this dictionary group. */
 	std::string uuid;
 	/**
-	 * Display name for this dictionary group.
-	 * Used as prefix in condition keys (e.g. "groupLabel.rowKey").
+	 * Short identifier for this dictionary group.
+	 * Used as prefix in condition keys (e.g. "groupId.rowKey").
 	 */
-	std::string label;
-	/**
-	 * Data type of values in this dictionary: "string", "number", or "boolean".
-	 * Determines how condition values should be parsed and compared.
-	 */
-	std::string valueType;
+	std::string id;
 	/**
 	 * All entries in this dictionary group.
 	 * See DictionaryRow for the entry structure.
@@ -558,8 +551,6 @@ struct ActionSignature {
 	 * Use this to map to your engine's action handler system.
 	 */
 	std::string id;
-	/** @brief Human-readable description of what this action does. */
-	std::string label;
 	/**
 	 * Parameter definitions describing the expected inputs for this action.
 	 * See SignatureParam for the parameter structure.

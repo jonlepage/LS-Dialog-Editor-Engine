@@ -2,74 +2,34 @@
 
 ## Blueprint Structure
 
-A `BlueprintExport` is the JSON file exported from the LS-Dialog editor. It contains all the data the engine needs.
+A `BlueprintExport` is the JSON file exported from the [LSDE](https://lepasoft.com/en/software/ls-dialog-editor "Lepasoft Dialog Editor") editor. It contains all the data the engine needs.
 
-```ts
-interface BlueprintExport {
-  version: string;
-  exportDate: string;
-  projectName?: string;
-  primaryLanguage?: string;
-  locales: string[];           // Available languages
-  dictionaries?: Dictionary[]; // Named value groups
-  signatures?: ActionSignature[]; // Reusable action signatures
-  scenes: BlueprintScene[];    // Dialogue scenes
-}
-```
+<!--@include: ../_shared/blueprint-export-type.md-->
 
 ## Scenes
 
-Each scene is an independent subgraph with an entry point:
+A scene is a self-contained dialogue sequence — a conversation, a cutscene, a tutorial prompt, a shop interaction. In a game, scenes are typically triggered by script events: the player talks to an NPC, enters a zone, or picks up an item.
 
-```ts
-interface BlueprintScene {
-  uuid: string;
-  label: string;
-  note?: string;
-  entryBlockId?: string;       // First block to execute
-  date: string;
-  blocks: BlueprintBlock[];    // All blocks in the scene
-  connections: BlueprintConnection[]; // Graph edges
-}
-```
+Each scene has its own entry block, its own flow, and its own state. Multiple scenes can run in parallel (e.g. a main dialogue and a tutorial overlay). Scenes are defined by the [`BlueprintScene`](/api-ref/interfaces/BlueprintScene) interface:
+
+<!--@include: ../_shared/blueprint-scene-type.md-->
 
 ## Connections
 
-Connections link output ports of a block to input ports of the next:
+Connections are the wires between blocks — they define which block leads to which. In the editor, you draw them visually; in the export, they become a flat list of source → target links defined by the [`BlueprintConnection`](/api-ref/interfaces/BlueprintConnection) interface:
 
-```ts
-interface BlueprintConnection {
-  id: string;
-  fromId: string;              // Source block UUID
-  toId: string;                // Target block UUID
-  fromPort: string;            // Output port name
-  toPort: string;              // Input port name
-  fromPortIndex?: number;      // Port index (portPerCharacter)
-}
-```
+<!--@include: ../_shared/blueprint-connection-type.md-->
+
+You won't typically need to inspect connections directly — the engine handles routing internally. They are however exposed in [`onValidateNextBlock`](/api-ref/classes/DialogueEngine#onvalidatenextblock) if needed.
 
 ## Dictionaries
 
-Dictionaries define named value sets used by conditions and action parameters:
+Dictionaries describe the registers of your game — switches, variables, inventory. The developer declares them in the [LSDE](https://lepasoft.com/en/software/ls-dialog-editor "Lepasoft Dialog Editor") editor to expose available game variables to the narrative designer. At runtime, the developer maps each dictionary to the corresponding system in their game. [`Conditions`](/api-ref/interfaces/ExportCondition) and [`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter) use these keys to evaluate game state. Defined by the [`Dictionary`](/api-ref/interfaces/Dictionary) interface:
 
-```ts
-interface Dictionary {
-  uuid: string;
-  label?: string;
-  valueType: 'string' | 'number' | 'boolean';
-  rows: DictionaryRow[];
-}
-```
+<!--@include: ../_shared/blueprint-dictionary-type.md-->
 
 ## Action Signatures
 
-Signatures describe reusable action types with their parameters:
+Signatures describe the action types available in your game — `set_flag`, `play_sound`, `give_item`. The developer declares them in the [LSDE](https://lepasoft.com/en/software/ls-dialog-editor "Lepasoft Dialog Editor") editor so that narrative designers can compose action sequences with typed parameters. At runtime, the signature `id` is what the developer maps to their own systems. Defined by the [`ActionSignature`](/api-ref/interfaces/ActionSignature) interface:
 
-```ts
-interface ActionSignature {
-  uuid: string;
-  id: string;                  // Unique identifier (e.g. "set_flag")
-  label?: string;
-  params: SignatureParam[];
-}
-```
+<!--@include: ../_shared/blueprint-signature-type.md-->

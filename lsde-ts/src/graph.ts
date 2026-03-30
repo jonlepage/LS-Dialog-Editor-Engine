@@ -75,13 +75,13 @@ export class BlueprintGraph {
 
 	private readonly sceneGraphs: Map<string, SceneGraph>;
 	private readonly signaturesById: Map<string, ActionSignature>;
-	private readonly dictionariesByLabel: Map<string, Dictionary>;
+	private readonly dictionariesById: Map<string, Dictionary>;
 	private readonly _locales: string[];
 
 	constructor( data: BlueprintExport ) {
 		this.sceneGraphs = new Map();
 		this.signaturesById = new Map();
-		this.dictionariesByLabel = new Map();
+		this.dictionariesById = new Map();
 		this._locales = data.locales ?? [];
 
 		for ( const scene of data.scenes ) {
@@ -96,9 +96,7 @@ export class BlueprintGraph {
 
 		if ( data.dictionaries ) {
 			for ( const dict of data.dictionaries ) {
-				if ( dict.label ) {
-					this.dictionariesByLabel.set( dict.label, dict );
-				}
+				this.dictionariesById.set( dict.id, dict );
 			}
 		}
 	}
@@ -111,8 +109,8 @@ export class BlueprintGraph {
 		return this.signaturesById.get( actionId );
 	}
 
-	getDictionary( groupLabel: string ): Dictionary | undefined {
-		return this.dictionariesByLabel.get( groupLabel );
+	getDictionary( groupId: string ): Dictionary | undefined {
+		return this.dictionariesById.get( groupId );
 	}
 
 	getAllSceneIds(): string[] {

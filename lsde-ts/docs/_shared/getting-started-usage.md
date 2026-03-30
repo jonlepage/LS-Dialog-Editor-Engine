@@ -88,24 +88,28 @@ DialogueEngine engine;
 engine.init({blueprint});
 
 // 4 required handlers — bridge between the engine and your game
-engine.onDialog([](auto* scene, auto* block, auto* ctx, auto next) {
+engine.onDialog([](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn {
     game->showDialog(block, ctx, [next]() { next(); });
+    return {};
 });
 
-engine.onChoice([](auto* scene, auto* block, auto* ctx, auto next) {
+engine.onChoice([](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn {
     game->showChoices(block, ctx, [next]() { next(); });
+    return {};
 });
 
-engine.onCondition([](auto* scene, auto* block, auto* ctx, auto next) {
+engine.onCondition([](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn {
     auto result = game->evaluateConditions(block->conditions);
     ctx->resolve(result);
     next();
+    return {};
 });
 
-engine.onAction([](auto*, auto* block, auto* ctx, auto next) {
+engine.onAction([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
     game->executeActions(block->actions);
     ctx->resolve();
     next();
+    return {};
 });
 
 // Start a scene anywhere in your game code

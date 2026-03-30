@@ -52,9 +52,7 @@ BlueprintGraph::BlueprintGraph(BlueprintExport data) : _data(std::move(data)) {
     }
 
     for (const auto& dict : _data.dictionaries) {
-        if (dict.label) {
-            _dictionariesByLabel[*dict.label] = &dict;
-        }
+        _dictionariesById[dict.id] = &dict;
     }
 }
 
@@ -68,9 +66,9 @@ const ActionSignature* BlueprintGraph::getSignature(const std::string& actionId)
     return it != _signaturesById.end() ? it->second : nullptr;
 }
 
-const LsdeDictionary* BlueprintGraph::getDictionary(const std::string& groupLabel) const {
-    auto it = _dictionariesByLabel.find(groupLabel);
-    return it != _dictionariesByLabel.end() ? it->second : nullptr;
+const LsdeDictionary* BlueprintGraph::getDictionary(const std::string& groupId) const {
+    auto it = _dictionariesById.find(groupId);
+    return it != _dictionariesById.end() ? it->second : nullptr;
 }
 
 std::vector<std::string> BlueprintGraph::getAllSceneIds() const {

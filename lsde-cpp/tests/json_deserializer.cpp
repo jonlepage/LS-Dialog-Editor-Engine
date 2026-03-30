@@ -171,13 +171,11 @@ void from_json(const nlohmann::json& j, BlueprintScene& v) {
 
 void from_json(const nlohmann::json& j, DictionaryRow& v) {
     j.at("key").get_to(v.key);
-    if (j.contains("note") && !j["note"].is_null()) v.note = j["note"].get<std::string>();
 }
 
 void from_json(const nlohmann::json& j, LsdeDictionary& v) {
     j.at("uuid").get_to(v.uuid);
-    if (j.contains("label") && !j["label"].is_null()) v.label = j["label"].get<std::string>();
-    if (j.contains("valueType")) j.at("valueType").get_to(v.valueType);
+    j.at("id").get_to(v.id);
     if (j.contains("rows")) v.rows = j["rows"].get<std::vector<DictionaryRow>>();
 }
 
@@ -197,7 +195,6 @@ void from_json(const nlohmann::json& j, SignatureParam& v) {
 void from_json(const nlohmann::json& j, ActionSignature& v) {
     j.at("uuid").get_to(v.uuid);
     j.at("id").get_to(v.id);
-    if (j.contains("label") && !j["label"].is_null()) v.label = j["label"].get<std::string>();
     if (j.contains("params")) v.params = j["params"].get<std::vector<SignatureParam>>();
 }
 

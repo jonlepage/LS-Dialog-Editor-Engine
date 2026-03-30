@@ -506,8 +506,6 @@ public class DictionaryRow
 	/// Referenced in conditions and action parameters.
 	/// </summary>
 	public string key;
-	/// <summary>Optional description or documentation for this dictionary entry.</summary>
-	public string note;
 }
 
 /// <summary>
@@ -521,15 +519,10 @@ public class ExportDictionary
 	/// <summary>Unique identifier for this dictionary group.</summary>
 	public string uuid;
 	/// <summary>
-	/// Display name for this dictionary group.
-	/// Used as prefix in condition keys (e.g. &quot;groupLabel.rowKey&quot;).
+	/// Short identifier for this dictionary group.
+	/// Used as prefix in condition keys (e.g. &quot;groupId.rowKey&quot;).
 	/// </summary>
-	public string label;
-	/// <summary>
-	/// Data type of values in this dictionary: &quot;string&quot;, &quot;number&quot;, or &quot;boolean&quot;.
-	/// Determines how condition values should be parsed and compared.
-	/// </summary>
-	public string valueType;
+	public string id;
 	/// <summary>
 	/// All entries in this dictionary group.
 	/// See DictionaryRow for the entry structure.
@@ -594,8 +587,6 @@ public class ActionSignature
 	/// Use this to map to your engine&apos;s action handler system.
 	/// </summary>
 	public string id;
-	/// <summary>Human-readable description of what this action does.</summary>
-	public string label;
 	/// <summary>
 	/// Parameter definitions describing the expected inputs for this action.
 	/// See SignatureParam for the parameter structure.

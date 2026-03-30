@@ -44,7 +44,7 @@ class SceneGraph extends RefCounted:
 ## Owns the data and builds scene graphs for O(1) lookups.
 var _scene_graphs: Dictionary = {}
 var _signatures_by_id: Dictionary = {}
-var _dictionaries_by_label: Dictionary = {}
+var _dictionaries_by_id: Dictionary = {}
 var _data: Dictionary
 
 func _init(data: Dictionary) -> void:
@@ -54,9 +54,9 @@ func _init(data: Dictionary) -> void:
 	for sig in data.get("signatures", []):
 		_signatures_by_id[sig.get("id", "")] = sig
 	for dict in data.get("dictionaries", []):
-		var label: Variant = dict.get("label")
-		if label is String and label != "":
-			_dictionaries_by_label[label] = dict
+		var dict_id: Variant = dict.get("id")
+		if dict_id is String and dict_id != "":
+			_dictionaries_by_id[dict_id] = dict
 
 ## Get the scene graph for a scene UUID, or null if not found.
 func get_scene_graph(scene_uuid: String) -> Variant:
@@ -66,9 +66,9 @@ func get_scene_graph(scene_uuid: String) -> Variant:
 func get_signature(action_id: String) -> Variant:
 	return _signatures_by_id.get(action_id)
 
-## Get a dictionary by its label, or null if not found.
-func get_dictionary(group_label: String) -> Variant:
-	return _dictionaries_by_label.get(group_label)
+## Get a dictionary by its id, or null if not found.
+func get_dictionary(group_id: String) -> Variant:
+	return _dictionaries_by_id.get(group_id)
 
 ## Get all scene UUIDs.
 func get_all_scene_ids() -> Array:

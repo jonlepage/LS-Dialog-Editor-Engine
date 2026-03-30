@@ -2,74 +2,34 @@
 
 ## Blueprint の構造
 
-`BlueprintExport` は LS-Dialog エディターから出力される JSON ファイルです。engine が必要とするすべてのデータを含んでいます。
+`BlueprintExport` は [LSDE](https://lepasoft.com/ja/software/ls-dialog-editor "Lepasoft Dialog Editor") エディターから出力される JSON ファイルです。engine が必要とするすべてのデータを含んでいます。
 
-```ts
-interface BlueprintExport {
-  version: string;
-  exportDate: string;
-  projectName?: string;
-  primaryLanguage?: string;
-  locales: string[];           // Available languages
-  dictionaries?: Dictionary[]; // Named value groups
-  signatures?: ActionSignature[]; // Reusable action signatures
-  scenes: BlueprintScene[];    // Dialogue scenes
-}
-```
+<!--@include: ../../_shared/blueprint-export-type.md-->
 
 ## Scene
 
-各 scene は、エントリーポイントを持つ独立したサブグラフです：
+scene は独立した対話シーケンスです — 会話、カットシーン、チュートリアル、ショップのやり取りなど。ゲームでは通常、スクリプトイベントによってトリガーされます：プレイヤーが NPC に話しかける、ゾーンに入る、アイテムを拾うなど。
 
-```ts
-interface BlueprintScene {
-  uuid: string;
-  label: string;
-  note?: string;
-  entryBlockId?: string;       // First block to execute
-  date: string;
-  blocks: BlueprintBlock[];    // All blocks in the scene
-  connections: BlueprintConnection[]; // Graph edges
-}
-```
+各 scene は独自のエントリーブロック、独自のフロー、独自の状態を持ちます。複数の scene を並行して実行できます（例：メインダイアログとチュートリアルオーバーレイ）。scene は [`BlueprintScene`](/api-ref/interfaces/BlueprintScene) インターフェースで定義されます：
+
+<!--@include: ../../_shared/blueprint-scene-type.md-->
 
 ## Connection
 
-connection は、block の出力 port を次の block の入力 port に接続します：
+connection は block 間のワイヤーです — どの block がどの block に繋がるかを定義します。エディター上では視覚的に描画し、エクスポートではソース → ターゲットのフラットなリストになります。[`BlueprintConnection`](/api-ref/interfaces/BlueprintConnection) インターフェースで定義されます：
 
-```ts
-interface BlueprintConnection {
-  id: string;
-  fromId: string;              // Source block UUID
-  toId: string;                // Target block UUID
-  fromPort: string;            // Output port name
-  toPort: string;              // Input port name
-  fromPortIndex?: number;      // Port index (portPerCharacter)
-}
-```
+<!--@include: ../../_shared/blueprint-connection-type.md-->
+
+通常、connection を直接検査する必要はありません — engine が内部でルーティングを処理します。ただし、必要に応じて [`onValidateNextBlock`](/api-ref/classes/DialogueEngine#onvalidatenextblock) で参照できます。
 
 ## Dictionary
 
-dictionary は、condition や action パラメーターで使用される名前付き値セットを定義します：
+dictionary はゲームのレジスタを記述します — スイッチ、変数、インベントリなど。開発者が [LSDE](https://lepasoft.com/ja/software/ls-dialog-editor "Lepasoft Dialog Editor") エディターで宣言し、ナラティブデザイナーにゲーム内で利用可能な変数を公開します。ランタイムでは、開発者が各 dictionary をゲームの対応するシステムにマッピングします。[`condition`](/api-ref/interfaces/ExportCondition) と [`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter) がこれらのキーを使ってゲーム状態を評価します。[`Dictionary`](/api-ref/interfaces/Dictionary) インターフェースで定義されます：
 
-```ts
-interface Dictionary {
-  uuid: string;
-  label?: string;
-  valueType: 'string' | 'number' | 'boolean';
-  rows: DictionaryRow[];
-}
-```
+<!--@include: ../../_shared/blueprint-dictionary-type.md-->
 
 ## Action Signature
 
-signature は、パラメーター付きの再利用可能な action タイプを記述します：
+signature はゲームで利用可能なアクションタイプを記述します — `set_flag`、`play_sound`、`give_item`。開発者が [LSDE](https://lepasoft.com/ja/software/ls-dialog-editor "Lepasoft Dialog Editor") エディターで宣言し、ナラティブデザイナーが型付きパラメーターでアクションシーケンスを構成できるようにします。ランタイムでは、signature の `id` を開発者が自分のシステムにマッピングします。[`ActionSignature`](/api-ref/interfaces/ActionSignature) インターフェースで定義されます：
 
-```ts
-interface ActionSignature {
-  uuid: string;
-  id: string;                  // Unique identifier (e.g. "set_flag")
-  label?: string;
-  params: SignatureParam[];
-}
-```
+<!--@include: ../../_shared/blueprint-signature-type.md-->

@@ -353,9 +353,6 @@ namespace LsdeDialogEngine
     {
         /// <summary>Key identifier referenced in conditions and action parameters.</summary>
         public string Key { get; set; } = "";
-
-        /// <summary>Optional description for this dictionary entry.</summary>
-        public string? Note { get; set; }
     }
 
     /// <summary>Dictionary group defining reusable key-value pairs for conditions and actions.</summary>
@@ -364,11 +361,8 @@ namespace LsdeDialogEngine
         /// <summary>Unique identifier for this dictionary group.</summary>
         public string Uuid { get; set; } = "";
 
-        /// <summary>Display name, used as prefix in condition keys (e.g. "groupLabel.rowKey").</summary>
-        public string? Label { get; set; }
-
-        /// <summary>Data type of values in this dictionary.</summary>
-        public string ValueType { get; set; } = "string";
+        /// <summary>Short stable identifier used as prefix in condition keys (e.g. "groupId.rowKey").</summary>
+        public string Id { get; set; } = "";
 
         /// <summary>All entries in this dictionary group.</summary>
         public List<DictionaryRow> Rows { get; set; } = new List<DictionaryRow>();
@@ -408,9 +402,6 @@ namespace LsdeDialogEngine
 
         /// <summary>Short action type identifier (e.g. "set_flag"). Referenced by ExportAction.ActionId.</summary>
         public string Id { get; set; } = "";
-
-        /// <summary>Human-readable description of what this action does.</summary>
-        public string? Label { get; set; }
 
         /// <summary>Parameter definitions describing the expected inputs.</summary>
         public List<SignatureParam> Params { get; set; } = new List<SignatureParam>();

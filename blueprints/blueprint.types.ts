@@ -32,8 +32,8 @@
 /** Characters defined in the project */
 export type lsdeCharacter = 'a1' | 'a2' | 'a3' | 'a4' | 'a5' | 'a6' | 'a7' | 'a8' | 'a9';
 
-/** Dictionary: GroupName (2 values) */
-export type lsdeDictionaryGroupName = 'key1' | 'key2';
+/** Dictionary: VariableGlobal (2 values) */
+export type lsdeDictionaryVariableGlobal = 'key1' | 'key2';
 
 /** Action signature IDs */
 export type lsdeActionId = 'signatureID1';
@@ -478,8 +478,6 @@ export interface DictionaryRow {
 	 * Referenced in conditions and action parameters.
 	 */
 	key: string;
-	/** Optional description or documentation for this dictionary entry. */
-	note?: string;
 }
 
 /**
@@ -491,15 +489,10 @@ export interface Dictionary {
 	/** Unique identifier for this dictionary group. */
 	uuid: string;
 	/**
-	 * Display name for this dictionary group.
-	 * Used as prefix in condition keys (e.g. "groupLabel.rowKey").
+	 * Identifier for this dictionary group.
+	 * Used as prefix in condition keys (e.g. "groupId.rowKey").
 	 */
-	label?: string;
-	/**
-	 * Data type of values in this dictionary: "string", "number", or "boolean".
-	 * Determines how condition values should be parsed and compared.
-	 */
-	valueType: 'string' | 'number' | 'boolean';
+	id: string;
 	/**
 	 * All entries in this dictionary group.
 	 * See DictionaryRow for the entry structure.
@@ -547,8 +540,6 @@ export interface ActionSignature {
 	 * Use this to map to your engine's action handler system.
 	 */
 	id: string;
-	/** Human-readable description of what this action does. */
-	label?: string;
 	/**
 	 * Parameter definitions describing the expected inputs for this action.
 	 * See SignatureParam for the parameter structure.

@@ -332,8 +332,6 @@ class DictionaryRow extends Resource:
 	## The key identifier for this dictionary entry.
 	## Referenced in conditions and action parameters.
 	@export var key: String
-	## Optional description or documentation for this dictionary entry.
-	@export var note: String
 
 ## A dictionary group defining reusable key-value pairs for conditions and actions.
 ## Dictionaries provide the valid keys that can be referenced in condition evaluations
@@ -341,12 +339,9 @@ class DictionaryRow extends Resource:
 class DictionaryGroup extends Resource:
 	## Unique identifier for this dictionary group.
 	@export var uuid: String
-	## Display name for this dictionary group.
-	## Used as prefix in condition keys (e.g. "groupLabel.rowKey").
-	@export var label: String
-	## Data type of values in this dictionary: "string", "number", or "boolean".
-	## Determines how condition values should be parsed and compared.
-	@export var valueType: String
+	## Short identifier for this dictionary group.
+	## Used as prefix in condition keys (e.g. "groupId.rowKey").
+	@export var id: String
 	## All entries in this dictionary group.
 	## See DictionaryRow for the entry structure.
 	@export var rows: Array[DictionaryRow]
@@ -376,8 +371,6 @@ class ActionSignature extends Resource:
 	## Short identifier for this action type.
 	## Use this to map to your engine's action handler system.
 	@export var id: String
-	## Human-readable description of what this action does.
-	@export var label: String
 	## Parameter definitions describing the expected inputs for this action.
 	## See SignatureParam for the parameter structure.
 	@export var params: Array[SignatureParam]
