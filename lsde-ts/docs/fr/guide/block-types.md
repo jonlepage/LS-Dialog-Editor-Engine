@@ -8,15 +8,15 @@ Les handlers se déclinent en deux niveaux : les **global handlers** (enregistr�
 
 ## DIALOG
 
-Affiche du texte dit par un personnage. Le personnage est résolu par le callback `onResolveCharacter`.
+Un block dialog représente une réplique — un personnage qui parle, un narrateur, un texte à l'écran. Le engine résout le personnage via le callback `onResolveCharacter` et l'expose dans `context.character`. Un handler dialog typique crée une instance de texte dans le jeu (textbox, bulle, sous-titre…), attend que le joueur ou une animation termine, puis appelle `next()` pour avancer le engine. La fonction de cleanup optionnelle permet de nettoyer les effets de bord quand le engine passe au bloc suivant.
 
 <!--@include: ../../_shared/block-dialog.md-->
 
-`resolveCharacterPort()` match par **UUID du personnage en premier**, puis par **nom** comme fallback.
+Quand le narrative designer assigne un output dédié par personnage ([`portPerCharacter`](/api-ref/interfaces/NativeProperties#portpercharacter)), le handler doit appeler `resolveCharacterPort()` pour indiquer au engine quel chemin suivre lors du `next()`.
 
 ## CHOICE
 
-Présente des options sélectionnables au joueur. Quand [`setChoiceFilter()`](/fr/guide/choice-visibility) est configuré, chaque choice est taggé avec `visible: true | false`.
+Un block choice représente un embranchement où le joueur choisit — un menu de réponses, des options de dialogue. Le `context.choices` contient toutes les options disponibles. Quand [`setChoiceFilter()`](/fr/guide/choice-visibility) est configuré, chaque option est taggée `visible: true | false` — le handler filtre et affiche celles qu'il veut. Après l'interaction du joueur, `selectChoice(uuid)` indique au engine quel chemin suivre, puis `next()` avance le flow.
 
 <!--@include: ../../_shared/block-choice.md-->
 
@@ -24,48 +24,45 @@ Voir [Choice Visibility](/fr/guide/choice-visibility) pour le système complet d
 
 ## CONDITION
 
-Évalue de la logique pour brancher le flow. Le handler **doit** appeler `resolve(result)` — `true` suit le port index 0, `false` suit le port index 1.
+Un block condition est un aiguillage invisible — il évalue l'état du jeu et envoie le flow sur l'un de deux chemins sans que le joueur le voie. Le handler évalue les conditions du block (variables, flags, inventaire…) puis appelle `context.resolve(result)` — `true` suit le port 0, `false` suit le port 1. Les conditions dont la clé commence par `choice:` référencent un choix précédent du joueur — `scene.evaluateCondition(cond)` les résout automatiquement via l'historique interne.
 
 <!--@include: ../../_shared/block-condition.md-->
 
-::: tip Conditions choice:
-Les conditions avec des clés qui commencent par `choice:` font référence à une sélection précédente du joueur. Utilise `scene.evaluateCondition(cond)` pour les résoudre — le engine check son historique de choix interne automatiquement.
-:::
-
 ## ACTION
 
-Trigger des changements de game state. Appeler `resolve()` pour le succès ou `reject(error)` pour un échec.
+Un block action déclenche des effets de bord dans le jeu — donner un item, jouer un son, activer un flag. Chaque action référence un `actionId` que le développeur mappe vers ses propres systèmes. Le handler exécute la liste d'actions puis appelle `context.resolve()` pour suivre le port "then", ou `context.reject(error)` pour suivre le port "catch" (fallback sur "then" si aucun "catch" n'existe).
 
 <!--@include: ../../_shared/block-action.md-->
 
 ## NOTE
 
-Block de documentation pour le designer. Jamais exécuté — automatiquement skippé pendant la traversée.
+Un block note est un pense-bête pour le narrative designer — commentaires, rappels, contexte. Il est automatiquement ignoré pendant la traversée. Il est techniquement possible d'intercepter un block note via [`onBeforeBlock`](/fr/guide/lifecycle), mais c'est déconseillé — le block action devrait couvrir tous vos besoins en effets de bord.
 
 ## Propriétés communes
 
-Tous les blocks partagent ces champs de base :
+Tous les blocks partagent ces champs de base ([`BlueprintBlockBase`](/api-ref/interfaces/BlueprintBlockBase)) :
 
 | Champ | Type | Description |
 |-------|------|-------------|
-| `uuid` | `string` | Identifiant unique |
-| `type` | `BlockType` | Type discriminant |
-| `label` | `string?` | Nom lisible par un humain |
-| `properties` | `BlockProperty[]` | Propriétés clé-valeur |
-| `userProperties` | `Record?` | Propriétés utilisateur libres |
-| `nativeProperties` | `NativeProperties?` | Propriétés d'exécution (async, delay, etc.) |
-| `metadata` | `BlockMetadata?` | Metadata d'affichage (personnages, tags, couleur) |
-| `isStartBlock` | `boolean?` | Marque le block d'entrée |
+| [`uuid`](/api-ref/interfaces/BlueprintBlockBase#uuid) | `string` | Identifiant unique |
+| [`type`](/api-ref/interfaces/BlueprintBlockBase#type) | `BlockType` | Type discriminant |
+| [`label`](/api-ref/interfaces/BlueprintBlockBase#label) | `string?` | Nom lisible par un humain |
+| [`parentLabels`](/api-ref/interfaces/BlueprintBlockBase#parentlabels) | `string[]?` | Hiérarchie des dossiers parents dans l'éditeur |
+| [`properties`](/api-ref/interfaces/BlueprintBlockBase#properties) | `BlockProperty[]` | Propriétés clé-valeur |
+| [`userProperties`](/api-ref/interfaces/BlueprintBlockBase#userproperties) | `Record?` | Propriétés utilisateur libres |
+| [`nativeProperties`](/api-ref/interfaces/BlueprintBlockBase#nativeproperties) | `NativeProperties?` | Propriétés d'exécution |
+| [`metadata`](/api-ref/interfaces/BlueprintBlockBase#metadata) | `BlockMetadata?` | Metadata d'affichage (personnages, tags, couleur) |
+| [`isStartBlock`](/api-ref/interfaces/BlueprintBlockBase#isstartblock) | `boolean?` | Marque le block d'entrée |
 
 ### NativeProperties
 
 | Champ | Type | Description |
 |-------|------|-------------|
-| `isAsync` | `boolean?` | Exécuter sur un track async parallèle |
-| `delay` | `number?` | Délai avant exécution (consommé par `onBeforeBlock`) |
-| `timeout` | `number?` | Timeout d'exécution |
-| `portPerCharacter` | `boolean?` | Un output port par personnage dans les metadata |
-| `skipIfMissingActor` | `boolean?` | Ignorer le block si l'acteur est absent |
-| `debug` | `boolean?` | Flag de debug pour l'éditeur |
-| `waitForBlocks` | `string[]?` | UUIDs de blocks qui doivent être visités avant que ce block puisse progresser |
-| `waitInput` | `boolean?` | Flag passif pour contrôle d'input joueur explicite |
+| [`isAsync`](/api-ref/interfaces/NativeProperties#isasync) | `boolean?` | Exécuter sur un track async parallèle |
+| [`delay`](/api-ref/interfaces/NativeProperties#delay) | `number?` | Délai avant exécution (consommé par `onBeforeBlock`) |
+| [`timeout`](/api-ref/interfaces/NativeProperties#timeout) | `number?` | Timeout d'exécution |
+| [`portPerCharacter`](/api-ref/interfaces/NativeProperties#portpercharacter) | `boolean?` | Un output port par personnage dans les metadata |
+| [`skipIfMissingActor`](/api-ref/interfaces/NativeProperties#skipifmissingactor) | `boolean?` | Ignorer le block si l'acteur est absent |
+| [`debug`](/api-ref/interfaces/NativeProperties#debug) | `boolean?` | Flag de debug pour l'éditeur |
+| [`waitForBlocks`](/api-ref/interfaces/NativeProperties#waitforblocks) | `string[]?` | UUIDs de blocks qui doivent être visités avant que ce block puisse progresser |
+| [`waitInput`](/api-ref/interfaces/NativeProperties#waitinput) | `boolean?` | Flag passif pour contrôle d'input joueur explicite |

@@ -1,52 +1,92 @@
 ::: code-group
 ```ts [TypeScript]
 engine.onChoice(({ block, context, next }) => {
-  const visible = context.choices.filter(c => c.visible !== false);
+  const { nativeProperties } = block;
+  const { choices, selectChoice } = context;
 
-  showChoicesUI(visible, (uuid) => {
-    context.selectChoice(uuid);
-    next();
-  });
+  const visible = choices.filter(c => c.visible !== false);
+  const dialog = game.createChoice(visible);
+
+  // when the player picks a choice, select it and advance
+  dialog
+    .then((selected) => selectChoice(selected))
+    .finally(() => next());
+
+  // optional: if the narrative designer set a timeout on this block
+  if (nativeProperties?.timeout) {
+    const timeout = game.wait(nativeProperties.timeout).then(() => next());
+    dialog.finally(() => timeout.cancel());
+  }
+
+  return () => dialog.destroy();
 });
 ```
 ```csharp [C#]
 engine.OnChoice(args => {
-    var visible = args.Context.Choices
+    var (scene, block, context, next) = args;
+    var visible = context.Choices
         .Where(c => c.Visible != false).ToList();
 
-    ShowChoicesUI(visible, uuid => {
-        args.Context.SelectChoice(uuid);
-        args.Next();
+    var dialog = Game.CreateChoice(visible);
+
+    // when the player picks a choice, select it and advance
+    dialog.OnSelect(selected => {
+        context.SelectChoice(selected);
+        next();
     });
-    return null;
+
+    // optional: if the narrative designer set a timeout on this block
+    if (block.NativeProperties?.Timeout is { } timeout)
+        Game.Wait(timeout).Then(() => next());
+
+    return () => dialog.Destroy();
 });
 ```
 ```cpp [C++]
-engine.onChoice([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
+engine.onChoice([&game](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn {
     std::vector<const RuntimeChoiceItem*> visible;
     for (const auto& c : ctx->choices())
         if (!c.visible.has_value() || c.visible.value())
             visible.push_back(&c);
 
-    showChoicesUI(visible, [ctx, next](auto& uuid) {
-        ctx->selectChoice(uuid);
+    auto* dialog = game.createChoice(visible);
+
+    // when the player picks a choice, select it and advance
+    dialog->onSelect([ctx, next](const auto& selected) {
+        ctx->selectChoice(selected);
         next();
     });
-    return {};
+
+    // optional: if the narrative designer set a timeout on this block
+    if (block->nativeProperties && block->nativeProperties->timeout) {
+        game.wait(*block->nativeProperties->timeout).then([next]() { next(); });
+    }
+
+    return [dialog]() { dialog->destroy(); };
 });
 ```
 ```gdscript [GDScript]
 engine.on_choice(func(args):
+    var block = args["block"]
+    var ctx = args["context"]
+    var next_fn = args["next"]
+
     var visible = []
-    for c in args["context"].choices:
+    for c in ctx.choices:
         if c.get("visible") != false:
             visible.append(c)
 
-    show_choices_ui(visible, func(uuid):
-        args["context"].select_choice(uuid)
-        args["next"].call()
-    )
-    return Callable()
+    var dialog = game.create_choice(visible)
+
+    # when the player picks a choice, select it and advance
+    var selected = await dialog.choice_selected
+    ctx.select_choice(selected)
+    next_fn.call()
+
+    # optional: if the narrative designer set a timeout on this block
+    # use a Timer node or game.wait() to handle timeouts natively
+
+    return func(): dialog.destroy()
 )
 ```
 :::
