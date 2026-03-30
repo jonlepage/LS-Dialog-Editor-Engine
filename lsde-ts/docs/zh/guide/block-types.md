@@ -1,8 +1,10 @@
 # Block 类型
 
-engine 支持 5 种 block 类型。每种类型都有专用的 handler 和特定类型的 context。
+block 是对话场景的构建单元 — 编辑器图中的每个节点都是一个 block。engine 将流程从一个 block 路由到下一个，并为每种类型调用对应的 handler。
 
-所有 4 个内容 block handler（`onDialog`、`onChoice`、`onCondition`、`onAction`）都是**必需的** — engine 在调用 `start()` 时会验证它们是否已注册。
+共有 5 种类型：**Dialog**、**Choice**、**Condition**、**Action** 和 **Note**。前四种是内容 block，各有专用的 handler（`onDialog`、`onChoice`、`onCondition`、`onAction`）— 四个都是**必需的**，在调用 `start()` 时验证。Note block 会被自动跳过。
+
+handler 分为两个层级：**global handler**（注册在 engine 上）覆盖所有 scene，对大多数游戏来说足够。**scene handler**（注册在 [`SceneHandle`](/zh/api-ref/classes/SceneHandle) 上）可以为特定 scene 补充或覆盖 global handler。详见 [Handlers](/zh/guide/handlers)。
 
 ## DIALOG
 

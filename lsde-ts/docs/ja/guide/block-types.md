@@ -1,8 +1,10 @@
 # Block タイプ
 
-engine は5つの block タイプをサポートしています。それぞれに専用の handler とタイプ固有の context があります。
+block は dialogue scene の構成要素です — エディターグラフの各ノードが block です。engine は block から block へフローをルーティングし、各タイプに対応する handler を呼び出します。
 
-4つのコンテンツ block handler（`onDialog`、`onChoice`、`onCondition`、`onAction`）は**必須**です — `start()` を呼び出す際に engine がそれらの存在を検証します。
+タイプは5種類あります：**Dialog**、**Choice**、**Condition**、**Action**、**Note**。最初の4つは専用の handler（`onDialog`、`onChoice`、`onCondition`、`onAction`）を持つコンテンツ block です — 4つとも**必須**で、`start()` 呼び出し時に検証されます。Note block は自動的にスキップされます。
+
+handler は2つのレベルで構成されます：**global handler**（engine に登録）はすべての scene をカバーし、ほとんどのゲームではこれだけで十分です。**scene handler**（[`SceneHandle`](/ja/api-ref/classes/SceneHandle) に登録）は、特定の scene で global を補完または上書きできます。詳細は [Handlers](/ja/guide/handlers) を参照してください。
 
 ## DIALOG
 
