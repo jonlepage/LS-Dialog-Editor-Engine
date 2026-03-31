@@ -1,5 +1,40 @@
 # Changelog
 
+## v0.2.0 (2026-03-30)
+
+### Features
+ add type-safe block overrides for dialog, choice, condition, and action handlers
+ mettre à jour les imports de LsdeUtils pour utiliser le nouveau chemin '@lsde/dialog-engine' dans plusieurs fichiers de documentation
+ mettre à jour la documentation pour le cycle de vie des blocks et la visibilité des choix, en clarifiant les appels de fonction et les propriétés d'exécution
+ mettre à jour la documentation pour le cycle de vie des scènes et l'intégration des dialogues
+ mettre à jour la documentation des handlers pour inclure le cycle de vie des scènes et ajouter des exemples de code
+ mettre à jour la documentation des types de blocks pour inclure des détails sur les handlers et leur validation
+ ajouter des gestionnaires de blocs sans nettoyage pour DIALOG, CHOICE, CONDITION et ACTION dans le moteur
+ ajouter un nouveau fichier de jeu pour tester l'API du moteur avec un blueprint réel
+ externaliser les instructions d'installation dans un fichier partagé
+ améliorer l'intégration et la documentation des gestionnaires pour les moteurs C++, C#, GDScript et TypeScript
+ ajouter un logo et un composant HeroCode avec des extraits de code pour plusieurs langages
+ ajouter _previews/ au fichier .gitignore
+ enhance block validation with character context
+ add waitForBlocks handling in AsyncTrack and improve block execution flow
+ enhance async track handling with waitForBlocks and track info API
+
+### Fixes
+ corriger le chemin d'accès à SceneHandle dans la documentation des types de blocks
+
+### Other
+- Update documentation for lifecycle, async tracks, and choice visibility
+- Refactor integration documentation for LSDE engine
+- Refactor documentation for action signatures, block types, and handlers across multiple languages
+- Refactor block handlers to use unified action execution and condition evaluation methods across TypeScript, C#, C++, and GDScript. Update documentation for block types to reflect changes in dialog, choice, condition, and action handling, including cleanup functions and character resolution. Enhance clarity and consistency in descriptions and examples.
+- Refactor documentation and code structure for Blueprint system
+- Add documentation for various engine features and handlers
+- Add Japanese and Chinese documentation for async tracks and lifecycle
+- Enhance async track functionality and documentation
+- Update blueprint schema and types to include new properties for block execution control
+
+
+
 ## v0.1.1 (2026-03-27)
 
 ### Features

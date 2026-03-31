@@ -83,6 +83,10 @@ sync_versions() {
   # Update .csproj
   sed -i "s|<Version>.*</Version>|<Version>$NEW_VERSION</Version>|" "$CSPROJ"
 
+  # Update CMakeLists.txt
+  local CMAKE="$ROOT/lsde-cpp/CMakeLists.txt"
+  sed -i "s|project(lsde-dialog-engine VERSION [0-9.]*|project(lsde-dialog-engine VERSION $NEW_VERSION|" "$CMAKE"
+
   echo "✓ Versions synced to $NEW_VERSION"
 }
 
@@ -132,7 +136,7 @@ generate_changelog() {
 # ─── Git tag ─────────────────────────────────────────────────────────────────
 git_tag() {
   cd "$ROOT"
-  git add CHANGELOG.md "$TS_DIR/package.json" "$CSPROJ"
+  git add CHANGELOG.md "$TS_DIR/package.json" "$CSPROJ" "$ROOT/lsde-cpp/CMakeLists.txt"
   git commit -m "release: v$NEW_VERSION"
   git tag "v$NEW_VERSION"
   echo "✓ Tagged v$NEW_VERSION"
