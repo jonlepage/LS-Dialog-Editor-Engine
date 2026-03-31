@@ -386,6 +386,22 @@ export class SceneHandleImpl implements SceneHandle {
 		this.sceneRegistry.setBlockHandler( blockUuid, handler );
 	}
 
+	onDialogId( blockUuid: string, handler: DialogHandler ): void {
+		this.sceneRegistry.setBlockHandler( blockUuid, handler as BlockHandler<BlueprintBlock, BaseBlockContext> );
+	}
+
+	onChoiceId( blockUuid: string, handler: ChoiceHandler ): void {
+		this.sceneRegistry.setBlockHandler( blockUuid, handler as BlockHandler<BlueprintBlock, BaseBlockContext> );
+	}
+
+	onConditionId( blockUuid: string, handler: ConditionHandler ): void {
+		this.sceneRegistry.setBlockHandler( blockUuid, handler as BlockHandler<BlueprintBlock, BaseBlockContext> );
+	}
+
+	onActionId( blockUuid: string, handler: ActionHandler ): void {
+		this.sceneRegistry.setBlockHandler( blockUuid, handler as BlockHandler<BlueprintBlock, BaseBlockContext> );
+	}
+
 	onDialog( handler: DialogHandler ): void {
 		this.sceneRegistry.dialogHandler = handler;
 	}

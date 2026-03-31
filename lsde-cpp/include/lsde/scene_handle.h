@@ -96,6 +96,10 @@ public:
     void onEnter(SceneLifecycleHandler handler) override;
     void onExit(SceneLifecycleHandler handler) override;
     void onBlock(const std::string& blockUuid, InternalBlockHandler handler) override;
+    void onDialogId(const std::string& blockUuid, TypedBlockHandler<DialogBlock, IDialogContext> handler) override;
+    void onChoiceId(const std::string& blockUuid, TypedBlockHandler<ChoiceBlock, IChoiceContext> handler) override;
+    void onConditionId(const std::string& blockUuid, TypedBlockHandler<ConditionBlock, IConditionContext> handler) override;
+    void onActionId(const std::string& blockUuid, TypedBlockHandler<ActionBlock, IActionContext> handler) override;
     void onDialog(TypedBlockHandler<DialogBlock, IDialogContext> handler) override;
     void onChoice(TypedBlockHandler<ChoiceBlock, IChoiceContext> handler) override;
     void onCondition(TypedBlockHandler<ConditionBlock, IConditionContext> handler) override;

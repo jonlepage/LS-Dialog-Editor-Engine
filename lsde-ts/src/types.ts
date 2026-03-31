@@ -856,6 +856,14 @@ export interface SceneHandle {
 
 	/** Override a specific block by UUID. */
 	onBlock(blockUuid: string, handler: BlockHandler<BlueprintBlock, BaseBlockContext>): void;
+	/** Override a specific DIALOG block by UUID (type-safe). */
+	onDialogId(blockUuid: string, handler: DialogHandler): void;
+	/** Override a specific CHOICE block by UUID (type-safe). */
+	onChoiceId(blockUuid: string, handler: ChoiceHandler): void;
+	/** Override a specific CONDITION block by UUID (type-safe). */
+	onConditionId(blockUuid: string, handler: ConditionHandler): void;
+	/** Override a specific ACTION block by UUID (type-safe). */
+	onActionId(blockUuid: string, handler: ActionHandler): void;
 	/** Override all DIALOG blocks for this scene. */
 	onDialog(handler: DialogHandler): void;
 	/** Override all CHOICE blocks for this scene. */

@@ -19,6 +19,10 @@ engine は以下の handler を公開しています：
 | [`onSceneEnter`](/api-ref/classes/DialogueEngine#onsceneenter) | global / scene | scene の開始 |
 | [`onSceneExit`](/api-ref/classes/DialogueEngine#onsceneexit) | global / scene | scene の終了 |
 | [`onBlock`](/api-ref/interfaces/SceneHandle#onblock) | scene | UUID で特定の block をオーバーライド |
+| [`onDialogId`](/api-ref/interfaces/SceneHandle#ondialogid) | scene | UUID で特定の DIALOG block をオーバーライド（型安全） |
+| [`onChoiceId`](/api-ref/interfaces/SceneHandle#onchoiceid) | scene | UUID で特定の CHOICE block をオーバーライド（型安全） |
+| [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | UUID で特定の CONDITION block をオーバーライド（型安全） |
+| [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | UUID で特定の ACTION block をオーバーライド（型安全） |
 | [`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter) | global | choice の可視性エバリュエーター |
 
 最初の4つ（`onDialog`、`onChoice`、`onCondition`、`onAction`）は**必須**です — `start()` 呼び出し時に engine がその存在を検証し、欠けている場合は記述的なエラーをスローします。
@@ -33,7 +37,7 @@ engine は handler を2つの階層で解決します：
 - **Scene handler** — 特定の [`SceneHandle`](/api-ref/interfaces/SceneHandle) に登録され、scene が異なるレンダリングや制御フローを必要とする場合にデフォルト動作をオーバーライドまたは拡張できます。まれですが、利用可能です。
 
 block がディスパッチされると、engine は以下の順序で handler を解決します：
-1. `handle.onBlock(uuid)` — block 固有のオーバーライド
+1. `handle.onBlock(uuid)` または `handle.onDialogId(uuid)` / `handle.onActionId(uuid)` / ... — block 固有のオーバーライド
 2. `handle.onDialog()` / `handle.onChoice()` / ... — scene レベルのタイプ handler
 3. `engine.onDialog()` / `engine.onChoice()` / ... — global handler
 
@@ -61,6 +65,14 @@ block がディスパッチされると、engine は以下の順序で handler �
 
 <!--@include: ../../_shared/handler-block-override.md-->
 
+## Type-Safe Block Override
+
+`onDialogId(uuid)`、`onChoiceId(uuid)`、`onConditionId(uuid)`、`onActionId(uuid)` は `onBlock(uuid)` の型安全な代替メソッドです。動作は全く同じ — 同じ優先度、同じ `preventGlobalHandler` サポート — ただし handler がジェネリックユニオンではなく、特殊化された block 型とコンテキストを受け取ります。
+
+登録時に block タイプが分かっていて、`block` と `context` のオートコンプリートが必要な場合に使用してください。
+
+<!--@include: ../../_shared/handler-block-override-typed.md-->
+
 ## Visual Reference
 
 ### Two-Tier Handler Dispatch
@@ -68,7 +80,7 @@ block がディスパッチされると、engine は以下の順序で handler �
 ```mermaid
 flowchart TD
     A[block dispatched] --> B{resolve scene handler}
-    B --> B1{"onBlock(uuid)?"}
+    B --> B1{"onBlock(uuid) /\nonDialogId(uuid) etc.?"}
     B1 -- found --> S
     B1 -- not found --> B2{"handle.onDialog() etc.?"}
     B2 -- found --> S

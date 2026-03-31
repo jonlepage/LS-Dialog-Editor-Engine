@@ -721,6 +721,15 @@ namespace LsdeDialogEngine
         /// <summary>Override a specific block by UUID. Takes highest priority over type handlers.</summary>
         void OnBlock(string blockUuid, BlockHandler<BlueprintBlock, IBaseBlockContext> handler);
 
+        /// <summary>Override a specific DIALOG block by UUID (type-safe).</summary>
+        void OnDialogId(string blockUuid, BlockHandler<DialogBlock, IDialogContext> handler);
+        /// <summary>Override a specific CHOICE block by UUID (type-safe).</summary>
+        void OnChoiceId(string blockUuid, BlockHandler<ChoiceBlock, IChoiceContext> handler);
+        /// <summary>Override a specific CONDITION block by UUID (type-safe).</summary>
+        void OnConditionId(string blockUuid, BlockHandler<ConditionBlock, IConditionContext> handler);
+        /// <summary>Override a specific ACTION block by UUID (type-safe).</summary>
+        void OnActionId(string blockUuid, BlockHandler<ActionBlock, IActionContext> handler);
+
         /// <summary>Override all DIALOG blocks for this scene (Tier 2).</summary>
         void OnDialog(BlockHandler<DialogBlock, IDialogContext> handler);
 

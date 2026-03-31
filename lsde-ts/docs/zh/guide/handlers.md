@@ -19,6 +19,10 @@ engine 公开以下 handler：
 | [`onSceneEnter`](/api-ref/classes/DialogueEngine#onsceneenter) | global / scene | scene 开始 |
 | [`onSceneExit`](/api-ref/classes/DialogueEngine#onsceneexit) | global / scene | scene 结束 |
 | [`onBlock`](/api-ref/interfaces/SceneHandle#onblock) | scene | 按 UUID 覆盖特定 block |
+| [`onDialogId`](/api-ref/interfaces/SceneHandle#ondialogid) | scene | 按 UUID 覆盖特定 DIALOG block（类型安全） |
+| [`onChoiceId`](/api-ref/interfaces/SceneHandle#onchoiceid) | scene | 按 UUID 覆盖特定 CHOICE block（类型安全） |
+| [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | 按 UUID 覆盖特定 CONDITION block（类型安全） |
+| [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | 按 UUID 覆盖特定 ACTION block（类型安全） |
 | [`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter) | global | choice 可见性评估器 |
 
 前 4 个（`onDialog`、`onChoice`、`onCondition`、`onAction`）是**必需的** — `start()` 调用时 engine 验证它们是否存在，缺失时抛出描述性错误。
@@ -33,7 +37,7 @@ engine 在两个层级上解析 handler：
 - **Scene handler** — 注册在特定的 [`SceneHandle`](/api-ref/interfaces/SceneHandle) 上，当 scene 需要不同的渲染或控制流程时，可以覆盖或扩展默认行为。这种情况很少见，但可用。
 
 当一个 block 被分发时，engine 按以下顺序解析 handler：
-1. `handle.onBlock(uuid)` — block 级别的覆盖
+1. `handle.onBlock(uuid)` 或 `handle.onDialogId(uuid)` / `handle.onActionId(uuid)` / ... — block 级别的覆盖
 2. `handle.onDialog()` / `handle.onChoice()` / ... — scene 级别的类型 handler
 3. `engine.onDialog()` / `engine.onChoice()` / ... — global handler
 
@@ -61,6 +65,14 @@ engine 在两个层级上解析 handler：
 
 <!--@include: ../../_shared/handler-block-override.md-->
 
+## Type-Safe Block Override
+
+`onDialogId(uuid)`、`onChoiceId(uuid)`、`onConditionId(uuid)` 和 `onActionId(uuid)` 是 `onBlock(uuid)` 的类型安全替代方法。工作方式完全相同 — 相同的优先级、相同的 `preventGlobalHandler` 支持 — 但 handler 接收特殊化的 block 类型和 context，而不是通用联合类型。
+
+当你在注册时已知 block 类型，并需要 `block` 和 `context` 的完整自动补全时使用这些方法。
+
+<!--@include: ../../_shared/handler-block-override-typed.md-->
+
 ## Visual Reference
 
 ### Two-Tier Handler Dispatch
@@ -68,7 +80,7 @@ engine 在两个层级上解析 handler：
 ```mermaid
 flowchart TD
     A[block dispatched] --> B{resolve scene handler}
-    B --> B1{"onBlock(uuid)?"}
+    B --> B1{"onBlock(uuid) /\nonDialogId(uuid) etc.?"}
     B1 -- found --> S
     B1 -- not found --> B2{"handle.onDialog() etc.?"}
     B2 -- found --> S

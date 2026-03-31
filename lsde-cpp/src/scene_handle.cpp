@@ -301,6 +301,10 @@ void SceneHandleImpl::cancel() {
 void SceneHandleImpl::onEnter(SceneLifecycleHandler h) { _sceneRegistry.enterHandler = std::move(h); }
 void SceneHandleImpl::onExit(SceneLifecycleHandler h) { _sceneRegistry.exitHandler = std::move(h); }
 void SceneHandleImpl::onBlock(const std::string& uuid, InternalBlockHandler h) { _sceneRegistry.setBlockHandler(uuid, std::move(h)); }
+void SceneHandleImpl::onDialogId(const std::string& uuid, TypedBlockHandler<DialogBlock, IDialogContext> h) { _sceneRegistry.setBlockHandler(uuid, wrapHandler<DialogBlock, IDialogContext>(std::move(h))); }
+void SceneHandleImpl::onChoiceId(const std::string& uuid, TypedBlockHandler<ChoiceBlock, IChoiceContext> h) { _sceneRegistry.setBlockHandler(uuid, wrapHandler<ChoiceBlock, IChoiceContext>(std::move(h))); }
+void SceneHandleImpl::onConditionId(const std::string& uuid, TypedBlockHandler<ConditionBlock, IConditionContext> h) { _sceneRegistry.setBlockHandler(uuid, wrapHandler<ConditionBlock, IConditionContext>(std::move(h))); }
+void SceneHandleImpl::onActionId(const std::string& uuid, TypedBlockHandler<ActionBlock, IActionContext> h) { _sceneRegistry.setBlockHandler(uuid, wrapHandler<ActionBlock, IActionContext>(std::move(h))); }
 void SceneHandleImpl::onDialog(TypedBlockHandler<DialogBlock, IDialogContext> h) { _sceneRegistry.dialogHandler = wrapHandler<DialogBlock, IDialogContext>(std::move(h)); }
 void SceneHandleImpl::onChoice(TypedBlockHandler<ChoiceBlock, IChoiceContext> h) { _sceneRegistry.choiceHandler = wrapHandler<ChoiceBlock, IChoiceContext>(std::move(h)); }
 void SceneHandleImpl::onCondition(TypedBlockHandler<ConditionBlock, IConditionContext> h) { _sceneRegistry.conditionHandler = wrapHandler<ConditionBlock, IConditionContext>(std::move(h)); }

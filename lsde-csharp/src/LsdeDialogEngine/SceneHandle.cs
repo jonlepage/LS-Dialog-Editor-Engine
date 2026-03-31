@@ -429,6 +429,50 @@ namespace LsdeDialogEngine
                 (scene, block, context, next) => handler(new BlockHandlerArgs<BlueprintBlock, IBaseBlockContext>(scene, block, context, next)));
         }
 
+        public void OnDialogId(string blockUuid, BlockHandler<DialogBlock, IDialogContext> handler)
+        {
+            _sceneRegistry.SetBlockHandler(blockUuid,
+                (scene, block, context, next) => handler(new BlockHandlerArgs<DialogBlock, IDialogContext>(scene, (DialogBlock)block, (IDialogContext)context, next)));
+        }
+
+        public void OnDialogId(string blockUuid, Action<BlockHandlerArgs<DialogBlock, IDialogContext>> handler)
+        {
+            OnDialogId(blockUuid, args => { handler(args); return null; });
+        }
+
+        public void OnChoiceId(string blockUuid, BlockHandler<ChoiceBlock, IChoiceContext> handler)
+        {
+            _sceneRegistry.SetBlockHandler(blockUuid,
+                (scene, block, context, next) => handler(new BlockHandlerArgs<ChoiceBlock, IChoiceContext>(scene, (ChoiceBlock)block, (IChoiceContext)context, next)));
+        }
+
+        public void OnChoiceId(string blockUuid, Action<BlockHandlerArgs<ChoiceBlock, IChoiceContext>> handler)
+        {
+            OnChoiceId(blockUuid, args => { handler(args); return null; });
+        }
+
+        public void OnConditionId(string blockUuid, BlockHandler<ConditionBlock, IConditionContext> handler)
+        {
+            _sceneRegistry.SetBlockHandler(blockUuid,
+                (scene, block, context, next) => handler(new BlockHandlerArgs<ConditionBlock, IConditionContext>(scene, (ConditionBlock)block, (IConditionContext)context, next)));
+        }
+
+        public void OnConditionId(string blockUuid, Action<BlockHandlerArgs<ConditionBlock, IConditionContext>> handler)
+        {
+            OnConditionId(blockUuid, args => { handler(args); return null; });
+        }
+
+        public void OnActionId(string blockUuid, BlockHandler<ActionBlock, IActionContext> handler)
+        {
+            _sceneRegistry.SetBlockHandler(blockUuid,
+                (scene, block, context, next) => handler(new BlockHandlerArgs<ActionBlock, IActionContext>(scene, (ActionBlock)block, (IActionContext)context, next)));
+        }
+
+        public void OnActionId(string blockUuid, Action<BlockHandlerArgs<ActionBlock, IActionContext>> handler)
+        {
+            OnActionId(blockUuid, args => { handler(args); return null; });
+        }
+
         public void OnDialog(BlockHandler<DialogBlock, IDialogContext> handler)
         {
             _sceneRegistry.DialogHandler = handler;

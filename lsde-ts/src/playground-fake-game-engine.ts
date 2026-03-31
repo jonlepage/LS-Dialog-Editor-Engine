@@ -170,7 +170,7 @@ function GameScript_001(id: string, gameScriptCallBack: () => void) {
 	// - ideal si vous voulez pas deleguer la logique de certain aspect thecnique au narrative designer
 	// - le dev peut ainsi controller chaque block et ajoutez ca logique et deleger a LSDE juste le narratif
 	// - ces un usecase acceptable pour un jeux casuel simple et sans complexiter narrative
-	scene.onBlock(LSDE_BLOCKS.newSceneAction001, ({ block, context, next }) => {
+	scene.onActionId(LSDE_BLOCKS.newSceneAction001, ({ block, context, next }) => {
 
 		const { actions } = block;
 

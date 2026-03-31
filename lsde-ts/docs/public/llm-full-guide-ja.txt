@@ -116,7 +116,7 @@ block は dialogue scene の構成要素です — エディターグラフの�
 
 タイプは5種類あります：**Dialog**、**Choice**、**Condition**、**Action**、**Note**。最初の4つは専用の handler（`onDialog`、`onChoice`、`onCondition`、`onAction`）を持つコンテンツ block です — 4つとも**必須**で、`start()` 呼び出し時に検証されます。Note block は自動的にスキップされます。
 
-handler は2つのレベルで構成されます：**global handler**（engine に登録）はすべての scene をカバーし、ほとんどのゲームではこれだけで十分です。**scene handler**（[`SceneHandle`](/ja/api-ref/classes/SceneHandle) に登録）は、特定の scene で global を補完または上書きできます。詳細は [Handlers](/ja/guide/handlers) を参照してください。
+handler は2つのレベルで構成されます：**global handler**（engine に登録）はすべての scene をカバーし、ほとんどのゲームではこれだけで十分です。**scene handler**（[`SceneHandle`](/api-ref/interfaces/SceneHandle) に登録）は、特定の scene で global を補完または上書きできます。詳細は [Handlers](/ja/guide/handlers) を参照してください。
 
 ## DIALOG
 
@@ -221,19 +221,36 @@ handler 内で、1行でフィルタリングできます：
 
 フィルターがインストールされている場合、`context.choices` 内の各 choice は `RuntimeChoiceItem` です — `visible` タグが追加された `ChoiceItem` の拡張です：
 
-```ts
+
+```ts [TypeScript]
 interface RuntimeChoiceItem extends ChoiceItem {
   visible?: boolean; // true | false | undefined
 }
 ```
+```csharp [C#]
+public class RuntimeChoiceItem : ChoiceItem
+{
+    public bool? Visible { get; set; } // true | false | null
+}
+```
+```cpp [C++]
+struct RuntimeChoiceItem : ChoiceItem {
+    std::optional<bool> visible; // true | false | nullopt
+};
+```
+```gdscript [GDScript]
+# RuntimeChoiceItem is a Dictionary with an extra "visible" key:
+# { "uuid": "...", "dialogueText": {...}, "visible": true/false/absent }
+```
 
-フィルターなしの場合、choice は `RuntimeChoiceItem` のままですが、`visible` は `undefined` のままです。
+フィルターなしの場合、choice は `RuntimeChoiceItem` のままですが、`visible` は `undefined`/`null`/`nullopt`/absent のままです。
 
 ## 使用例
 
 ### 標準 — 表示可能な choice を表示
 
-```ts
+
+```ts [TypeScript]
 engine.onChoice(({ context, next }) => {
   const visible = context.choices.filter(c => c.visible !== false);
   ui.showChoices(visible, (uuid) => {
@@ -242,10 +259,48 @@ engine.onChoice(({ context, next }) => {
   });
 });
 ```
+```csharp [C#]
+engine.OnChoice(args => {
+    var visible = args.Context.Choices
+        .Where(c => c.Visible != false).ToList();
+    ShowChoicesUI(visible, uuid => {
+        args.Context.SelectChoice(uuid);
+        args.Next();
+    });
+    return null;
+});
+```
+```cpp [C++]
+engine.onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
+    std::vector<const RuntimeChoiceItem*> visible;
+    for (const auto& c : ctx->choices())
+        if (!c.visible.has_value() || c.visible.value())
+            visible.push_back(&c);
+    showChoicesUI(visible, [ctx, next](const auto& uuid) {
+        ctx->selectChoice(uuid);
+        next();
+    });
+    return {};
+});
+```
+```gdscript [GDScript]
+engine.on_choice(func(args):
+    var visible = []
+    for c in args["context"].choices:
+        if c.get("visible") != false:
+            visible.append(c)
+    show_choices_ui(visible, func(uuid):
+        args["context"].select_choice(uuid)
+        args["next"].call()
+    )
+    return Callable()
+)
+```
 
 ### タイムアウト付き choice — タイムアウト時に自動選択
 
-```ts
+
+```ts [TypeScript]
 engine.onChoice(({ block, context, next }) => {
   const visible = context.choices.filter(c => c.visible !== false);
   const timeout = block.nativeProperties?.timeout;
@@ -266,30 +321,180 @@ engine.onChoice(({ block, context, next }) => {
   }
 });
 ```
+```csharp [C#]
+engine.OnChoice(args => {
+    var (_, block, context, next) = args;
+    var visible = context.Choices
+        .Where(c => c.Visible != false).ToList();
+    var timeout = block.NativeProperties?.Timeout;
+
+    void Resolve(RuntimeChoiceItem choice) {
+        context.SelectChoice(choice.Uuid);
+        next();
+    }
+
+    if (timeout.HasValue)
+    {
+        // use your engine's timer — cancel on player selection
+        var timer = ScheduleTimer((float)timeout.Value, () => Resolve(visible[0]));
+        ShowChoicesUI(visible, uuid => {
+            timer.Cancel();
+            Resolve(visible.First(c => c.Uuid == uuid));
+        });
+    }
+    else
+    {
+        ShowChoicesUI(visible, uuid => Resolve(visible.First(c => c.Uuid == uuid)));
+    }
+    return null;
+});
+```
+```cpp [C++]
+engine.onChoice([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
+    std::vector<const RuntimeChoiceItem*> visible;
+    for (const auto& c : ctx->choices())
+        if (!c.visible.has_value() || c.visible.value())
+            visible.push_back(&c);
+
+    auto timeout = block->nativeProperties
+        ? block->nativeProperties->timeout : std::nullopt;
+
+    auto resolve = [ctx, next](const std::string& uuid) {
+        ctx->selectChoice(uuid);
+        next();
+    };
+
+    if (timeout.has_value()) {
+        // use your engine's timer — cancel on player selection
+        auto timer = scheduleDelay(timeout.value(), [&]() { resolve(visible[0]->uuid); });
+        showChoicesUI(visible, [resolve, timer](const auto& uuid) {
+            timer->cancel();
+            resolve(uuid);
+        });
+    } else {
+        showChoicesUI(visible, resolve);
+    }
+    return {};
+});
+```
+```gdscript [GDScript]
+engine.on_choice(func(args):
+    var ctx = args["context"]
+    var next_fn = args["next"]
+    var block = args["block"]
+    var visible = []
+    for c in ctx.choices:
+        if c.get("visible") != false:
+            visible.append(c)
+
+    var timeout_val = block.get("nativeProperties", {}).get("timeout", 0)
+
+    if timeout_val > 0:
+        # use your engine's timer — cancel on player selection
+        var timer = get_tree().create_timer(timeout_val)
+        timer.timeout.connect(func():
+            ctx.select_choice(visible[0]["uuid"])
+            next_fn.call()
+        )
+        show_choices_ui(visible, func(uuid):
+            timer.time_left = 0  # cancel
+            ctx.select_choice(uuid)
+            next_fn.call()
+        )
+    else:
+        show_choices_ui(visible, func(uuid):
+            ctx.select_choice(uuid)
+            next_fn.call()
+        )
+    return Callable()
+)
+```
 
 ### 非表示の choice をグレーアウト表示
 
-```ts
+
+```ts [TypeScript]
 engine.onChoice(({ context, next }) => {
   for (const choice of context.choices) {
     if (choice.visible === false) {
-      ui.addGreyed(choice);   // Show but disabled
+      ui.addGreyed(choice);   // show but disabled
     } else {
-      ui.addNormal(choice);   // Selectable
+      ui.addNormal(choice);   // selectable
     }
   }
-  // Wait for player selection...
+  // wait for player selection...
 });
+```
+```csharp [C#]
+engine.OnChoice(args => {
+    foreach (var choice in args.Context.Choices)
+    {
+        if (choice.Visible == false)
+            AddGreyed(choice);   // show but disabled
+        else
+            AddNormal(choice);   // selectable
+    }
+    // wait for player selection...
+    return null;
+});
+```
+```cpp [C++]
+engine.onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
+    for (const auto& choice : ctx->choices()) {
+        if (choice.visible.has_value() && !choice.visible.value())
+            addGreyed(choice);   // show but disabled
+        else
+            addNormal(choice);   // selectable
+    }
+    // wait for player selection...
+    return {};
+});
+```
+```gdscript [GDScript]
+engine.on_choice(func(args):
+    for choice in args["context"].choices:
+        if choice.get("visible") == false:
+            add_greyed(choice)   # show but disabled
+        else:
+            add_normal(choice)   # selectable
+    # wait for player selection...
+    return Callable()
+)
 ```
 
 ### チュートリアル — 表示制御を完全に無視
 
-```ts
+
+```ts [TypeScript]
 tutorial.onChoice(({ context, next }) => {
-  // Force-select the first choice, no filtering
+  // force-select the first choice, no filtering
   context.selectChoice(context.choices[0].uuid);
   next();
 });
+```
+```csharp [C#]
+tutorial.OnChoice(args => {
+    // force-select the first choice, no filtering
+    args.Context.SelectChoice(args.Context.Choices[0].Uuid);
+    args.Next();
+    return null;
+});
+```
+```cpp [C++]
+tutorial->onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
+    // force-select the first choice, no filtering
+    ctx->selectChoice(ctx->choices()[0].uuid);
+    next();
+    return {};
+});
+```
+```gdscript [GDScript]
+tutorial.on_choice(func(args):
+    # force-select the first choice, no filtering
+    args["context"].select_choice(args["context"].choices[0]["uuid"])
+    args["next"].call()
+    return Callable()
+)
 ```
 
 ## エバリュエーターの共有
@@ -305,14 +510,36 @@ tutorial.onChoice(({ context, next }) => {
 
 グローバルフィルターをインストールしたくない場合、`LsdeUtils` がローレベルのユーティリティを提供します：
 
-```ts
+
+```ts [TypeScript]
 import { LsdeUtils } from '@lsde/dialog-engine';
 
 const visible = LsdeUtils.filterVisibleChoices(
   block.choices ?? [],
   (cond) => gameState.check(cond.key, cond.operator, cond.value),
-  scene, // Optional — when provided, choice: conditions are resolved via choice history
+  scene, // optional — enables choice: condition resolution via history
 );
+```
+```csharp [C#]
+var visible = LsdeUtils.FilterVisibleChoices(
+    block.Choices ?? new(),
+    cond => GameState.Check(cond.Key, cond.Operator, cond.Value),
+    scene // optional — enables choice: condition resolution via history
+);
+```
+```cpp [C++]
+auto visible = lsde::LsdeUtils::FilterVisibleChoices(
+    block->choices,
+    [](const auto& cond) { return gameState.check(cond.key, cond.op, cond.value); },
+    scene // optional — enables choice: condition resolution via history
+);
+```
+```gdscript [GDScript]
+var visible = LsdeUtils.filter_visible_choices(
+    block.get("choices", []),
+    func(cond): return game_state.check(cond),
+    scene # optional — enables choice: condition resolution via history
+)
 ```
 
 `scene` パラメーターを指定すると、`choice:` condition の自動解決が有効になります。指定しない場合、すべての condition は登録されたエバリュエーター callback に委任されます。
@@ -340,6 +567,10 @@ engine は以下の handler を公開しています：
 | [`onSceneEnter`](/api-ref/classes/DialogueEngine#onsceneenter) | global / scene | scene の開始 |
 | [`onSceneExit`](/api-ref/classes/DialogueEngine#onsceneexit) | global / scene | scene の終了 |
 | [`onBlock`](/api-ref/interfaces/SceneHandle#onblock) | scene | UUID で特定の block をオーバーライド |
+| [`onDialogId`](/api-ref/interfaces/SceneHandle#ondialogid) | scene | UUID で特定の DIALOG block をオーバーライド（型安全） |
+| [`onChoiceId`](/api-ref/interfaces/SceneHandle#onchoiceid) | scene | UUID で特定の CHOICE block をオーバーライド（型安全） |
+| [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | UUID で特定の CONDITION block をオーバーライド（型安全） |
+| [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | UUID で特定の ACTION block をオーバーライド（型安全） |
 | [`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter) | global | choice の可視性エバリュエーター |
 
 最初の4つ（`onDialog`、`onChoice`、`onCondition`、`onAction`）は**必須**です — `start()` 呼び出し時に engine がその存在を検証し、欠けている場合は記述的なエラーをスローします。
@@ -354,7 +585,7 @@ engine は handler を2つの階層で解決します：
 - **Scene handler** — 特定の [`SceneHandle`](/api-ref/interfaces/SceneHandle) に登録され、scene が異なるレンダリングや制御フローを必要とする場合にデフォルト動作をオーバーライドまたは拡張できます。まれですが、利用可能です。
 
 block がディスパッチされると、engine は以下の順序で handler を解決します：
-1. `handle.onBlock(uuid)` — block 固有のオーバーライド
+1. `handle.onBlock(uuid)` または `handle.onDialogId(uuid)` / `handle.onActionId(uuid)` / ... — block 固有のオーバーライド
 2. `handle.onDialog()` / `handle.onChoice()` / ... — scene レベルのタイプ handler
 3. `engine.onDialog()` / `engine.onChoice()` / ... — global handler
 
@@ -382,6 +613,14 @@ block がディスパッチされると、engine は以下の順序で handler �
 
 <!--@include: ../../_shared/handler-block-override.md-->
 
+## Type-Safe Block Override
+
+`onDialogId(uuid)`、`onChoiceId(uuid)`、`onConditionId(uuid)`、`onActionId(uuid)` は `onBlock(uuid)` の型安全な代替メソッドです。動作は全く同じ — 同じ優先度、同じ `preventGlobalHandler` サポート — ただし handler がジェネリックユニオンではなく、特殊化された block 型とコンテキストを受け取ります。
+
+登録時に block タイプが分かっていて、`block` と `context` のオートコンプリートが必要な場合に使用してください。
+
+<!--@include: ../../_shared/handler-block-override-typed.md-->
+
 ## Visual Reference
 
 ### Two-Tier Handler Dispatch
@@ -389,7 +628,7 @@ block がディスパッチされると、engine は以下の順序で handler �
 ```mermaid
 flowchart TD
     A[block dispatched] --> B{resolve scene handler}
-    B --> B1{"onBlock(uuid)?"}
+    B --> B1{"onBlock(uuid) /\nonDialogId(uuid) etc.?"}
     B1 -- found --> S
     B1 -- not found --> B2{"handle.onDialog() etc.?"}
     B2 -- found --> S
@@ -404,63 +643,35 @@ flowchart TD
 
 # ゲームエンジン統合
 
-LSDE engine は純粋なグラフ走査マシンです — ノードを辿り handler を呼び出します。**handler が engine とゲーム側の橋渡し役です。** このページでは、実際のゲームエンジンへの接続方法を示します。
+LSDE はエンジン非依存です — ゲームエンジン、UIフレームワーク、オーディオシステムへの依存はありません。グラフを走査し、登録された handler を呼び出します。このページでは、主要なゲームエンジンへの組み込み方法を示します。
 
-## パターン
+handler の詳細な実装については、[Block Types](./block-types) と [Handlers](./handlers) を参照してください。
 
-すべての統合は同じ3ステップのダンスに従います：
+## 完全な統合例
 
-1. **初期化** — engine に blueprint JSON を読み込ませる
-2. **接続** — 4つの handler をゲームシステム（UI、ステート、オーディオ...）に接続する
-3. **開始** — engine が handler を呼び出し、ゲーム側で処理を実行する
+以下の例は、各エンジンに LSDE を統合する一つの方法を示しています。必須の 4 つの handler — dialog、choice、condition、action — を一つのクラスにまとめた、出発点となるコードです。
 
-engine は UI やステート、オーディオに一切触れません。何が*起きたか*を伝えるだけです。*どう*反応するかはホストアプリケーション側の責務です。舞台演出を読み上げる演出家のようなもの — ゲームがキャスト、クルー、舞台そのものです。
+ゲームごとにニーズは異なります。構造、レイアウト、UI をプロジェクトに合わせて調整してください。
 
-## 対話の表示
+<!--@include: ../../_shared/integration-complete.md-->
 
-最もシンプルな handler — テキストを表示し、プレイヤーの続行を待ちます。
+## 4つの Handler
 
-<!--@include: ../../_shared/integration-dialog.md-->
+各 handler は block データと `next()` コールバックを受け取ります。開発者がエンジン内でデータを処理し、block の処理が完了したら `next()` を呼び出します。その呼び出しのタイミングはゲーム側に委ねられています。
 
-> TIP:
-即座に `next()` を呼び出して高速対話を実現するか、保存して後から呼び出します — アニメーション後、タイマー後、プレイヤーのクリック後...ゲームに合ったタイミングで。engine は辛抱強く待ちます。
+- **Dialog** — テキスト、キャラクター、ネイティブプロパティ。UI にダイアログを表示し、プレイヤーの入力またはディレイを待ってから `next()` を呼び出します。engine が次の block に移る際に UI を非表示にするクリーンアップ関数を返します。
 
-## 選択肢の表示
+- **Choice** — `choiceFilter` が設定されている場合、`visible` タグ付きの選択肢リスト。対応する UI 要素を作成します — ボタン、リスト、ラジアルメニュー。プレイヤーが選択したら、`selectChoice(uuid)` で分岐先を engine に伝え、`next()` でフローを進めます。
 
-UI 要素を動的に生成し、プレイヤーに選ばせ、選択された結果を engine に伝えます。
+- **Condition** — block に定義された条件。ゲームロジックで評価します — フラグ、クエスト、インベントリのチェック。`context.resolve(true)` はポート 0 へ、`context.resolve(false)` はポート 1 へフローを送ります。
 
-<!--@include: ../../_shared/integration-choice.md-->
+- **Action** — block に定義されたアクション。エンジンで実行します — サウンド再生、アイテム付与、シネマティックのトリガー。`context.resolve()` は成功を確認、`context.reject(err)` は失敗を通知します。
 
-## Condition の評価
+## Tips
 
-ゲームステートの評価はゲーム側の責務です。engine が必要とするのは `true` か `false` だけです。
-
-<!--@include: ../../_shared/integration-condition.md-->
-
-## Action の実行
-
-ここからゲームが動き出します — サウンド再生、アイテム付与、フラグ設定、カットシーンのトリガー。
-
-<!--@include: ../../_shared/integration-action.md-->
-
-## 接続先の一覧
-
-| Handler | engine が伝えること | ゲーム側の処理 |
-|---|---|---|
-| `onDialog` | 「このキャラクターからこのテキストを表示して」 | UI 表示、ボイス再生、入力待ち |
-| `onChoice` | 「選択肢がここにある（visible/hidden タグ付き）」 | ボタン生成、選択処理 |
-| `onCondition` | 「これらの condition を評価して」 | ゲームステートチェック、true/false を返す |
-| `onAction` | 「これらのエフェクトを実行して」 | フラグ設定、アイテム付与、サウンド再生 |
-| `onResolveCharacter` | 「どのキャラクターがアクティブ？」 | パーティシステム、戦闘フォーメーション |
-| `setChoiceFilter` | 「この condition は表示制御のために true？」 | インベントリ、フラグ、クエストステートのチェック |
-| `onValidateNextBlock` | 「次の block — 実行を許可する？」 | キャラクターゲーティング、ステータスチェック、遷移ルール |
-| `onBeforeBlock` | 「block が実行されようとしている」 | 遅延処理、トランジション、フェードイン |
-
-## プロのヒント
-
-- **`next()` はリモコンです。** 高速対話のために即座に呼び出すか、アニメーションが終わるまで保持できます。engine は待機します — 時間の概念を持ちません。
-- **クリーンアップ関数は無料のハウスキーピングです。** 任意の handler から返すと、次の block に移る際に engine が呼び出します。UI の非表示、オーディオの停止、生成ノードの解放に最適です。
-- **`onBeforeBlock` が遅延を処理します。** engine は `delay` を強制しません — `onBeforeBlock` handler が `nativeProperties.delay` を読み取り、タイマー後に `resolve()` を呼び出します。完全な制御権がホストアプリケーション側にあります。
-- **Async トラックは並列ストーリーラインです。** カットシーンで対話とカメラ移動を同時に行う必要がある場合、エディターで block を `isAsync` としてマークします。各トラックは独立して実行されます。
+- **`next()` はリモコンです。** 高速ダイアログのために即座に呼び出すか、アニメーションが完了するまで保持します。engine は待機します — 時間の概念を持ちません。
+- **クリーンアップ関数が後片付けします。** どの handler からでも関数を返せば、engine が次の block に移る時に呼び出します。UI の非表示、オーディオの停止、ノードの解放に最適です。
+- **`onBeforeBlock` が delay を処理します。** engine は `nativeProperties.delay` を強制しません — `onBeforeBlock` がそれを読み取り、タイマー後に `resolve()` を呼び出します。完全な制御権があります。
+- **async track は並列フローです。** カットシーンでダイアログとカメラ移動を同時に行う場合、エディタで `isAsync` マークされた block は独立した track で実行されます。
 
 ================================================================================

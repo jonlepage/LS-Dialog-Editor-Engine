@@ -153,6 +153,10 @@ All 4 type handlers are **required** — the engine will throw if a scene starts
 | `handle.onCondition(handler)` | Override global CONDITION handler for this scene. |
 | `handle.onAction(handler)` | Override global ACTION handler for this scene. |
 | `handle.onBlock(uuid, handler)` | Override handler for a specific block by UUID. |
+| `handle.onDialogId(uuid, handler)` | Override a specific DIALOG block by UUID (type-safe). |
+| `handle.onChoiceId(uuid, handler)` | Override a specific CHOICE block by UUID (type-safe). |
+| `handle.onConditionId(uuid, handler)` | Override a specific CONDITION block by UUID (type-safe). |
+| `handle.onActionId(uuid, handler)` | Override a specific ACTION block by UUID (type-safe). |
 | `handle.onEnter(handler)` | Override global `onSceneEnter` for this scene. |
 | `handle.onExit(handler)` | Override global `onSceneExit` for this scene. |
 | `handle.onResolveCharacter(fn)` | Override character resolver for this scene. |

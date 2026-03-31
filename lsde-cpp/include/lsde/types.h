@@ -665,6 +665,14 @@ public:
 
     /// Override a specific block by UUID. Takes highest priority over type handlers.
     virtual void onBlock(const std::string& blockUuid, InternalBlockHandler handler) = 0;
+    /// Override a specific DIALOG block by UUID (type-safe).
+    virtual void onDialogId(const std::string& blockUuid, TypedBlockHandler<DialogBlock, IDialogContext> handler) = 0;
+    /// Override a specific CHOICE block by UUID (type-safe).
+    virtual void onChoiceId(const std::string& blockUuid, TypedBlockHandler<ChoiceBlock, IChoiceContext> handler) = 0;
+    /// Override a specific CONDITION block by UUID (type-safe).
+    virtual void onConditionId(const std::string& blockUuid, TypedBlockHandler<ConditionBlock, IConditionContext> handler) = 0;
+    /// Override a specific ACTION block by UUID (type-safe).
+    virtual void onActionId(const std::string& blockUuid, TypedBlockHandler<ActionBlock, IActionContext> handler) = 0;
     /// Override all DIALOG blocks for this scene (Tier 2).
     virtual void onDialog(TypedBlockHandler<DialogBlock, IDialogContext> handler) = 0;
     /// Override all CHOICE blocks for this scene (Tier 2).

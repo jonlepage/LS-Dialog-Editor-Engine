@@ -187,6 +187,10 @@ All 4 type handlers are **required** — the engine will throw if a scene starts
 | `handle.OnCondition(handler)` | Override global CONDITION handler for this scene. |
 | `handle.OnAction(handler)` | Override global ACTION handler for this scene. |
 | `handle.OnBlock(uuid, handler)` | Override handler for a specific block by UUID. |
+| `handle.OnDialogId(uuid, handler)` | Override a specific DIALOG block by UUID (type-safe). |
+| `handle.OnChoiceId(uuid, handler)` | Override a specific CHOICE block by UUID (type-safe). |
+| `handle.OnConditionId(uuid, handler)` | Override a specific CONDITION block by UUID (type-safe). |
+| `handle.OnActionId(uuid, handler)` | Override a specific ACTION block by UUID (type-safe). |
 | `handle.OnEnter(handler)` | Override global `OnSceneEnter` for this scene. |
 | `handle.OnExit(handler)` | Override global `OnSceneExit` for this scene. |
 | `handle.OnResolveCharacter(fn)` | Override character resolver for this scene. |

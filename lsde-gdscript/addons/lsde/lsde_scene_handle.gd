@@ -98,6 +98,22 @@ func on_exit(handler: Callable) -> void:
 func on_block(block_uuid: String, handler: Callable) -> void:
 	_scene_registry.set_block_handler(block_uuid, handler)
 
+## Override a specific DIALOG block by UUID (type-safe convenience).
+func on_dialog_id(block_uuid: String, handler: Callable) -> void:
+	_scene_registry.set_block_handler(block_uuid, handler)
+
+## Override a specific CHOICE block by UUID (type-safe convenience).
+func on_choice_id(block_uuid: String, handler: Callable) -> void:
+	_scene_registry.set_block_handler(block_uuid, handler)
+
+## Override a specific CONDITION block by UUID (type-safe convenience).
+func on_condition_id(block_uuid: String, handler: Callable) -> void:
+	_scene_registry.set_block_handler(block_uuid, handler)
+
+## Override a specific ACTION block by UUID (type-safe convenience).
+func on_action_id(block_uuid: String, handler: Callable) -> void:
+	_scene_registry.set_block_handler(block_uuid, handler)
+
 ## Override all DIALOG blocks for this scene (Tier 2).
 func on_dialog(handler: Callable) -> void:
 	_scene_registry.dialog_handler = handler

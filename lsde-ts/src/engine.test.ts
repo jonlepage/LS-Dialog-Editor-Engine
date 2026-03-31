@@ -208,6 +208,142 @@ describe( 'DialogueEngine', () => {
 			expect( calls[0] ).toBe( 'block-override' );
 		} );
 
+		it( 'onDialogId provides typed block and context', () => {
+			const calls: string[] = [];
+			const engine = new DialogueEngine();
+			engine.init( { data: makeExport() } );
+			registerAllHandlers( engine );
+
+			engine.onDialog( ( { next } ) => {
+				calls.push( 'global' );
+				next();
+			} );
+
+			const handle = engine.scene( 'scene-1' );
+			handle.onDialogId( 'b1', ( { block, context, next } ) => {
+				// block is typed as DialogBlock — dialogueText is directly accessible
+				calls.push( `dialog:${ block.dialogueText?.en ?? '' }` );
+				// context is typed as DialogContext — resolveCharacterPort exists
+				expect( typeof context.resolveCharacterPort ).toBe( 'function' );
+				context.preventGlobalHandler();
+				next();
+			} );
+			handle.start();
+
+			expect( calls[0] ).toBe( 'dialog:Hello' );
+			// global was prevented for b1
+			expect( calls[1] ).toBe( 'global' ); // b2 still fires global
+		} );
+
+		it( 'onActionId provides typed block and context', () => {
+			const calls: string[] = [];
+			const actScene: BlueprintScene = {
+				uuid: 'scene-act-id', label: 'ActId', date: '2025-01-01',
+				blocks: [
+					{ uuid: 'act1', type: 'ACTION', properties: [], isStartBlock: true,
+						actions: [{ uuid: 'a1', actionId: 'give_item', params: ['sword'] }] },
+					{ uuid: 'after', type: 'DIALOG', properties: [] },
+				],
+				connections: [
+					{ id: 'c1', fromId: 'act1', toId: 'after', fromPort: 'then', toPort: 'in' },
+				],
+			};
+
+			const engine = new DialogueEngine();
+			engine.init( { data: makeExport( [actScene] ) } );
+			registerAllHandlers( engine );
+
+			const handle = engine.scene( 'scene-act-id' );
+			handle.onActionId( 'act1', ( { block, context, next } ) => {
+				// block is typed as ActionBlock — actions is directly accessible
+				calls.push( `action:${ block.actions?.[0]?.actionId ?? '' }` );
+				// context is typed as ActionContext — resolve/reject exist
+				expect( typeof context.resolve ).toBe( 'function' );
+				expect( typeof context.reject ).toBe( 'function' );
+				context.resolve();
+				next();
+			} );
+			handle.start();
+
+			expect( calls[0] ).toBe( 'action:give_item' );
+		} );
+
+		it( 'onChoiceId provides typed block and context', () => {
+			const choiceSceneSimple: BlueprintScene = {
+				uuid: 'scene-choice-id', label: 'ChoiceId', date: '2025-01-01',
+				blocks: [
+					{ uuid: 'ch1', type: 'CHOICE', properties: [], isStartBlock: true,
+						choices: [
+							{ uuid: 'opt-a', structureKey: 'a', dialogueText: { en: 'A' } },
+							{ uuid: 'opt-b', structureKey: 'b', dialogueText: { en: 'B' } },
+						] },
+					{ uuid: 'end-a', type: 'DIALOG', properties: [] },
+					{ uuid: 'end-b', type: 'DIALOG', properties: [] },
+				],
+				connections: [
+					{ id: 'c1', fromId: 'ch1', toId: 'end-a', fromPort: 'opt-a', toPort: 'in' },
+					{ id: 'c2', fromId: 'ch1', toId: 'end-b', fromPort: 'opt-b', toPort: 'in' },
+				],
+			};
+
+			const calls: string[] = [];
+			const engine = new DialogueEngine();
+			engine.init( { data: makeExport( [choiceSceneSimple] ) } );
+			registerAllHandlers( engine );
+
+			const handle = engine.scene( 'scene-choice-id' );
+			handle.onChoiceId( 'ch1', ( { block, context, next } ) => {
+				// block is typed as ChoiceBlock — choices is directly accessible
+				calls.push( `choice:${ block.choices?.length ?? 0 }` );
+				// context is typed as ChoiceContext — selectChoice/choices exist
+				expect( typeof context.selectChoice ).toBe( 'function' );
+				expect( Array.isArray( context.choices ) ).toBe( true );
+				context.selectChoice( context.choices[0]!.uuid );
+				next();
+			} );
+			handle.start();
+
+			expect( calls[0] ).toBe( 'choice:2' );
+		} );
+
+		it( 'onConditionId provides typed block and context', () => {
+			const condScene: BlueprintScene = {
+				uuid: 'scene-cond-id', label: 'CondId', date: '2025-01-01',
+				blocks: [
+					{ uuid: 'cond1', type: 'CONDITION', properties: [], isStartBlock: true,
+						conditions: [{ uuid: 'c1', key: 'quest', operator: '=', value: 'active' }] },
+					{ uuid: 'yes', type: 'DIALOG', properties: [] },
+					{ uuid: 'no', type: 'DIALOG', properties: [] },
+				],
+				connections: [
+					{ id: 'ct', fromId: 'cond1', toId: 'yes', fromPort: 'true', toPort: 'in', fromPortIndex: 0 },
+					{ id: 'cf', fromId: 'cond1', toId: 'no', fromPort: 'false', toPort: 'in', fromPortIndex: 1 },
+				],
+			};
+
+			const visited: string[] = [];
+			const engine = new DialogueEngine();
+			engine.init( { data: makeExport( [condScene] ) } );
+			registerAllHandlers( engine );
+
+			const handle = engine.scene( 'scene-cond-id' );
+			handle.onConditionId( 'cond1', ( { block, context, next } ) => {
+				// block is typed as ConditionBlock — conditions is directly accessible
+				expect( block.conditions?.length ).toBe( 1 );
+				// context is typed as ConditionContext — resolve(boolean) exists
+				expect( typeof context.resolve ).toBe( 'function' );
+				context.resolve( true );
+				next();
+			} );
+			handle.onDialog( ( { block, next } ) => {
+				visited.push( block.uuid );
+				next();
+			} );
+			handle.start();
+
+			expect( visited ).toEqual( ['yes'] );
+		} );
+
 	} );
 
 	describe( 'condition handler', () => {

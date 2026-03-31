@@ -7,7 +7,7 @@ import blueprintJson from "../../blueprints/blueprint.json";
 
 const engine = new DialogueEngine();
 
-engine.init({ data: blueprintJson });
+engine.init({ data: blueprintJson as BlueprintExport })
 
 //#generic game handlers for dialog, choice, condition, action blocks
 engine.onDialog(({ scene, block, context, next }) => {
