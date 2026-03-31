@@ -6,7 +6,7 @@ Source: lsde-ts/docs/guide/*.md
 
 # What is LSDEDE?
 
-**LSDE** (LS Dialog Editor) is a free tool for game and software developers that combines visual dialogue graph editing, AI-powered translation, voice generation, i18n code integration, and project diagnostics. It exports dialogue graphs as JSON blueprints containing scenes, blocks, connections, dictionaries, and action signatures. More info: [lepasoft.com/en/software/ls-dialog-editor](https://lepasoft.com/en/software/ls-dialog-editor).
+**LSDE** (LS Dialog Editor) is a free tool for game and software developers that combines visual dialogue graph editing, AI-powered translation, voice generation, i18n code integration, and project diagnostics. It exports dialogue graphs as blueprints (JSON, XML, YAML, or CSV) containing scenes, blocks, connections, dictionaries, and action signatures. More info: [lepasoft.com/en/software/ls-dialog-editor](https://lepasoft.com/en/software/ls-dialog-editor).
 
 **LSDEDE** (LSDE Dialog Engine) is the multi-runtime engine that loads and executes these blueprints. It is available in multiple languages for native integration into any game engine or framework.
 
@@ -25,13 +25,13 @@ All runtimes share the same blueprint format and pass a common cross-language te
 
 Every runtime follows the same **callback-driven graph dispatcher** pattern:
 
-1. **Blueprint** — A JSON file exported from LSDE, containing scenes, blocks and connections.
+1. **Blueprint** — A file exported from LSDE (JSON, XML, or YAML), containing scenes, blocks and connections.
 2. **Engine** — Validates the blueprint, builds the internal graph and dispatches blocks to registered handlers.
 3. **Handlers** — Functions that react to each block type (dialog, choice, condition, action).
 4. **Host Application** — Conditions, actions, and character resolution are implemented by handler callbacks.
 
 ```
-  Blueprint (JSON)
+      Blueprint
         │
         ▼
      Engine ◄── next() ──┐
@@ -61,6 +61,9 @@ Every runtime follows the same **callback-driven graph dispatcher** pattern:
 ## Minimal Usage
 
 The engine is a graph traversal machine — it dispatches blocks to registered handlers, which give them meaning. Without handlers, the engine has no output.
+
+> TIP:
+The engine consumes a `BlueprintExport` object, not a file. You can load your blueprint from JSON, XML, or YAML using any parser suited to your platform. See [Parsing & Import](./parsing) for recommendations.
 
 <!--@include: ../_shared/getting-started-usage.md-->
 

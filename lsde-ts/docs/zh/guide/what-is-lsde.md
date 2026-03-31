@@ -1,6 +1,6 @@
 # 什么是 LSDEDE？
 
-**LSDE**（LS Dialog Editor）是一款面向游戏和软件开发者的免费工具，集成了可视化对话图编辑、AI翻译、语音生成、i18n代码集成和项目诊断等功能。更多信息请参阅 [lepasoft.com/zh/software/ls-dialog-editor](https://lepasoft.com/zh/software/ls-dialog-editor)。LSDE 将对话图导出为 JSON blueprint，其中包含 scene、block、connection、dictionary 和 action signature。
+**LSDE**（LS Dialog Editor）是一款面向游戏和软件开发者的免费工具，集成了可视化对话图编辑、AI翻译、语音生成、i18n代码集成和项目诊断等功能。更多信息请参阅 [lepasoft.com/zh/software/ls-dialog-editor](https://lepasoft.com/zh/software/ls-dialog-editor)。LSDE 将对话图导出为 blueprint（JSON、XML、YAML 或 CSV），其中包含 scene、block、connection、dictionary 和 action signature。
 
 **LSDEDE**（LSDE Dialog Engine）是加载并执行这些 blueprint 的多运行时 engine。它提供多种语言版本，可原生集成到各种游戏引擎或框架中。
 
@@ -19,13 +19,13 @@
 
 每个运行时都遵循相同的**回调驱动图调度器**模式：
 
-1. **Blueprint** — 从 LSDE 导出的 JSON 文件，包含 scene、block 和 connection。
+1. **Blueprint** — 从 LSDE 导出的文件（JSON、XML 或 YAML），包含 scene、block 和 connection。
 2. **Engine** — 验证 blueprint，构建内部图，并将 block 分发给已注册的 handler。
 3. **Handler** — 由开发者编写的函数，用于响应每种 block 类型（dialog、choice、condition、action）。
 4. **宿主应用程序** — condition、action 和角色解析由 handler callback 处理。
 
 ```
-  Blueprint (JSON)
+      Blueprint
         │
         ▼
      Engine ◄── next() ──┐

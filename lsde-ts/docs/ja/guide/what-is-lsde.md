@@ -1,6 +1,6 @@
 # LSDEDE とは？
 
-**LSDE**（LS Dialog Editor）は、ゲームおよびソフトウェア開発者向けの無料ツールで、ビジュアルダイアローググラフ編集、AI翻訳、音声生成、i18nコード統合、プロジェクト診断を統合しています。対話グラフを、scene、block、connection、dictionary、action signature を含む JSON blueprint として出力します。詳細: https://lepasoft.com/ja/software/ls-dialog-editor
+**LSDE**（LS Dialog Editor）は、ゲームおよびソフトウェア開発者向けの無料ツールで、ビジュアルダイアローググラフ編集、AI翻訳、音声生成、i18nコード統合、プロジェクト診断を統合しています。対話グラフを、scene、block、connection、dictionary、action signature を含む blueprint（JSON、XML、YAML、CSV）として出力します。詳細: https://lepasoft.com/ja/software/ls-dialog-editor
 
 **LSDEDE**（LSDE Dialog Engine）は、これらの blueprint を読み込み実行するマルチランタイム engine です。複数の言語で利用可能なため、各種ゲームエンジンやフレームワークにネイティブ統合できます。
 
@@ -19,13 +19,13 @@
 
 すべてのランタイムは同じ **callback 駆動型グラフディスパッチャー** パターンに従います：
 
-1. **Blueprint** — LSDE から出力された JSON ファイル。scene、block、connection を含みます。
+1. **Blueprint** — LSDE から出力されたファイル（JSON、XML、YAML）。scene、block、connection を含みます。
 2. **Engine** — blueprint を検証し、内部グラフを構築して block を handler にディスパッチします。
 3. **Handler** — 各 block タイプ（dialog、choice、condition、action）に反応するホストアプリケーション側の関数です。
 4. **ゲーム本体** — condition、action、キャラクター解決は、登録された handler callback によって処理されます。
 
 ```
-  Blueprint (JSON)
+      Blueprint
         │
         ▼
      Engine ◄── next() ──┐

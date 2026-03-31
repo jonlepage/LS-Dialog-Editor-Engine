@@ -8,6 +8,10 @@
 
 The engine is a graph traversal machine — it dispatches blocks to registered handlers, which give them meaning. Without handlers, the engine has no output.
 
+::: tip Format-agnostic
+The engine consumes a `BlueprintExport` object, not a file. You can load your blueprint from JSON, XML, or YAML using any parser suited to your platform. See [Parsing & Import](./parsing) for recommendations.
+:::
+
 <!--@include: ../_shared/getting-started-usage.md-->
 
 ## Blueprint Validation

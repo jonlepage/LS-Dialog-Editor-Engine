@@ -8,6 +8,10 @@
 
 engine 是一个图遍历机器 — 它将 block 分发给已注册的 handler，由 handler 赋予其意义。没有 handler 的话，engine 不会产生任何输出。
 
+::: tip 格式无关
+engine 接收 `BlueprintExport` 对象，而非文件。您可以使用平台适配的解析器从 JSON、XML 或 YAML 加载蓝图。请参阅[解析与导入](./parsing)。
+:::
+
 <!--@include: ../../_shared/getting-started-usage.md-->
 
 ## Blueprint 验证

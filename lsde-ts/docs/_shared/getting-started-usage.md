@@ -45,6 +45,8 @@ function myGameScript(sceneId: string) {
 ```csharp [C#]
 using LsdeDialogEngine;
 
+// Parse your blueprint file first — see "Parsing & Import" guide.
+// Unity: Newtonsoft.Json | .NET 5+: System.Text.Json | Godot: System.Text.Json
 var engine = new DialogueEngine();
 engine.Init(new InitOptions { Data = blueprint });
 

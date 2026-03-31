@@ -8,6 +8,10 @@
 
 engine はグラフ走査マシンです — block を handler にディスパッチし、ホストアプリケーション側でそれに意味を与えます。handler がなければ、engine は何も出力しません。
 
+::: tip フォーマット非依存
+engine は `BlueprintExport` オブジェクトを受け取ります（ファイルではありません）。JSON、XML、YAML のいずれかを、プラットフォームに適したパーサーで読み込んでください。[解析とインポート](./parsing)を参照してください。
+:::
+
 <!--@include: ../../_shared/getting-started-usage.md-->
 
 ## Blueprint の検証
