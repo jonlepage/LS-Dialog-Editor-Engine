@@ -11,7 +11,7 @@
 namespace LSDE_SCENES {
 	/**
 	 * @brief Scene: New Scene
-	 * 2 ACTION, 2 CHOICE, 1 CONDITION, 8 DIALOG
+	 * 3 ACTION, 3 CHOICE, 2 CONDITION, 15 DIALOG
 	 * Entry: `DIALOG-001`
 	 * - Emotions: `hangry`, `sad`
 	 * - Characters: `Boo`, `Gruht Tyron`, `Svelt Moon`, `Zoozo Zee`, `lia`
@@ -48,12 +48,23 @@ namespace LSDE_BLOCKS {
 	constexpr const char* newSceneAction002 = "7662f44f-1836-4176-85b2-39f3c1bd4620";
 
 	/**
+	 * @brief 🟧[ACTION] trigger_reveal_action-AI
+	 * - Scene: `New Scene`
+	 * - In: `stalker_encounter-AI`, `near_miss_escape-AI`
+	 * - Out: `cliffhanger_reveal-AI`
+	 * `trigger_forest_collapse`(high_tension)
+	 * ---
+	 * <image url="./_images/action.webp" />
+	 */
+	constexpr const char* newSceneTriggerRevealActionAi = "f0792ff1-da03-4834-b15f-8652df3b041a";
+
+	/**
 	 * @brief ⬜[CHOICE] CHOICE-001
 	 * - Characters: `lia`
 	 * - Scene: `New Scene`
 	 * - In: `DIALOG-001`
 	 * - Out: `DIALOG-002`, `DIALOG-004`
-	 * - Choices: `C1`, `C2`
+	 * - Choices: `17e98de3-1690-4ca4-8ea5-8070c15b1fe1`, `a0eee458-6ccc-4a23-bd36-0b3d1f73771e`
 	 * ---
 	 * <image url="./_images/choice.webp" />
 	 */
@@ -71,6 +82,17 @@ namespace LSDE_BLOCKS {
 	constexpr const char* newSceneChoice002 = "2b184947-49f9-4e57-8600-70b46e2cd0ba";
 
 	/**
+	 * @brief ⬜[CHOICE] stealth_choice-AI
+	 * - Scene: `New Scene`
+	 * - In: `anxiety_observation-AI`
+	 * - Out: `silence_path-AI`, `flight_path-AI`
+	 * - Choices: `Rester parfaitement immobile dans l'ombre`, `Courir vers la lueur lointaine`
+	 * ---
+	 * <image url="./_images/choice.webp" />
+	 */
+	constexpr const char* newSceneStealthChoiceAi = "e55d4d79-7642-452d-aea3-cb44ca37a826";
+
+	/**
 	 * @brief 🟪[CONDITION] CONDITION-001
 	 * - Scene: `New Scene`
 	 * - In: `CHOICE-002`
@@ -81,6 +103,40 @@ namespace LSDE_BLOCKS {
 	 * <image url="./_images/cond.webp" />
 	 */
 	constexpr const char* newSceneCondition001 = "4074b6c2-bfc8-44f1-9a29-cda529bf522a";
+
+	/**
+	 * @brief 🟪[CONDITION] noise_check-AI
+	 * - Scene: `New Scene`
+	 * - In: `silence_path-AI`, `flight_path-AI`
+	 * - Out: `stalker_encounter-AI`, `near_miss_escape-AI`
+	 * `noise_level` > `15`
+	 * ---
+	 * <image url="./_images/cond.webp" />
+	 */
+	constexpr const char* newSceneNoiseCheckAi = "f7923356-5267-430a-bd6c-b9392eb15a24";
+
+	/**
+	 * @brief 🟦[DIALOG] anxiety_observation-AI
+	 * "*Boo tremble de tout son long, ses grands yeux dilatés scrutant l'obscurité mouvante qui semble se détacher du brouillar..."
+	 * - Characters: `Boo`
+	 * - Scene: `New Scene`
+	 * - In: `survival_setup-AI`
+	 * - Out: `stealth_choice-AI`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	constexpr const char* newSceneAnxietyObservationAi = "b91fb645-cc0f-49b0-a456-25a596d0bd0b";
+
+	/**
+	 * @brief 🟦[DIALOG] cliffhanger_reveal-AI
+	 * "Regarde devant nous... ce n'est pas la sortie du Thicket. *Lia s'arrête net, la lueur de sa torche vacillante révélant u..."
+	 * - Characters: `lia`
+	 * - Scene: `New Scene`
+	 * - In: `trigger_reveal_action-AI`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	constexpr const char* newSceneCliffhangerRevealAi = "36edbe6e-c48e-44b6-9037-e7bd489a3155";
 
 	/**
 	 * @brief 🟦[DIALOG] DIALOG-001 (entry)
@@ -173,6 +229,65 @@ namespace LSDE_BLOCKS {
 	 */
 	constexpr const char* newSceneDialog008 = "7ab18c86-c98e-41f1-99ca-51c7e66cb144";
 
+	/**
+	 * @brief 🟦[DIALOG] flight_path-AI
+	 * "C'est trop tard pour se cacher, l'air s'est figé et il sait exactement que nous sommes ici ! *Lia attrape violemment Boo..."
+	 * - Characters: `lia`
+	 * - Scene: `New Scene`
+	 * - In: `stealth_choice-AI`
+	 * - Out: `noise_check-AI`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	constexpr const char* newSceneFlightPathAi = "39327ee6-8f67-448a-8cb1-e888cc597a8b";
+
+	/**
+	 * @brief 🟦[DIALOG] near_miss_escape-AI
+	 * "Le cliquetis s'éloigne lentement vers le nord, mais ne te détrompe pas, il tourne en rond autour de nous comme un prédat..."
+	 * - Characters: `lia`
+	 * - Scene: `New Scene`
+	 * - In: `noise_check-AI`
+	 * - Out: `trigger_reveal_action-AI`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	constexpr const char* newSceneNearMissEscapeAi = "14d056d8-5bc2-4df7-babf-f7b67d8daa3c";
+
+	/**
+	 * @brief 🟦[DIALOG] silence_path-AI
+	 * "On ne bouge plus, Boo. *Lia plaque sa main glacée sur le museau du petit chat volant, sentant son cœur battre comme celu..."
+	 * - Characters: `lia`
+	 * - Scene: `New Scene`
+	 * - In: `stealth_choice-AI`
+	 * - Out: `noise_check-AI`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	constexpr const char* newSceneSilencePathAi = "ce74b7c3-49b7-4515-891b-6a80ab79f323";
+
+	/**
+	 * @brief 🟦[DIALOG] stalker_encounter-AI
+	 * "*Une silhouette immense et distordue émerge soudainement du brouillard, ses membres trop longs claquant contre le sol co..."
+	 * - Characters: `Boo`
+	 * - Scene: `New Scene`
+	 * - In: `noise_check-AI`
+	 * - Out: `trigger_reveal_action-AI`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	constexpr const char* newSceneStalkerEncounterAi = "eaa4fb18-28f1-4f96-85c7-f5366b592a6c";
+
+	/**
+	 * @brief 🟦[DIALOG] survival_setup-AI
+	 * "Chut. Ne bouge plus d'un cil, Boo. Est-ce que tu entends ce cliquetis sec et rythmique qui résonne contre l'écorce putri..."
+	 * - Characters: `lia`
+	 * - Scene: `New Scene`
+	 * - Out: `anxiety_observation-AI`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	constexpr const char* newSceneSurvivalSetupAi = "a32834d4-45df-4540-8c0e-5cb093ea5862";
+
 }
 
 /**
@@ -182,22 +297,22 @@ namespace LSDE_BLOCKS {
  */
 namespace LSDE_CHOICES {
 	/**
-	 * @brief ⬜[CHOICE_ITEM] C1
+	 * @brief ⬜[CHOICE_ITEM] 17e98de3-1690-4ca4-8ea5-8070c15b1fe1
 	 * "C1"
 	 * - Scene: `New Scene`
 	 * - Parent: `CHOICE-001`
 	 */
 	/** @see LSDE_BLOCKS::newSceneChoice001 */
-	constexpr const char* newSceneC1 = "17e98de3-1690-4ca4-8ea5-8070c15b1fe1";
+	constexpr const char* newScene17e98de316904ca48ea58070c15b1fe1 = "17e98de3-1690-4ca4-8ea5-8070c15b1fe1";
 
 	/**
-	 * @brief ⬜[CHOICE_ITEM] C2
+	 * @brief ⬜[CHOICE_ITEM] a0eee458-6ccc-4a23-bd36-0b3d1f73771e
 	 * "C2"
 	 * - Scene: `New Scene`
 	 * - Parent: `CHOICE-001`
 	 */
 	/** @see LSDE_BLOCKS::newSceneChoice001 */
-	constexpr const char* newSceneC2 = "a0eee458-6ccc-4a23-bd36-0b3d1f73771e";
+	constexpr const char* newSceneA0eee4586ccc4a23Bd360b3d1f73771e = "a0eee458-6ccc-4a23-bd36-0b3d1f73771e";
 
 	/**
 	 * @brief ⬜[CHOICE_ITEM] C1.1
@@ -216,5 +331,23 @@ namespace LSDE_CHOICES {
 	 */
 	/** @see LSDE_BLOCKS::newSceneChoice002 */
 	constexpr const char* newSceneC21 = "e306346e-6bcc-4564-8b19-e2ed28fabafe";
+
+	/**
+	 * @brief ⬜[CHOICE_ITEM] Rester parfaitement immobile dans l'ombre
+	 * "Rester parfaitement immobile dans l'ombre"
+	 * - Scene: `New Scene`
+	 * - Parent: `stealth_choice-AI`
+	 */
+	/** @see LSDE_BLOCKS::newSceneStealthChoiceAi */
+	constexpr const char* newSceneResterParfaitementImmobileDansLOmbre = "3ff6be38-0db4-4d24-98a0-bbb21be19d4a";
+
+	/**
+	 * @brief ⬜[CHOICE_ITEM] Courir vers la lueur lointaine
+	 * "Courir vers la lueur lointaine"
+	 * - Scene: `New Scene`
+	 * - Parent: `stealth_choice-AI`
+	 */
+	/** @see LSDE_BLOCKS::newSceneStealthChoiceAi */
+	constexpr const char* newSceneCourirVersLaLueurLointaine = "7b0f9b9a-6e4d-444f-bdf9-a3be47d89140";
 
 }

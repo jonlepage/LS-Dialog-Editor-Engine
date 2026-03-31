@@ -1,0 +1,676 @@
+# Blueprint export - LSDE
+version: "1.0.0"
+exportDate: "2026-03-31T15:29:47.163Z"
+projectName: blueprint-with-actors-emotions
+primaryLanguage: fr
+locales:
+  - en
+  - fr
+dictionaries:
+  -
+    uuid: 15492c5a-f632-4545-acc4-c875d883188b
+    id: VariableGlobal
+    rows:
+      -
+        key: key1
+      -
+        key: key2
+signatures:
+  -
+    uuid: 7908f59d-b97d-40ea-80f1-30c6f762e30d
+    id: signatureID1
+    params:
+      -
+        label: param1String
+        type: string
+      -
+        label: param2Number
+        type: number
+scenes:
+  -
+    uuid: 3e0110a5-49bb-46fe-884b-05ce106af4cd
+    label: "New Scene"
+    date: 31/03/2026
+    entryBlockId: 6462dab3-0eb4-4a2c-a505-407556441156
+    blocks:
+      -
+        uuid: d72bcf6a-161b-4759-90dd-2ae10a58fdd3
+        type: ACTION
+        properties: []
+        label: ACTION-001
+        actions:
+          -
+            uuid: aee8f7ba-cfe8-4afb-92e7-54b2ddae23f5
+            signatureUuid: 7908f59d-b97d-40ea-80f1-30c6f762e30d
+            actionId: signatureID1
+            params:
+              - a
+              - 2
+        parentLabels:
+          - __blueprints__
+      -
+        uuid: 7662f44f-1836-4176-85b2-39f3c1bd4620
+        type: ACTION
+        properties: []
+        label: ACTION-002
+        actions:
+          -
+            uuid: 2ec47776-b0fa-4225-9cbe-133cd60e97b7
+            signatureUuid: 7908f59d-b97d-40ea-80f1-30c6f762e30d
+            actionId: signatureID1
+            params:
+              - item2
+              - 1
+        parentLabels:
+          - __blueprints__
+      -
+        uuid: f0792ff1-da03-4834-b15f-8652df3b041a
+        type: ACTION
+        properties: []
+        label: trigger_reveal_action-AI
+        note: trigger_forest_collapse(high_tension)
+        actions:
+          -
+            uuid: 09ef962a-c1ce-483f-b2b2-cfad12969e81
+            signatureUuid: trigger_forest_collapse
+            actionId: trigger_forest_collapse
+            params:
+              - high_tension
+        parentLabels:
+          - __blueprints__
+      -
+        uuid: 014f503a-6688-429d-a5fe-801cf33f2410
+        type: CHOICE
+        properties: []
+        label: CHOICE-001
+        choices:
+          -
+            uuid: 17e98de3-1690-4ca4-8ea5-8070c15b1fe1
+            structureKey: "__blueprints__.New Scene.CHOICE-001"
+            visibilityConditions:
+              -
+                uuid: 10a81c04-9bea-4b51-a67e-9965fcc4ce01
+                key: variable_0
+                chain: "|"
+                operator: =
+                value: ""
+              -
+                uuid: bf7d49f8-c7ae-49ca-8256-2cf1ae7ae441
+                key: variable_0
+                chain: "|"
+                operator: =
+                value: ""
+              -
+                uuid: 4607ebba-8f9c-4a8a-b682-0a9e5cfb8a3b
+                key: variable_0
+                chain: "&"
+                operator: =
+                value: ""
+            dialogueText:
+              en: C1
+              fr: ""
+          -
+            uuid: a0eee458-6ccc-4a23-bd36-0b3d1f73771e
+            structureKey: "__blueprints__.New Scene.DIALOG-001"
+            visibilityConditions: []
+            dialogueText:
+              en: C2
+              fr: ""
+        nativeProperties:
+          isAsync: false
+          timeout: 1000
+          debug: false
+        parentLabels:
+          - __blueprints__
+        metadata:
+          characters:
+            -
+              uuid: 3504bd0b-b950-4060-880d-a244a0f15992
+              id: a1
+              name: lia
+      -
+        uuid: 2b184947-49f9-4e57-8600-70b46e2cd0ba
+        type: CHOICE
+        properties: []
+        label: CHOICE-002
+        choices:
+          -
+            uuid: d16d21ea-ecf8-4172-aaa3-668df80e9853
+            structureKey: ""
+            content: C1.1
+            visibilityConditions:
+              -
+                uuid: ab48f9fc-7a0d-4d9f-80b6-3467c3b04483
+                key: "choice:014f503a-6688-429d-a5fe-801cf33f2410"
+                chain: "|"
+                operator: =
+                value: 17e98de3-1690-4ca4-8ea5-8070c15b1fe1
+          -
+            uuid: e306346e-6bcc-4564-8b19-e2ed28fabafe
+            structureKey: ""
+            content: C2.1
+            visibilityConditions:
+              -
+                uuid: 36d610af-d5e4-48f8-95a6-0771cb42306b
+                key: "choice:014f503a-6688-429d-a5fe-801cf33f2410"
+                chain: "|"
+                operator: =
+                value: a0eee458-6ccc-4a23-bd36-0b3d1f73771e
+        parentLabels:
+          - __blueprints__
+      -
+        uuid: e55d4d79-7642-452d-aea3-cb44ca37a826
+        type: CHOICE
+        properties: []
+        label: stealth_choice-AI
+        choices:
+          -
+            uuid: 3ff6be38-0db4-4d24-98a0-bbb21be19d4a
+            structureKey: ""
+            content: "Rester parfaitement immobile dans l'ombre"
+            visibilityConditions: []
+          -
+            uuid: 7b0f9b9a-6e4d-444f-bdf9-a3be47d89140
+            structureKey: ""
+            content: "Courir vers la lueur lointaine"
+            visibilityConditions: []
+        note: "Rester parfaitement immobile dans l'ombre | Courir vers la lueur lointaine"
+        parentLabels:
+          - __blueprints__
+      -
+        uuid: 4074b6c2-bfc8-44f1-9a29-cda529bf522a
+        type: CONDITION
+        properties: []
+        label: CONDITION-001
+        conditions:
+          -
+            uuid: accb5ba5-b824-4898-b0ae-20658bd345b4
+            key: "choice:014f503a-6688-429d-a5fe-801cf33f2410"
+            operator: =
+            value: a0eee458-6ccc-4a23-bd36-0b3d1f73771e
+          -
+            uuid: 512ddb6a-cd5b-4caf-a2d0-993042a30042
+            key: "choice:2b184947-49f9-4e57-8600-70b46e2cd0ba"
+            operator: =
+            value: e306346e-6bcc-4564-8b19-e2ed28fabafe
+        parentLabels:
+          - __blueprints__
+      -
+        uuid: f7923356-5267-430a-bd6c-b9392eb15a24
+        type: CONDITION
+        properties: []
+        label: noise_check-AI
+        note: "noise_level > 15"
+        conditions:
+          -
+            uuid: 83d6ff62-3795-4526-963a-69ceadbfdd05
+            key: noise_level
+            operator: ">"
+            value: "15"
+        parentLabels:
+          - __blueprints__
+      -
+        uuid: b91fb645-cc0f-49b0-a456-25a596d0bd0b
+        type: DIALOG
+        properties: []
+        label: anxiety_observation-AI
+        structureKey: "__blueprints__.New Scene.anxiety_observation-AI"
+        content: "*Boo tremble de tout son long, ses grands yeux dilatés scrutant l'obscurité mouvante qui semble se détacher du brouillard.* Lia, l'air devient si épais qu'il me pique les poumons, ça sent l'ozone et la chair rance, comme si la brume elle-même était en train de nous digérer vivants. Le bruit... il ne vient plus des arbres, il vient d'en dessous, juste sous les racines noueuses où nous sommes tapis. Je sens ses vibrations dans mes pattes, une faim primitive qui cherche à briser ce silence oppressant pour nous dévorer dans le noir."
+        dialogueText:
+          en: ""
+          fr: "*Boo tremble de tout son long, ses grands yeux dilatés scrutant l'obscurité mouvante qui semble se détacher du brouillard.* Lia, l'air devient si épais qu'il me pique les poumons, ça sent l'ozone et la chair rance, comme si la brume elle-même était en train de nous digérer vivants. Le bruit... il ne vient plus des arbres, il vient d'en dessous, juste sous les racines noueuses où nous sommes tapis. Je sens ses vibrations dans mes pattes, une faim primitive qui cherche à briser ce silence oppressant pour nous dévorer dans le noir."
+        parentLabels:
+          - __blueprints__
+        metadata:
+          characters:
+            -
+              uuid: b8d2fe53-cc5a-4d1b-aa72-02b55b941ff7
+              id: a2
+              name: Boo
+      -
+        uuid: 36edbe6e-c48e-44b6-9037-e7bd489a3155
+        type: DIALOG
+        properties: []
+        label: cliffhanger_reveal-AI
+        structureKey: "__blueprints__.New Scene.cliffhanger_reveal-AI"
+        content: "Regarde devant nous... ce n'est pas la sortie du Thicket. *Lia s'arrête net, la lueur de sa torche vacillante révélant un mur de racines vivantes qui se referment en un dôme infranchissable.* Ce n'était pas nous qu'il chassait, il nous poussait délibérément vers cet endroit, vers cette gueule végétale béante qui attendait son offrande depuis des siècles. Qu'avons-nous fait ? Le Stalker s'arrête derrière nous et s'incline presque avec respect, alors que la terre commence à trembler sous un rugissement qui n'a absolument rien d'animal."
+        dialogueText:
+          en: ""
+          fr: "Regarde devant nous... ce n'est pas la sortie du Thicket. *Lia s'arrête net, la lueur de sa torche vacillante révélant un mur de racines vivantes qui se referment en un dôme infranchissable.* Ce n'était pas nous qu'il chassait, il nous poussait délibérément vers cet endroit, vers cette gueule végétale béante qui attendait son offrande depuis des siècles. Qu'avons-nous fait ? Le Stalker s'arrête derrière nous et s'incline presque avec respect, alors que la terre commence à trembler sous un rugissement qui n'a absolument rien d'animal."
+        parentLabels:
+          - __blueprints__
+        metadata:
+          characters:
+            -
+              uuid: 3504bd0b-b950-4060-880d-a244a0f15992
+              id: a1
+              name: lia
+      -
+        uuid: 6462dab3-0eb4-4a2c-a505-407556441156
+        type: DIALOG
+        properties: []
+        label: DIALOG-001
+        isStartBlock: true
+        structureKey: "__blueprints__.New Scene.DIALOG-001"
+        content: ""
+        nativeProperties:
+          portPerCharacter: true
+        dialogueText:
+          en: C2
+          fr: ""
+        parentLabels:
+          - __blueprints__
+        metadata:
+          characters:
+            -
+              uuid: 3504bd0b-b950-4060-880d-a244a0f15992
+              id: a1
+              name: lia
+              emotion: sad
+              emotionIntensity: 2
+            -
+              uuid: b8d2fe53-cc5a-4d1b-aa72-02b55b941ff7
+              id: a2
+              name: Boo
+              emotion: sad
+              emotionIntensity: 2
+            -
+              uuid: e96c0d26-1bd8-4cbf-8009-2d1b3de4cdf3
+              id: a3
+              name: "Svelt Moon"
+              emotion: sad
+              emotionIntensity: 2
+            -
+              uuid: 79b2bbb8-953e-476e-91bf-ec93bc2b1cf2
+              id: a5
+              name: "Gruht Tyron"
+              emotion: sad
+              emotionIntensity: 2
+      -
+        uuid: c66437af-54b7-4a75-9efa-713e983c145d
+        type: DIALOG
+        properties: []
+        label: DIALOG-002
+        structureKey: "__blueprints__.New Scene.DIALOG-002"
+        content: ""
+        dialogueText:
+          en: D2
+          fr: ""
+        parentLabels:
+          - __blueprints__
+        metadata:
+          {}
+      -
+        uuid: dfc30c4c-a1aa-4e76-81b6-640bf447351b
+        type: DIALOG
+        properties: []
+        label: DIALOG-003
+        structureKey: "__blueprints__.New Scene.DIALOG-003"
+        content: ""
+        dialogueText:
+          en: D5
+          fr: ""
+        parentLabels:
+          - __blueprints__
+        metadata:
+          {}
+      -
+        uuid: 4a800564-098f-4b88-a36b-f5d03f642944
+        type: DIALOG
+        properties: []
+        label: DIALOG-004
+        structureKey: "__blueprints__.New Scene.DIALOG-004"
+        content: ""
+        nativeProperties:
+          isAsync: true
+        dialogueText:
+          en: Hehehe!
+          fr: ""
+        parentLabels:
+          - __blueprints__
+        metadata:
+          characters:
+            -
+              uuid: 79b2bbb8-953e-476e-91bf-ec93bc2b1cf2
+              id: a5
+              name: "Gruht Tyron"
+              emotion: hangry
+              emotionIntensity: 0
+      -
+        uuid: 2a087cbc-3b00-457a-9448-538e39a475ab
+        type: DIALOG
+        properties: []
+        label: DIALOG-005
+        structureKey: "__blueprints__.New Scene.DIALOG-005"
+        content: ""
+        nativeProperties:
+          delay: 2000
+        dialogueText:
+          en: "Je suis le roi!"
+          fr: ""
+        parentLabels:
+          - __blueprints__
+        metadata:
+          characters:
+            -
+              uuid: 79b2bbb8-953e-476e-91bf-ec93bc2b1cf2
+              id: a5
+              name: "Gruht Tyron"
+      -
+        uuid: ef7301d9-c8ce-4416-9a28-4b1f5595ac74
+        type: DIALOG
+        properties: []
+        label: DIALOG-006
+        structureKey: "__blueprints__.New Scene.DIALOG-006"
+        content: ""
+        nativeProperties:
+          isAsync: true
+          delay: 5000
+          waitForBlocks:
+            - 2b184947-49f9-4e57-8600-70b46e2cd0ba
+        dialogueText:
+          en: "heu, je suis pas certain de comprendre"
+          fr: ""
+        parentLabels:
+          - __blueprints__
+        metadata:
+          characters:
+            -
+              uuid: 839020c1-322b-425f-b143-dc3b7581eafb
+              id: a8
+              name: "Zoozo Zee"
+      -
+        uuid: d0cf7ee4-8dcb-4b75-b373-5d4a1dca73be
+        type: DIALOG
+        properties: []
+        label: DIALOG-007
+        structureKey: "__blueprints__.New Scene.DIALOG-007"
+        content: ""
+        dialogueText:
+          en: "heu non mais ca va pas !?\nces moi qui est las "
+          fr: ""
+        parentLabels:
+          - __blueprints__
+        metadata:
+          characters:
+            -
+              uuid: 839020c1-322b-425f-b143-dc3b7581eafb
+              id: a8
+              name: "Zoozo Zee"
+      -
+        uuid: 7ab18c86-c98e-41f1-99ca-51c7e66cb144
+        type: DIALOG
+        properties: []
+        label: DIALOG-008
+        structureKey: "__blueprints__.New Scene.DIALOG-008"
+        content: ""
+        dialogueText:
+          en: "ces pas moi le probleme !!!"
+          fr: ""
+        parentLabels:
+          - __blueprints__
+        metadata:
+          characters:
+            -
+              uuid: 79b2bbb8-953e-476e-91bf-ec93bc2b1cf2
+              id: a5
+              name: "Gruht Tyron"
+      -
+        uuid: 39327ee6-8f67-448a-8cb1-e888cc597a8b
+        type: DIALOG
+        properties: []
+        label: flight_path-AI
+        structureKey: "__blueprints__.New Scene.flight_path-AI"
+        content: "C'est trop tard pour se cacher, l'air s'est figé et il sait exactement que nous sommes ici ! *Lia attrape violemment Boo par la peau du cou et s'élance à travers les racines traîtresses, ses bottes s'enfonçant dans la mousse spongieuse.* On doit atteindre la clairière de lumière avant que les griffes de l'ombre ne nous déchirent le dos. Ne regarde pas en arrière, Boo, peu importe les cris que tu entendras derrière nous, cours jusqu'à ce que tes poumons brûlent et que tes ailes ne puissent plus te porter."
+        dialogueText:
+          en: ""
+          fr: "C'est trop tard pour se cacher, l'air s'est figé et il sait exactement que nous sommes ici ! *Lia attrape violemment Boo par la peau du cou et s'élance à travers les racines traîtresses, ses bottes s'enfonçant dans la mousse spongieuse.* On doit atteindre la clairière de lumière avant que les griffes de l'ombre ne nous déchirent le dos. Ne regarde pas en arrière, Boo, peu importe les cris que tu entendras derrière nous, cours jusqu'à ce que tes poumons brûlent et que tes ailes ne puissent plus te porter."
+        parentLabels:
+          - __blueprints__
+        metadata:
+          characters:
+            -
+              uuid: 3504bd0b-b950-4060-880d-a244a0f15992
+              id: a1
+              name: lia
+      -
+        uuid: 14d056d8-5bc2-4df7-babf-f7b67d8daa3c
+        type: DIALOG
+        properties: []
+        label: near_miss_escape-AI
+        structureKey: "__blueprints__.New Scene.near_miss_escape-AI"
+        content: "Le cliquetis s'éloigne lentement vers le nord, mais ne te détrompe pas, il tourne en rond autour de nous comme un prédateur dans une mer de brume. *Lia vérifie son couteau de survie, les jointures blanches de tension sous l'effort.* On a gagné quelques secondes de vie, mais la forêt semble se refermer sur nous. Regarde les racines, elles bougent, elles se tordent pour nous barrer le passage. Nous ne sommes pas sortis d'affaire, nous sommes juste entrés dans une pièce plus petite de son garde-manger."
+        dialogueText:
+          en: ""
+          fr: "Le cliquetis s'éloigne lentement vers le nord, mais ne te détrompe pas, il tourne en rond autour de nous comme un prédateur dans une mer de brume. *Lia vérifie son couteau de survie, les jointures blanches de tension sous l'effort.* On a gagné quelques secondes de vie, mais la forêt semble se refermer sur nous. Regarde les racines, elles bougent, elles se tordent pour nous barrer le passage. Nous ne sommes pas sortis d'affaire, nous sommes juste entrés dans une pièce plus petite de son garde-manger."
+        parentLabels:
+          - __blueprints__
+        metadata:
+          characters:
+            -
+              uuid: 3504bd0b-b950-4060-880d-a244a0f15992
+              id: a1
+              name: lia
+      -
+        uuid: ce74b7c3-49b7-4515-891b-6a80ab79f323
+        type: DIALOG
+        properties: []
+        label: silence_path-AI
+        structureKey: "__blueprints__.New Scene.silence_path-AI"
+        content: "On ne bouge plus, Boo. *Lia plaque sa main glacée sur le museau du petit chat volant, sentant son cœur battre comme celui d'un oiseau pris au piège.* La chose est juste là, une silhouette de cauchemar qui se découpe dans la brume, ses membres trop longs frôlant les fougères avec une grâce macabre. Si nous restons parfaitement immobiles, peut-être nous prendra-t-elle pour des troncs morts, des reliques de ce bois maudit qui n'ont plus aucune chaleur à offrir à ses griffes acérées. Respire par le nez, lentement, trèslentement."
+        dialogueText:
+          en: ""
+          fr: "On ne bouge plus, Boo. *Lia plaque sa main glacée sur le museau du petit chat volant, sentant son cœur battre comme celui d'un oiseau pris au piège.* La chose est juste là, une silhouette de cauchemar qui se découpe dans la brume, ses membres trop longs frôlant les fougères avec une grâce macabre. Si nous restons parfaitement immobiles, peut-être nous prendra-t-elle pour des troncs morts, des reliques de ce bois maudit qui n'ont plus aucune chaleur à offrir à ses griffes acérées. Respire par le nez, lentement, trèslentement."
+        parentLabels:
+          - __blueprints__
+        metadata:
+          characters:
+            -
+              uuid: 3504bd0b-b950-4060-880d-a244a0f15992
+              id: a1
+              name: lia
+      -
+        uuid: eaa4fb18-28f1-4f96-85c7-f5366b592a6c
+        type: DIALOG
+        properties: []
+        label: stalker_encounter-AI
+        structureKey: "__blueprints__.New Scene.stalker_encounter-AI"
+        content: "*Une silhouette immense et distordue émerge soudainement du brouillard, ses membres trop longs claquant contre le sol comme des ciseaux géants.* Le cliquetis s'arrête net et un silence de mort s'installe. Il est là, juste devant nous, ses orbites vides fixées sur nos gorges palpitantes. Lia, je ne veux pas finir en amuse-gueule pour monstre forestier ! Sa mâchoire se décroche dans un craquement sinistre, révélant des rangées de dents d'obsidienne qui brillent d'une lueur sombre. C'est la fin, n'est-ce pas ?"
+        dialogueText:
+          en: ""
+          fr: "*Une silhouette immense et distordue émerge soudainement du brouillard, ses membres trop longs claquant contre le sol comme des ciseaux géants.* Le cliquetis s'arrête net et un silence de mort s'installe. Il est là, juste devant nous, ses orbites vides fixées sur nos gorges palpitantes. Lia, je ne veux pas finir en amuse-gueule pour monstre forestier ! Sa mâchoire se décroche dans un craquement sinistre, révélant des rangées de dents d'obsidienne qui brillent d'une lueur sombre. C'est la fin, n'est-ce pas ?"
+        parentLabels:
+          - __blueprints__
+        metadata:
+          characters:
+            -
+              uuid: b8d2fe53-cc5a-4d1b-aa72-02b55b941ff7
+              id: a2
+              name: Boo
+      -
+        uuid: a32834d4-45df-4540-8c0e-5cb093ea5862
+        type: DIALOG
+        properties: []
+        label: survival_setup-AI
+        structureKey: "__blueprints__.New Scene.survival_setup-AI"
+        content: "Chut. Ne bouge plus d'un cil, Boo. Est-ce que tu entends ce cliquetis sec et rythmique qui résonne contre l'écorce putride de ces arbres millénaires ? C'est le Stalker de l'Ombre, il nous traque à la trace thermique de notre peur et au moindre souffle trop court. Garde tes ailes serrées contre ton petit corps, car la bioluminescence de tes plumes est une balise mortelle dans ce brouillard poisseux qui nous étouffe. Si nous faisons un seul pas de travers sur ces racines mouvantes, cette forêt deviendra notre tombeau sans que personne ne retrouve jamais nos os."
+        dialogueText:
+          en: ""
+          fr: "Chut. Ne bouge plus d'un cil, Boo. Est-ce que tu entends ce cliquetis sec et rythmique qui résonne contre l'écorce putride de ces arbres millénaires ? C'est le Stalker de l'Ombre, il nous traque à la trace thermique de notre peur et au moindre souffle trop court. Garde tes ailes serrées contre ton petit corps, car la bioluminescence de tes plumes est une balise mortelle dans ce brouillard poisseux qui nous étouffe. Si nous faisons un seul pas de travers sur ces racines mouvantes, cette forêt deviendra notre tombeau sans que personne ne retrouve jamais nos os."
+        parentLabels:
+          - __blueprints__
+        metadata:
+          characters:
+            -
+              uuid: 3504bd0b-b950-4060-880d-a244a0f15992
+              id: a1
+              name: lia
+    connections:
+      -
+        id: 0371f914-fecd-413b-b14f-2c83460d323f
+        fromId: 6462dab3-0eb4-4a2c-a505-407556441156
+        toId: 014f503a-6688-429d-a5fe-801cf33f2410
+        fromPort: 3504bd0b-b950-4060-880d-a244a0f15992
+        toPort: in
+        fromPortIndex: 0
+      -
+        id: e993c445-15cd-4511-8ba1-1a86855c734b
+        fromId: c66437af-54b7-4a75-9efa-713e983c145d
+        toId: 2b184947-49f9-4e57-8600-70b46e2cd0ba
+        fromPort: out
+        toPort: in
+        fromPortIndex: 0
+      -
+        id: 107d1986-c380-4637-9b3a-65c1137958ad
+        fromId: 2b184947-49f9-4e57-8600-70b46e2cd0ba
+        toId: 4074b6c2-bfc8-44f1-9a29-cda529bf522a
+        fromPort: e306346e-6bcc-4564-8b19-e2ed28fabafe
+        toPort: in
+        fromPortIndex: 1
+      -
+        id: 6d3d9f28-b105-4307-af03-c4ae5b0b30f5
+        fromId: 4074b6c2-bfc8-44f1-9a29-cda529bf522a
+        toId: d72bcf6a-161b-4759-90dd-2ae10a58fdd3
+        fromPort: "true"
+        toPort: in
+        fromPortIndex: 0
+      -
+        id: ec761e6f-403b-41f2-88a7-6bc7f2bd181c
+        fromId: 4074b6c2-bfc8-44f1-9a29-cda529bf522a
+        toId: dfc30c4c-a1aa-4e76-81b6-640bf447351b
+        fromPort: "false"
+        toPort: in
+        fromPortIndex: 1
+      -
+        id: b46922bf-74be-48d7-9fcf-a83c120be23f
+        fromId: 014f503a-6688-429d-a5fe-801cf33f2410
+        toId: c66437af-54b7-4a75-9efa-713e983c145d
+        fromPort: a0eee458-6ccc-4a23-bd36-0b3d1f73771e
+        toPort: in
+        fromPortIndex: 1
+      -
+        id: 27dc10e3-3a9d-4cb2-9c6e-5db4e720a012
+        fromId: 014f503a-6688-429d-a5fe-801cf33f2410
+        toId: 4a800564-098f-4b88-a36b-f5d03f642944
+        fromPort: a0eee458-6ccc-4a23-bd36-0b3d1f73771e
+        toPort: in
+        fromPortIndex: 1
+      -
+        id: 89b85afc-06ed-4807-a1e1-7ee94874c4e7
+        fromId: 4a800564-098f-4b88-a36b-f5d03f642944
+        toId: 2a087cbc-3b00-457a-9448-538e39a475ab
+        fromPort: out
+        toPort: in
+        fromPortIndex: 0
+      -
+        id: 34b977e8-d46d-4775-a512-c01ff1968ded
+        fromId: 4a800564-098f-4b88-a36b-f5d03f642944
+        toId: ef7301d9-c8ce-4416-9a28-4b1f5595ac74
+        fromPort: out
+        toPort: in
+        fromPortIndex: 0
+      -
+        id: c8f85041-f154-45f4-8649-767364bd3041
+        fromId: ef7301d9-c8ce-4416-9a28-4b1f5595ac74
+        toId: d0cf7ee4-8dcb-4b75-b373-5d4a1dca73be
+        fromPort: out
+        toPort: in
+        fromPortIndex: 0
+      -
+        id: aed759f3-5499-4bcc-8732-7635fdca2a87
+        fromId: 2a087cbc-3b00-457a-9448-538e39a475ab
+        toId: 7ab18c86-c98e-41f1-99ca-51c7e66cb144
+        fromPort: out
+        toPort: in
+        fromPortIndex: 0
+      -
+        id: dc57f0b4-1816-4fce-8def-5da1b59ca81c
+        fromId: d0cf7ee4-8dcb-4b75-b373-5d4a1dca73be
+        toId: 7662f44f-1836-4176-85b2-39f3c1bd4620
+        fromPort: out
+        toPort: in
+        fromPortIndex: 0
+      -
+        id: 6d735702-302d-4672-98b3-6272796c83dc
+        fromId: a32834d4-45df-4540-8c0e-5cb093ea5862
+        toId: b91fb645-cc0f-49b0-a456-25a596d0bd0b
+        fromPort: out
+        toPort: in
+        fromPortIndex: 0
+      -
+        id: 9dc01909-66b9-4a48-9569-06115b20dbe4
+        fromId: b91fb645-cc0f-49b0-a456-25a596d0bd0b
+        toId: e55d4d79-7642-452d-aea3-cb44ca37a826
+        fromPort: out
+        toPort: in
+        fromPortIndex: 0
+      -
+        id: a03a22f6-9cce-4447-a418-f69776ab80ab
+        fromId: e55d4d79-7642-452d-aea3-cb44ca37a826
+        toId: ce74b7c3-49b7-4515-891b-6a80ab79f323
+        fromPort: 3ff6be38-0db4-4d24-98a0-bbb21be19d4a
+        toPort: in
+        fromPortIndex: 0
+      -
+        id: 017f3bf3-9adc-43d4-a770-41ceb65acdc4
+        fromId: e55d4d79-7642-452d-aea3-cb44ca37a826
+        toId: 39327ee6-8f67-448a-8cb1-e888cc597a8b
+        fromPort: 7b0f9b9a-6e4d-444f-bdf9-a3be47d89140
+        toPort: in
+        fromPortIndex: 1
+      -
+        id: 1d658b02-e203-47a2-8a40-67d64cb16a62
+        fromId: ce74b7c3-49b7-4515-891b-6a80ab79f323
+        toId: f7923356-5267-430a-bd6c-b9392eb15a24
+        fromPort: out
+        toPort: in
+        fromPortIndex: 0
+      -
+        id: 9341ea9d-1090-4fed-bc37-545f09def786
+        fromId: 39327ee6-8f67-448a-8cb1-e888cc597a8b
+        toId: f7923356-5267-430a-bd6c-b9392eb15a24
+        fromPort: out
+        toPort: in
+        fromPortIndex: 0
+      -
+        id: b6627f83-0e64-4ab1-8c91-4b4851589e06
+        fromId: f7923356-5267-430a-bd6c-b9392eb15a24
+        toId: eaa4fb18-28f1-4f96-85c7-f5366b592a6c
+        fromPort: "true"
+        toPort: in
+        fromPortIndex: 0
+      -
+        id: 59978c9b-8135-440c-9813-5a4639550a40
+        fromId: f7923356-5267-430a-bd6c-b9392eb15a24
+        toId: 14d056d8-5bc2-4df7-babf-f7b67d8daa3c
+        fromPort: "false"
+        toPort: in
+        fromPortIndex: 1
+      -
+        id: 356a5dae-bfeb-4a09-909d-1cfd615f30f0
+        fromId: eaa4fb18-28f1-4f96-85c7-f5366b592a6c
+        toId: f0792ff1-da03-4834-b15f-8652df3b041a
+        fromPort: out
+        toPort: in
+        fromPortIndex: 0
+      -
+        id: 1f0a7f47-8997-4689-81e4-648d83da9d0a
+        fromId: 14d056d8-5bc2-4df7-babf-f7b67d8daa3c
+        toId: f0792ff1-da03-4834-b15f-8652df3b041a
+        fromPort: out
+        toPort: in
+        fromPortIndex: 0
+      -
+        id: aa8337d8-3bc7-4203-be00-a2ef80b2a8bb
+        fromId: f0792ff1-da03-4834-b15f-8652df3b041a
+        toId: 36edbe6e-c48e-44b6-9037-e7bd489a3155
+        fromPort: then
+        toPort: in
+        fromPortIndex: 0
+      -
+        id: 98f267fe-95d6-46ba-add3-c32a155b3183
+        fromId: f0792ff1-da03-4834-b15f-8652df3b041a
+        toId: 36edbe6e-c48e-44b6-9037-e7bd489a3155
+        fromPort: catch
+        toPort: in
+        fromPortIndex: 1

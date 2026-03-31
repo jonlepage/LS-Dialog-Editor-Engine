@@ -9,7 +9,7 @@ public static class LSDE_SCENES
 {
 	/// <summary>
 	/// <para>Scene: New Scene</para>
-	/// <para>2 ACTION, 2 CHOICE, 1 CONDITION, 8 DIALOG</para>
+	/// <para>3 ACTION, 3 CHOICE, 2 CONDITION, 15 DIALOG</para>
 	/// <para>Entry: <c>DIALOG-001</c></para>
 	/// <para>Emotions: <c>hangry</c>, <c>sad</c></para>
 	/// <para>Characters: <c>Boo</c>, <c>Gruht Tyron</c>, <c>Svelt Moon</c>, <c>Zoozo Zee</c>, <c>lia</c></para>
@@ -47,6 +47,17 @@ public static class LSDE_BLOCKS
 	public const string newSceneAction002 = "7662f44f-1836-4176-85b2-39f3c1bd4620";
 
 	/// <summary>
+	/// <para>🟧[ACTION] trigger_reveal_action-AI</para>
+	/// <para>Scene: <c>New Scene</c></para>
+	/// <para>In: <c>stalker_encounter-AI</c>, <c>near_miss_escape-AI</c></para>
+	/// <para>Out: <c>cliffhanger_reveal-AI</c></para>
+	/// </summary>
+	/// <remarks>
+	/// <image url="./_images/action.webp" />
+	/// </remarks>
+	public const string newSceneTriggerRevealActionAi = "f0792ff1-da03-4834-b15f-8652df3b041a";
+
+	/// <summary>
 	/// <para>⬜[CHOICE] CHOICE-001</para>
 	/// <para>Characters: <c>lia</c></para>
 	/// <para>Scene: <c>New Scene</c></para>
@@ -70,6 +81,17 @@ public static class LSDE_BLOCKS
 	public const string newSceneChoice002 = "2b184947-49f9-4e57-8600-70b46e2cd0ba";
 
 	/// <summary>
+	/// <para>⬜[CHOICE] stealth_choice-AI</para>
+	/// <para>Scene: <c>New Scene</c></para>
+	/// <para>In: <c>anxiety_observation-AI</c></para>
+	/// <para>Out: <c>silence_path-AI</c>, <c>flight_path-AI</c></para>
+	/// </summary>
+	/// <remarks>
+	/// <image url="./_images/choice.webp" />
+	/// </remarks>
+	public const string newSceneStealthChoiceAi = "e55d4d79-7642-452d-aea3-cb44ca37a826";
+
+	/// <summary>
 	/// <para>🟪[CONDITION] CONDITION-001</para>
 	/// <para>Scene: <c>New Scene</c></para>
 	/// <para>In: <c>CHOICE-002</c></para>
@@ -79,6 +101,42 @@ public static class LSDE_BLOCKS
 	/// <image url="./_images/cond.webp" />
 	/// </remarks>
 	public const string newSceneCondition001 = "4074b6c2-bfc8-44f1-9a29-cda529bf522a";
+
+	/// <summary>
+	/// <para>🟪[CONDITION] noise_check-AI</para>
+	/// <para>Scene: <c>New Scene</c></para>
+	/// <para>In: <c>silence_path-AI</c>, <c>flight_path-AI</c></para>
+	/// <para>Out: <c>stalker_encounter-AI</c>, <c>near_miss_escape-AI</c></para>
+	/// </summary>
+	/// <remarks>
+	/// <image url="./_images/cond.webp" />
+	/// </remarks>
+	public const string newSceneNoiseCheckAi = "f7923356-5267-430a-bd6c-b9392eb15a24";
+
+	/// <summary>
+	/// <para>🟦[DIALOG] anxiety_observation-AI</para>
+	/// <para>"*Boo tremble de tout son long, ses grands yeux dilatés scrutant l&apos;obscurité mouvante qui semble se détacher du brouillar..."</para>
+	/// <para>Characters: <c>Boo</c></para>
+	/// <para>Scene: <c>New Scene</c></para>
+	/// <para>In: <c>survival_setup-AI</c></para>
+	/// <para>Out: <c>stealth_choice-AI</c></para>
+	/// </summary>
+	/// <remarks>
+	/// <image url="./_images/dialog.webp" />
+	/// </remarks>
+	public const string newSceneAnxietyObservationAi = "b91fb645-cc0f-49b0-a456-25a596d0bd0b";
+
+	/// <summary>
+	/// <para>🟦[DIALOG] cliffhanger_reveal-AI</para>
+	/// <para>"Regarde devant nous... ce n&apos;est pas la sortie du Thicket. *Lia s&apos;arrête net, la lueur de sa torche vacillante révélant u..."</para>
+	/// <para>Characters: <c>lia</c></para>
+	/// <para>Scene: <c>New Scene</c></para>
+	/// <para>In: <c>trigger_reveal_action-AI</c></para>
+	/// </summary>
+	/// <remarks>
+	/// <image url="./_images/dialog.webp" />
+	/// </remarks>
+	public const string newSceneCliffhangerRevealAi = "36edbe6e-c48e-44b6-9037-e7bd489a3155";
 
 	/// <summary>
 	/// <para>🟦[DIALOG] DIALOG-001 (entry)</para>
@@ -179,6 +237,70 @@ public static class LSDE_BLOCKS
 	/// </remarks>
 	public const string newSceneDialog008 = "7ab18c86-c98e-41f1-99ca-51c7e66cb144";
 
+	/// <summary>
+	/// <para>🟦[DIALOG] flight_path-AI</para>
+	/// <para>"C&apos;est trop tard pour se cacher, l&apos;air s&apos;est figé et il sait exactement que nous sommes ici ! *Lia attrape violemment Boo..."</para>
+	/// <para>Characters: <c>lia</c></para>
+	/// <para>Scene: <c>New Scene</c></para>
+	/// <para>In: <c>stealth_choice-AI</c></para>
+	/// <para>Out: <c>noise_check-AI</c></para>
+	/// </summary>
+	/// <remarks>
+	/// <image url="./_images/dialog.webp" />
+	/// </remarks>
+	public const string newSceneFlightPathAi = "39327ee6-8f67-448a-8cb1-e888cc597a8b";
+
+	/// <summary>
+	/// <para>🟦[DIALOG] near_miss_escape-AI</para>
+	/// <para>"Le cliquetis s&apos;éloigne lentement vers le nord, mais ne te détrompe pas, il tourne en rond autour de nous comme un prédat..."</para>
+	/// <para>Characters: <c>lia</c></para>
+	/// <para>Scene: <c>New Scene</c></para>
+	/// <para>In: <c>noise_check-AI</c></para>
+	/// <para>Out: <c>trigger_reveal_action-AI</c></para>
+	/// </summary>
+	/// <remarks>
+	/// <image url="./_images/dialog.webp" />
+	/// </remarks>
+	public const string newSceneNearMissEscapeAi = "14d056d8-5bc2-4df7-babf-f7b67d8daa3c";
+
+	/// <summary>
+	/// <para>🟦[DIALOG] silence_path-AI</para>
+	/// <para>"On ne bouge plus, Boo. *Lia plaque sa main glacée sur le museau du petit chat volant, sentant son cœur battre comme celu..."</para>
+	/// <para>Characters: <c>lia</c></para>
+	/// <para>Scene: <c>New Scene</c></para>
+	/// <para>In: <c>stealth_choice-AI</c></para>
+	/// <para>Out: <c>noise_check-AI</c></para>
+	/// </summary>
+	/// <remarks>
+	/// <image url="./_images/dialog.webp" />
+	/// </remarks>
+	public const string newSceneSilencePathAi = "ce74b7c3-49b7-4515-891b-6a80ab79f323";
+
+	/// <summary>
+	/// <para>🟦[DIALOG] stalker_encounter-AI</para>
+	/// <para>"*Une silhouette immense et distordue émerge soudainement du brouillard, ses membres trop longs claquant contre le sol co..."</para>
+	/// <para>Characters: <c>Boo</c></para>
+	/// <para>Scene: <c>New Scene</c></para>
+	/// <para>In: <c>noise_check-AI</c></para>
+	/// <para>Out: <c>trigger_reveal_action-AI</c></para>
+	/// </summary>
+	/// <remarks>
+	/// <image url="./_images/dialog.webp" />
+	/// </remarks>
+	public const string newSceneStalkerEncounterAi = "eaa4fb18-28f1-4f96-85c7-f5366b592a6c";
+
+	/// <summary>
+	/// <para>🟦[DIALOG] survival_setup-AI</para>
+	/// <para>"Chut. Ne bouge plus d&apos;un cil, Boo. Est-ce que tu entends ce cliquetis sec et rythmique qui résonne contre l&apos;écorce putri..."</para>
+	/// <para>Characters: <c>lia</c></para>
+	/// <para>Scene: <c>New Scene</c></para>
+	/// <para>Out: <c>anxiety_observation-AI</c></para>
+	/// </summary>
+	/// <remarks>
+	/// <image url="./_images/dialog.webp" />
+	/// </remarks>
+	public const string newSceneSurvivalSetupAi = "a32834d4-45df-4540-8c0e-5cb093ea5862";
+
 }
 
 /// <summary>
@@ -189,20 +311,20 @@ public static class LSDE_BLOCKS
 public static class LSDE_CHOICES
 {
 	/// <summary>
-	/// <para>⬜[CHOICE_ITEM] C1</para>
+	/// <para>⬜[CHOICE_ITEM] 17e98de3-1690-4ca4-8ea5-8070c15b1fe1</para>
 	/// <para>"C1"</para>
 	/// <para>Scene: <c>New Scene</c></para>
 	/// </summary>
 	/// <summary>See <see cref="LSDE_BLOCKS.newSceneChoice001"/></summary>
-	public const string newSceneC1 = "17e98de3-1690-4ca4-8ea5-8070c15b1fe1";
+	public const string newScene17e98de316904ca48ea58070c15b1fe1 = "17e98de3-1690-4ca4-8ea5-8070c15b1fe1";
 
 	/// <summary>
-	/// <para>⬜[CHOICE_ITEM] C2</para>
+	/// <para>⬜[CHOICE_ITEM] a0eee458-6ccc-4a23-bd36-0b3d1f73771e</para>
 	/// <para>"C2"</para>
 	/// <para>Scene: <c>New Scene</c></para>
 	/// </summary>
 	/// <summary>See <see cref="LSDE_BLOCKS.newSceneChoice001"/></summary>
-	public const string newSceneC2 = "a0eee458-6ccc-4a23-bd36-0b3d1f73771e";
+	public const string newSceneA0eee4586ccc4a23Bd360b3d1f73771e = "a0eee458-6ccc-4a23-bd36-0b3d1f73771e";
 
 	/// <summary>
 	/// <para>⬜[CHOICE_ITEM] C1.1</para>
@@ -219,5 +341,21 @@ public static class LSDE_CHOICES
 	/// </summary>
 	/// <summary>See <see cref="LSDE_BLOCKS.newSceneChoice002"/></summary>
 	public const string newSceneC21 = "e306346e-6bcc-4564-8b19-e2ed28fabafe";
+
+	/// <summary>
+	/// <para>⬜[CHOICE_ITEM] Rester parfaitement immobile dans l&apos;ombre</para>
+	/// <para>"Rester parfaitement immobile dans l&apos;ombre"</para>
+	/// <para>Scene: <c>New Scene</c></para>
+	/// </summary>
+	/// <summary>See <see cref="LSDE_BLOCKS.newSceneStealthChoiceAi"/></summary>
+	public const string newSceneResterParfaitementImmobileDansLOmbre = "3ff6be38-0db4-4d24-98a0-bbb21be19d4a";
+
+	/// <summary>
+	/// <para>⬜[CHOICE_ITEM] Courir vers la lueur lointaine</para>
+	/// <para>"Courir vers la lueur lointaine"</para>
+	/// <para>Scene: <c>New Scene</c></para>
+	/// </summary>
+	/// <summary>See <see cref="LSDE_BLOCKS.newSceneStealthChoiceAi"/></summary>
+	public const string newSceneCourirVersLaLueurLointaine = "7b0f9b9a-6e4d-444f-bdf9-a3be47d89140";
 
 }

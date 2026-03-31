@@ -39,8 +39,8 @@ class lsdeCharacter:
 	const a8 = "a8"
 	const a9 = "a9"
 
-## Dictionary: GroupName (2 values)
-class lsdeDictionaryGroupName:
+## Dictionary: VariableGlobal (2 values)
+class lsdeDictionaryVariableGlobal:
 	const key1 = "key1"
 	const key2 = "key2"
 
@@ -339,7 +339,7 @@ class DictionaryRow extends Resource:
 class DictionaryGroup extends Resource:
 	## Unique identifier for this dictionary group.
 	@export var uuid: String
-	## Short identifier for this dictionary group.
+	## Identifier for this dictionary group.
 	## Used as prefix in condition keys (e.g. "groupId.rowKey").
 	@export var id: String
 	## All entries in this dictionary group.

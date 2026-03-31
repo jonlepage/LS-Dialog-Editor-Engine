@@ -45,8 +45,8 @@ public static class lsdeCharacter
 	public const string a9 = "a9";
 }
 
-/// <summary>Dictionary: GroupName (2 values)</summary>
-public static class lsdeDictionaryGroupName
+/// <summary>Dictionary: VariableGlobal (2 values)</summary>
+public static class lsdeDictionaryVariableGlobal
 {
 	public const string key1 = "key1";
 	public const string key2 = "key2";
@@ -519,7 +519,7 @@ public class ExportDictionary
 	/// <summary>Unique identifier for this dictionary group.</summary>
 	public string uuid;
 	/// <summary>
-	/// Short identifier for this dictionary group.
+	/// Identifier for this dictionary group.
 	/// Used as prefix in condition keys (e.g. &quot;groupId.rowKey&quot;).
 	/// </summary>
 	public string id;

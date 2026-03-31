@@ -49,8 +49,8 @@ namespace lsdeCharacter {
 	constexpr const char* a9 = "a9";
 }
 
-/** @brief Dictionary: GroupName (2 values) */
-namespace lsdeDictionaryGroupName {
+/** @brief Dictionary: VariableGlobal (2 values) */
+namespace lsdeDictionaryVariableGlobal {
 	constexpr const char* key1 = "key1";
 	constexpr const char* key2 = "key2";
 }
@@ -494,7 +494,7 @@ struct ExportDictionary {
 	/** @brief Unique identifier for this dictionary group. */
 	std::string uuid;
 	/**
-	 * Short identifier for this dictionary group.
+	 * Identifier for this dictionary group.
 	 * Used as prefix in condition keys (e.g. "groupId.rowKey").
 	 */
 	std::string id;
