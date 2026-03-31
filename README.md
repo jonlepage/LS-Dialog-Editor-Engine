@@ -35,6 +35,10 @@ LSDE exports dialogue graphs (scenes, blocks, connections, dictionaries, signatu
 
 - <a href="https://jonlepage.github.io/LS-Dialog-Editor-Engine/" target="_blank">API Reference & Guides</a> — Full documentation
 
+## Screenshot LSDE v1.6 > — Blueprint Editor
+
+<a href="lsde1.6.jpg" target="_blank"><img src="lsde1.6.jpg" alt="LSDE 1.6 — Blueprint Editor" width="320"></a>
+
 ## License
 
 Proprietary — distributed under the LSDE license. See [LICENSE](LICENSE).
