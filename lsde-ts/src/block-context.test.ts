@@ -114,25 +114,45 @@ describe( 'createChoiceContext', () => {
 describe( 'createConditionContext', () => {
 
 	it( 'resolve(true) stores true', () => {
-		const ctx = createConditionContext( undefined );
+		const ctx = createConditionContext( undefined, [] );
 		ctx.resolve( true );
 		expect( ctx._conditionResult ).toBe( true );
 	} );
 
 	it( 'resolve(false) stores false', () => {
-		const ctx = createConditionContext( undefined );
+		const ctx = createConditionContext( undefined, [] );
 		ctx.resolve( false );
 		expect( ctx._conditionResult ).toBe( false );
 	} );
 
 	it( 'starts with undefined conditionResult', () => {
-		const ctx = createConditionContext( undefined );
+		const ctx = createConditionContext( undefined, [] );
 		expect( ctx._conditionResult ).toBeUndefined();
 	} );
 
 	it( 'exposes resolved character', () => {
-		const ctx = createConditionContext( hero );
+		const ctx = createConditionContext( hero, [] );
 		expect( ctx.character?.name ).toBe( 'Hero' );
+	} );
+
+	it( 'exposes pre-evaluated groups with portIndex and result', () => {
+		const groups = [
+			{ conditions: [{ uuid: 'c1', key: 'x', operator: '=', value: '1' }], portIndex: 0, result: true },
+			{ conditions: [{ uuid: 'c2', key: 'y', operator: '=', value: '2' }], portIndex: 1, result: false },
+		];
+		const ctx = createConditionContext( undefined, groups );
+		expect( ctx.conditionGroups ).toHaveLength( 2 );
+		expect( ctx.conditionGroups[0]?.portIndex ).toBe( 0 );
+		expect( ctx.conditionGroups[0]?.result ).toBe( true );
+		expect( ctx.conditionGroups[1]?.portIndex ).toBe( 1 );
+		expect( ctx.conditionGroups[1]?.result ).toBe( false );
+	} );
+
+	it( 'groups without resolver have undefined result', () => {
+		const groups = [{ conditions: [{ uuid: 'c1', key: 'x', operator: '=', value: '1' }], portIndex: 0 }];
+		const ctx = createConditionContext( undefined, groups );
+		expect( ctx.conditionGroups ).toHaveLength( 1 );
+		expect( ctx.conditionGroups[0]?.result ).toBeUndefined();
 	} );
 
 } );

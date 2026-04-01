@@ -19,10 +19,9 @@ engine.setLocale("en");
 // votre jeux dois renvoyez un des personnage dans la liste pour que le block sois autoriser a ce lancer.
 engine.onResolveCharacter((characters) => game.getActorsInParty(characters));
 
-// si vous utilisez le system de conditionnel dans les block de choix
-// pour devez evaluer vos conditions avec votre moteur de jeux
-// les choix receveront le tag : .visible = true/false pour etre exploiter dans les block de choix.
-engine.setChoiceFilter((cond) => game.evaluateGameStateCondition(cond));
+// Unified condition resolver — evaluates game-state conditions for choice visibility and condition blocks.
+// choice: conditions are resolved internally by the engine via choice history.
+engine.onResolveCondition((cond) => game.evaluateGameStateCondition(cond));
 
 // vous pouvez gerer les block dialog de facon generique pour votre jeux
 engine.onDialog(({ block, context, next }) => {

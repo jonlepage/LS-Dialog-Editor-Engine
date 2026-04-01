@@ -19,7 +19,7 @@ function makeCallbacks( overrides?: Partial<SceneHandleCallbacks> ): SceneHandle
 		onSceneStarted: vi.fn(),
 		onSceneEnded: vi.fn(),
 		getResolveCharacter: () => ( chars ) => chars[0],
-		getChoiceFilter: () => null,
+		getConditionResolver: () => null,
 		getLocale: () => 'en',
 		...overrides,
 	};
@@ -397,7 +397,7 @@ describe( 'SceneHandleImpl', () => {
 		global.actionHandler = ( { next } ) => next();
 
 		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks( {
-			getChoiceFilter: () => () => false, // all external conditions fail
+			getConditionResolver: () => () => false, // all external conditions fail
 		} ) );
 		handle.start();
 

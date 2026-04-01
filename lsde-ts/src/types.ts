@@ -94,12 +94,26 @@ export interface ChoiceItem {
 }
 
 /**
- * Choice item with runtime visibility tag, set by the engine when `setChoiceFilter()` is configured.
+ * Choice item with runtime visibility tag, set by the engine when `onResolveCondition()` is configured.
  * Use `choices.filter(c => c.visible !== false)` to get visible choices.
  */
 export interface RuntimeChoiceItem extends ChoiceItem {
 	/** `true` = visible, `false` = hidden, `undefined` = no filter installed (treat as visible). */
 	visible?: boolean;
+}
+
+/**
+ * A condition group with an optional pre-evaluated result, set by the engine
+ * when {@link IDialogueEngine.onResolveCondition | onResolveCondition()} is configured.
+ * Mirrors how {@link RuntimeChoiceItem} extends ChoiceItem with a `visible` tag.
+ */
+export interface RuntimeConditionGroup {
+	/** The raw conditions for this group. Chained with `&` (AND) / `|` (OR). */
+	conditions: ExportCondition[];
+	/** Port index this group maps to (case_0 = 0, case_1 = 1, ...). Pass to `resolve()` for routing. */
+	portIndex: number;
+	/** Pre-evaluated result. `true` if the group matches, `false` if not, `undefined` if no resolver is installed. */
+	result?: boolean;
 }
 
 /**
@@ -285,7 +299,7 @@ export interface DialogBlock extends BlueprintBlockBase {
  *
  * @remarks
  * The `context.choices` array contains ALL choices — none are filtered out.
- * When {@link IDialogueEngine.setChoiceFilter | setChoiceFilter()} is configured, the engine
+ * When {@link IDialogueEngine.onResolveCondition | onResolveCondition()} is configured, the engine
  * evaluates each choice's `visibilityConditions` and tags every {@link RuntimeChoiceItem} with
  * `visible: true | false`. The developer filters with `choices.filter(c => c.visible !== false)`.
  * Without a filter, `visible` is `undefined` and all choices pass.
@@ -620,7 +634,7 @@ export interface DialogContext extends BaseBlockContext {
 /** Context for CHOICE block handlers. */
 export interface ChoiceContext extends BaseBlockContext {
 	/**
-	 * All choices with optional visibility tags. When `engine.setChoiceFilter()` is configured,
+	 * All choices with optional visibility tags. When `engine.onResolveCondition()` is configured,
 	 * each choice is tagged `visible: true | false`. Filter with `choices.filter(c => c.visible !== false)`.
 	 * Without a filter, `visible` is `undefined` and all choices pass.
 	 */
@@ -631,6 +645,12 @@ export interface ChoiceContext extends BaseBlockContext {
 
 /** Context for CONDITION block handlers. */
 export interface ConditionContext extends BaseBlockContext {
+	/**
+	 * All condition groups with optional pre-evaluated results.
+	 * When {@link IDialogueEngine.onResolveCondition | onResolveCondition()} is configured,
+	 * each group has `result: true | false`. Without a resolver, `result` is `undefined`.
+	 */
+	conditionGroups: RuntimeConditionGroup[];
 	/**
 	 * Resolve the condition evaluation result.
 	 * - `boolean`: legacy single-group mode — `true` → port index 0, `false` → port index 1.
@@ -956,7 +976,7 @@ export interface IDialogueEngine {
 
 	/** Register a global handler for DIALOG blocks. May return a cleanup function. */
 	onDialog(handler: DialogHandler): void;
-	/** Register a global handler for CHOICE blocks. All choices are provided, tagged with `visible` when `setChoiceFilter()` is configured. */
+	/** Register a global handler for CHOICE blocks. All choices are provided, tagged with `visible` when `onResolveCondition()` is configured. */
 	onChoice(handler: ChoiceHandler): void;
 	/** Register a global handler for CONDITION blocks. The developer MUST handle evaluation in this handler. */
 	onCondition(handler: ConditionHandler): void;
@@ -971,11 +991,18 @@ export interface IDialogueEngine {
 	// ── Choice visibility ────────────────────────────────────────────────
 
 	/**
-	 * Install a condition evaluator for choice visibility tagging.
-	 * When set, the engine evaluates each choice's `visibilityConditions` before calling `onChoice`,
-	 * tagging each choice with `visible: true | false`. The engine handles `choice:` conditions
-	 * internally via choice history — this callback evaluates game-state conditions only.
+	 * Install a unified condition evaluator for both choice visibility and condition block pre-evaluation.
+	 * The engine handles `choice:` conditions internally via choice history — this callback
+	 * evaluates game-state conditions only.
+	 *
+	 * When installed:
+	 * - Choice blocks: each choice is tagged with `visible: true | false` based on its `visibilityConditions`.
+	 * - Condition blocks: each group is pre-evaluated and the result is available in `context.groups[i].result`
+	 *   and `context.evaluation`.
 	 */
+	onResolveCondition(evaluator: (condition: ExportCondition) => boolean): void;
+
+	/** @deprecated Use {@link onResolveCondition} instead. */
 	setChoiceFilter(evaluator: (condition: ExportCondition) => boolean): void;
 
 	// ── Scene lifecycle ─────────────────────────────────────────────────

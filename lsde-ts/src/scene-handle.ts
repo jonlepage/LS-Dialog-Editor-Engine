@@ -23,7 +23,7 @@ export interface SceneHandleCallbacks {
 	onSceneStarted: ( handle: SceneHandleImpl ) => void;
 	onSceneEnded: ( handle: SceneHandleImpl ) => void;
 	getResolveCharacter: () => ( characters: BlockCharacter[] ) => BlockCharacter | undefined;
-	getChoiceFilter: () => ( ( condition: ExportCondition ) => boolean ) | null;
+	getConditionResolver: () => ( ( condition: ExportCondition ) => boolean ) | null;
 	getLocale: () => string;
 }
 
@@ -330,13 +330,17 @@ export class SceneHandleImpl implements SceneHandle {
 		const missing: string[] = [];
 		if ( !this.sceneRegistry.dialogHandler && !this.globalRegistry.dialogHandler ) missing.push( 'onDialog' );
 		if ( !this.sceneRegistry.choiceHandler && !this.globalRegistry.choiceHandler ) missing.push( 'onChoice' );
-		if ( !this.sceneRegistry.conditionHandler && !this.globalRegistry.conditionHandler ) missing.push( 'onCondition' );
+		// onCondition is optional when onResolveCondition is installed — the engine auto-routes
+		// from pre-evaluated conditionGroups. The handler becomes a logging/override hook.
+		if ( !this.sceneRegistry.conditionHandler && !this.globalRegistry.conditionHandler
+			&& !this.callbacks.getConditionResolver() ) missing.push( 'onCondition' );
 		if ( !this.sceneRegistry.actionHandler && !this.globalRegistry.actionHandler ) missing.push( 'onAction' );
 		if ( missing.length > 0 ) {
 			throw new Error(
 				`Cannot start scene — missing required handler(s): ${ missing.join( ', ' ) }.\n` +
-				'Register all 4 handlers before starting:\n' +
-				'  engine.onDialog(handler)\n  engine.onChoice(handler)\n  engine.onCondition(handler)\n  engine.onAction(handler)',
+				'Register handlers before starting:\n' +
+				'  engine.onDialog(handler)\n  engine.onChoice(handler)\n  engine.onCondition(handler)\n  engine.onAction(handler)\n' +
+				'Note: onCondition is optional when engine.onResolveCondition() is installed.',
 			);
 		}
 
@@ -450,8 +454,11 @@ export class SceneHandleImpl implements SceneHandle {
 		return this.choiceHistory.get( blockUuid );
 	}
 
+	// Uses the unified resolver as fallback for non-choice conditions.
+	// Without a resolver, non-choice conditions default to false.
 	evaluateCondition( condition: ExportCondition ): boolean {
-		return this.evaluateConditionWithHistory( condition, () => false );
+		const resolver = this.callbacks.getConditionResolver();
+		return this.evaluateConditionWithHistory( condition, resolver ?? ( () => false ) );
 	}
 
 	onResolveCharacter( fn: ( characters: BlockCharacter[] ) => BlockCharacter | undefined ): void {
@@ -756,9 +763,9 @@ export class SceneHandleImpl implements SceneHandle {
 
 	private tagChoiceVisibility(
 		choices: ChoiceItem[],
-		filter: ( ( condition: ExportCondition ) => boolean ) | null,
+		resolver: ( ( condition: ExportCondition ) => boolean ) | null,
 	): RuntimeChoiceItem[] {
-		if ( !filter ) return choices;
+		if ( !resolver ) return choices;
 		return choices.map( choice => ( {
 			...choice,
 			visible: !choice.visibilityConditions?.length
@@ -767,7 +774,7 @@ export class SceneHandleImpl implements SceneHandle {
 					if ( cond.key.startsWith( 'choice:' ) ) {
 						return this.evaluateConditionWithHistory( cond, () => false );
 					}
-					return filter( cond );
+					return resolver( cond );
 				} ),
 		} ) );
 	}
@@ -783,14 +790,40 @@ export class SceneHandleImpl implements SceneHandle {
 			return createDialogContext( block, resolvedCharacter );
 		}
 		if ( isChoiceBlock( block ) ) {
-			const choiceFilter = this.callbacks.getChoiceFilter();
-			const taggedChoices = this.tagChoiceVisibility( block.choices ?? [], choiceFilter );
+			const resolver = this.callbacks.getConditionResolver();
+			const taggedChoices = this.tagChoiceVisibility( block.choices ?? [], resolver );
 			return createChoiceContext( block, taggedChoices, ( blockUuid, choiceUuid ) => {
 				this.recordChoice( blockUuid, choiceUuid );
 			}, resolvedCharacter );
 		}
 		if ( isConditionBlock( block ) ) {
-			return createConditionContext( resolvedCharacter );
+			const resolver = this.callbacks.getConditionResolver();
+			if ( resolver ) {
+				const rawGroups = block.conditions ?? [];
+				// Unified evaluator: choice: conditions resolved internally via choice history,
+				// game-state conditions delegated to the onResolveCondition callback.
+				// Same evaluator pattern as tagChoiceVisibility for CHOICE blocks.
+				const evaluate = ( cond: ExportCondition ): boolean =>
+					cond.key.startsWith( 'choice:' )
+						? this.evaluateConditionWithHistory( cond, () => false )
+						: resolver( cond );
+				const conditionGroups = rawGroups.map( ( conditions, i ) => ( {
+					conditions,
+					portIndex: i,
+					result: evaluateConditionChain( conditions, evaluate ),
+				} ) );
+				const ctx = createConditionContext( resolvedCharacter, conditionGroups );
+				// Auto-resolve from pre-evaluated groups — the handler can override with resolve().
+				// If the handler only calls next() without resolve(), the engine routes automatically.
+				const matched = conditionGroups.filter( g => g.result ).map( g => g.portIndex );
+				ctx._conditionResult = block.nativeProperties?.enableDispatcher
+					? matched
+					: ( matched[0] ?? -1 );
+				return ctx;
+			}
+			// No resolver installed — raw groups without pre-evaluation
+			const conditionGroups = ( block.conditions ?? [] ).map( ( conditions, i ) => ( { conditions, portIndex: i } ) );
+			return createConditionContext( resolvedCharacter, conditionGroups );
 		}
 		if ( isActionBlock( block ) ) {
 			return createActionContext( resolvedCharacter );

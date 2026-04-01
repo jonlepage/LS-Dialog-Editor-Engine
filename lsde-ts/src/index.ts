@@ -10,7 +10,7 @@ export type {
 	BlockType,
 	BlueprintExport, BlueprintScene, BlueprintBlock, BlueprintConnection, BlueprintBlockBase,
 	DialogBlock, ChoiceBlock, ConditionBlock, ActionBlock, NoteBlock,
-	ExportCondition, ExportAction, ChoiceItem, RuntimeChoiceItem,
+	ExportCondition, ExportAction, ChoiceItem, RuntimeChoiceItem, RuntimeConditionGroup,
 	NativeProperties, BlockCharacter, BlockMetadata, BlockProperty, BlockScreenshot,
 	Dictionary, DictionaryRow, ActionSignature, SignatureParam,
 

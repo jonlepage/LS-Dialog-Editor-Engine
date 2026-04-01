@@ -35,8 +35,8 @@ export class DialogueEngine implements IDialogueEngine {
 	private initialized = false;
 	/** Character resolution callback. Default: first character in the list. */
 	private _resolveCharacter: ( characters: BlockCharacter[] ) => BlockCharacter | undefined = ( chars ) => chars[0];
-	/** Choice visibility evaluator. When set, the engine tags each choice with `visible` before calling onChoice. */
-	private _choiceFilter: ( ( condition: ExportCondition ) => boolean ) | null = null;
+	/** Unified condition evaluator for choice visibility and condition block pre-evaluation. */
+	private _conditionResolver: ( ( condition: ExportCondition ) => boolean ) | null = null;
 
 	init( options: InitOptions ): DiagnosticReport {
 		const report = validateBlueprint( options );
@@ -66,8 +66,13 @@ export class DialogueEngine implements IDialogueEngine {
 		this._resolveCharacter = fn;
 	}
 
+	onResolveCondition( evaluator: ( condition: ExportCondition ) => boolean ): void {
+		this._conditionResolver = evaluator;
+	}
+
+	/** @deprecated Use onResolveCondition() instead. */
 	setChoiceFilter( evaluator: ( condition: ExportCondition ) => boolean ): void {
-		this._choiceFilter = evaluator;
+		this._conditionResolver = evaluator;
 	}
 
 	onValidateNextBlock( handler: ValidateNextBlockHandler ): void {
@@ -120,7 +125,7 @@ export class DialogueEngine implements IDialogueEngine {
 			onSceneStarted: ( h ) => this.activeScenes.set( sceneId, h ),
 			onSceneEnded: () => this.activeScenes.delete( sceneId ),
 			getResolveCharacter: () => this._resolveCharacter,
-			getChoiceFilter: () => this._choiceFilter,
+			getConditionResolver: () => this._conditionResolver,
 			getLocale: () => this.locale,
 		} );
 

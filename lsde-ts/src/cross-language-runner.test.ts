@@ -10,7 +10,6 @@ import type {
 	BlueprintExport, ConditionBlock,
 	DialogContext, ChoiceContext, ConditionContext, ActionContext,
 } from './types.js';
-import { evaluateConditionGroups } from './condition-evaluator.js';
 
 // ─── JSON Schema Types ──────────────────────────────────────────────────────
 
@@ -130,9 +129,9 @@ function runFlowTests( filename: string ): void {
 
 					engine.setLocale( suite.locale ?? 'en' );
 
-					// Install choice visibility filter from stateBridge conditions
+					// Install unified condition resolver from stateBridge conditions
 					const bridgeConditions = suite.stateBridge?.conditions ?? {};
-					engine.setChoiceFilter( ( cond ) => {
+					engine.onResolveCondition( ( cond ) => {
 						if ( cond.key in bridgeConditions ) {
 							const actual = String( bridgeConditions[cond.key] );
 							return cond.operator === '!=' ? actual !== cond.value : actual === cond.value;
@@ -165,16 +164,10 @@ function runFlowTests( filename: string ): void {
 						} else {
 							// Not the expected step — auto-advance (async track or passthrough)
 							if ( 'resolve' in context && blockType === 'CONDITION' ) {
-								// Evaluate condition groups from the block definition using stateBridge data
-								const groups = block.conditions ?? [];
-								const result = evaluateConditionGroups( groups, ( cond ) => {
-									if ( cond.key in bridgeConditions ) {
-										const actual = String( bridgeConditions[cond.key] );
-										return cond.operator === '!=' ? actual !== cond.value : actual === cond.value;
-									}
-									return true;
-								} );
-								( context as ConditionContext ).resolve( result );
+								// onResolveCondition pre-evaluates conditionGroups — derive result from .result + .portIndex
+								const cg = ( context as ConditionContext ).conditionGroups;
+								const match = cg.find( g => g.result );
+								( context as ConditionContext ).resolve( match ? match.portIndex : -1 );
 							}
 							if ( 'resolve' in context && blockType === 'ACTION' ) {
 								( context as ActionContext ).resolve();

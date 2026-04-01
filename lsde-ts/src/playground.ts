@@ -4,8 +4,24 @@ declare const console: { log: (...args: unknown[]) => void };
 // This file is excluded from build (tsconfig.json exclude).
 
 import { DialogueEngine, LsdeUtils } from "./index.js";
-import type { BlueprintExport, RuntimeChoiceItem } from "./index.js";
+import type { BlueprintExport, ExportCondition, RuntimeChoiceItem } from "./index.js";
 import blueprintJson from "../../blueprints/blueprint.json";
+
+// simulation
+function GameOnResolveCondition(cond: ExportCondition): boolean {
+	console.log('◽onResolveCondition:', cond)
+	const [target, key] = cond.key.split('.');
+	switch (target) {
+		case "VariableGlobal":
+			switch (key) {
+				case "key1": return true;
+				case "key2": return false;
+			}
+		default:
+			return true;
+	}
+}
+
 
 const testData = blueprintJson as unknown as BlueprintExport;
 const engine = new DialogueEngine();
@@ -29,12 +45,9 @@ engine.setLocale("fr");
 
 engine.onResolveCharacter((characters) => characters[0]);
 
-// Opt-in: install choice visibility filter (playground: all game-state conditions pass)
-engine.setChoiceFilter((cond) => {
-	// Simule un game state où variable_0 = "something_else"
-	if (cond.key === "variable_0") return cond.value === "something_else";
-	return true;
-});
+// Unified condition resolver — evaluates game-state conditions for both choice visibility and condition blocks.
+// choice: conditions are handled internally by the engine via choice history.
+engine.onResolveCondition(GameOnResolveCondition);
 
 // ─── 4 Required Handlers ────────────────────────────────────────────────────
 
@@ -61,7 +74,7 @@ engine.onDialog(({ block, context, next }) => {
 engine.onChoice(({ block, context, next }) => {
 	const { choices, selectChoice } = context;
 
-	// choices are tagged with .visible by the engine (setChoiceFilter installed above)
+	// choices are tagged with .visible by the engine (onResolveCondition installed above)
 	const visible = choices.filter((c) => c.visible !== false);
 	const timeout = block.nativeProperties?.timeout;
 	// le moteur de jeux decidera quel visible choix est actif par default
@@ -108,27 +121,33 @@ engine.onChoice(({ block, context, next }) => {
 	};
 });
 
-engine.onCondition(({ scene, block, context, next }) => {
-	const groups = block.conditions ?? [];
-	const isDispatcher = !!block.nativeProperties?.enableDispatcher;
+engine.onCondition(({ block, context, next }) => {
+	const { conditionGroups } = context;
+	const { nativeProperties } = block;
+	const isDispatcher = !!nativeProperties?.enableDispatcher;
 
-	const result = LsdeUtils.evaluateConditionGroups(
-		groups,
-		(cond) =>
-			LsdeUtils.isChoiceCondition(cond) ? scene.evaluateCondition(cond) : true, // playground: all game conditions pass
-		isDispatcher,
-	);
-
-	for (const [i, group] of groups.entries()) {
-		for (const cond of group) {
-			console.log(`   [case ${i}] ${cond.key} ${cond.operator} ${cond.value}`);
+	for (const [i, g] of conditionGroups.entries()) {
+		for (const cond of g.conditions) {
+			console.log(`   [case ${i}] ${g.portIndex} key:${cond.key} ${cond.operator} ${cond.value} → ${g.result}`);
 		}
 	}
+
+	// Derive result from pre-evaluated groups
+	const matched = conditionGroups
+		.filter((c) => c.result)
+		.map((c) => c.portIndex);
+
+	const result = isDispatcher
+		? matched
+		: matched.at(0) ?? -1;
+
 	console.log(
-		`\n🔀 CONDITION  ${block.label} — ${groups.length} groups${isDispatcher ? ' [DISPATCHER]' : ''} → ${JSON.stringify(result)}`,
+		`\n🔀 CONDITION  ${block.label} — ${conditionGroups.length} groups${isDispatcher ? " [DISPATCHER]" : ""
+		} → ${JSON.stringify(result)}`,
 	);
 	context.resolve(result);
 	next();
+
 });
 
 engine.onAction(({ block, context, next }) => {

@@ -36,7 +36,7 @@ function makeCallbacks(): SceneHandleCallbacks {
 		onSceneStarted: vi.fn(),
 		onSceneEnded: vi.fn(),
 		getResolveCharacter: () => ( chars ) => chars[0],
-		getChoiceFilter: () => null,
+		getConditionResolver: () => null,
 		getLocale: () => 'en',
 	};
 }
