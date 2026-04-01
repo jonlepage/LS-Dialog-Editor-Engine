@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>9.0</LangVersion>
+    <RootNamespace>LsdeDialogEngine.Newtonsoft</RootNamespace>
+    <AssemblyName>LsdeDialogEngine.Newtonsoft</AssemblyName>
+
+    <!-- NuGet package metadata -->
+    <PackageId>LsdeDialogEngine.Newtonsoft</PackageId>
+    <Version>0.2.0</Version>
+    <Authors>LepaSoft</Authors>
+    <Description>Newtonsoft.Json loader for LsdeDialogEngine — polymorphic BlueprintBlock deserialization for Unity</Description>
+    <PackageProjectUrl>https://github.com/jonlepage/LS-Dialog-Editor-Engine</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/jonlepage/LS-Dialog-Editor-Engine.git</RepositoryUrl>
+    <PackageTags>dialogue;dialog;engine;game;blueprint;lsde;json;newtonsoft;unity</PackageTags>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LsdeDialogEngine\LsdeDialogEngine.csproj" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\..\LICENSE" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>

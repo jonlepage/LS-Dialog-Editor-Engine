@@ -4,6 +4,10 @@ npm install @lsde/dialog-engine
 ```
 ```bash [C#]
 dotnet add package LsdeDialogEngine
+
+# JSON loader — choose ONE based on your platform:
+dotnet add package LsdeDialogEngine.Newtonsoft        # Unity
+dotnet add package LsdeDialogEngine.SystemTextJson    # .NET 5+ / Godot .NET
 ```
 ```bash [C++ (CMake)]
 # Add as a git submodule

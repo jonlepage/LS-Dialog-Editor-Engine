@@ -1,5 +1,15 @@
 ::: code-group
-```csharp [JSON — System.Text.Json (.NET 5+)]
+```csharp [JSON — LsdeDialogEngine.SystemTextJson]
+// Install: dotnet add package LsdeDialogEngine.SystemTextJson
+using LsdeDialogEngine;
+using LsdeDialogEngine.Json;
+
+var json = File.ReadAllText("blueprint.json");
+var blueprint = LsdeJson.Parse(json);
+engine.Init(new InitOptions { Data = blueprint });
+```
+```csharp [JSON — manual System.Text.Json]
+// Without companion package — manual converter setup
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using LsdeDialogEngine;
@@ -9,8 +19,8 @@ var options = new JsonSerializerOptions {
     PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     Converters = {
         new JsonStringEnumConverter(),
-        new BlueprintBlockConverter(),       // see below
-        new BlockPropertyValueConverter(),   // see below
+        new BlueprintBlockConverter(),       // see Polymorphic Dispatch
+        new BlockPropertyValueConverter(),
     },
 };
 var blueprint = JsonSerializer.Deserialize<BlueprintExport>(json, options);

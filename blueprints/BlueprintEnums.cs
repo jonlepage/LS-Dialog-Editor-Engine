@@ -8,13 +8,12 @@
 public static class LSDE_SCENES
 {
 	/// <summary>
-	/// <para>Scene: New Scene</para>
-	/// <para>3 ACTION, 3 CHOICE, 2 CONDITION, 15 DIALOG</para>
+	/// <para>Scene: Flow-001</para>
+	/// <para>2 ACTION, 1 CHOICE, 1 CONDITION, 8 DIALOG</para>
 	/// <para>Entry: <c>DIALOG-001</c></para>
-	/// <para>Emotions: <c>hangry</c>, <c>sad</c></para>
-	/// <para>Characters: <c>Boo</c>, <c>Gruht Tyron</c>, <c>Svelt Moon</c>, <c>Zoozo Zee</c>, <c>lia</c></para>
+	/// <para>Characters: <c>Boo</c>, <c>lia</c></para>
 	/// </summary>
-	public const string newScene = "3e0110a5-49bb-46fe-884b-05ce106af4cd";
+	public const string flow001 = "199c33e2-a4aa-44bb-8b70-16ce88824e82";
 
 }
 
@@ -28,278 +27,145 @@ public static class LSDE_BLOCKS
 {
 	/// <summary>
 	/// <para>🟧[ACTION] ACTION-001</para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// <para>In: <c>CONDITION-001</c></para>
+	/// <para>Scene: <c>Flow-001</c></para>
+	/// <para>In: <c>DIALOG-002</c></para>
+	/// <para>Out: <c>DIALOG-003</c></para>
 	/// </summary>
 	/// <remarks>
 	/// <image url="./_images/action.webp" />
 	/// </remarks>
-	public const string newSceneAction001 = "d72bcf6a-161b-4759-90dd-2ae10a58fdd3";
+	public const string flow001Action001 = "73fa0dce-df57-4040-b2d7-2db8dc5156c2";
 
 	/// <summary>
 	/// <para>🟧[ACTION] ACTION-002</para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// <para>In: <c>DIALOG-007</c></para>
-	/// </summary>
-	/// <remarks>
-	/// <image url="./_images/action.webp" />
-	/// </remarks>
-	public const string newSceneAction002 = "7662f44f-1836-4176-85b2-39f3c1bd4620";
-
-	/// <summary>
-	/// <para>🟧[ACTION] trigger_reveal_action-AI</para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// <para>In: <c>stalker_encounter-AI</c>, <c>near_miss_escape-AI</c></para>
-	/// <para>Out: <c>cliffhanger_reveal-AI</c></para>
-	/// </summary>
-	/// <remarks>
-	/// <image url="./_images/action.webp" />
-	/// </remarks>
-	public const string newSceneTriggerRevealActionAi = "f0792ff1-da03-4834-b15f-8652df3b041a";
-
-	/// <summary>
-	/// <para>⬜[CHOICE] CHOICE-001</para>
-	/// <para>Characters: <c>lia</c></para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// <para>In: <c>DIALOG-001</c></para>
-	/// <para>Out: <c>DIALOG-002</c>, <c>DIALOG-004</c></para>
-	/// </summary>
-	/// <remarks>
-	/// <image url="./_images/choice.webp" />
-	/// </remarks>
-	public const string newSceneChoice001 = "014f503a-6688-429d-a5fe-801cf33f2410";
-
-	/// <summary>
-	/// <para>⬜[CHOICE] CHOICE-002</para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// <para>In: <c>DIALOG-002</c></para>
+	/// <para>Scene: <c>Flow-001</c></para>
+	/// <para>In: <c>DIALOG-003</c></para>
 	/// <para>Out: <c>CONDITION-001</c></para>
 	/// </summary>
 	/// <remarks>
-	/// <image url="./_images/choice.webp" />
+	/// <image url="./_images/action.webp" />
 	/// </remarks>
-	public const string newSceneChoice002 = "2b184947-49f9-4e57-8600-70b46e2cd0ba";
+	public const string flow001Action002 = "fed6440c-1a2a-47f8-9e40-3dbf3ce25492";
 
 	/// <summary>
-	/// <para>⬜[CHOICE] stealth_choice-AI</para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// <para>In: <c>anxiety_observation-AI</c></para>
-	/// <para>Out: <c>silence_path-AI</c>, <c>flight_path-AI</c></para>
+	/// <para>⬜[CHOICE] CHOICE-001</para>
+	/// <para>Scene: <c>Flow-001</c></para>
+	/// <para>In: <c>DIALOG-005</c></para>
+	/// <para>Out: <c>DIALOG-006</c>, <c>DIALOG-007</c></para>
 	/// </summary>
 	/// <remarks>
 	/// <image url="./_images/choice.webp" />
 	/// </remarks>
-	public const string newSceneStealthChoiceAi = "e55d4d79-7642-452d-aea3-cb44ca37a826";
+	public const string flow001Choice001 = "23e9aeda-e1db-4f8e-ae9f-afaf76786e95";
 
 	/// <summary>
 	/// <para>🟪[CONDITION] CONDITION-001</para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// <para>In: <c>CHOICE-002</c></para>
-	/// <para>Out: <c>ACTION-001</c>, <c>DIALOG-003</c></para>
+	/// <para>Scene: <c>Flow-001</c></para>
+	/// <para>In: <c>ACTION-002</c></para>
+	/// <para>Out: <c>DIALOG-004</c>, <c>DIALOG-008</c></para>
 	/// </summary>
 	/// <remarks>
 	/// <image url="./_images/cond.webp" />
 	/// </remarks>
-	public const string newSceneCondition001 = "4074b6c2-bfc8-44f1-9a29-cda529bf522a";
-
-	/// <summary>
-	/// <para>🟪[CONDITION] noise_check-AI</para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// <para>In: <c>silence_path-AI</c>, <c>flight_path-AI</c></para>
-	/// <para>Out: <c>stalker_encounter-AI</c>, <c>near_miss_escape-AI</c></para>
-	/// </summary>
-	/// <remarks>
-	/// <image url="./_images/cond.webp" />
-	/// </remarks>
-	public const string newSceneNoiseCheckAi = "f7923356-5267-430a-bd6c-b9392eb15a24";
-
-	/// <summary>
-	/// <para>🟦[DIALOG] anxiety_observation-AI</para>
-	/// <para>"*Boo tremble de tout son long, ses grands yeux dilatés scrutant l&apos;obscurité mouvante qui semble se détacher du brouillar..."</para>
-	/// <para>Characters: <c>Boo</c></para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// <para>In: <c>survival_setup-AI</c></para>
-	/// <para>Out: <c>stealth_choice-AI</c></para>
-	/// </summary>
-	/// <remarks>
-	/// <image url="./_images/dialog.webp" />
-	/// </remarks>
-	public const string newSceneAnxietyObservationAi = "b91fb645-cc0f-49b0-a456-25a596d0bd0b";
-
-	/// <summary>
-	/// <para>🟦[DIALOG] cliffhanger_reveal-AI</para>
-	/// <para>"Regarde devant nous... ce n&apos;est pas la sortie du Thicket. *Lia s&apos;arrête net, la lueur de sa torche vacillante révélant u..."</para>
-	/// <para>Characters: <c>lia</c></para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// <para>In: <c>trigger_reveal_action-AI</c></para>
-	/// </summary>
-	/// <remarks>
-	/// <image url="./_images/dialog.webp" />
-	/// </remarks>
-	public const string newSceneCliffhangerRevealAi = "36edbe6e-c48e-44b6-9037-e7bd489a3155";
+	public const string flow001Condition001 = "f80757d6-73c0-4160-8449-e494f5c485b7";
 
 	/// <summary>
 	/// <para>🟦[DIALOG] DIALOG-001 (entry)</para>
-	/// <para>"C2"</para>
-	/// <para>Characters: <c>lia</c> (sad x2), <c>Boo</c> (sad x2), <c>Svelt Moon</c> (sad x2), <c>Gruht Tyron</c> (sad x2)</para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// <para>Out: <c>CHOICE-001</c></para>
+	/// <para>"Salut , dit moi que fait tu la ?"</para>
+	/// <para>Characters: <c>lia</c></para>
+	/// <para>Scene: <c>Flow-001</c></para>
+	/// <para>Out: <c>DIALOG-002</c></para>
 	/// </summary>
 	/// <remarks>
 	/// <image url="./_images/dialog.webp" />
 	/// </remarks>
-	public const string newSceneDialog001 = "6462dab3-0eb4-4a2c-a505-407556441156";
+	public const string flow001Dialog001 = "f2402df4-0081-4663-9fce-6dca72e9ff77";
 
 	/// <summary>
 	/// <para>🟦[DIALOG] DIALOG-002</para>
-	/// <para>"D2"</para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// <para>In: <c>CHOICE-001</c></para>
-	/// <para>Out: <c>CHOICE-002</c></para>
+	/// <para>"Ha j&apos;ai tres mal et jessai de me reposer , je me suis cogner a cette roche la bas !"</para>
+	/// <para>Scene: <c>Flow-001</c></para>
+	/// <para>In: <c>DIALOG-001</c></para>
+	/// <para>Out: <c>ACTION-001</c></para>
 	/// </summary>
 	/// <remarks>
 	/// <image url="./_images/dialog.webp" />
 	/// </remarks>
-	public const string newSceneDialog002 = "c66437af-54b7-4a75-9efa-713e983c145d";
+	public const string flow001Dialog002 = "c302b3a4-3433-4cf4-8402-a61e33ba1a84";
 
 	/// <summary>
 	/// <para>🟦[DIALOG] DIALOG-003</para>
-	/// <para>"D5"</para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// <para>In: <c>CONDITION-001</c></para>
-	/// </summary>
-	/// <remarks>
-	/// <image url="./_images/dialog.webp" />
-	/// </remarks>
-	public const string newSceneDialog003 = "dfc30c4c-a1aa-4e76-81b6-640bf447351b";
-
-	/// <summary>
-	/// <para>🟦[DIALOG] DIALOG-004</para>
-	/// <para>"Hehehe!"</para>
-	/// <para>Characters: <c>Gruht Tyron</c> (hangry)</para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// <para>In: <c>CHOICE-001</c></para>
-	/// <para>Out: <c>DIALOG-005</c>, <c>DIALOG-006</c></para>
-	/// </summary>
-	/// <remarks>
-	/// <image url="./_images/dialog.webp" />
-	/// </remarks>
-	public const string newSceneDialog004 = "4a800564-098f-4b88-a36b-f5d03f642944";
-
-	/// <summary>
-	/// <para>🟦[DIALOG] DIALOG-005</para>
-	/// <para>"Je suis le roi!"</para>
-	/// <para>Characters: <c>Gruht Tyron</c></para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// <para>In: <c>DIALOG-004</c></para>
-	/// <para>Out: <c>DIALOG-008</c></para>
-	/// </summary>
-	/// <remarks>
-	/// <image url="./_images/dialog.webp" />
-	/// </remarks>
-	public const string newSceneDialog005 = "2a087cbc-3b00-457a-9448-538e39a475ab";
-
-	/// <summary>
-	/// <para>🟦[DIALOG] DIALOG-006</para>
-	/// <para>"heu, je suis pas certain de comprendre"</para>
-	/// <para>Characters: <c>Zoozo Zee</c></para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// <para>In: <c>DIALOG-004</c></para>
-	/// <para>Out: <c>DIALOG-007</c></para>
-	/// </summary>
-	/// <remarks>
-	/// <image url="./_images/dialog.webp" />
-	/// </remarks>
-	public const string newSceneDialog006 = "ef7301d9-c8ce-4416-9a28-4b1f5595ac74";
-
-	/// <summary>
-	/// <para>🟦[DIALOG] DIALOG-007</para>
-	/// <para>"heu non mais ca va pas !? ces moi qui est las"</para>
-	/// <para>Characters: <c>Zoozo Zee</c></para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// <para>In: <c>DIALOG-006</c></para>
+	/// <para>"&gt; ces la roche etrange qui semble avoir blesser cette creature !"</para>
+	/// <para>Scene: <c>Flow-001</c></para>
+	/// <para>In: <c>ACTION-001</c></para>
 	/// <para>Out: <c>ACTION-002</c></para>
 	/// </summary>
 	/// <remarks>
 	/// <image url="./_images/dialog.webp" />
 	/// </remarks>
-	public const string newSceneDialog007 = "d0cf7ee4-8dcb-4b75-b373-5d4a1dca73be";
+	public const string flow001Dialog003 = "157817bf-073e-4368-89de-52e295ffcecb";
+
+	/// <summary>
+	/// <para>🟦[DIALOG] DIALOG-004</para>
+	/// <para>"Je compatis a votre douleur ! miouw"</para>
+	/// <para>Characters: <c>Boo</c></para>
+	/// <para>Scene: <c>Flow-001</c></para>
+	/// <para>In: <c>CONDITION-001</c></para>
+	/// <para>Out: <c>DIALOG-005</c></para>
+	/// </summary>
+	/// <remarks>
+	/// <image url="./_images/dialog.webp" />
+	/// </remarks>
+	public const string flow001Dialog004 = "f6262aa9-6d90-46d1-a0fd-f9108ded43ff";
+
+	/// <summary>
+	/// <para>🟦[DIALOG] DIALOG-005</para>
+	/// <para>"Moi aussi"</para>
+	/// <para>Characters: <c>lia</c></para>
+	/// <para>Scene: <c>Flow-001</c></para>
+	/// <para>In: <c>DIALOG-004</c></para>
+	/// <para>Out: <c>CHOICE-001</c></para>
+	/// </summary>
+	/// <remarks>
+	/// <image url="./_images/dialog.webp" />
+	/// </remarks>
+	public const string flow001Dialog005 = "a458323a-d832-405f-8f47-9ca096d7eea6";
+
+	/// <summary>
+	/// <para>🟦[DIALOG] DIALOG-006</para>
+	/// <para>"venez je vais vous aider"</para>
+	/// <para>Characters: <c>lia</c></para>
+	/// <para>Scene: <c>Flow-001</c></para>
+	/// <para>In: <c>CHOICE-001</c></para>
+	/// </summary>
+	/// <remarks>
+	/// <image url="./_images/dialog.webp" />
+	/// </remarks>
+	public const string flow001Dialog006 = "8994d27a-592b-4fe6-9311-754f6f7d491d";
+
+	/// <summary>
+	/// <para>🟦[DIALOG] DIALOG-007</para>
+	/// <para>"a la prochaine"</para>
+	/// <para>Characters: <c>lia</c></para>
+	/// <para>Scene: <c>Flow-001</c></para>
+	/// <para>In: <c>CHOICE-001</c></para>
+	/// </summary>
+	/// <remarks>
+	/// <image url="./_images/dialog.webp" />
+	/// </remarks>
+	public const string flow001Dialog007 = "03773f48-310f-43e8-a7bb-1062f1c92d83";
 
 	/// <summary>
 	/// <para>🟦[DIALOG] DIALOG-008</para>
-	/// <para>"ces pas moi le probleme !!!"</para>
-	/// <para>Characters: <c>Gruht Tyron</c></para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// <para>In: <c>DIALOG-005</c></para>
-	/// </summary>
-	/// <remarks>
-	/// <image url="./_images/dialog.webp" />
-	/// </remarks>
-	public const string newSceneDialog008 = "7ab18c86-c98e-41f1-99ca-51c7e66cb144";
-
-	/// <summary>
-	/// <para>🟦[DIALOG] flight_path-AI</para>
-	/// <para>"C&apos;est trop tard pour se cacher, l&apos;air s&apos;est figé et il sait exactement que nous sommes ici ! *Lia attrape violemment Boo..."</para>
-	/// <para>Characters: <c>lia</c></para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// <para>In: <c>stealth_choice-AI</c></para>
-	/// <para>Out: <c>noise_check-AI</c></para>
-	/// </summary>
-	/// <remarks>
-	/// <image url="./_images/dialog.webp" />
-	/// </remarks>
-	public const string newSceneFlightPathAi = "39327ee6-8f67-448a-8cb1-e888cc597a8b";
-
-	/// <summary>
-	/// <para>🟦[DIALOG] near_miss_escape-AI</para>
-	/// <para>"Le cliquetis s&apos;éloigne lentement vers le nord, mais ne te détrompe pas, il tourne en rond autour de nous comme un prédat..."</para>
-	/// <para>Characters: <c>lia</c></para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// <para>In: <c>noise_check-AI</c></para>
-	/// <para>Out: <c>trigger_reveal_action-AI</c></para>
-	/// </summary>
-	/// <remarks>
-	/// <image url="./_images/dialog.webp" />
-	/// </remarks>
-	public const string newSceneNearMissEscapeAi = "14d056d8-5bc2-4df7-babf-f7b67d8daa3c";
-
-	/// <summary>
-	/// <para>🟦[DIALOG] silence_path-AI</para>
-	/// <para>"On ne bouge plus, Boo. *Lia plaque sa main glacée sur le museau du petit chat volant, sentant son cœur battre comme celu..."</para>
-	/// <para>Characters: <c>lia</c></para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// <para>In: <c>stealth_choice-AI</c></para>
-	/// <para>Out: <c>noise_check-AI</c></para>
-	/// </summary>
-	/// <remarks>
-	/// <image url="./_images/dialog.webp" />
-	/// </remarks>
-	public const string newSceneSilencePathAi = "ce74b7c3-49b7-4515-891b-6a80ab79f323";
-
-	/// <summary>
-	/// <para>🟦[DIALOG] stalker_encounter-AI</para>
-	/// <para>"*Une silhouette immense et distordue émerge soudainement du brouillard, ses membres trop longs claquant contre le sol co..."</para>
+	/// <para>"hehehe"</para>
 	/// <para>Characters: <c>Boo</c></para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// <para>In: <c>noise_check-AI</c></para>
-	/// <para>Out: <c>trigger_reveal_action-AI</c></para>
+	/// <para>Scene: <c>Flow-001</c></para>
+	/// <para>In: <c>CONDITION-001</c></para>
 	/// </summary>
 	/// <remarks>
 	/// <image url="./_images/dialog.webp" />
 	/// </remarks>
-	public const string newSceneStalkerEncounterAi = "eaa4fb18-28f1-4f96-85c7-f5366b592a6c";
-
-	/// <summary>
-	/// <para>🟦[DIALOG] survival_setup-AI</para>
-	/// <para>"Chut. Ne bouge plus d&apos;un cil, Boo. Est-ce que tu entends ce cliquetis sec et rythmique qui résonne contre l&apos;écorce putri..."</para>
-	/// <para>Characters: <c>lia</c></para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// <para>Out: <c>anxiety_observation-AI</c></para>
-	/// </summary>
-	/// <remarks>
-	/// <image url="./_images/dialog.webp" />
-	/// </remarks>
-	public const string newSceneSurvivalSetupAi = "a32834d4-45df-4540-8c0e-5cb093ea5862";
+	public const string flow001Dialog008 = "80a3b47d-1262-4bb4-a520-915fc88f75ea";
 
 }
 
@@ -311,51 +177,19 @@ public static class LSDE_BLOCKS
 public static class LSDE_CHOICES
 {
 	/// <summary>
-	/// <para>⬜[CHOICE_ITEM] 17e98de3-1690-4ca4-8ea5-8070c15b1fe1</para>
-	/// <para>"C1"</para>
-	/// <para>Scene: <c>New Scene</c></para>
+	/// <para>⬜[CHOICE_ITEM] aidez</para>
+	/// <para>"aidez"</para>
+	/// <para>Scene: <c>Flow-001</c></para>
 	/// </summary>
-	/// <summary>See <see cref="LSDE_BLOCKS.newSceneChoice001"/></summary>
-	public const string newScene17e98de316904ca48ea58070c15b1fe1 = "17e98de3-1690-4ca4-8ea5-8070c15b1fe1";
+	/// <summary>See <see cref="LSDE_BLOCKS.flow001Choice001"/></summary>
+	public const string flow001Aidez = "decb34ee-dbb8-4f94-b770-9d94f63a3eaf";
 
 	/// <summary>
-	/// <para>⬜[CHOICE_ITEM] a0eee458-6ccc-4a23-bd36-0b3d1f73771e</para>
-	/// <para>"C2"</para>
-	/// <para>Scene: <c>New Scene</c></para>
+	/// <para>⬜[CHOICE_ITEM] continuer</para>
+	/// <para>"continuer"</para>
+	/// <para>Scene: <c>Flow-001</c></para>
 	/// </summary>
-	/// <summary>See <see cref="LSDE_BLOCKS.newSceneChoice001"/></summary>
-	public const string newSceneA0eee4586ccc4a23Bd360b3d1f73771e = "a0eee458-6ccc-4a23-bd36-0b3d1f73771e";
-
-	/// <summary>
-	/// <para>⬜[CHOICE_ITEM] C1.1</para>
-	/// <para>"C1.1"</para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// </summary>
-	/// <summary>See <see cref="LSDE_BLOCKS.newSceneChoice002"/></summary>
-	public const string newSceneC11 = "d16d21ea-ecf8-4172-aaa3-668df80e9853";
-
-	/// <summary>
-	/// <para>⬜[CHOICE_ITEM] C2.1</para>
-	/// <para>"C2.1"</para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// </summary>
-	/// <summary>See <see cref="LSDE_BLOCKS.newSceneChoice002"/></summary>
-	public const string newSceneC21 = "e306346e-6bcc-4564-8b19-e2ed28fabafe";
-
-	/// <summary>
-	/// <para>⬜[CHOICE_ITEM] Rester parfaitement immobile dans l&apos;ombre</para>
-	/// <para>"Rester parfaitement immobile dans l&apos;ombre"</para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// </summary>
-	/// <summary>See <see cref="LSDE_BLOCKS.newSceneStealthChoiceAi"/></summary>
-	public const string newSceneResterParfaitementImmobileDansLOmbre = "3ff6be38-0db4-4d24-98a0-bbb21be19d4a";
-
-	/// <summary>
-	/// <para>⬜[CHOICE_ITEM] Courir vers la lueur lointaine</para>
-	/// <para>"Courir vers la lueur lointaine"</para>
-	/// <para>Scene: <c>New Scene</c></para>
-	/// </summary>
-	/// <summary>See <see cref="LSDE_BLOCKS.newSceneStealthChoiceAi"/></summary>
-	public const string newSceneCourirVersLaLueurLointaine = "7b0f9b9a-6e4d-444f-bdf9-a3be47d89140";
+	/// <summary>See <see cref="LSDE_BLOCKS.flow001Choice001"/></summary>
+	public const string flow001Continuer = "bfc4d9f3-3315-4d8b-8fc9-17e867521126";
 
 }

@@ -10,13 +10,12 @@
  */
 namespace LSDE_SCENES {
 	/**
-	 * @brief Scene: New Scene
-	 * 3 ACTION, 3 CHOICE, 2 CONDITION, 15 DIALOG
+	 * @brief Scene: Flow-001
+	 * 2 ACTION, 1 CHOICE, 1 CONDITION, 8 DIALOG
 	 * Entry: `DIALOG-001`
-	 * - Emotions: `hangry`, `sad`
-	 * - Characters: `Boo`, `Gruht Tyron`, `Svelt Moon`, `Zoozo Zee`, `lia`
+	 * - Characters: `Boo`, `lia`
 	 */
-	constexpr const char* newScene = "3e0110a5-49bb-46fe-884b-05ce106af4cd";
+	constexpr const char* flow001 = "199c33e2-a4aa-44bb-8b70-16ce88824e82";
 
 }
 
@@ -29,264 +28,140 @@ namespace LSDE_SCENES {
 namespace LSDE_BLOCKS {
 	/**
 	 * @brief 🟧[ACTION] ACTION-001
-	 * - Scene: `New Scene`
-	 * - In: `CONDITION-001`
-	 * `signatureID1`(a, 2)
+	 * - Scene: `Flow-001`
+	 * - In: `DIALOG-002`
+	 * - Out: `DIALOG-003`
+	 * `moveCameraTo`(InterestPoint1)
 	 * ---
 	 * <image url="./_images/action.webp" />
 	 */
-	constexpr const char* newSceneAction001 = "d72bcf6a-161b-4759-90dd-2ae10a58fdd3";
+	constexpr const char* flow001Action001 = "73fa0dce-df57-4040-b2d7-2db8dc5156c2";
 
 	/**
 	 * @brief 🟧[ACTION] ACTION-002
-	 * - Scene: `New Scene`
-	 * - In: `DIALOG-007`
-	 * `signatureID1`(item2, 1)
+	 * - Scene: `Flow-001`
+	 * - In: `DIALOG-003`
+	 * - Out: `CONDITION-001`
+	 * `moveCameraTo`(a1)
 	 * ---
 	 * <image url="./_images/action.webp" />
 	 */
-	constexpr const char* newSceneAction002 = "7662f44f-1836-4176-85b2-39f3c1bd4620";
-
-	/**
-	 * @brief 🟧[ACTION] trigger_reveal_action-AI
-	 * - Scene: `New Scene`
-	 * - In: `stalker_encounter-AI`, `near_miss_escape-AI`
-	 * - Out: `cliffhanger_reveal-AI`
-	 * `trigger_forest_collapse`(high_tension)
-	 * ---
-	 * <image url="./_images/action.webp" />
-	 */
-	constexpr const char* newSceneTriggerRevealActionAi = "f0792ff1-da03-4834-b15f-8652df3b041a";
+	constexpr const char* flow001Action002 = "fed6440c-1a2a-47f8-9e40-3dbf3ce25492";
 
 	/**
 	 * @brief ⬜[CHOICE] CHOICE-001
-	 * - Characters: `lia`
-	 * - Scene: `New Scene`
-	 * - In: `DIALOG-001`
-	 * - Out: `DIALOG-002`, `DIALOG-004`
-	 * - Choices: `17e98de3-1690-4ca4-8ea5-8070c15b1fe1`, `a0eee458-6ccc-4a23-bd36-0b3d1f73771e`
+	 * - Scene: `Flow-001`
+	 * - In: `DIALOG-005`
+	 * - Out: `DIALOG-006`, `DIALOG-007`
+	 * - Choices: `aidez`, `continuer`
 	 * ---
 	 * <image url="./_images/choice.webp" />
 	 */
-	constexpr const char* newSceneChoice001 = "014f503a-6688-429d-a5fe-801cf33f2410";
-
-	/**
-	 * @brief ⬜[CHOICE] CHOICE-002
-	 * - Scene: `New Scene`
-	 * - In: `DIALOG-002`
-	 * - Out: `CONDITION-001`
-	 * - Choices: `C1.1`, `C2.1`
-	 * ---
-	 * <image url="./_images/choice.webp" />
-	 */
-	constexpr const char* newSceneChoice002 = "2b184947-49f9-4e57-8600-70b46e2cd0ba";
-
-	/**
-	 * @brief ⬜[CHOICE] stealth_choice-AI
-	 * - Scene: `New Scene`
-	 * - In: `anxiety_observation-AI`
-	 * - Out: `silence_path-AI`, `flight_path-AI`
-	 * - Choices: `Rester parfaitement immobile dans l'ombre`, `Courir vers la lueur lointaine`
-	 * ---
-	 * <image url="./_images/choice.webp" />
-	 */
-	constexpr const char* newSceneStealthChoiceAi = "e55d4d79-7642-452d-aea3-cb44ca37a826";
+	constexpr const char* flow001Choice001 = "23e9aeda-e1db-4f8e-ae9f-afaf76786e95";
 
 	/**
 	 * @brief 🟪[CONDITION] CONDITION-001
-	 * - Scene: `New Scene`
-	 * - In: `CHOICE-002`
-	 * - Out: `ACTION-001`, `DIALOG-003`
-	 * `choice:014f503a-6688-429d-a5fe-801cf33f2410` = `a0eee458-6ccc-4a23-bd36-0b3d1f73771e`
-	 * `choice:2b184947-49f9-4e57-8600-70b46e2cd0ba` = `e306346e-6bcc-4564-8b19-e2ed28fabafe`
+	 * - Scene: `Flow-001`
+	 * - In: `ACTION-002`
+	 * - Out: `DIALOG-004`, `DIALOG-008`
+	 * Case 0:
+	 * `VariableGlobal.key1` = `1`
+	 * Case 1:
+	 * `VariableGlobal.key2` = `2`
 	 * ---
 	 * <image url="./_images/cond.webp" />
 	 */
-	constexpr const char* newSceneCondition001 = "4074b6c2-bfc8-44f1-9a29-cda529bf522a";
-
-	/**
-	 * @brief 🟪[CONDITION] noise_check-AI
-	 * - Scene: `New Scene`
-	 * - In: `silence_path-AI`, `flight_path-AI`
-	 * - Out: `stalker_encounter-AI`, `near_miss_escape-AI`
-	 * `noise_level` > `15`
-	 * ---
-	 * <image url="./_images/cond.webp" />
-	 */
-	constexpr const char* newSceneNoiseCheckAi = "f7923356-5267-430a-bd6c-b9392eb15a24";
-
-	/**
-	 * @brief 🟦[DIALOG] anxiety_observation-AI
-	 * "*Boo tremble de tout son long, ses grands yeux dilatés scrutant l'obscurité mouvante qui semble se détacher du brouillar..."
-	 * - Characters: `Boo`
-	 * - Scene: `New Scene`
-	 * - In: `survival_setup-AI`
-	 * - Out: `stealth_choice-AI`
-	 * ---
-	 * <image url="./_images/dialog.webp" />
-	 */
-	constexpr const char* newSceneAnxietyObservationAi = "b91fb645-cc0f-49b0-a456-25a596d0bd0b";
-
-	/**
-	 * @brief 🟦[DIALOG] cliffhanger_reveal-AI
-	 * "Regarde devant nous... ce n'est pas la sortie du Thicket. *Lia s'arrête net, la lueur de sa torche vacillante révélant u..."
-	 * - Characters: `lia`
-	 * - Scene: `New Scene`
-	 * - In: `trigger_reveal_action-AI`
-	 * ---
-	 * <image url="./_images/dialog.webp" />
-	 */
-	constexpr const char* newSceneCliffhangerRevealAi = "36edbe6e-c48e-44b6-9037-e7bd489a3155";
+	constexpr const char* flow001Condition001 = "f80757d6-73c0-4160-8449-e494f5c485b7";
 
 	/**
 	 * @brief 🟦[DIALOG] DIALOG-001 (entry)
-	 * "C2"
-	 * - Characters: `lia` (sad x2), `Boo` (sad x2), `Svelt Moon` (sad x2), `Gruht Tyron` (sad x2)
-	 * - Scene: `New Scene`
-	 * - Out: `CHOICE-001`
+	 * "Salut , dit moi que fait tu la ?"
+	 * - Characters: `lia`
+	 * - Scene: `Flow-001`
+	 * - Out: `DIALOG-002`
 	 * ---
 	 * <image url="./_images/dialog.webp" />
 	 */
-	constexpr const char* newSceneDialog001 = "6462dab3-0eb4-4a2c-a505-407556441156";
+	constexpr const char* flow001Dialog001 = "f2402df4-0081-4663-9fce-6dca72e9ff77";
 
 	/**
 	 * @brief 🟦[DIALOG] DIALOG-002
-	 * "D2"
-	 * - Scene: `New Scene`
-	 * - In: `CHOICE-001`
-	 * - Out: `CHOICE-002`
+	 * "Ha j'ai tres mal et jessai de me reposer , je me suis cogner a cette roche la bas !"
+	 * - Scene: `Flow-001`
+	 * - In: `DIALOG-001`
+	 * - Out: `ACTION-001`
 	 * ---
 	 * <image url="./_images/dialog.webp" />
 	 */
-	constexpr const char* newSceneDialog002 = "c66437af-54b7-4a75-9efa-713e983c145d";
+	constexpr const char* flow001Dialog002 = "c302b3a4-3433-4cf4-8402-a61e33ba1a84";
 
 	/**
 	 * @brief 🟦[DIALOG] DIALOG-003
-	 * "D5"
-	 * - Scene: `New Scene`
-	 * - In: `CONDITION-001`
-	 * ---
-	 * <image url="./_images/dialog.webp" />
-	 */
-	constexpr const char* newSceneDialog003 = "dfc30c4c-a1aa-4e76-81b6-640bf447351b";
-
-	/**
-	 * @brief 🟦[DIALOG] DIALOG-004
-	 * "Hehehe!"
-	 * - Characters: `Gruht Tyron` (hangry)
-	 * - Scene: `New Scene`
-	 * - In: `CHOICE-001`
-	 * - Out: `DIALOG-005`, `DIALOG-006`
-	 * ---
-	 * <image url="./_images/dialog.webp" />
-	 */
-	constexpr const char* newSceneDialog004 = "4a800564-098f-4b88-a36b-f5d03f642944";
-
-	/**
-	 * @brief 🟦[DIALOG] DIALOG-005
-	 * "Je suis le roi!"
-	 * - Characters: `Gruht Tyron`
-	 * - Scene: `New Scene`
-	 * - In: `DIALOG-004`
-	 * - Out: `DIALOG-008`
-	 * ---
-	 * <image url="./_images/dialog.webp" />
-	 */
-	constexpr const char* newSceneDialog005 = "2a087cbc-3b00-457a-9448-538e39a475ab";
-
-	/**
-	 * @brief 🟦[DIALOG] DIALOG-006
-	 * "heu, je suis pas certain de comprendre"
-	 * - Characters: `Zoozo Zee`
-	 * - Scene: `New Scene`
-	 * - In: `DIALOG-004`
-	 * - Out: `DIALOG-007`
-	 * ---
-	 * <image url="./_images/dialog.webp" />
-	 */
-	constexpr const char* newSceneDialog006 = "ef7301d9-c8ce-4416-9a28-4b1f5595ac74";
-
-	/**
-	 * @brief 🟦[DIALOG] DIALOG-007
-	 * "heu non mais ca va pas !? ces moi qui est las"
-	 * - Characters: `Zoozo Zee`
-	 * - Scene: `New Scene`
-	 * - In: `DIALOG-006`
+	 * "> ces la roche etrange qui semble avoir blesser cette creature !"
+	 * - Scene: `Flow-001`
+	 * - In: `ACTION-001`
 	 * - Out: `ACTION-002`
 	 * ---
 	 * <image url="./_images/dialog.webp" />
 	 */
-	constexpr const char* newSceneDialog007 = "d0cf7ee4-8dcb-4b75-b373-5d4a1dca73be";
+	constexpr const char* flow001Dialog003 = "157817bf-073e-4368-89de-52e295ffcecb";
+
+	/**
+	 * @brief 🟦[DIALOG] DIALOG-004
+	 * "Je compatis a votre douleur ! miouw"
+	 * - Characters: `Boo`
+	 * - Scene: `Flow-001`
+	 * - In: `CONDITION-001`
+	 * - Out: `DIALOG-005`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	constexpr const char* flow001Dialog004 = "f6262aa9-6d90-46d1-a0fd-f9108ded43ff";
+
+	/**
+	 * @brief 🟦[DIALOG] DIALOG-005
+	 * "Moi aussi"
+	 * - Characters: `lia`
+	 * - Scene: `Flow-001`
+	 * - In: `DIALOG-004`
+	 * - Out: `CHOICE-001`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	constexpr const char* flow001Dialog005 = "a458323a-d832-405f-8f47-9ca096d7eea6";
+
+	/**
+	 * @brief 🟦[DIALOG] DIALOG-006
+	 * "venez je vais vous aider"
+	 * - Characters: `lia`
+	 * - Scene: `Flow-001`
+	 * - In: `CHOICE-001`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	constexpr const char* flow001Dialog006 = "8994d27a-592b-4fe6-9311-754f6f7d491d";
+
+	/**
+	 * @brief 🟦[DIALOG] DIALOG-007
+	 * "a la prochaine"
+	 * - Characters: `lia`
+	 * - Scene: `Flow-001`
+	 * - In: `CHOICE-001`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	constexpr const char* flow001Dialog007 = "03773f48-310f-43e8-a7bb-1062f1c92d83";
 
 	/**
 	 * @brief 🟦[DIALOG] DIALOG-008
-	 * "ces pas moi le probleme !!!"
-	 * - Characters: `Gruht Tyron`
-	 * - Scene: `New Scene`
-	 * - In: `DIALOG-005`
-	 * ---
-	 * <image url="./_images/dialog.webp" />
-	 */
-	constexpr const char* newSceneDialog008 = "7ab18c86-c98e-41f1-99ca-51c7e66cb144";
-
-	/**
-	 * @brief 🟦[DIALOG] flight_path-AI
-	 * "C'est trop tard pour se cacher, l'air s'est figé et il sait exactement que nous sommes ici ! *Lia attrape violemment Boo..."
-	 * - Characters: `lia`
-	 * - Scene: `New Scene`
-	 * - In: `stealth_choice-AI`
-	 * - Out: `noise_check-AI`
-	 * ---
-	 * <image url="./_images/dialog.webp" />
-	 */
-	constexpr const char* newSceneFlightPathAi = "39327ee6-8f67-448a-8cb1-e888cc597a8b";
-
-	/**
-	 * @brief 🟦[DIALOG] near_miss_escape-AI
-	 * "Le cliquetis s'éloigne lentement vers le nord, mais ne te détrompe pas, il tourne en rond autour de nous comme un prédat..."
-	 * - Characters: `lia`
-	 * - Scene: `New Scene`
-	 * - In: `noise_check-AI`
-	 * - Out: `trigger_reveal_action-AI`
-	 * ---
-	 * <image url="./_images/dialog.webp" />
-	 */
-	constexpr const char* newSceneNearMissEscapeAi = "14d056d8-5bc2-4df7-babf-f7b67d8daa3c";
-
-	/**
-	 * @brief 🟦[DIALOG] silence_path-AI
-	 * "On ne bouge plus, Boo. *Lia plaque sa main glacée sur le museau du petit chat volant, sentant son cœur battre comme celu..."
-	 * - Characters: `lia`
-	 * - Scene: `New Scene`
-	 * - In: `stealth_choice-AI`
-	 * - Out: `noise_check-AI`
-	 * ---
-	 * <image url="./_images/dialog.webp" />
-	 */
-	constexpr const char* newSceneSilencePathAi = "ce74b7c3-49b7-4515-891b-6a80ab79f323";
-
-	/**
-	 * @brief 🟦[DIALOG] stalker_encounter-AI
-	 * "*Une silhouette immense et distordue émerge soudainement du brouillard, ses membres trop longs claquant contre le sol co..."
+	 * "hehehe"
 	 * - Characters: `Boo`
-	 * - Scene: `New Scene`
-	 * - In: `noise_check-AI`
-	 * - Out: `trigger_reveal_action-AI`
+	 * - Scene: `Flow-001`
+	 * - In: `CONDITION-001`
 	 * ---
 	 * <image url="./_images/dialog.webp" />
 	 */
-	constexpr const char* newSceneStalkerEncounterAi = "eaa4fb18-28f1-4f96-85c7-f5366b592a6c";
-
-	/**
-	 * @brief 🟦[DIALOG] survival_setup-AI
-	 * "Chut. Ne bouge plus d'un cil, Boo. Est-ce que tu entends ce cliquetis sec et rythmique qui résonne contre l'écorce putri..."
-	 * - Characters: `lia`
-	 * - Scene: `New Scene`
-	 * - Out: `anxiety_observation-AI`
-	 * ---
-	 * <image url="./_images/dialog.webp" />
-	 */
-	constexpr const char* newSceneSurvivalSetupAi = "a32834d4-45df-4540-8c0e-5cb093ea5862";
+	constexpr const char* flow001Dialog008 = "80a3b47d-1262-4bb4-a520-915fc88f75ea";
 
 }
 
@@ -297,57 +172,21 @@ namespace LSDE_BLOCKS {
  */
 namespace LSDE_CHOICES {
 	/**
-	 * @brief ⬜[CHOICE_ITEM] 17e98de3-1690-4ca4-8ea5-8070c15b1fe1
-	 * "C1"
-	 * - Scene: `New Scene`
+	 * @brief ⬜[CHOICE_ITEM] aidez
+	 * "aidez"
+	 * - Scene: `Flow-001`
 	 * - Parent: `CHOICE-001`
 	 */
-	/** @see LSDE_BLOCKS::newSceneChoice001 */
-	constexpr const char* newScene17e98de316904ca48ea58070c15b1fe1 = "17e98de3-1690-4ca4-8ea5-8070c15b1fe1";
+	/** @see LSDE_BLOCKS::flow001Choice001 */
+	constexpr const char* flow001Aidez = "decb34ee-dbb8-4f94-b770-9d94f63a3eaf";
 
 	/**
-	 * @brief ⬜[CHOICE_ITEM] a0eee458-6ccc-4a23-bd36-0b3d1f73771e
-	 * "C2"
-	 * - Scene: `New Scene`
+	 * @brief ⬜[CHOICE_ITEM] continuer
+	 * "continuer"
+	 * - Scene: `Flow-001`
 	 * - Parent: `CHOICE-001`
 	 */
-	/** @see LSDE_BLOCKS::newSceneChoice001 */
-	constexpr const char* newSceneA0eee4586ccc4a23Bd360b3d1f73771e = "a0eee458-6ccc-4a23-bd36-0b3d1f73771e";
-
-	/**
-	 * @brief ⬜[CHOICE_ITEM] C1.1
-	 * "C1.1"
-	 * - Scene: `New Scene`
-	 * - Parent: `CHOICE-002`
-	 */
-	/** @see LSDE_BLOCKS::newSceneChoice002 */
-	constexpr const char* newSceneC11 = "d16d21ea-ecf8-4172-aaa3-668df80e9853";
-
-	/**
-	 * @brief ⬜[CHOICE_ITEM] C2.1
-	 * "C2.1"
-	 * - Scene: `New Scene`
-	 * - Parent: `CHOICE-002`
-	 */
-	/** @see LSDE_BLOCKS::newSceneChoice002 */
-	constexpr const char* newSceneC21 = "e306346e-6bcc-4564-8b19-e2ed28fabafe";
-
-	/**
-	 * @brief ⬜[CHOICE_ITEM] Rester parfaitement immobile dans l'ombre
-	 * "Rester parfaitement immobile dans l'ombre"
-	 * - Scene: `New Scene`
-	 * - Parent: `stealth_choice-AI`
-	 */
-	/** @see LSDE_BLOCKS::newSceneStealthChoiceAi */
-	constexpr const char* newSceneResterParfaitementImmobileDansLOmbre = "3ff6be38-0db4-4d24-98a0-bbb21be19d4a";
-
-	/**
-	 * @brief ⬜[CHOICE_ITEM] Courir vers la lueur lointaine
-	 * "Courir vers la lueur lointaine"
-	 * - Scene: `New Scene`
-	 * - Parent: `stealth_choice-AI`
-	 */
-	/** @see LSDE_BLOCKS::newSceneStealthChoiceAi */
-	constexpr const char* newSceneCourirVersLaLueurLointaine = "7b0f9b9a-6e4d-444f-bdf9-a3be47d89140";
+	/** @see LSDE_BLOCKS::flow001Choice001 */
+	constexpr const char* flow001Continuer = "bfc4d9f3-3315-4d8b-8fc9-17e867521126";
 
 }

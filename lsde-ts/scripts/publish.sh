@@ -20,6 +20,8 @@ ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -W 2>/dev/null || pwd)"
 TS_DIR="$ROOT/lsde-ts"
 CS_DIR="$ROOT/lsde-csharp/src/LsdeDialogEngine"
 CSPROJ="$CS_DIR/LsdeDialogEngine.csproj"
+CS_STJ_CSPROJ="$ROOT/lsde-csharp/src/LsdeDialogEngine.SystemTextJson/LsdeDialogEngine.SystemTextJson.csproj"
+CS_NJ_CSPROJ="$ROOT/lsde-csharp/src/LsdeDialogEngine.Newtonsoft/LsdeDialogEngine.Newtonsoft.csproj"
 
 TARGET="both"
 BUMP=""
@@ -80,8 +82,10 @@ sync_versions() {
   cd "$TS_DIR"
   npm version "$NEW_VERSION" --no-git-tag-version --allow-same-version > /dev/null
 
-  # Update .csproj
+  # Update .csproj (core + companions)
   sed -i "s|<Version>.*</Version>|<Version>$NEW_VERSION</Version>|" "$CSPROJ"
+  sed -i "s|<Version>.*</Version>|<Version>$NEW_VERSION</Version>|" "$CS_STJ_CSPROJ"
+  sed -i "s|<Version>.*</Version>|<Version>$NEW_VERSION</Version>|" "$CS_NJ_CSPROJ"
 
   # Update CMakeLists.txt
   local CMAKE="$ROOT/lsde-cpp/CMakeLists.txt"
@@ -136,7 +140,7 @@ generate_changelog() {
 # ─── Git tag ─────────────────────────────────────────────────────────────────
 git_tag() {
   cd "$ROOT"
-  git add CHANGELOG.md "$TS_DIR/package.json" "$CSPROJ" "$ROOT/lsde-cpp/CMakeLists.txt"
+  git add CHANGELOG.md "$TS_DIR/package.json" "$CSPROJ" "$CS_STJ_CSPROJ" "$CS_NJ_CSPROJ" "$ROOT/lsde-cpp/CMakeLists.txt"
   git commit -m "release: v$NEW_VERSION"
   git tag "v$NEW_VERSION"
   echo "✓ Tagged v$NEW_VERSION"
@@ -162,22 +166,30 @@ publish_npm() {
 # ─── NuGet ────────────────────────────────────────────────────────────────────
 publish_nuget() {
   echo ""
-  echo "═══ NuGet: LsdeDialogEngine@$NEW_VERSION ═══"
-  cd "$CS_DIR"
+  echo "═══ NuGet: LsdeDialogEngine packages@$NEW_VERSION ═══"
 
   resolve_nuget_key
 
-  echo "→ Build + pack..."
-  dotnet pack -c Release -o ./nupkg
+  local NUGET_SRC="https://api.nuget.org/v3/index.json"
+  local PACK_DIR="$ROOT/lsde-csharp/nupkg"
+  rm -rf "$PACK_DIR"
 
-  local NUPKG
-  NUPKG=$(ls ./nupkg/LsdeDialogEngine.*.nupkg | head -1)
+  # Pack all 3 packages
+  for proj in "$CSPROJ" "$CS_STJ_CSPROJ" "$CS_NJ_CSPROJ"; do
+    local name
+    name=$(basename "$proj" .csproj)
+    echo "→ Pack $name..."
+    dotnet pack "$proj" -c Release -o "$PACK_DIR"
+  done
 
-  echo "→ Pushing..."
-  dotnet nuget push "$NUPKG" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
-  echo "✓ Published to NuGet"
+  # Push all .nupkg files
+  for nupkg in "$PACK_DIR"/*.nupkg; do
+    echo "→ Push $(basename "$nupkg")..."
+    dotnet nuget push "$nupkg" --api-key "$NUGET_API_KEY" --source "$NUGET_SRC" --skip-duplicate
+  done
 
-  rm -rf ./nupkg
+  echo "✓ Published all NuGet packages"
+  rm -rf "$PACK_DIR"
 }
 
 # ─── Run ──────────────────────────────────────────────────────────────────────

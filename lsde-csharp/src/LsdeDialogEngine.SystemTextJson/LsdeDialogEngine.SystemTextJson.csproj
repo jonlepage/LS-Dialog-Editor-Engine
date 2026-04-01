@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>9.0</LangVersion>
+    <RootNamespace>LsdeDialogEngine.Json</RootNamespace>
+    <AssemblyName>LsdeDialogEngine.SystemTextJson</AssemblyName>
+
+    <!-- NuGet package metadata -->
+    <PackageId>LsdeDialogEngine.SystemTextJson</PackageId>
+    <Version>0.2.0</Version>
+    <Authors>LepaSoft</Authors>
+    <Description>System.Text.Json loader for LsdeDialogEngine — polymorphic BlueprintBlock deserialization out-of-the-box</Description>
+    <PackageProjectUrl>https://github.com/jonlepage/LS-Dialog-Editor-Engine</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/jonlepage/LS-Dialog-Editor-Engine.git</RepositoryUrl>
+    <PackageTags>dialogue;dialog;engine;game;blueprint;lsde;json;system-text-json</PackageTags>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LsdeDialogEngine\LsdeDialogEngine.csproj" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\..\LICENSE" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>

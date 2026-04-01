@@ -6,12 +6,11 @@ class_name BlueprintEnums
 ## Use these constants to start or reference a specific dialogue sequence.
 ## Each value maps to the scene's UUID — stable even if the scene is renamed.
 class LSDE_SCENES:
-	## [b]Scene: New Scene[/b]
-	## 3 ACTION, 3 CHOICE, 2 CONDITION, 15 DIALOG
+	## [b]Scene: Flow-001[/b]
+	## 2 ACTION, 1 CHOICE, 1 CONDITION, 8 DIALOG
 	## Entry: [code]DIALOG-001[/code]
-	## Emotions: [code]hangry[/code], [code]sad[/code]
-	## Characters: [code]Boo[/code], [code]Gruht Tyron[/code], [code]Svelt Moon[/code], [code]Zoozo Zee[/code], [code]lia[/code]
-	const newScene = "3e0110a5-49bb-46fe-884b-05ce106af4cd"
+	## Characters: [code]Boo[/code], [code]lia[/code]
+	const flow001 = "199c33e2-a4aa-44bb-8b70-16ce88824e82"
 
 
 ## Block identifiers for type-safe access to individual blocks within scenes.
@@ -20,249 +19,125 @@ class LSDE_SCENES:
 ## Each value maps to the block's UUID — stable even if the block is renamed.
 class LSDE_BLOCKS:
 	## [b]🟧[ACTION] ACTION-001[/b]
-	## Scene: [code]New Scene[/code]
-	## In: [code]CONDITION-001[/code]
+	## Scene: [code]Flow-001[/code]
+	## In: [code]DIALOG-002[/code]
+	## Out: [code]DIALOG-003[/code]
 	## ---
 	## <image url="./_images/action.webp" />
-	const newSceneAction001 = "d72bcf6a-161b-4759-90dd-2ae10a58fdd3"
+	const flow001Action001 = "73fa0dce-df57-4040-b2d7-2db8dc5156c2"
 
 	## [b]🟧[ACTION] ACTION-002[/b]
-	## Scene: [code]New Scene[/code]
-	## In: [code]DIALOG-007[/code]
-	## ---
-	## <image url="./_images/action.webp" />
-	const newSceneAction002 = "7662f44f-1836-4176-85b2-39f3c1bd4620"
-
-	## [b]🟧[ACTION] trigger_reveal_action-AI[/b]
-	## Scene: [code]New Scene[/code]
-	## In: [code]stalker_encounter-AI[/code], [code]near_miss_escape-AI[/code]
-	## Out: [code]cliffhanger_reveal-AI[/code]
-	## ---
-	## <image url="./_images/action.webp" />
-	const newSceneTriggerRevealActionAi = "f0792ff1-da03-4834-b15f-8652df3b041a"
-
-	## [b]⬜[CHOICE] CHOICE-001[/b]
-	## Characters: [code]lia[/code]
-	## Scene: [code]New Scene[/code]
-	## In: [code]DIALOG-001[/code]
-	## Out: [code]DIALOG-002[/code], [code]DIALOG-004[/code]
-	## ---
-	## <image url="./_images/choice.webp" />
-	const newSceneChoice001 = "014f503a-6688-429d-a5fe-801cf33f2410"
-
-	## [b]⬜[CHOICE] CHOICE-002[/b]
-	## Scene: [code]New Scene[/code]
-	## In: [code]DIALOG-002[/code]
+	## Scene: [code]Flow-001[/code]
+	## In: [code]DIALOG-003[/code]
 	## Out: [code]CONDITION-001[/code]
 	## ---
-	## <image url="./_images/choice.webp" />
-	const newSceneChoice002 = "2b184947-49f9-4e57-8600-70b46e2cd0ba"
+	## <image url="./_images/action.webp" />
+	const flow001Action002 = "fed6440c-1a2a-47f8-9e40-3dbf3ce25492"
 
-	## [b]⬜[CHOICE] stealth_choice-AI[/b]
-	## Scene: [code]New Scene[/code]
-	## In: [code]anxiety_observation-AI[/code]
-	## Out: [code]silence_path-AI[/code], [code]flight_path-AI[/code]
+	## [b]⬜[CHOICE] CHOICE-001[/b]
+	## Scene: [code]Flow-001[/code]
+	## In: [code]DIALOG-005[/code]
+	## Out: [code]DIALOG-006[/code], [code]DIALOG-007[/code]
 	## ---
 	## <image url="./_images/choice.webp" />
-	const newSceneStealthChoiceAi = "e55d4d79-7642-452d-aea3-cb44ca37a826"
+	const flow001Choice001 = "23e9aeda-e1db-4f8e-ae9f-afaf76786e95"
 
 	## [b]🟪[CONDITION] CONDITION-001[/b]
-	## Scene: [code]New Scene[/code]
-	## In: [code]CHOICE-002[/code]
-	## Out: [code]ACTION-001[/code], [code]DIALOG-003[/code]
+	## Scene: [code]Flow-001[/code]
+	## In: [code]ACTION-002[/code]
+	## Out: [code]DIALOG-004[/code], [code]DIALOG-008[/code]
 	## ---
 	## <image url="./_images/cond.webp" />
-	const newSceneCondition001 = "4074b6c2-bfc8-44f1-9a29-cda529bf522a"
-
-	## [b]🟪[CONDITION] noise_check-AI[/b]
-	## Scene: [code]New Scene[/code]
-	## In: [code]silence_path-AI[/code], [code]flight_path-AI[/code]
-	## Out: [code]stalker_encounter-AI[/code], [code]near_miss_escape-AI[/code]
-	## ---
-	## <image url="./_images/cond.webp" />
-	const newSceneNoiseCheckAi = "f7923356-5267-430a-bd6c-b9392eb15a24"
-
-	## [b]🟦[DIALOG] anxiety_observation-AI[/b]
-	## [i]"*Boo tremble de tout son long, ses grands yeux dilatés scrutant l'obscurité mouvante qui semble se détacher du brouillar..."[/i]
-	## Characters: [code]Boo[/code]
-	## Scene: [code]New Scene[/code]
-	## In: [code]survival_setup-AI[/code]
-	## Out: [code]stealth_choice-AI[/code]
-	## ---
-	## <image url="./_images/dialog.webp" />
-	const newSceneAnxietyObservationAi = "b91fb645-cc0f-49b0-a456-25a596d0bd0b"
-
-	## [b]🟦[DIALOG] cliffhanger_reveal-AI[/b]
-	## [i]"Regarde devant nous... ce n'est pas la sortie du Thicket. *Lia s'arrête net, la lueur de sa torche vacillante révélant u..."[/i]
-	## Characters: [code]lia[/code]
-	## Scene: [code]New Scene[/code]
-	## In: [code]trigger_reveal_action-AI[/code]
-	## ---
-	## <image url="./_images/dialog.webp" />
-	const newSceneCliffhangerRevealAi = "36edbe6e-c48e-44b6-9037-e7bd489a3155"
+	const flow001Condition001 = "f80757d6-73c0-4160-8449-e494f5c485b7"
 
 	## [b]🟦[DIALOG] DIALOG-001 (entry)[/b]
-	## [i]"C2"[/i]
-	## Characters: [code]lia[/code] (sad x2), [code]Boo[/code] (sad x2), [code]Svelt Moon[/code] (sad x2), [code]Gruht Tyron[/code] (sad x2)
-	## Scene: [code]New Scene[/code]
-	## Out: [code]CHOICE-001[/code]
+	## [i]"Salut , dit moi que fait tu la ?"[/i]
+	## Characters: [code]lia[/code]
+	## Scene: [code]Flow-001[/code]
+	## Out: [code]DIALOG-002[/code]
 	## ---
 	## <image url="./_images/dialog.webp" />
-	const newSceneDialog001 = "6462dab3-0eb4-4a2c-a505-407556441156"
+	const flow001Dialog001 = "f2402df4-0081-4663-9fce-6dca72e9ff77"
 
 	## [b]🟦[DIALOG] DIALOG-002[/b]
-	## [i]"D2"[/i]
-	## Scene: [code]New Scene[/code]
-	## In: [code]CHOICE-001[/code]
-	## Out: [code]CHOICE-002[/code]
+	## [i]"Ha j'ai tres mal et jessai de me reposer , je me suis cogner a cette roche la bas !"[/i]
+	## Scene: [code]Flow-001[/code]
+	## In: [code]DIALOG-001[/code]
+	## Out: [code]ACTION-001[/code]
 	## ---
 	## <image url="./_images/dialog.webp" />
-	const newSceneDialog002 = "c66437af-54b7-4a75-9efa-713e983c145d"
+	const flow001Dialog002 = "c302b3a4-3433-4cf4-8402-a61e33ba1a84"
 
 	## [b]🟦[DIALOG] DIALOG-003[/b]
-	## [i]"D5"[/i]
-	## Scene: [code]New Scene[/code]
-	## In: [code]CONDITION-001[/code]
-	## ---
-	## <image url="./_images/dialog.webp" />
-	const newSceneDialog003 = "dfc30c4c-a1aa-4e76-81b6-640bf447351b"
-
-	## [b]🟦[DIALOG] DIALOG-004[/b]
-	## [i]"Hehehe!"[/i]
-	## Characters: [code]Gruht Tyron[/code] (hangry)
-	## Scene: [code]New Scene[/code]
-	## In: [code]CHOICE-001[/code]
-	## Out: [code]DIALOG-005[/code], [code]DIALOG-006[/code]
-	## ---
-	## <image url="./_images/dialog.webp" />
-	const newSceneDialog004 = "4a800564-098f-4b88-a36b-f5d03f642944"
-
-	## [b]🟦[DIALOG] DIALOG-005[/b]
-	## [i]"Je suis le roi!"[/i]
-	## Characters: [code]Gruht Tyron[/code]
-	## Scene: [code]New Scene[/code]
-	## In: [code]DIALOG-004[/code]
-	## Out: [code]DIALOG-008[/code]
-	## ---
-	## <image url="./_images/dialog.webp" />
-	const newSceneDialog005 = "2a087cbc-3b00-457a-9448-538e39a475ab"
-
-	## [b]🟦[DIALOG] DIALOG-006[/b]
-	## [i]"heu, je suis pas certain de comprendre"[/i]
-	## Characters: [code]Zoozo Zee[/code]
-	## Scene: [code]New Scene[/code]
-	## In: [code]DIALOG-004[/code]
-	## Out: [code]DIALOG-007[/code]
-	## ---
-	## <image url="./_images/dialog.webp" />
-	const newSceneDialog006 = "ef7301d9-c8ce-4416-9a28-4b1f5595ac74"
-
-	## [b]🟦[DIALOG] DIALOG-007[/b]
-	## [i]"heu non mais ca va pas !? ces moi qui est las"[/i]
-	## Characters: [code]Zoozo Zee[/code]
-	## Scene: [code]New Scene[/code]
-	## In: [code]DIALOG-006[/code]
+	## [i]"> ces la roche etrange qui semble avoir blesser cette creature !"[/i]
+	## Scene: [code]Flow-001[/code]
+	## In: [code]ACTION-001[/code]
 	## Out: [code]ACTION-002[/code]
 	## ---
 	## <image url="./_images/dialog.webp" />
-	const newSceneDialog007 = "d0cf7ee4-8dcb-4b75-b373-5d4a1dca73be"
+	const flow001Dialog003 = "157817bf-073e-4368-89de-52e295ffcecb"
+
+	## [b]🟦[DIALOG] DIALOG-004[/b]
+	## [i]"Je compatis a votre douleur ! miouw"[/i]
+	## Characters: [code]Boo[/code]
+	## Scene: [code]Flow-001[/code]
+	## In: [code]CONDITION-001[/code]
+	## Out: [code]DIALOG-005[/code]
+	## ---
+	## <image url="./_images/dialog.webp" />
+	const flow001Dialog004 = "f6262aa9-6d90-46d1-a0fd-f9108ded43ff"
+
+	## [b]🟦[DIALOG] DIALOG-005[/b]
+	## [i]"Moi aussi"[/i]
+	## Characters: [code]lia[/code]
+	## Scene: [code]Flow-001[/code]
+	## In: [code]DIALOG-004[/code]
+	## Out: [code]CHOICE-001[/code]
+	## ---
+	## <image url="./_images/dialog.webp" />
+	const flow001Dialog005 = "a458323a-d832-405f-8f47-9ca096d7eea6"
+
+	## [b]🟦[DIALOG] DIALOG-006[/b]
+	## [i]"venez je vais vous aider"[/i]
+	## Characters: [code]lia[/code]
+	## Scene: [code]Flow-001[/code]
+	## In: [code]CHOICE-001[/code]
+	## ---
+	## <image url="./_images/dialog.webp" />
+	const flow001Dialog006 = "8994d27a-592b-4fe6-9311-754f6f7d491d"
+
+	## [b]🟦[DIALOG] DIALOG-007[/b]
+	## [i]"a la prochaine"[/i]
+	## Characters: [code]lia[/code]
+	## Scene: [code]Flow-001[/code]
+	## In: [code]CHOICE-001[/code]
+	## ---
+	## <image url="./_images/dialog.webp" />
+	const flow001Dialog007 = "03773f48-310f-43e8-a7bb-1062f1c92d83"
 
 	## [b]🟦[DIALOG] DIALOG-008[/b]
-	## [i]"ces pas moi le probleme !!!"[/i]
-	## Characters: [code]Gruht Tyron[/code]
-	## Scene: [code]New Scene[/code]
-	## In: [code]DIALOG-005[/code]
-	## ---
-	## <image url="./_images/dialog.webp" />
-	const newSceneDialog008 = "7ab18c86-c98e-41f1-99ca-51c7e66cb144"
-
-	## [b]🟦[DIALOG] flight_path-AI[/b]
-	## [i]"C'est trop tard pour se cacher, l'air s'est figé et il sait exactement que nous sommes ici ! *Lia attrape violemment Boo..."[/i]
-	## Characters: [code]lia[/code]
-	## Scene: [code]New Scene[/code]
-	## In: [code]stealth_choice-AI[/code]
-	## Out: [code]noise_check-AI[/code]
-	## ---
-	## <image url="./_images/dialog.webp" />
-	const newSceneFlightPathAi = "39327ee6-8f67-448a-8cb1-e888cc597a8b"
-
-	## [b]🟦[DIALOG] near_miss_escape-AI[/b]
-	## [i]"Le cliquetis s'éloigne lentement vers le nord, mais ne te détrompe pas, il tourne en rond autour de nous comme un prédat..."[/i]
-	## Characters: [code]lia[/code]
-	## Scene: [code]New Scene[/code]
-	## In: [code]noise_check-AI[/code]
-	## Out: [code]trigger_reveal_action-AI[/code]
-	## ---
-	## <image url="./_images/dialog.webp" />
-	const newSceneNearMissEscapeAi = "14d056d8-5bc2-4df7-babf-f7b67d8daa3c"
-
-	## [b]🟦[DIALOG] silence_path-AI[/b]
-	## [i]"On ne bouge plus, Boo. *Lia plaque sa main glacée sur le museau du petit chat volant, sentant son cœur battre comme celu..."[/i]
-	## Characters: [code]lia[/code]
-	## Scene: [code]New Scene[/code]
-	## In: [code]stealth_choice-AI[/code]
-	## Out: [code]noise_check-AI[/code]
-	## ---
-	## <image url="./_images/dialog.webp" />
-	const newSceneSilencePathAi = "ce74b7c3-49b7-4515-891b-6a80ab79f323"
-
-	## [b]🟦[DIALOG] stalker_encounter-AI[/b]
-	## [i]"*Une silhouette immense et distordue émerge soudainement du brouillard, ses membres trop longs claquant contre le sol co..."[/i]
+	## [i]"hehehe"[/i]
 	## Characters: [code]Boo[/code]
-	## Scene: [code]New Scene[/code]
-	## In: [code]noise_check-AI[/code]
-	## Out: [code]trigger_reveal_action-AI[/code]
+	## Scene: [code]Flow-001[/code]
+	## In: [code]CONDITION-001[/code]
 	## ---
 	## <image url="./_images/dialog.webp" />
-	const newSceneStalkerEncounterAi = "eaa4fb18-28f1-4f96-85c7-f5366b592a6c"
-
-	## [b]🟦[DIALOG] survival_setup-AI[/b]
-	## [i]"Chut. Ne bouge plus d'un cil, Boo. Est-ce que tu entends ce cliquetis sec et rythmique qui résonne contre l'écorce putri..."[/i]
-	## Characters: [code]lia[/code]
-	## Scene: [code]New Scene[/code]
-	## Out: [code]anxiety_observation-AI[/code]
-	## ---
-	## <image url="./_images/dialog.webp" />
-	const newSceneSurvivalSetupAi = "a32834d4-45df-4540-8c0e-5cb093ea5862"
+	const flow001Dialog008 = "80a3b47d-1262-4bb4-a520-915fc88f75ea"
 
 
 ## Choice item identifiers for type-safe access to individual player choices.
 ## Each value maps to a choice item's UUID within a CHOICE block.
 ## Use these for switch/case handling of specific player decisions.
 class LSDE_CHOICES:
-	## [b]⬜[CHOICE_ITEM] 17e98de3-1690-4ca4-8ea5-8070c15b1fe1[/b]
-	## [i]"C1"[/i]
-	## Scene: [code]New Scene[/code]
-	## See LSDE_BLOCKS.newSceneChoice001
-	const newScene17e98de316904ca48ea58070c15b1fe1 = "17e98de3-1690-4ca4-8ea5-8070c15b1fe1"
+	## [b]⬜[CHOICE_ITEM] aidez[/b]
+	## [i]"aidez"[/i]
+	## Scene: [code]Flow-001[/code]
+	## See LSDE_BLOCKS.flow001Choice001
+	const flow001Aidez = "decb34ee-dbb8-4f94-b770-9d94f63a3eaf"
 
-	## [b]⬜[CHOICE_ITEM] a0eee458-6ccc-4a23-bd36-0b3d1f73771e[/b]
-	## [i]"C2"[/i]
-	## Scene: [code]New Scene[/code]
-	## See LSDE_BLOCKS.newSceneChoice001
-	const newSceneA0eee4586ccc4a23Bd360b3d1f73771e = "a0eee458-6ccc-4a23-bd36-0b3d1f73771e"
-
-	## [b]⬜[CHOICE_ITEM] C1.1[/b]
-	## [i]"C1.1"[/i]
-	## Scene: [code]New Scene[/code]
-	## See LSDE_BLOCKS.newSceneChoice002
-	const newSceneC11 = "d16d21ea-ecf8-4172-aaa3-668df80e9853"
-
-	## [b]⬜[CHOICE_ITEM] C2.1[/b]
-	## [i]"C2.1"[/i]
-	## Scene: [code]New Scene[/code]
-	## See LSDE_BLOCKS.newSceneChoice002
-	const newSceneC21 = "e306346e-6bcc-4564-8b19-e2ed28fabafe"
-
-	## [b]⬜[CHOICE_ITEM] Rester parfaitement immobile dans l'ombre[/b]
-	## [i]"Rester parfaitement immobile dans l'ombre"[/i]
-	## Scene: [code]New Scene[/code]
-	## See LSDE_BLOCKS.newSceneStealthChoiceAi
-	const newSceneResterParfaitementImmobileDansLOmbre = "3ff6be38-0db4-4d24-98a0-bbb21be19d4a"
-
-	## [b]⬜[CHOICE_ITEM] Courir vers la lueur lointaine[/b]
-	## [i]"Courir vers la lueur lointaine"[/i]
-	## Scene: [code]New Scene[/code]
-	## See LSDE_BLOCKS.newSceneStealthChoiceAi
-	const newSceneCourirVersLaLueurLointaine = "7b0f9b9a-6e4d-444f-bdf9-a3be47d89140"
+	## [b]⬜[CHOICE_ITEM] continuer[/b]
+	## [i]"continuer"[/i]
+	## Scene: [code]Flow-001[/code]
+	## See LSDE_BLOCKS.flow001Choice001
+	const flow001Continuer = "bfc4d9f3-3315-4d8b-8fc9-17e867521126"
 

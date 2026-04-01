@@ -1,6 +1,15 @@
 ::: code-group
-```cpp [JSON — nlohmann/json]
-// Header-only: #include <nlohmann/json.hpp>
+```cpp [JSON — lsde/json_loader.h]
+// Include the optional JSON loader (requires nlohmann/json)
+#include <lsde/json_loader.h>
+
+auto blueprint = lsde::LsdeJson::parseFile("blueprint.json");
+// or from string:
+// auto blueprint = lsde::LsdeJson::parse(jsonString);
+engine.init({blueprint});
+```
+```cpp [JSON — manual nlohmann/json]
+// Without json_loader.h — manual polymorphic dispatch
 #include <nlohmann/json.hpp>
 #include <lsde/engine.h>
 

@@ -4,8 +4,12 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/LsdeDialogEngine/LsdeDialogEngine.csproj" />
+    <Project Path="src/LsdeDialogEngine.SystemTextJson/LsdeDialogEngine.SystemTextJson.csproj" />
+    <Project Path="src/LsdeDialogEngine.Newtonsoft/LsdeDialogEngine.Newtonsoft.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/LsdeDialogEngine.Tests/LsdeDialogEngine.Tests.csproj" />
+    <Project Path="tests/LsdeDialogEngine.SystemTextJson.Tests/LsdeDialogEngine.SystemTextJson.Tests.csproj" />
+    <Project Path="tests/LsdeDialogEngine.Newtonsoft.Tests/LsdeDialogEngine.Newtonsoft.Tests.csproj" />
   </Folder>
 </Solution>

@@ -95,3 +95,554 @@ npm run publish:major
 ```
 
 The script (`scripts/publish.sh`) syncs versions across `package.json`, `.csproj`, and `CMakeLists.txt`, runs tests, builds, publishes to npm and NuGet, then creates a git tag.
+
+
+
+## Contexte
+
+LSDE (LepaSoft Dialogue Editor) exporte des données de dialogue (scenes, blocks, connections, dictionaries, signatures) que les développeurs de jeux consomment dans leurs moteurs. Ce repo contient les implémentations runtime dans plusieurs langages qui traversent et exécutent ces graphes de dialogue.
+
+Le fichier `concept/dialog-engine-concept.ts` est un prototype non-fonctionnel qui aide à comprendre l'idéologie du design. Ce document formalise et complète ce concept.
+
+---
+
+## 1. Structure du Repository
+
+Organisation inspirée de [Spine Runtimes](https://github.com/EsotericSoftware/spine-runtimes) — un dossier autonome par runtime.
+
+```
+lsde-dialog-engine/
+├── README.md                          # Overview, badges, liens par runtime
+├── LICENSE
+├── PLAN.md                            # CE DOCUMENT — la spécification
+├── AGENTS.md                          # Règles pour les agents AI
+├── CHANGELOG.md
+│
+├── blueprints/                        # Données de test partagées (export LSDE)
+│   ├── simple-linear.json             # 1 scène, 3 dialog blocks, linéaire
+│   ├── branching-choice.json          # 1 scène, choice + branches
+│   ├── condition-routing.json         # Condition true/false routing
+│   ├── action-execution.json          # Action block avec resolve/reject
+│   ├── multi-scene.json               # 2+ scènes
+│   ├── async-delay.json               # Blocks avec isAsync, delay
+│   ├── character-ports.json           # Dialog avec portPerCharacter
+│   ├── visibility-conditions.json     # Choices avec visibilityConditions
+│   ├── full-featured.json             # Tous les types, toutes les features
+│   ├── blueprint.types.ts             # Types TS de référence (généré par LSDE)
+│   ├── blueprint.enums.ts             # Enums TS (LSDE_SCENES, LSDE_BLOCKS)
+│   └── blueprint.schema.json          # JSON Schema de validation
+│
+├── tests/                             # Specs de tests cross-language (JSON)
+│   ├── README.md
+│   ├── test-cases.json                # Input → expected output
+│   ├── test-init-validation.json      # Tests de validation init
+│   └── test-port-routing.json         # Tests spécifiques au port routing
+│
+├── lsde-ts/                           # TypeScript — implémentation de référence
+├── lsde-csharp/                       # C# (Unity, .NET)
+├── lsde-gdscript/                     # GDScript (Godot 4)
+├── lsde-cpp/                          # C++ (Unreal, moteurs custom)
+├── lsde-rust/                         # Rust
+├── lsde-lua/                          # Lua (Defold, LÖVE)
+├── lsde-python/                       # Python
+│
+├── concept/
+│   └── dialog-engine-concept.ts       # Prototype conceptuel (non-fonctionnel)
+│
+└── .github/workflows/                 # CI par runtime
+```
+
+---
+
+## 2. Principes fondamentaux
+
+### Le moteur est un dispatcher de graphe, rien d'autre
+
+- **Pas de rendu** — le jeu possède son UI, ses sprites, ses animations
+- **Pas de timers** — le jeu possède ses propres systèmes de temps
+- **Pas de IO** — pas de filesystem, pas de réseau, pas de base de données
+- **Pas de game loop** — pas de `update(delta)`, pas de tick
+
+### Le flow avance uniquement par callbacks
+
+Le moteur ne progresse **jamais** automatiquement. Il attend que le développeur appelle `next()`, `resolve()` ou `selectChoice()` dans ses handlers. Ce modèle callback-driven est ce qui rend le moteur portable dans tous les langages (pas besoin d'async/await, pas de promises, pas de coroutines — juste des callbacks).
+
+### Les NativeProperties sont des DONNÉES, pas du comportement
+
+Le moteur ne lit jamais `delay`, `timeout`, `isAsync`, `debug`, `skipIfMissingActor`, `portPerCharacter` pour prendre des décisions internes. Ces propriétés sont passées aux handlers du développeur comme données brutes. C'est le développeur qui décide quoi en faire dans ses handlers.
+
+### Deux tiers de handlers
+
+- **Tier 1 (Global)** — enregistré sur `engine`. S'applique à toutes les scènes.
+- **Tier 2 (Par scène)** — enregistré sur un `SceneHandle`. Override le global pour cette scène spécifique.
+
+---
+
+## 3. Surface API complète
+
+### 3.1 Initialisation
+
+```
+engine = new DialogueEngine()
+
+engine.init({
+    data: BlueprintExport,
+    check?: {
+        signatures?: string[],
+        dictionaries?: { [groupLabel]: string[] },
+        characters?: string[]
+    }
+}) → DiagnosticReport
+```
+
+**`init()`** :
+- Valide l'intégrité des données (tous les blocks référencés dans connections existent)
+- Vérifie qu'une seule `isStartBlock` par scène
+- Construit des index internes pour accès rapide (blocks par UUID, connections par blockId)
+- Si `check` fourni : cross-valide les signatures/dictionaries/characters du jeu contre les données LSDE. Reporte les divergences en warnings.
+- Retourne un `DiagnosticReport { errors[], warnings[], stats }`
+
+```
+engine.setLocale(locale: string) → void
+```
+
+Définit la langue active pour la résolution des textes dans `dialogueText` et `choices`.
+
+### 3.2 StateBridge (3 méthodes — pont vers le game state)
+
+```
+engine.setStateBridge({
+    evaluateCondition(condition: ExportCondition): boolean,
+    executeAction(action: ExportAction, signature?: ActionSignature): void,
+    resolveDictionary(groupLabel: string, rowKey: string): string | number | boolean,
+})
+```
+
+**`evaluateCondition`** — Appelé AUTOMATIQUEMENT par le moteur pour :
+- `ChoiceItem.visibilityConditions[]` (filtrage des choix visibles)
+- `ConditionBlock.conditions[]` si aucun `onCondition` handler n'est enregistré (auto-évaluation)
+
+**`executeAction`** — Appelé AUTOMATIQUEMENT par le moteur pour :
+- `ActionBlock.actions[]` si aucun `onAction` handler n'est enregistré (auto-exécution)
+
+**`resolveDictionary`** — Appelé quand un paramètre d'action est de type "dictionary".
+
+### 3.3 Validation de blocks
+
+```
+engine.onValidateNextBlock(handler: ({ nextBlock, fromBlock, port, context })
+    → { valid: boolean, reason?: string })
+```
+
+Appelé AVANT chaque block. Return type toujours un objet (cross-language).
+Si `{ valid: false }` → le moteur appelle `onInvalidateBlock`.
+
+```
+engine.onInvalidateBlock(handler: ({ scene, reason }) → void)
+```
+
+Le développeur décide quoi faire : `scene.cancel()`, log, fallback, etc.
+
+### 3.4 Pré-exécution
+
+```
+engine.onBeforeBlock(handler: ({ block, scene, context, resolve }) → void)
+```
+
+Fire pour TOUS les blocks, AVANT le handler de type. Le handler de type ne s'exécute que quand `resolve()` est appelé. C'est ici que le dev gère les NativeProperties communes (delay, debug, etc.).
+
+### 3.5 Handlers de type (un par type de block)
+
+Chaque handler reçoit `{ scene, block, context, next }` et retourne optionnellement une **fonction de cleanup** appelée quand le moteur quitte ce block.
+
+```
+engine.onDialog(handler)    → blocks de type DIALOG
+engine.onChoice(handler)    → blocks de type CHOICE
+engine.onCondition(handler) → blocks de type CONDITION
+engine.onAction(handler)    → blocks de type ACTION
+```
+
+**NOTE blocks** : toujours ignorés silencieusement par le moteur (contenu designer-only).
+
+**Si `onCondition` absent** : le moteur auto-évalue via `StateBridge.evaluateCondition()` et suit le port true/false.
+
+**Si `onAction` absent** : le moteur auto-exécute via `StateBridge.executeAction()` pour chaque action du block, puis avance.
+
+### 3.6 Context API par type de block
+
+**Commun à tous** :
+- `context.preventGlobalHandler()` — dans un handler Tier 2, empêche le handler global de s'exécuter
+
+**DialogContext** :
+- `context.character` — personnage du block (name, emotion, emotionIntensity)
+- `context.resolveCharacterPort(characterName)` — quand `portPerCharacter = true`, indique quel port suivre
+
+**ChoiceContext** :
+- `context.choices` — choix visibles (déjà filtrés par visibilityConditions via StateBridge)
+- `context.selectChoice(choiceUuid)` — sélectionne un choix, le moteur suivra le port correspondant
+
+**ConditionContext** :
+- `context.resolve(boolean)` — true → port index 0, false → port index 1
+
+**ActionContext** :
+- `context.resolve()` — action réussie
+- `context.reject(error)` — action échouée
+
+### 3.7 Scene Lifecycle (Tier 1 — global)
+
+```
+engine.onSceneEnter(handler: ({ scene, context }) → void)
+engine.onSceneExit(handler: ({ scene, context }) → void)
+```
+
+Hooks globaux pour TOUTES les scènes.
+
+### 3.8 Scene Handles (Tier 2 — par scène)
+
+```
+const handle = engine.scene(sceneId)  // crée un handle, ne démarre PAS
+handle.start()                        // lance le flow depuis entryBlockId
+```
+
+**Overrides** :
+```
+handle.onEnter(callback)              // remplace engine.onSceneEnter pour cette scène
+handle.onExit(callback)               // remplace engine.onSceneExit pour cette scène
+handle.onBlock(blockUuid, handler)    // override un block PRÉCIS par UUID
+handle.onDialog(handler)              // override TOUS les DIALOG de cette scène
+handle.onChoice(handler)              // idem pour CHOICE
+handle.onCondition(handler)           // idem pour CONDITION
+handle.onAction(handler)              // idem pour ACTION
+```
+
+**Introspection** :
+```
+handle.getCurrentBlock()              // block en cours d'exécution
+handle.getVisitedBlocks()             // Set<UUID> des blocks visités
+handle.isRunning()                    // true si le flow est actif
+```
+
+**Contrôle** :
+```
+handle.cancel()                       // arrête le flow de cette scène
+```
+
+### 3.9 Engine Control
+
+```
+engine.stop()                         // arrêt de toutes les scènes actives
+engine.isRunning()                    // true si au moins une scène est active
+engine.getActiveScenes()              // SceneHandle[] des scènes en cours
+engine.getCurrentBlocks()             // blocks actifs de toutes les scènes
+engine.getSceneConnections(sceneId)   // connections inter-scènes (metadata folder mode)
+                                      // le dev les utilise pour décider la navigation entre scènes
+```
+
+---
+
+## 4. Résolution des handlers (priorité)
+
+```
+1. handle.onBlock(blockUuid, handler)     ← le plus spécifique
+   ↓ si pas de preventGlobalHandler()
+2. handle.onDialog/onChoice/...(handler)  ← type override pour cette scène
+   ↓ si pas de preventGlobalHandler()
+3. engine.onDialog/onChoice/...(handler)  ← global
+```
+
+Si un handler Tier 2 appelle `context.preventGlobalHandler()`, le handler global ne fire PAS.
+Si le handler Tier 2 ne l'appelle pas, les deux s'exécutent en séquence (scène d'abord, global ensuite).
+
+---
+
+## 5. Port Resolution (algorithme critique)
+
+Ce module doit être **identique** dans tous les runtimes. C'est le coeur déterministe du moteur.
+
+### Règles par type de block
+
+| Type | Comportement |
+|------|-------------|
+| **DIALOG** | Port unique `out`. Si `portPerCharacter = true` : match `connection.fromPort === characterName`, fallback sur `out` |
+| **CHOICE** | Match `connection.fromPort === selectedChoiceUuid` |
+| **CONDITION** | `fromPortIndex === 0` pour true, `fromPortIndex === 1` pour false |
+| **ACTION** | Port unique `out` en succès. Si reject : cherche port `catch`, sinon `out` |
+| **NOTE** | Jamais exécuté, ignoré |
+
+### Connections
+
+```
+BlueprintConnection {
+    id: string
+    fromId: string        // UUID du block source
+    toId: string          // UUID du block cible
+    fromPort: string      // ID du port de sortie
+    toPort: string        // ID du port d'entrée
+    fromPortIndex?: number // Index numérique du port (stable)
+}
+```
+
+---
+
+## 6. Flow d'exécution complet
+
+```
+engine.init(data, check)
+engine.setLocale(locale)
+engine.setStateBridge(bridge)
+[enregistrement des handlers globaux]
+    ↓
+handle = engine.scene(sceneId)
+[enregistrement des overrides Tier 2]
+handle.start()
+    ↓
+engine.onSceneEnter / handle.onEnter fires
+    ↓
+[pour chaque block dans la scène]
+  ┌─────────────────────────────────────────────────────┐
+  │ 1. Si block.type === 'NOTE' → skip, suivre connections │
+  │ 2. onValidateNextBlock({ nextBlock, fromBlock })     │
+  │    → si { valid: false } → onInvalidateBlock()       │
+  │    → si scene.cancel() appelé → stop                 │
+  │ 3. onBeforeBlock({ block, resolve })                  │
+  │    → attendre resolve()                               │
+  │ 4. Résoudre handler (Tier 2 block > Tier 2 type > Tier 1) │
+  │ 5. Appeler handler({ block, context, next })          │
+  │    → stocker cleanup function si retournée            │
+  │ 6. Attendre next()                                    │
+  │ 7. Appeler cleanup du block précédent                 │
+  │ 8. PortResolver → trouver la connection de sortie     │
+  │ 9. Suivre connection → block suivant                  │
+  │ 10. Répéter                                           │
+  └─────────────────────────────────────────────────────┘
+    ↓ (plus de connections)
+engine.onSceneExit / handle.onExit fires
+scene terminée
+```
+
+---
+
+## 7. Évaluation des chaînes de conditions
+
+Le moteur évalue les conditions en chaîne via `StateBridge.evaluateCondition()` :
+
+```
+conditions: [c1(chain:&), c2(chain:|), c3]
+
+Évaluation :
+- Le chain d'une condition indique comment elle se connecte à la PRÉCÉDENTE
+- La première condition n'a pas de chain (c'est le début)
+- '&' = AND avec la précédente
+- '|' = OR avec la précédente
+
+Exemple: c1 AND c2 OR c3
+```
+
+Ceci s'applique à :
+- `ConditionBlock.conditions[]`
+- `ChoiceItem.visibilityConditions[]`
+
+Pour les `visibilityConditions`, le moteur filtre les choix AVANT de les passer au handler `onChoice`. Le handler reçoit uniquement les choix visibles.
+
+---
+
+## 8. Types de données (discriminated union)
+
+Les types sont générés par l'export LSDE. Voir `blueprints/blueprint.types.ts` pour la référence complète.
+
+### BlueprintBlock = DialogBlock | ChoiceBlock | ConditionBlock | ActionBlock | NoteBlock
+
+**Commun (BlueprintBlockBase)** :
+- `uuid`, `type`, `label`, `parentLabels[]`
+- `properties: BlockProperty[]` — key/value custom
+- `userProperties: Record<string, string|number|boolean>` — données designer
+- `nativeProperties: NativeProperties` — voir §8.1
+- `metadata: BlockMetadata` — color, comments, tags, characters, screenshots
+- `isStartBlock: boolean`
+
+**DialogBlock** : `structureKey`, `content`, `dialogueText: { locale: text }`
+
+**ChoiceBlock** : `choices: ChoiceItem[]`, `note`
+
+**ConditionBlock** : `conditions: ExportCondition[]`, `note`
+
+**ActionBlock** : `actions: ExportAction[]`, `note`
+
+**NoteBlock** : (aucun champ spécifique — designer-only)
+
+### 8.1 NativeProperties
+
+| Propriété | Type | Description |
+|-----------|------|-------------|
+| `delay` | number | Secondes d'attente avant exécution. Géré par le dev dans `onBeforeBlock`. |
+| `timeout` | number | Temps max en secondes. Géré par le dev dans ses handlers. |
+| `debug` | boolean | Flag de développement. Le dev décide quoi en faire. |
+| `isAsync` | boolean | Block parallèle. Le dev gère l'exécution parallèle dans son moteur. |
+| `portPerCharacter` | boolean | DIALOG uniquement. Crée des ports de sortie par personnage. |
+| `skipIfMissingActor` | boolean | Skip si le personnage n'est pas présent. Géré via `onValidateNextBlock`. |
+
+---
+
+## 9. Tests cross-language
+
+### Format des test cases
+
+```json
+{
+    "version": "1.0",
+    "suites": [{
+        "id": "linear-dialog",
+        "description": "Three dialog blocks in sequence",
+        "blueprint": "simple-linear.json",
+        "locale": "en",
+        "stateBridge": {
+            "conditions": { "quest_active": true },
+            "dictionaries": {},
+            "actions": {}
+        },
+        "cases": [{
+            "id": "linear-001",
+            "steps": [
+                {
+                    "expect": { "type": "DIALOG", "blockUuid": "uuid-1", "dialogueText": "Hello" },
+                    "action": { "type": "next" }
+                },
+                {
+                    "expect": { "type": "END_OF_SCENE" }
+                }
+            ],
+            "expectedVisited": ["uuid-1"],
+            "expectedCleanupCalls": 1
+        }]
+    }]
+}
+```
+
+### Types d'actions de test
+
+| Action | Description |
+|--------|-------------|
+| `{ type: "next" }` | Appelle `next()` |
+| `{ type: "selectChoice", choiceUuid: "..." }` | Appelle `context.selectChoice(uuid)` puis `next()` |
+| `{ type: "resolve", value: true/false }` | Appelle `context.resolve(value)` puis `next()` |
+| `{ type: "resolveAction" }` | Appelle `context.resolve()` puis `next()` |
+| `{ type: "rejectAction", error: "..." }` | Appelle `context.reject(error)` puis `next()` |
+| `{ type: "resolveCharacterPort", name: "..." }` | Appelle `context.resolveCharacterPort(name)` puis `next()` |
+
+### Pattern du test runner
+
+Chaque runtime implémente un runner générique qui :
+1. Lit `test-cases.json`
+2. Charge le blueprint JSON référencé
+3. Crée un `DialogueEngine` avec un StateBridge configuré depuis le test case
+4. Enregistre des handlers "enregistreurs" qui capturent les blocks visités
+5. Lance la scène
+6. Pour chaque step : vérifie `expect`, exécute `action`
+7. À la fin : vérifie `expectedVisited` et `expectedCleanupCalls`
+
+---
+
+## 10. Architecture TypeScript (implémentation de référence)
+
+```
+lsde-ts/src/
+├── index.ts              # Barrel export public
+├── types.ts              # Tous les types/interfaces
+├── engine.ts             # DialogueEngine — facade publique
+├── graph.ts              # Indexation du graphe + lookups
+├── scene-handle.ts       # SceneHandle (Tier 2) + boucle de traversée
+├── handler-registry.ts   # Registration + résolution Tier 1/Tier 2
+├── port-resolver.ts      # Routing connections/ports (algorithme critique)
+├── block-context.ts      # Factory de contexte par type de block
+├── condition-evaluator.ts # Évaluation chaîne de conditions (& / |)
+├── validator.ts           # Validation init + diagnostic report
+└── utils.ts              # Helpers partagés
+```
+
+### Ordre de build recommandé
+
+1. **`types.ts`** — Interfaces. Aucune logique.
+2. **`validator.ts`** — Validation des données. Testable isolément.
+3. **`graph.ts`** — Index par UUID, connections. Pure data structure.
+4. **`condition-evaluator.ts`** — Évaluation chaînes AND/OR. Pure function.
+5. **`port-resolver.ts`** — Routing. Pure function. Tests exhaustifs pour les 5 types.
+6. **`handler-registry.ts`** — Registration + résolution priorité. Tests Tier 1/Tier 2.
+7. **`block-context.ts`** — Factory de contexte. Tests par type.
+8. **`scene-handle.ts`** — Boucle de traversée. Intègre tout.
+9. **`engine.ts`** — Facade. Tests d'intégration avec les test cases JSON.
+
+---
+
+## 11. Conventions par langage
+
+### TypeScript (lsde-ts/) — RÉFÉRENCE
+- Strict TS, pas de `any`
+- ESM, vitest pour les tests
+- Les types exportés doivent correspondre exactement à `blueprints/blueprint.types.ts`
+
+### C# (lsde-csharp/)
+- .NET Standard 2.1 (Unity 2021+)
+- PascalCase méthodes, camelCase params
+- `Action<T>` et `Func<T>` pour callbacks
+- Pas de LINQ dans les hot paths (allocations Unity)
+- `StateBridge` = interface (pas objet littéral)
+
+### GDScript (lsde-gdscript/)
+- snake_case partout
+- `class_name` pour toutes les classes
+- `Callable` pour les callbacks
+- `Signal` pour onSceneEnter/onSceneExit (convention Godot)
+- `JSON.parse_string()` pour le parsing
+
+### C++ (lsde-cpp/)
+- C++17 minimum
+- `std::function` pour callbacks
+- `std::unordered_map` pour index
+- nlohmann/json pour parsing
+- CMake build system
+- Pas d'exceptions dans les hot paths
+
+### Rust (lsde-rust/)
+- Edition 2021
+- `serde` + `serde_json`
+- `Box<dyn Fn>` pour callbacks
+- `Result<DiagnosticReport, InitError>` pour init
+
+### Lua (lsde-lua/)
+- Lua 5.1+ (compatible Defold)
+- Tables pour tout
+- Module pattern
+- Pas de dépendances externes pour le core
+
+### Python (lsde-python/)
+- Python 3.10+
+- `dataclasses` pour types
+- `typing.Callable` pour callbacks
+- `pytest` pour tests
+
+---
+
+## 12. Conventions de commit
+
+```
+[ts] Fix port resolution for catch port
+[ts][csharp] Update condition chain evaluation
+[spec] Add async block test cases
+[ci] Fix GDScript test runner
+[blueprints] Update test fixtures from LSDE export
+```
+
+---
+
+## 13. Décisions de design
+
+| Décision | Rationale |
+|----------|-----------|
+| Callbacks partout (pas async/await) | Cross-language : Lua, C, GDScript n'ont pas d'async natif |
+| NativeProperties = données pures | Le moteur ne peut pas savoir comment le jeu gère ses timers/UI |
+| NOTE blocks ignorés silencieusement | Contenu designer-only, pas de connections dans l'export |
+| Visibility conditions filtrées avant onChoice | Toujours nécessaire, évite le boilerplate |
+| Connections inter-scènes = metadata consultable, pas auto-traversées | Les transitions impliquent du game-specific ; le dev lit les connections via `engine.getSceneConnections(sceneId)` pour décider la navigation |
+| Auto-évaluation conditions si pas de handler | Réduit le boilerplate pour le cas commun |
+| Auto-exécution actions si pas de handler | Idem |
+| TypeScript = implémentation de référence | En cas d'ambiguïté dans ce document, le comportement TS fait foi |

@@ -18,13 +18,13 @@
  * 3. Execute the block based on its type:
  *    - DIALOG: Display text, resolve characters and emotions
  *    - CHOICE: Present options, filter by visibilityConditions
- *    - CONDITION: Evaluate conditions, follow true/false port (index 0/1)
+ *    - CONDITION: Evaluate condition groups in order — single group: true/false ports, multiple groups: case_0..N/default ports
  *    - ACTION: Execute actions using signatures to resolve actionId
  *    - NOTE: Skip (designer-only, not for runtime)
  * 4. Follow connections to the next block(s):
  *    - Match connection.fromId === currentBlock.uuid
  *    - For CHOICE: match connection.fromPort === selectedChoice.uuid
- *    - For CONDITION: fromPortIndex 0 = true, 1 = false
+ *    - For CONDITION: single group → fromPort "true"/"false"; switch mode → fromPort "case_0".."case_N" or "default"
  * 5. Use dictionaries to resolve condition keys and action params
  * 6. Use signatures to understand action types and param definitions
  * 7. Repeat until no outgoing connections remain
@@ -57,7 +57,7 @@ namespace lsdeDictionaryVariableGlobal {
 
 /** @brief Action signature IDs */
 namespace lsdeActionId {
-	constexpr const char* signatureID1 = "signatureID1";
+	constexpr const char* moveCameraTo = "moveCameraTo";
 }
 
 /**
@@ -402,14 +402,18 @@ struct ChoiceBlock : public BlueprintBlockBase {
 
 /**
  * A condition block that evaluates logic to branch the dialogue flow.
- * Has true/false output ports based on condition evaluation.
+ * With a single condition group: has true/false output ports.
+ * With multiple groups (switch mode): each group is a case evaluated in order,
+ * first matching case routes to its port (case_0, case_1, ...), otherwise routes to default.
  */
 struct ConditionBlock : public BlueprintBlockBase {
 	/**
-	 * Conditions evaluated before this block executes.
-	 * If conditions are not met, the block may be skipped or hidden.
+	 * 2D array of condition groups (Condition[][]).
+	 * Each inner array is a "case" — conditions chained with & (AND) / | (OR).
+	 * Groups are evaluated in order: first matching group wins.
+	 * Single group: classic true/false branching. Multiple groups: switch mode.
 	 */
-	std::vector<ExportCondition> conditions;
+	std::vector<std::vector<ExportCondition>> conditions;
 	/**
 	 * Designer note attached to this block.
 	 * Internal documentation, not intended for player-facing display.

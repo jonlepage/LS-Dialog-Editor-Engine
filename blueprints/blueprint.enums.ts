@@ -7,13 +7,12 @@
  */
 export enum LSDE_SCENES {
 	/**
-	 * ### Scene: New Scene
-	 * 3 ACTION, 3 CHOICE, 2 CONDITION, 15 DIALOG
+	 * ### Scene: Flow-001
+	 * 2 ACTION, 1 CHOICE, 1 CONDITION, 8 DIALOG
 	 * Entry: `DIALOG-001` ⭐
-	 * - Emotions: `hangry`, `sad`
-	 * - Characters: `Boo`, `Gruht Tyron`, `Svelt Moon`, `Zoozo Zee`, `lia`
+	 * - Characters: `Boo`, `lia`
 	 */
-	newScene = '3e0110a5-49bb-46fe-884b-05ce106af4cd',
+	flow001 = '199c33e2-a4aa-44bb-8b70-16ce88824e82',
 }
 
 /**
@@ -25,242 +24,129 @@ export enum LSDE_SCENES {
 export enum LSDE_BLOCKS {
 	/**
 	 * ### 🟧[ACTION] ACTION-001
-	 * - Scene: `New Scene`
-	 * - In: `CONDITION-001`
-	 * `signatureID1`(a, 2)
+	 * - Scene: `Flow-001`
+	 * - In: `DIALOG-002`
+	 * - Out: `DIALOG-003`
+	 * `moveCameraTo`(InterestPoint1)
 	 * ---
 	 * <image url="./_images/action.webp" />
 	 */
-	newSceneAction001 = 'd72bcf6a-161b-4759-90dd-2ae10a58fdd3',
+	flow001Action001 = '73fa0dce-df57-4040-b2d7-2db8dc5156c2',
 	/**
 	 * ### 🟧[ACTION] ACTION-002
-	 * - Scene: `New Scene`
-	 * - In: `DIALOG-007`
-	 * `signatureID1`(item2, 1)
+	 * - Scene: `Flow-001`
+	 * - In: `DIALOG-003`
+	 * - Out: `CONDITION-001`
+	 * `moveCameraTo`(a1)
 	 * ---
 	 * <image url="./_images/action.webp" />
 	 */
-	newSceneAction002 = '7662f44f-1836-4176-85b2-39f3c1bd4620',
-	/**
-	 * ### 🟧[ACTION] trigger_reveal_action-AI
-	 * - Scene: `New Scene`
-	 * - In: `stalker_encounter-AI`, `near_miss_escape-AI`
-	 * - Out: `cliffhanger_reveal-AI`
-	 * `trigger_forest_collapse`(high_tension)
-	 * ---
-	 * <image url="./_images/action.webp" />
-	 */
-	newSceneTriggerRevealActionAi = 'f0792ff1-da03-4834-b15f-8652df3b041a',
+	flow001Action002 = 'fed6440c-1a2a-47f8-9e40-3dbf3ce25492',
 	/**
 	 * ### ⬜[CHOICE] CHOICE-001
-	 * - Characters: `lia`
-	 * - Scene: `New Scene`
-	 * - In: `DIALOG-001`
-	 * - Out: `DIALOG-002`, `DIALOG-004`
-	 * - Choices: `17e98de3-1690-4ca4-8ea5-8070c15b1fe1`, `a0eee458-6ccc-4a23-bd36-0b3d1f73771e`
+	 * - Scene: `Flow-001`
+	 * - In: `DIALOG-005`
+	 * - Out: `DIALOG-006`, `DIALOG-007`
+	 * - Choices: `aidez`, `continuer`
 	 * ---
 	 * <image url="./_images/choice.webp" />
 	 */
-	newSceneChoice001 = '014f503a-6688-429d-a5fe-801cf33f2410',
-	/**
-	 * ### ⬜[CHOICE] CHOICE-002
-	 * - Scene: `New Scene`
-	 * - In: `DIALOG-002`
-	 * - Out: `CONDITION-001`
-	 * - Choices: `C1.1`, `C2.1`
-	 * ---
-	 * <image url="./_images/choice.webp" />
-	 */
-	newSceneChoice002 = '2b184947-49f9-4e57-8600-70b46e2cd0ba',
-	/**
-	 * ### ⬜[CHOICE] stealth_choice-AI
-	 * - Scene: `New Scene`
-	 * - In: `anxiety_observation-AI`
-	 * - Out: `silence_path-AI`, `flight_path-AI`
-	 * - Choices: `Rester parfaitement immobile dans l'ombre`, `Courir vers la lueur lointaine`
-	 * ---
-	 * <image url="./_images/choice.webp" />
-	 */
-	newSceneStealthChoiceAi = 'e55d4d79-7642-452d-aea3-cb44ca37a826',
+	flow001Choice001 = '23e9aeda-e1db-4f8e-ae9f-afaf76786e95',
 	/**
 	 * ### 🟪[CONDITION] CONDITION-001
-	 * - Scene: `New Scene`
-	 * - In: `CHOICE-002`
-	 * - Out: `ACTION-001`, `DIALOG-003`
-	 * `choice:014f503a-6688-429d-a5fe-801cf33f2410` = `a0eee458-6ccc-4a23-bd36-0b3d1f73771e`
-	 * `choice:2b184947-49f9-4e57-8600-70b46e2cd0ba` = `e306346e-6bcc-4564-8b19-e2ed28fabafe`
+	 * - Scene: `Flow-001`
+	 * - In: `ACTION-002`
+	 * - Out: `DIALOG-004`, `DIALOG-008`
+	 * Case 0:
+	 * `VariableGlobal.key1` = `1`
+	 * Case 1:
+	 * `VariableGlobal.key2` = `2`
 	 * ---
 	 * <image url="./_images/cond.webp" />
 	 */
-	newSceneCondition001 = '4074b6c2-bfc8-44f1-9a29-cda529bf522a',
-	/**
-	 * ### 🟪[CONDITION] noise_check-AI
-	 * - Scene: `New Scene`
-	 * - In: `silence_path-AI`, `flight_path-AI`
-	 * - Out: `stalker_encounter-AI`, `near_miss_escape-AI`
-	 * `noise_level` > `15`
-	 * ---
-	 * <image url="./_images/cond.webp" />
-	 */
-	newSceneNoiseCheckAi = 'f7923356-5267-430a-bd6c-b9392eb15a24',
-	/**
-	 * ### 🟦[DIALOG] anxiety_observation-AI
-	 * _"*Boo tremble de tout son long, ses grands yeux dilatés scrutant l'obscurité mouvante qui semble se détacher du brouillar..."_
-	 * - Characters: `Boo`
-	 * - Scene: `New Scene`
-	 * - In: `survival_setup-AI`
-	 * - Out: `stealth_choice-AI`
-	 * ---
-	 * <image url="./_images/dialog.webp" />
-	 */
-	newSceneAnxietyObservationAi = 'b91fb645-cc0f-49b0-a456-25a596d0bd0b',
-	/**
-	 * ### 🟦[DIALOG] cliffhanger_reveal-AI
-	 * _"Regarde devant nous... ce n'est pas la sortie du Thicket. *Lia s'arrête net, la lueur de sa torche vacillante révélant u..."_
-	 * - Characters: `lia`
-	 * - Scene: `New Scene`
-	 * - In: `trigger_reveal_action-AI`
-	 * ---
-	 * <image url="./_images/dialog.webp" />
-	 */
-	newSceneCliffhangerRevealAi = '36edbe6e-c48e-44b6-9037-e7bd489a3155',
+	flow001Condition001 = 'f80757d6-73c0-4160-8449-e494f5c485b7',
 	/**
 	 * ### 🟦[DIALOG] DIALOG-001 ⭐
-	 * _"C2"_
-	 * - Characters: `lia` (sad ×2), `Boo` (sad ×2), `Svelt Moon` (sad ×2), `Gruht Tyron` (sad ×2)
-	 * - Scene: `New Scene`
-	 * - Out: `CHOICE-001`
+	 * _"Salut , dit moi que fait tu la ?"_
+	 * - Characters: `lia`
+	 * - Scene: `Flow-001`
+	 * - Out: `DIALOG-002`
 	 * ---
 	 * <image url="./_images/dialog.webp" />
 	 */
-	newSceneDialog001 = '6462dab3-0eb4-4a2c-a505-407556441156',
+	flow001Dialog001 = 'f2402df4-0081-4663-9fce-6dca72e9ff77',
 	/**
 	 * ### 🟦[DIALOG] DIALOG-002
-	 * _"D2"_
-	 * - Scene: `New Scene`
-	 * - In: `CHOICE-001`
-	 * - Out: `CHOICE-002`
+	 * _"Ha j'ai tres mal et jessai de me reposer , je me suis cogner a cette roche la bas !"_
+	 * - Scene: `Flow-001`
+	 * - In: `DIALOG-001`
+	 * - Out: `ACTION-001`
 	 * ---
 	 * <image url="./_images/dialog.webp" />
 	 */
-	newSceneDialog002 = 'c66437af-54b7-4a75-9efa-713e983c145d',
+	flow001Dialog002 = 'c302b3a4-3433-4cf4-8402-a61e33ba1a84',
 	/**
 	 * ### 🟦[DIALOG] DIALOG-003
-	 * _"D5"_
-	 * - Scene: `New Scene`
-	 * - In: `CONDITION-001`
-	 * ---
-	 * <image url="./_images/dialog.webp" />
-	 */
-	newSceneDialog003 = 'dfc30c4c-a1aa-4e76-81b6-640bf447351b',
-	/**
-	 * ### 🟦[DIALOG] DIALOG-004
-	 * _"Hehehe!"_
-	 * - Characters: `Gruht Tyron` (hangry)
-	 * - Scene: `New Scene`
-	 * - In: `CHOICE-001`
-	 * - Out: `DIALOG-005`, `DIALOG-006`
-	 * ---
-	 * <image url="./_images/dialog.webp" />
-	 */
-	newSceneDialog004 = '4a800564-098f-4b88-a36b-f5d03f642944',
-	/**
-	 * ### 🟦[DIALOG] DIALOG-005
-	 * _"Je suis le roi!"_
-	 * - Characters: `Gruht Tyron`
-	 * - Scene: `New Scene`
-	 * - In: `DIALOG-004`
-	 * - Out: `DIALOG-008`
-	 * ---
-	 * <image url="./_images/dialog.webp" />
-	 */
-	newSceneDialog005 = '2a087cbc-3b00-457a-9448-538e39a475ab',
-	/**
-	 * ### 🟦[DIALOG] DIALOG-006
-	 * _"heu, je suis pas certain de comprendre"_
-	 * - Characters: `Zoozo Zee`
-	 * - Scene: `New Scene`
-	 * - In: `DIALOG-004`
-	 * - Out: `DIALOG-007`
-	 * ---
-	 * <image url="./_images/dialog.webp" />
-	 */
-	newSceneDialog006 = 'ef7301d9-c8ce-4416-9a28-4b1f5595ac74',
-	/**
-	 * ### 🟦[DIALOG] DIALOG-007
-	 * _"heu non mais ca va pas !? ces moi qui est las"_
-	 * - Characters: `Zoozo Zee`
-	 * - Scene: `New Scene`
-	 * - In: `DIALOG-006`
+	 * _"> ces la roche etrange qui semble avoir blesser cette creature !"_
+	 * - Scene: `Flow-001`
+	 * - In: `ACTION-001`
 	 * - Out: `ACTION-002`
 	 * ---
 	 * <image url="./_images/dialog.webp" />
 	 */
-	newSceneDialog007 = 'd0cf7ee4-8dcb-4b75-b373-5d4a1dca73be',
+	flow001Dialog003 = '157817bf-073e-4368-89de-52e295ffcecb',
+	/**
+	 * ### 🟦[DIALOG] DIALOG-004
+	 * _"Je compatis a votre douleur ! miouw"_
+	 * - Characters: `Boo`
+	 * - Scene: `Flow-001`
+	 * - In: `CONDITION-001`
+	 * - Out: `DIALOG-005`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	flow001Dialog004 = 'f6262aa9-6d90-46d1-a0fd-f9108ded43ff',
+	/**
+	 * ### 🟦[DIALOG] DIALOG-005
+	 * _"Moi aussi"_
+	 * - Characters: `lia`
+	 * - Scene: `Flow-001`
+	 * - In: `DIALOG-004`
+	 * - Out: `CHOICE-001`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	flow001Dialog005 = 'a458323a-d832-405f-8f47-9ca096d7eea6',
+	/**
+	 * ### 🟦[DIALOG] DIALOG-006
+	 * _"venez je vais vous aider"_
+	 * - Characters: `lia`
+	 * - Scene: `Flow-001`
+	 * - In: `CHOICE-001`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	flow001Dialog006 = '8994d27a-592b-4fe6-9311-754f6f7d491d',
+	/**
+	 * ### 🟦[DIALOG] DIALOG-007
+	 * _"a la prochaine"_
+	 * - Characters: `lia`
+	 * - Scene: `Flow-001`
+	 * - In: `CHOICE-001`
+	 * ---
+	 * <image url="./_images/dialog.webp" />
+	 */
+	flow001Dialog007 = '03773f48-310f-43e8-a7bb-1062f1c92d83',
 	/**
 	 * ### 🟦[DIALOG] DIALOG-008
-	 * _"ces pas moi le probleme !!!"_
-	 * - Characters: `Gruht Tyron`
-	 * - Scene: `New Scene`
-	 * - In: `DIALOG-005`
-	 * ---
-	 * <image url="./_images/dialog.webp" />
-	 */
-	newSceneDialog008 = '7ab18c86-c98e-41f1-99ca-51c7e66cb144',
-	/**
-	 * ### 🟦[DIALOG] flight_path-AI
-	 * _"C'est trop tard pour se cacher, l'air s'est figé et il sait exactement que nous sommes ici ! *Lia attrape violemment Boo..."_
-	 * - Characters: `lia`
-	 * - Scene: `New Scene`
-	 * - In: `stealth_choice-AI`
-	 * - Out: `noise_check-AI`
-	 * ---
-	 * <image url="./_images/dialog.webp" />
-	 */
-	newSceneFlightPathAi = '39327ee6-8f67-448a-8cb1-e888cc597a8b',
-	/**
-	 * ### 🟦[DIALOG] near_miss_escape-AI
-	 * _"Le cliquetis s'éloigne lentement vers le nord, mais ne te détrompe pas, il tourne en rond autour de nous comme un prédat..."_
-	 * - Characters: `lia`
-	 * - Scene: `New Scene`
-	 * - In: `noise_check-AI`
-	 * - Out: `trigger_reveal_action-AI`
-	 * ---
-	 * <image url="./_images/dialog.webp" />
-	 */
-	newSceneNearMissEscapeAi = '14d056d8-5bc2-4df7-babf-f7b67d8daa3c',
-	/**
-	 * ### 🟦[DIALOG] silence_path-AI
-	 * _"On ne bouge plus, Boo. *Lia plaque sa main glacée sur le museau du petit chat volant, sentant son cœur battre comme celu..."_
-	 * - Characters: `lia`
-	 * - Scene: `New Scene`
-	 * - In: `stealth_choice-AI`
-	 * - Out: `noise_check-AI`
-	 * ---
-	 * <image url="./_images/dialog.webp" />
-	 */
-	newSceneSilencePathAi = 'ce74b7c3-49b7-4515-891b-6a80ab79f323',
-	/**
-	 * ### 🟦[DIALOG] stalker_encounter-AI
-	 * _"*Une silhouette immense et distordue émerge soudainement du brouillard, ses membres trop longs claquant contre le sol co..."_
+	 * _"hehehe"_
 	 * - Characters: `Boo`
-	 * - Scene: `New Scene`
-	 * - In: `noise_check-AI`
-	 * - Out: `trigger_reveal_action-AI`
+	 * - Scene: `Flow-001`
+	 * - In: `CONDITION-001`
 	 * ---
 	 * <image url="./_images/dialog.webp" />
 	 */
-	newSceneStalkerEncounterAi = 'eaa4fb18-28f1-4f96-85c7-f5366b592a6c',
-	/**
-	 * ### 🟦[DIALOG] survival_setup-AI
-	 * _"Chut. Ne bouge plus d'un cil, Boo. Est-ce que tu entends ce cliquetis sec et rythmique qui résonne contre l'écorce putri..."_
-	 * - Characters: `lia`
-	 * - Scene: `New Scene`
-	 * - Out: `anxiety_observation-AI`
-	 * ---
-	 * <image url="./_images/dialog.webp" />
-	 */
-	newSceneSurvivalSetupAi = 'a32834d4-45df-4540-8c0e-5cb093ea5862',
+	flow001Dialog008 = '80a3b47d-1262-4bb4-a520-915fc88f75ea',
 }
 
 /**
@@ -270,51 +156,19 @@ export enum LSDE_BLOCKS {
  */
 export enum LSDE_CHOICES {
 	/**
-	 * ### ⬜[CHOICE_ITEM] 17e98de3-1690-4ca4-8ea5-8070c15b1fe1
-	 * _"C1"_
-	 * - Scene: `New Scene`
+	 * ### ⬜[CHOICE_ITEM] aidez
+	 * _"aidez"_
+	 * - Scene: `Flow-001`
 	 * - Parent: `CHOICE-001`
 	 */
-	/** @see {@link LSDE_BLOCKS.newSceneChoice001} */
-	newScene17e98de316904ca48ea58070c15b1fe1 = '17e98de3-1690-4ca4-8ea5-8070c15b1fe1',
+	/** @see {@link LSDE_BLOCKS.flow001Choice001} */
+	flow001Aidez = 'decb34ee-dbb8-4f94-b770-9d94f63a3eaf',
 	/**
-	 * ### ⬜[CHOICE_ITEM] a0eee458-6ccc-4a23-bd36-0b3d1f73771e
-	 * _"C2"_
-	 * - Scene: `New Scene`
+	 * ### ⬜[CHOICE_ITEM] continuer
+	 * _"continuer"_
+	 * - Scene: `Flow-001`
 	 * - Parent: `CHOICE-001`
 	 */
-	/** @see {@link LSDE_BLOCKS.newSceneChoice001} */
-	newSceneA0eee4586ccc4a23Bd360b3d1f73771e = 'a0eee458-6ccc-4a23-bd36-0b3d1f73771e',
-	/**
-	 * ### ⬜[CHOICE_ITEM] C1.1
-	 * _"C1.1"_
-	 * - Scene: `New Scene`
-	 * - Parent: `CHOICE-002`
-	 */
-	/** @see {@link LSDE_BLOCKS.newSceneChoice002} */
-	newSceneC11 = 'd16d21ea-ecf8-4172-aaa3-668df80e9853',
-	/**
-	 * ### ⬜[CHOICE_ITEM] C2.1
-	 * _"C2.1"_
-	 * - Scene: `New Scene`
-	 * - Parent: `CHOICE-002`
-	 */
-	/** @see {@link LSDE_BLOCKS.newSceneChoice002} */
-	newSceneC21 = 'e306346e-6bcc-4564-8b19-e2ed28fabafe',
-	/**
-	 * ### ⬜[CHOICE_ITEM] Rester parfaitement immobile dans l'ombre
-	 * _"Rester parfaitement immobile dans l'ombre"_
-	 * - Scene: `New Scene`
-	 * - Parent: `stealth_choice-AI`
-	 */
-	/** @see {@link LSDE_BLOCKS.newSceneStealthChoiceAi} */
-	newSceneResterParfaitementImmobileDansLOmbre = '3ff6be38-0db4-4d24-98a0-bbb21be19d4a',
-	/**
-	 * ### ⬜[CHOICE_ITEM] Courir vers la lueur lointaine
-	 * _"Courir vers la lueur lointaine"_
-	 * - Scene: `New Scene`
-	 * - Parent: `stealth_choice-AI`
-	 */
-	/** @see {@link LSDE_BLOCKS.newSceneStealthChoiceAi} */
-	newSceneCourirVersLaLueurLointaine = '7b0f9b9a-6e4d-444f-bdf9-a3be47d89140',
+	/** @see {@link LSDE_BLOCKS.flow001Choice001} */
+	flow001Continuer = 'bfc4d9f3-3315-4d8b-8fc9-17e867521126',
 }

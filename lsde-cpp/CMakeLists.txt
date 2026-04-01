@@ -23,6 +23,26 @@ target_include_directories(lsde PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
+# ─── JSON loader — optional, requires nlohmann/json ──────────────────────────
+
+option(LSDE_JSON_LOADER "Build JSON loader (requires nlohmann/json)" ON)
+
+if(LSDE_JSON_LOADER)
+    include(FetchContent)
+    FetchContent_Declare(
+        json
+        GIT_REPOSITORY https://github.com/nlohmann/json.git
+        GIT_TAG v3.11.3
+    )
+    FetchContent_MakeAvailable(json)
+
+    add_library(lsde_json STATIC src/json_loader.cpp)
+    target_link_libraries(lsde_json PUBLIC lsde nlohmann_json::nlohmann_json)
+    target_include_directories(lsde_json PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    )
+endif()
+
 # ─── Options ──────────────────────────────────────────────────────────────────
 
 option(LSDE_BUILD_TESTS "Build cross-language tests" ON)

@@ -8,24 +8,28 @@ Port of the TypeScript reference implementation. Validated against the same 42 c
 
 ---
 
-## Quick Start
-
-### Unity
-
-Copy the `src/LsdeDialogEngine/` folder into your Unity project's `Assets/Plugins/` directory. No package manager needed.
-
-### .NET
+## Installation
 
 ```bash
-cd lsde-csharp
-dotnet build
+# Core engine
+dotnet add package LsdeDialogEngine
+
+# JSON loader — choose ONE based on your platform:
+dotnet add package LsdeDialogEngine.Newtonsoft        # Unity
+dotnet add package LsdeDialogEngine.SystemTextJson    # .NET 5+ / Godot .NET
 ```
 
-### Usage
+### Unity (alternative)
+
+Copy the `src/LsdeDialogEngine/` folder into your Unity project's `Assets/Plugins/` directory. Install `com.unity.nuget.newtonsoft-json` via Unity Package Manager for JSON parsing.
+
+## Quick Start
 
 ```csharp
 using LsdeDialogEngine;
+using LsdeDialogEngine.Json; // or LsdeDialogEngine.Newtonsoft for Unity
 
+var blueprint = LsdeJson.Parse(File.ReadAllText("blueprint.json"));
 var engine = new DialogueEngine();
 var report = engine.Init(new InitOptions { Data = blueprint });
 
