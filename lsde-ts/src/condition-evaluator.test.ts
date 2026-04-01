@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateConditionChain, filterVisibleChoices } from './condition-evaluator.js';
+import { evaluateConditionChain, evaluateConditionGroups, filterVisibleChoices } from './condition-evaluator.js';
 import type { ExportCondition, ChoiceItem } from './types.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -73,6 +73,93 @@ describe( 'evaluateConditionChain', () => {
 			[cond( 'true1' ), cond( 'false1' )], // no chain on 2nd
 			evaluator,
 		) ).toBe( false );
+	} );
+
+} );
+
+// ─── evaluateConditionGroups ─────────────────────────────────────────────────
+
+describe( 'evaluateConditionGroups', () => {
+
+	// ── Switch mode (default) ────────────────────────────────────────────
+
+	it( 'returns -1 for empty groups', () => {
+		expect( evaluateConditionGroups( [], evaluator ) ).toBe( -1 );
+	} );
+
+	it( 'single group match → returns 0', () => {
+		expect( evaluateConditionGroups( [[cond( 'true1' )]], evaluator ) ).toBe( 0 );
+	} );
+
+	it( 'single group no match → returns -1', () => {
+		expect( evaluateConditionGroups( [[cond( 'false1' )]], evaluator ) ).toBe( -1 );
+	} );
+
+	it( '2 groups, first matches → returns 0 (break)', () => {
+		expect( evaluateConditionGroups(
+			[[cond( 'true1' )], [cond( 'true2' )]],
+			evaluator,
+		) ).toBe( 0 );
+	} );
+
+	it( '2 groups, second matches → returns 1', () => {
+		expect( evaluateConditionGroups(
+			[[cond( 'false1' )], [cond( 'true1' )]],
+			evaluator,
+		) ).toBe( 1 );
+	} );
+
+	it( '2 groups, none match → returns -1', () => {
+		expect( evaluateConditionGroups(
+			[[cond( 'false1' )], [cond( 'false2' )]],
+			evaluator,
+		) ).toBe( -1 );
+	} );
+
+	it( 'evaluates chains within groups', () => {
+		// Group 0: false AND true → false, Group 1: true → true
+		expect( evaluateConditionGroups(
+			[[cond( 'false1' ), cond( 'true1', '&' )], [cond( 'true2' )]],
+			evaluator,
+		) ).toBe( 1 );
+	} );
+
+	// ── Dispatcher mode ─────────────────────────────────────────────────
+
+	it( 'dispatcher: empty groups → returns []', () => {
+		expect( evaluateConditionGroups( [], evaluator, true ) ).toEqual( [] );
+	} );
+
+	it( 'dispatcher: 2 groups, both match → returns [0, 1]', () => {
+		expect( evaluateConditionGroups(
+			[[cond( 'true1' )], [cond( 'true2' )]],
+			evaluator,
+			true,
+		) ).toEqual( [0, 1] );
+	} );
+
+	it( 'dispatcher: 2 groups, none match → returns []', () => {
+		expect( evaluateConditionGroups(
+			[[cond( 'false1' )], [cond( 'false2' )]],
+			evaluator,
+			true,
+		) ).toEqual( [] );
+	} );
+
+	it( 'dispatcher: 3 groups, 1st+3rd match → returns [0, 2]', () => {
+		expect( evaluateConditionGroups(
+			[[cond( 'true1' )], [cond( 'false1' )], [cond( 'true2' )]],
+			evaluator,
+			true,
+		) ).toEqual( [0, 2] );
+	} );
+
+	it( 'dispatcher: single group match → returns [0]', () => {
+		expect( evaluateConditionGroups(
+			[[cond( 'true1' )]],
+			evaluator,
+			true,
+		) ).toEqual( [0] );
 	} );
 
 } );

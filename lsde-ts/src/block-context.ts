@@ -19,7 +19,7 @@ export interface InternalChoiceContext extends ChoiceContext {
 
 export interface InternalConditionContext extends ConditionContext {
 	_globalPrevented: boolean;
-	_conditionResult: boolean | undefined;
+	_conditionResult: boolean | number | number[] | undefined;
 }
 
 export interface InternalActionContext extends ActionContext {
@@ -79,7 +79,7 @@ export function createConditionContext( resolvedCharacter: BlockCharacter | unde
 		_globalPrevented: false,
 		_conditionResult: undefined,
 		character: resolvedCharacter,
-		resolve( result: boolean ) {
+		resolve( result: boolean | number | number[] ) {
 			ctx._conditionResult = result;
 		},
 		preventGlobalHandler() {

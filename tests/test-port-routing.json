@@ -314,7 +314,7 @@
                 "properties": [],
                 "isStartBlock": true,
                 "conditions": [
-                  { "uuid": "vc1", "key": "quest", "operator": "=", "value": "true" }
+                  [{ "uuid": "vc1", "key": "quest", "operator": "=", "value": "true" }]
                 ]
               },
               {

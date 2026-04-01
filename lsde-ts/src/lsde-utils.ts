@@ -2,7 +2,7 @@
 
 import type { BlueprintBlock, ExportCondition, ChoiceItem } from './types.js';
 import { isDialogBlock, isChoiceBlock, isConditionBlock, isActionBlock, isNoteBlock } from './utils.js';
-import { evaluateConditionChain, filterVisibleChoices } from './condition-evaluator.js';
+import { evaluateConditionChain, evaluateConditionGroups, filterVisibleChoices } from './condition-evaluator.js';
 
 /** Public utility class exposing common helpers for game developers integrating the LSDE engine. */
 export class LsdeUtils {
@@ -73,6 +73,16 @@ export class LsdeUtils {
 	 * @param evaluator - A callback that evaluates a single condition.
 	 */
 	static evaluateConditionChain = evaluateConditionChain;
+
+	/**
+	 * Evaluates condition groups (2D array) for switch or dispatcher mode.
+	 * - Switch mode (`dispatcher = false`): returns the index of the first matching group, or `-1`.
+	 * - Dispatcher mode (`dispatcher = true`): returns an array of all matching group indices.
+	 * @param groups - The 2D condition array from `ConditionBlock.conditions`.
+	 * @param evaluator - A callback that evaluates a single condition.
+	 * @param dispatcher - When `true`, evaluates all groups instead of breaking at first match.
+	 */
+	static evaluateConditionGroups = evaluateConditionGroups;
 
 	/**
 	 * Filters choice items by their visibility conditions.

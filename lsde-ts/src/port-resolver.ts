@@ -57,14 +57,48 @@ function resolveChoicePort(
 	return filterByFromPort( connections, selectedChoiceUuid );
 }
 
+/**
+ * CONDITION port resolution:
+ * - `boolean` (legacy): true → fromPortIndex 0, false → fromPortIndex 1.
+ * - `number[]` (dispatcher): default/false port + all matching case ports by fromPortIndex.
+ * - `number >= 0` (switch match): single case port by fromPortIndex.
+ * - `number < 0` (switch no-match): default/false port by fromPort name.
+ */
 function resolveConditionPort(
 	connections: BlueprintConnection[],
-	conditionResult: boolean | undefined,
+	conditionResult: boolean | number | number[] | undefined,
 ): PortResolutionResult {
 	if ( conditionResult === undefined ) return NONE;
-	const targetIndex = conditionResult ? 0 : 1;
-	const matches = connections.filter( c => c.fromPortIndex === targetIndex );
-	return { connections: matches };
+
+	// boolean legacy: true → index 0, false → index 1
+	if ( typeof conditionResult === 'boolean' ) {
+		const idx = conditionResult ? 0 : 1;
+		return { connections: connections.filter( c => c.fromPortIndex === idx ) };
+	}
+
+	// number[]: dispatcher — all matched case ports + default
+	if ( Array.isArray( conditionResult ) ) {
+		const indices = new Set( conditionResult );
+		const defaultConns = connections.filter( c =>
+			c.fromPort === 'default' || c.fromPort === 'false',
+		);
+		const matchedConns = connections.filter( c =>
+			c.fromPortIndex !== undefined && indices.has( c.fromPortIndex ),
+		);
+		// default FIRST → becomes mainConnection (non-async) in advanceToNextBlock
+		// matched after → become asyncConnections
+		return { connections: [ ...defaultConns, ...matchedConns ] };
+	}
+
+	// number >= 0: switch mode — single case match
+	if ( conditionResult >= 0 ) {
+		return { connections: connections.filter( c => c.fromPortIndex === conditionResult ) };
+	}
+
+	// number < 0 (-1): no match → default/false port
+	return { connections: connections.filter( c =>
+		c.fromPort === 'default' || c.fromPort === 'false',
+	) };
 }
 
 /**

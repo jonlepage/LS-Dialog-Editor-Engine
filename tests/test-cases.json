@@ -325,12 +325,14 @@
                 "label": "Check Quest",
                 "properties": [],
                 "conditions": [
-                  {
-                    "uuid": "vc1",
-                    "key": "quest_active",
-                    "operator": "=",
-                    "value": "true"
-                  }
+                  [
+                    {
+                      "uuid": "vc1",
+                      "key": "quest_active",
+                      "operator": "=",
+                      "value": "true"
+                    }
+                  ]
                 ]
               },
               {
@@ -364,7 +366,7 @@
                 "id": "conn-2",
                 "fromId": "cond1",
                 "toId": "yes",
-                "fromPort": "out",
+                "fromPort": "true",
                 "toPort": "in",
                 "fromPortIndex": 0
               },
@@ -372,7 +374,7 @@
                 "id": "conn-3",
                 "fromId": "cond1",
                 "toId": "no",
-                "fromPort": "out",
+                "fromPort": "false",
                 "toPort": "in",
                 "fromPortIndex": 1
               }
@@ -461,12 +463,14 @@
                 "label": "Check Quest",
                 "properties": [],
                 "conditions": [
-                  {
-                    "uuid": "vc1",
-                    "key": "quest_active",
-                    "operator": "=",
-                    "value": "true"
-                  }
+                  [
+                    {
+                      "uuid": "vc1",
+                      "key": "quest_active",
+                      "operator": "=",
+                      "value": "true"
+                    }
+                  ]
                 ]
               },
               {
@@ -500,7 +504,7 @@
                 "id": "conn-2",
                 "fromId": "cond1",
                 "toId": "yes",
-                "fromPort": "out",
+                "fromPort": "true",
                 "toPort": "in",
                 "fromPortIndex": 0
               },
@@ -508,7 +512,7 @@
                 "id": "conn-3",
                 "fromId": "cond1",
                 "toId": "no",
-                "fromPort": "out",
+                "fromPort": "false",
                 "toPort": "in",
                 "fromPortIndex": 1
               }
@@ -1650,12 +1654,14 @@
                 "label": "Check Worthy",
                 "properties": [],
                 "conditions": [
-                  {
-                    "uuid": "c1",
-                    "key": "player_worthy",
-                    "operator": "=",
-                    "value": "true"
-                  }
+                  [
+                    {
+                      "uuid": "c1",
+                      "key": "player_worthy",
+                      "operator": "=",
+                      "value": "true"
+                    }
+                  ]
                 ]
               },
               {
@@ -1726,7 +1732,7 @@
                 "id": "conn-6",
                 "fromId": "cond",
                 "toId": "success",
-                "fromPort": "out",
+                "fromPort": "true",
                 "toPort": "in",
                 "fromPortIndex": 0
               },
@@ -1734,7 +1740,7 @@
                 "id": "conn-7",
                 "fromId": "cond",
                 "toId": "fail",
-                "fromPort": "out",
+                "fromPort": "false",
                 "toPort": "in",
                 "fromPortIndex": 1
               }
@@ -1870,17 +1876,19 @@
           "blocks": [
             { "uuid": "start", "type": "DIALOG", "label": "Start", "properties": [], "isStartBlock": true, "dialogueText": { "en": "Checking equipment..." } },
             { "uuid": "cond1", "type": "CONDITION", "label": "Equipment Check", "properties": [], "conditions": [
-              { "uuid": "c1", "key": "has_sword", "operator": "=", "value": "true" },
-              { "uuid": "c2", "key": "has_shield", "operator": "=", "value": "true", "chain": "&" },
-              { "uuid": "c3", "key": "is_warrior", "operator": "=", "value": "true", "chain": "|" }
+              [
+                { "uuid": "c1", "key": "has_sword", "operator": "=", "value": "true" },
+                { "uuid": "c2", "key": "has_shield", "operator": "=", "value": "true", "chain": "&" },
+                { "uuid": "c3", "key": "is_warrior", "operator": "=", "value": "true", "chain": "|" }
+              ]
             ]},
             { "uuid": "pass", "type": "DIALOG", "label": "Pass", "properties": [], "dialogueText": { "en": "You are ready!" } },
             { "uuid": "fail", "type": "DIALOG", "label": "Fail", "properties": [], "dialogueText": { "en": "Not ready." } }
           ],
           "connections": [
             { "id": "conn-1", "fromId": "start", "toId": "cond1", "fromPort": "out", "toPort": "in" },
-            { "id": "conn-2", "fromId": "cond1", "toId": "pass", "fromPort": "true-port", "toPort": "in", "fromPortIndex": 0 },
-            { "id": "conn-3", "fromId": "cond1", "toId": "fail", "fromPort": "false-port", "toPort": "in", "fromPortIndex": 1 }
+            { "id": "conn-2", "fromId": "cond1", "toId": "pass", "fromPort": "true", "toPort": "in", "fromPortIndex": 0 },
+            { "id": "conn-3", "fromId": "cond1", "toId": "fail", "fromPort": "false", "toPort": "in", "fromPortIndex": 1 }
           ]
         }]
       },
@@ -1919,17 +1927,19 @@
           "blocks": [
             { "uuid": "start", "type": "DIALOG", "label": "Start", "properties": [], "isStartBlock": true, "dialogueText": { "en": "Checking equipment..." } },
             { "uuid": "cond1", "type": "CONDITION", "label": "Equipment Check", "properties": [], "conditions": [
-              { "uuid": "c1", "key": "has_sword", "operator": "=", "value": "true" },
-              { "uuid": "c2", "key": "has_shield", "operator": "=", "value": "true", "chain": "&" },
-              { "uuid": "c3", "key": "is_warrior", "operator": "=", "value": "true", "chain": "|" }
+              [
+                { "uuid": "c1", "key": "has_sword", "operator": "=", "value": "true" },
+                { "uuid": "c2", "key": "has_shield", "operator": "=", "value": "true", "chain": "&" },
+                { "uuid": "c3", "key": "is_warrior", "operator": "=", "value": "true", "chain": "|" }
+              ]
             ]},
             { "uuid": "pass", "type": "DIALOG", "label": "Pass", "properties": [], "dialogueText": { "en": "You are ready!" } },
             { "uuid": "fail", "type": "DIALOG", "label": "Fail", "properties": [], "dialogueText": { "en": "Not ready." } }
           ],
           "connections": [
             { "id": "conn-1", "fromId": "start", "toId": "cond1", "fromPort": "out", "toPort": "in" },
-            { "id": "conn-2", "fromId": "cond1", "toId": "pass", "fromPort": "true-port", "toPort": "in", "fromPortIndex": 0 },
-            { "id": "conn-3", "fromId": "cond1", "toId": "fail", "fromPort": "false-port", "toPort": "in", "fromPortIndex": 1 }
+            { "id": "conn-2", "fromId": "cond1", "toId": "pass", "fromPort": "true", "toPort": "in", "fromPortIndex": 0 },
+            { "id": "conn-3", "fromId": "cond1", "toId": "fail", "fromPort": "false", "toPort": "in", "fromPortIndex": 1 }
           ]
         }]
       },
@@ -1967,17 +1977,19 @@
           "blocks": [
             { "uuid": "start", "type": "DIALOG", "label": "Start", "properties": [], "isStartBlock": true, "dialogueText": { "en": "Checking equipment..." } },
             { "uuid": "cond1", "type": "CONDITION", "label": "Equipment Check", "properties": [], "conditions": [
-              { "uuid": "c1", "key": "has_sword", "operator": "=", "value": "true" },
-              { "uuid": "c2", "key": "has_shield", "operator": "=", "value": "true", "chain": "&" },
-              { "uuid": "c3", "key": "is_warrior", "operator": "=", "value": "true", "chain": "|" }
+              [
+                { "uuid": "c1", "key": "has_sword", "operator": "=", "value": "true" },
+                { "uuid": "c2", "key": "has_shield", "operator": "=", "value": "true", "chain": "&" },
+                { "uuid": "c3", "key": "is_warrior", "operator": "=", "value": "true", "chain": "|" }
+              ]
             ]},
             { "uuid": "pass", "type": "DIALOG", "label": "Pass", "properties": [], "dialogueText": { "en": "You are ready!" } },
             { "uuid": "fail", "type": "DIALOG", "label": "Fail", "properties": [], "dialogueText": { "en": "Not ready." } }
           ],
           "connections": [
             { "id": "conn-1", "fromId": "start", "toId": "cond1", "fromPort": "out", "toPort": "in" },
-            { "id": "conn-2", "fromId": "cond1", "toId": "pass", "fromPort": "true-port", "toPort": "in", "fromPortIndex": 0 },
-            { "id": "conn-3", "fromId": "cond1", "toId": "fail", "fromPort": "false-port", "toPort": "in", "fromPortIndex": 1 }
+            { "id": "conn-2", "fromId": "cond1", "toId": "pass", "fromPort": "true", "toPort": "in", "fromPortIndex": 0 },
+            { "id": "conn-3", "fromId": "cond1", "toId": "fail", "fromPort": "false", "toPort": "in", "fromPortIndex": 1 }
           ]
         }]
       },

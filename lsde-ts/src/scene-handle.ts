@@ -302,8 +302,6 @@ export class SceneHandleImpl implements SceneHandle {
 	private currentBlock: BlueprintBlock | null = null;
 	private previousBlock: BlueprintBlock | null = null;
 	private previousCharacter: BlockCharacter | undefined = undefined;
-	private _preResolvedNextCharacter: BlockCharacter | undefined = undefined;
-	private _hasPreResolvedCharacter = false;
 	private readonly visited = new Set<string>();
 	private readonly choiceHistory = new Map<string, string[]>();
 	private previousCleanup: CleanupFn | null = null;
@@ -571,8 +569,6 @@ export class SceneHandleImpl implements SceneHandle {
 				}
 				return;
 			}
-			this._hasPreResolvedCharacter = true;
-			this._preResolvedNextCharacter = nextCharacter;
 		}
 
 		if ( this.cancelled ) return;
@@ -685,11 +681,6 @@ export class SceneHandleImpl implements SceneHandle {
 			}
 		}
 
-		// Clear pre-resolved cache before spawning async tracks to prevent
-		// an async track from consuming the main track's cached character.
-		this._hasPreResolvedCharacter = false;
-		this._preResolvedNextCharacter = undefined;
-
 		for ( const conn of asyncConnections ) {
 			const targetBlock = this.sceneGraph.getBlock( conn.toId );
 			if ( targetBlock ) {
@@ -781,16 +772,12 @@ export class SceneHandleImpl implements SceneHandle {
 		} ) );
 	}
 
+	// Character is resolved fresh every time — no caching. This method is called by both
+	// the main track and async tracks (via createBlockContext). Caching would leak the main
+	// track's resolved character into async tracks triggered by waitForBlocks/notifyWaitSatisfied.
 	private createContext( block: BlueprintBlock ): InternalContext | null {
-		let resolvedCharacter: BlockCharacter | undefined;
-		if ( this._hasPreResolvedCharacter ) {
-			resolvedCharacter = this._preResolvedNextCharacter;
-			this._hasPreResolvedCharacter = false;
-			this._preResolvedNextCharacter = undefined;
-		} else {
-			const characters = block.metadata?.characters ?? [];
-			resolvedCharacter = this.getResolveCharacterFn()( characters );
-		}
+		const characters = block.metadata?.characters ?? [];
+		const resolvedCharacter = this.getResolveCharacterFn()( characters );
 
 		if ( isDialogBlock( block ) ) {
 			return createDialogContext( block, resolvedCharacter );

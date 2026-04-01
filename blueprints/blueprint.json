@@ -1,1 +1,415 @@
-{"version":"1.0.0","exportDate":"2026-04-01T19:35:19.305Z","projectName":"blueprint-with-actors-emotions","primaryLanguage":"fr","locales":["en","fr"],"dictionaries":[{"uuid":"15492c5a-f632-4545-acc4-c875d883188b","id":"VariableGlobal","rows":[{"key":"key1"},{"key":"key2"}]}],"signatures":[{"uuid":"18568e9e-9fa3-44f0-aecb-a8e6b1019663","id":"moveCameraTo","params":[{"label":"labelId","type":"string"}]}],"scenes":[{"uuid":"199c33e2-a4aa-44bb-8b70-16ce88824e82","label":"Flow-001","date":"01/04/2026","entryBlockId":"f2402df4-0081-4663-9fce-6dca72e9ff77","blocks":[{"uuid":"73fa0dce-df57-4040-b2d7-2db8dc5156c2","type":"ACTION","properties":[],"label":"ACTION-001","actions":[{"uuid":"45355091-8d7a-4756-bba7-da9fbb38528a","signatureUuid":"18568e9e-9fa3-44f0-aecb-a8e6b1019663","actionId":"moveCameraTo","params":["InterestPoint1"]}],"parentLabels":["__blueprints__"]},{"uuid":"fed6440c-1a2a-47f8-9e40-3dbf3ce25492","type":"ACTION","properties":[],"label":"ACTION-002","actions":[{"uuid":"9155b488-9fc8-4c01-a436-3a9010ab848b","signatureUuid":"18568e9e-9fa3-44f0-aecb-a8e6b1019663","actionId":"moveCameraTo","params":["a1"]}],"parentLabels":["__blueprints__"]},{"uuid":"23e9aeda-e1db-4f8e-ae9f-afaf76786e95","type":"CHOICE","properties":[],"label":"CHOICE-001","choices":[{"uuid":"decb34ee-dbb8-4f94-b770-9d94f63a3eaf","structureKey":"","content":"aidez","visibilityConditions":[]},{"uuid":"bfc4d9f3-3315-4d8b-8fc9-17e867521126","structureKey":"","content":"continuer","visibilityConditions":[]}],"parentLabels":["__blueprints__"]},{"uuid":"f80757d6-73c0-4160-8449-e494f5c485b7","type":"CONDITION","properties":[],"label":"CONDITION-001","conditions":[[{"uuid":"bedb44b3-5afb-4b7d-8d12-609e2fdd54f9","key":"VariableGlobal.key1","operator":"=","value":"1"}],[{"uuid":"cebd9a2e-d26f-4e94-bbad-88d5b8a2483f","key":"VariableGlobal.key2","operator":"=","value":"2"}]],"parentLabels":["__blueprints__"]},{"uuid":"f2402df4-0081-4663-9fce-6dca72e9ff77","type":"DIALOG","properties":[],"label":"DIALOG-001","isStartBlock":true,"structureKey":"__blueprints__.Flow-001.DIALOG-001","content":"Salut , dit moi que fait tu la ?","dialogueText":{"en":"","fr":"Salut , dit moi que fait tu la ?"},"parentLabels":["__blueprints__"],"metadata":{"characters":[{"uuid":"3504bd0b-b950-4060-880d-a244a0f15992","id":"a1","name":"lia"}]}},{"uuid":"c302b3a4-3433-4cf4-8402-a61e33ba1a84","type":"DIALOG","properties":[],"label":"DIALOG-002","structureKey":"__blueprints__.Flow-001.DIALOG-002","content":"Ha j'ai tres mal et jessai de me reposer , je me suis cogner a cette roche la bas !","dialogueText":{"en":"","fr":"Ha j'ai tres mal et jessai de me reposer , je me suis cogner a cette roche la bas !"},"parentLabels":["__blueprints__"],"metadata":{}},{"uuid":"157817bf-073e-4368-89de-52e295ffcecb","type":"DIALOG","properties":[],"label":"DIALOG-003","structureKey":"__blueprints__.Flow-001.DIALOG-003","content":"> ces la roche etrange qui semble avoir blesser cette creature !","dialogueText":{"en":"","fr":"> ces la roche etrange qui semble avoir blesser cette creature !"},"parentLabels":["__blueprints__"],"metadata":{}},{"uuid":"f6262aa9-6d90-46d1-a0fd-f9108ded43ff","type":"DIALOG","properties":[],"label":"DIALOG-004","structureKey":"__blueprints__.Flow-001.DIALOG-004","content":"Je compatis a votre douleur ! miouw","dialogueText":{"en":"","fr":"Je compatis a votre douleur ! miouw"},"parentLabels":["__blueprints__"],"metadata":{"characters":[{"uuid":"b8d2fe53-cc5a-4d1b-aa72-02b55b941ff7","id":"a2","name":"Boo","emotionIntensity":0}]}},{"uuid":"a458323a-d832-405f-8f47-9ca096d7eea6","type":"DIALOG","properties":[],"label":"DIALOG-005","structureKey":"__blueprints__.Flow-001.DIALOG-005","content":"Moi aussi","dialogueText":{"en":"","fr":"Moi aussi"},"parentLabels":["__blueprints__"],"metadata":{"characters":[{"uuid":"3504bd0b-b950-4060-880d-a244a0f15992","id":"a1","name":"lia","emotionIntensity":0}]}},{"uuid":"8994d27a-592b-4fe6-9311-754f6f7d491d","type":"DIALOG","properties":[],"label":"DIALOG-006","structureKey":"__blueprints__.Flow-001.DIALOG-006","content":"venez je vais vous aider ","dialogueText":{"en":"","fr":"venez je vais vous aider "},"parentLabels":["__blueprints__"],"metadata":{"characters":[{"uuid":"3504bd0b-b950-4060-880d-a244a0f15992","id":"a1","name":"lia","emotionIntensity":0}]}},{"uuid":"03773f48-310f-43e8-a7bb-1062f1c92d83","type":"DIALOG","properties":[],"label":"DIALOG-007","structureKey":"__blueprints__.Flow-001.DIALOG-007","content":"a la prochaine","dialogueText":{"en":"","fr":"a la prochaine"},"parentLabels":["__blueprints__"],"metadata":{"characters":[{"uuid":"3504bd0b-b950-4060-880d-a244a0f15992","id":"a1","name":"lia","emotionIntensity":0}]}},{"uuid":"80a3b47d-1262-4bb4-a520-915fc88f75ea","type":"DIALOG","properties":[],"label":"DIALOG-008","structureKey":"__blueprints__.Flow-001.DIALOG-008","content":"hehehe","nativeProperties":{"isAsync":true,"delay":200,"waitForBlocks":["a458323a-d832-405f-8f47-9ca096d7eea6"]},"dialogueText":{"en":"","fr":"hehehe"},"parentLabels":["__blueprints__"],"metadata":{"characters":[{"uuid":"b8d2fe53-cc5a-4d1b-aa72-02b55b941ff7","id":"a2","name":"Boo"}]}}],"connections":[{"id":"b5e9d652-3c1f-44a4-bf22-372465fd3216","fromId":"f2402df4-0081-4663-9fce-6dca72e9ff77","toId":"c302b3a4-3433-4cf4-8402-a61e33ba1a84","fromPort":"out","toPort":"in","fromPortIndex":0},{"id":"3ffc9b57-b59e-429f-8dfb-429e2db7cc01","fromId":"c302b3a4-3433-4cf4-8402-a61e33ba1a84","toId":"73fa0dce-df57-4040-b2d7-2db8dc5156c2","fromPort":"out","toPort":"in","fromPortIndex":0},{"id":"7d1cdbbe-cb67-4ff2-8066-5fbc9a93f4ea","fromId":"73fa0dce-df57-4040-b2d7-2db8dc5156c2","toId":"157817bf-073e-4368-89de-52e295ffcecb","fromPort":"then","toPort":"in","fromPortIndex":0},{"id":"0bb99623-e7d3-48e7-a985-2528e1920cf9","fromId":"157817bf-073e-4368-89de-52e295ffcecb","toId":"fed6440c-1a2a-47f8-9e40-3dbf3ce25492","fromPort":"out","toPort":"in","fromPortIndex":0},{"id":"693aaf87-a1ab-4644-800d-4cd1c405f5a0","fromId":"f6262aa9-6d90-46d1-a0fd-f9108ded43ff","toId":"a458323a-d832-405f-8f47-9ca096d7eea6","fromPort":"out","toPort":"in","fromPortIndex":0},{"id":"5d499f66-a945-43a3-909b-f234864b0f99","fromId":"a458323a-d832-405f-8f47-9ca096d7eea6","toId":"23e9aeda-e1db-4f8e-ae9f-afaf76786e95","fromPort":"out","toPort":"in","fromPortIndex":0},{"id":"1143fbb1-62b4-43c9-a595-88cfe4a7e3a2","fromId":"23e9aeda-e1db-4f8e-ae9f-afaf76786e95","toId":"8994d27a-592b-4fe6-9311-754f6f7d491d","fromPort":"decb34ee-dbb8-4f94-b770-9d94f63a3eaf","toPort":"in","fromPortIndex":0},{"id":"ec1f4dbe-ff11-45fb-a54f-e68be724b63e","fromId":"23e9aeda-e1db-4f8e-ae9f-afaf76786e95","toId":"03773f48-310f-43e8-a7bb-1062f1c92d83","fromPort":"bfc4d9f3-3315-4d8b-8fc9-17e867521126","toPort":"in","fromPortIndex":1},{"id":"724a9ed8-b5d9-4a7d-a024-71167968cb09","fromId":"fed6440c-1a2a-47f8-9e40-3dbf3ce25492","toId":"f80757d6-73c0-4160-8449-e494f5c485b7","fromPort":"then","toPort":"in","fromPortIndex":0},{"id":"13afa2dc-7c6a-401e-b99c-8750299285a0","fromId":"f80757d6-73c0-4160-8449-e494f5c485b7","toId":"f6262aa9-6d90-46d1-a0fd-f9108ded43ff","fromPort":"default","toPort":"in","fromPortIndex":2},{"id":"8007fddd-c9b1-491f-80c7-7c439f13fde5","fromId":"f80757d6-73c0-4160-8449-e494f5c485b7","toId":"80a3b47d-1262-4bb4-a520-915fc88f75ea","fromPort":"case_0","toPort":"in","fromPortIndex":0}]}]}
+{
+	"version": "1.0.0",
+	"exportDate": "2026-04-01T20:48:35.685Z",
+	"projectName": "blueprint-with-actors-emotions",
+	"primaryLanguage": "fr",
+	"locales": [
+		"en",
+		"fr"
+	],
+	"dictionaries": [
+		{
+			"uuid": "15492c5a-f632-4545-acc4-c875d883188b",
+			"id": "VariableGlobal",
+			"rows": [
+				{
+					"key": "key1"
+				},
+				{
+					"key": "key2"
+				}
+			]
+		}
+	],
+	"signatures": [
+		{
+			"uuid": "18568e9e-9fa3-44f0-aecb-a8e6b1019663",
+			"id": "moveCameraTo",
+			"params": [
+				{
+					"label": "labelId",
+					"type": "string"
+				}
+			]
+		}
+	],
+	"scenes": [
+		{
+			"uuid": "199c33e2-a4aa-44bb-8b70-16ce88824e82",
+			"label": "Flow-001",
+			"date": "01/04/2026",
+			"entryBlockId": "f2402df4-0081-4663-9fce-6dca72e9ff77",
+			"blocks": [
+				{
+					"uuid": "73fa0dce-df57-4040-b2d7-2db8dc5156c2",
+					"type": "ACTION",
+					"properties": [],
+					"label": "ACTION-001",
+					"actions": [
+						{
+							"uuid": "45355091-8d7a-4756-bba7-da9fbb38528a",
+							"signatureUuid": "18568e9e-9fa3-44f0-aecb-a8e6b1019663",
+							"actionId": "moveCameraTo",
+							"params": [
+								"InterestPoint1"
+							]
+						}
+					],
+					"parentLabels": [
+						"__blueprints__"
+					]
+				},
+				{
+					"uuid": "fed6440c-1a2a-47f8-9e40-3dbf3ce25492",
+					"type": "ACTION",
+					"properties": [],
+					"label": "ACTION-002",
+					"actions": [
+						{
+							"uuid": "9155b488-9fc8-4c01-a436-3a9010ab848b",
+							"signatureUuid": "18568e9e-9fa3-44f0-aecb-a8e6b1019663",
+							"actionId": "moveCameraTo",
+							"params": [
+								"a1"
+							]
+						}
+					],
+					"parentLabels": [
+						"__blueprints__"
+					]
+				},
+				{
+					"uuid": "23e9aeda-e1db-4f8e-ae9f-afaf76786e95",
+					"type": "CHOICE",
+					"properties": [],
+					"label": "CHOICE-001",
+					"choices": [
+						{
+							"uuid": "decb34ee-dbb8-4f94-b770-9d94f63a3eaf",
+							"structureKey": "",
+							"content": "aidez",
+							"visibilityConditions": []
+						},
+						{
+							"uuid": "bfc4d9f3-3315-4d8b-8fc9-17e867521126",
+							"structureKey": "",
+							"content": "continuer",
+							"visibilityConditions": []
+						}
+					],
+					"parentLabels": [
+						"__blueprints__"
+					]
+				},
+				{
+					"uuid": "f80757d6-73c0-4160-8449-e494f5c485b7",
+					"type": "CONDITION",
+					"properties": [],
+					"label": "CONDITION-001",
+					"nativeProperties": {
+						"enableDispatcher": true
+					},
+					"conditions": [
+						[
+							{
+								"uuid": "bedb44b3-5afb-4b7d-8d12-609e2fdd54f9",
+								"key": "VariableGlobal.key1",
+								"operator": "=",
+								"value": "1"
+							}
+						],
+						[
+							{
+								"uuid": "cebd9a2e-d26f-4e94-bbad-88d5b8a2483f",
+								"key": "VariableGlobal.key2",
+								"operator": "=",
+								"value": "2"
+							}
+						]
+					],
+					"parentLabels": [
+						"__blueprints__"
+					]
+				},
+				{
+					"uuid": "f2402df4-0081-4663-9fce-6dca72e9ff77",
+					"type": "DIALOG",
+					"properties": [],
+					"label": "DIALOG-001",
+					"isStartBlock": true,
+					"structureKey": "__blueprints__.Flow-001.DIALOG-001",
+					"content": "Salut , dit moi que fait tu la ?",
+					"dialogueText": {
+						"en": "",
+						"fr": "Salut , dit moi que fait tu la ?"
+					},
+					"parentLabels": [
+						"__blueprints__"
+					],
+					"metadata": {
+						"characters": [
+							{
+								"uuid": "3504bd0b-b950-4060-880d-a244a0f15992",
+								"id": "a1",
+								"name": "lia"
+							}
+						]
+					}
+				},
+				{
+					"uuid": "c302b3a4-3433-4cf4-8402-a61e33ba1a84",
+					"type": "DIALOG",
+					"properties": [],
+					"label": "DIALOG-002",
+					"structureKey": "__blueprints__.Flow-001.DIALOG-002",
+					"content": "Ha j'ai tres mal et jessai de me reposer , je me suis cogner a cette roche la bas !",
+					"dialogueText": {
+						"en": "",
+						"fr": "Ha j'ai tres mal et jessai de me reposer , je me suis cogner a cette roche la bas !"
+					},
+					"parentLabels": [
+						"__blueprints__"
+					],
+					"metadata": {}
+				},
+				{
+					"uuid": "157817bf-073e-4368-89de-52e295ffcecb",
+					"type": "DIALOG",
+					"properties": [],
+					"label": "DIALOG-003",
+					"structureKey": "__blueprints__.Flow-001.DIALOG-003",
+					"content": "> ces la roche etrange qui semble avoir blesser cette creature !",
+					"dialogueText": {
+						"en": "",
+						"fr": "> ces la roche etrange qui semble avoir blesser cette creature !"
+					},
+					"parentLabels": [
+						"__blueprints__"
+					],
+					"metadata": {}
+				},
+				{
+					"uuid": "f6262aa9-6d90-46d1-a0fd-f9108ded43ff",
+					"type": "DIALOG",
+					"properties": [],
+					"label": "DIALOG-004",
+					"structureKey": "__blueprints__.Flow-001.DIALOG-004",
+					"content": "Je compatis a votre douleur ! miouw",
+					"dialogueText": {
+						"en": "",
+						"fr": "Je compatis a votre douleur ! miouw"
+					},
+					"parentLabels": [
+						"__blueprints__"
+					],
+					"metadata": {
+						"characters": [
+							{
+								"uuid": "b8d2fe53-cc5a-4d1b-aa72-02b55b941ff7",
+								"id": "a2",
+								"name": "Boo",
+								"emotionIntensity": 0
+							}
+						]
+					}
+				},
+				{
+					"uuid": "a458323a-d832-405f-8f47-9ca096d7eea6",
+					"type": "DIALOG",
+					"properties": [],
+					"label": "DIALOG-005",
+					"structureKey": "__blueprints__.Flow-001.DIALOG-005",
+					"content": "Moi aussi",
+					"dialogueText": {
+						"en": "",
+						"fr": "Moi aussi"
+					},
+					"parentLabels": [
+						"__blueprints__"
+					],
+					"metadata": {
+						"characters": [
+							{
+								"uuid": "3504bd0b-b950-4060-880d-a244a0f15992",
+								"id": "a1",
+								"name": "lia",
+								"emotionIntensity": 0
+							}
+						]
+					}
+				},
+				{
+					"uuid": "8994d27a-592b-4fe6-9311-754f6f7d491d",
+					"type": "DIALOG",
+					"properties": [],
+					"label": "DIALOG-006",
+					"structureKey": "__blueprints__.Flow-001.DIALOG-006",
+					"content": "venez je vais vous aider ",
+					"dialogueText": {
+						"en": "",
+						"fr": "venez je vais vous aider "
+					},
+					"parentLabels": [
+						"__blueprints__"
+					],
+					"metadata": {
+						"characters": [
+							{
+								"uuid": "3504bd0b-b950-4060-880d-a244a0f15992",
+								"id": "a1",
+								"name": "lia",
+								"emotionIntensity": 0
+							}
+						]
+					}
+				},
+				{
+					"uuid": "03773f48-310f-43e8-a7bb-1062f1c92d83",
+					"type": "DIALOG",
+					"properties": [],
+					"label": "DIALOG-007",
+					"structureKey": "__blueprints__.Flow-001.DIALOG-007",
+					"content": "a la prochaine",
+					"dialogueText": {
+						"en": "",
+						"fr": "a la prochaine"
+					},
+					"parentLabels": [
+						"__blueprints__"
+					],
+					"metadata": {
+						"characters": [
+							{
+								"uuid": "3504bd0b-b950-4060-880d-a244a0f15992",
+								"id": "a1",
+								"name": "lia",
+								"emotionIntensity": 0
+							}
+						]
+					}
+				},
+				{
+					"uuid": "80a3b47d-1262-4bb4-a520-915fc88f75ea",
+					"type": "DIALOG",
+					"properties": [],
+					"label": "DIALOG-008",
+					"structureKey": "__blueprints__.Flow-001.DIALOG-008",
+					"content": "hehehe",
+					"nativeProperties": {
+						"isAsync": true,
+						"delay": 200,
+						"waitForBlocks": [
+							"a458323a-d832-405f-8f47-9ca096d7eea6"
+						]
+					},
+					"dialogueText": {
+						"en": "",
+						"fr": "hehehe"
+					},
+					"parentLabels": [
+						"__blueprints__"
+					],
+					"metadata": {
+						"characters": [
+							{
+								"uuid": "b8d2fe53-cc5a-4d1b-aa72-02b55b941ff7",
+								"id": "a2",
+								"name": "Boo"
+							}
+						]
+					}
+				}
+			],
+			"connections": [
+				{
+					"id": "b5e9d652-3c1f-44a4-bf22-372465fd3216",
+					"fromId": "f2402df4-0081-4663-9fce-6dca72e9ff77",
+					"toId": "c302b3a4-3433-4cf4-8402-a61e33ba1a84",
+					"fromPort": "out",
+					"toPort": "in",
+					"fromPortIndex": 0
+				},
+				{
+					"id": "3ffc9b57-b59e-429f-8dfb-429e2db7cc01",
+					"fromId": "c302b3a4-3433-4cf4-8402-a61e33ba1a84",
+					"toId": "73fa0dce-df57-4040-b2d7-2db8dc5156c2",
+					"fromPort": "out",
+					"toPort": "in",
+					"fromPortIndex": 0
+				},
+				{
+					"id": "7d1cdbbe-cb67-4ff2-8066-5fbc9a93f4ea",
+					"fromId": "73fa0dce-df57-4040-b2d7-2db8dc5156c2",
+					"toId": "157817bf-073e-4368-89de-52e295ffcecb",
+					"fromPort": "then",
+					"toPort": "in",
+					"fromPortIndex": 0
+				},
+				{
+					"id": "0bb99623-e7d3-48e7-a985-2528e1920cf9",
+					"fromId": "157817bf-073e-4368-89de-52e295ffcecb",
+					"toId": "fed6440c-1a2a-47f8-9e40-3dbf3ce25492",
+					"fromPort": "out",
+					"toPort": "in",
+					"fromPortIndex": 0
+				},
+				{
+					"id": "693aaf87-a1ab-4644-800d-4cd1c405f5a0",
+					"fromId": "f6262aa9-6d90-46d1-a0fd-f9108ded43ff",
+					"toId": "a458323a-d832-405f-8f47-9ca096d7eea6",
+					"fromPort": "out",
+					"toPort": "in",
+					"fromPortIndex": 0
+				},
+				{
+					"id": "5d499f66-a945-43a3-909b-f234864b0f99",
+					"fromId": "a458323a-d832-405f-8f47-9ca096d7eea6",
+					"toId": "23e9aeda-e1db-4f8e-ae9f-afaf76786e95",
+					"fromPort": "out",
+					"toPort": "in",
+					"fromPortIndex": 0
+				},
+				{
+					"id": "1143fbb1-62b4-43c9-a595-88cfe4a7e3a2",
+					"fromId": "23e9aeda-e1db-4f8e-ae9f-afaf76786e95",
+					"toId": "8994d27a-592b-4fe6-9311-754f6f7d491d",
+					"fromPort": "decb34ee-dbb8-4f94-b770-9d94f63a3eaf",
+					"toPort": "in",
+					"fromPortIndex": 0
+				},
+				{
+					"id": "ec1f4dbe-ff11-45fb-a54f-e68be724b63e",
+					"fromId": "23e9aeda-e1db-4f8e-ae9f-afaf76786e95",
+					"toId": "03773f48-310f-43e8-a7bb-1062f1c92d83",
+					"fromPort": "bfc4d9f3-3315-4d8b-8fc9-17e867521126",
+					"toPort": "in",
+					"fromPortIndex": 1
+				},
+				{
+					"id": "724a9ed8-b5d9-4a7d-a024-71167968cb09",
+					"fromId": "fed6440c-1a2a-47f8-9e40-3dbf3ce25492",
+					"toId": "f80757d6-73c0-4160-8449-e494f5c485b7",
+					"fromPort": "then",
+					"toPort": "in",
+					"fromPortIndex": 0
+				},
+				{
+					"id": "13afa2dc-7c6a-401e-b99c-8750299285a0",
+					"fromId": "f80757d6-73c0-4160-8449-e494f5c485b7",
+					"toId": "f6262aa9-6d90-46d1-a0fd-f9108ded43ff",
+					"fromPort": "default",
+					"toPort": "in",
+					"fromPortIndex": 2
+				},
+				{
+					"id": "8007fddd-c9b1-491f-80c7-7c439f13fde5",
+					"fromId": "f80757d6-73c0-4160-8449-e494f5c485b7",
+					"toId": "80a3b47d-1262-4bb4-a520-915fc88f75ea",
+					"fromPort": "case_0",
+					"toPort": "in",
+					"fromPortIndex": 0
+				}
+			]
+		}
+	]
+}

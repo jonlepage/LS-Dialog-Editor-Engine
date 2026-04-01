@@ -295,7 +295,7 @@ describe( 'multitrack — mixed scenarios', () => {
 				dialog( 'main1', { start: true } ),
 				{ uuid: 'bg-cond', type: 'CONDITION', properties: [],
 					nativeProperties: { isAsync: true },
-					conditions: [{ uuid: 'c1', key: 'flag', operator: '=', value: 'true' }],
+					conditions: [[{ uuid: 'c1', key: 'flag', operator: '=', value: 'true' }]],
 				} as BlueprintBlock,
 				{ uuid: 'bg-act', type: 'ACTION', properties: [],
 					actions: [{ uuid: 'a1', actionId: 'bg_effect', params: [] }],

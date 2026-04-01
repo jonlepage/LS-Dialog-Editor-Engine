@@ -10,7 +10,7 @@ import type {
 	BlueprintExport, ConditionBlock,
 	DialogContext, ChoiceContext, ConditionContext, ActionContext,
 } from './types.js';
-import { evaluateConditionChain } from './condition-evaluator.js';
+import { evaluateConditionGroups } from './condition-evaluator.js';
 
 // ─── JSON Schema Types ──────────────────────────────────────────────────────
 
@@ -165,9 +165,9 @@ function runFlowTests( filename: string ): void {
 						} else {
 							// Not the expected step — auto-advance (async track or passthrough)
 							if ( 'resolve' in context && blockType === 'CONDITION' ) {
-								// Evaluate conditions from the block definition using stateBridge data
-								const conditions = block.conditions ?? [];
-								const result = evaluateConditionChain( conditions, ( cond ) => {
+								// Evaluate condition groups from the block definition using stateBridge data
+								const groups = block.conditions ?? [];
+								const result = evaluateConditionGroups( groups, ( cond ) => {
 									if ( cond.key in bridgeConditions ) {
 										const actual = String( bridgeConditions[cond.key] );
 										return cond.operator === '!=' ? actual !== cond.value : actual === cond.value;

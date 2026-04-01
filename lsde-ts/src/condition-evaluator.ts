@@ -32,6 +32,38 @@ export function evaluateConditionChain(
 }
 
 /**
+ * Evaluate condition groups (2D array) for switch or dispatcher mode.
+ * Each inner array is a "case" evaluated via `evaluateConditionChain`.
+ *
+ * - **Switch mode** (`dispatcher = false`): evaluates groups in order, returns the index
+ *   of the first matching group, or `-1` if none match (→ default port).
+ * - **Dispatcher mode** (`dispatcher = true`): evaluates ALL groups, returns an array
+ *   of all matching indices (may be empty → default port only).
+ */
+export function evaluateConditionGroups(
+	groups: ExportCondition[][],
+	evaluator: ( condition: ExportCondition ) => boolean,
+	dispatcher?: boolean,
+): number | number[] {
+	if ( dispatcher ) {
+		const matched: number[] = [];
+		for ( let i = 0; i < groups.length; i++ ) {
+			if ( evaluateConditionChain( groups[i]!, evaluator ) ) {
+				matched.push( i );
+			}
+		}
+		return matched;
+	}
+	// Switch mode: break at first match
+	for ( let i = 0; i < groups.length; i++ ) {
+		if ( evaluateConditionChain( groups[i]!, evaluator ) ) {
+			return i;
+		}
+	}
+	return -1; // no match → default port
+}
+
+/**
  * Filter choices by their visibilityConditions.
  * Choices with no conditions or passing conditions are kept.
  *

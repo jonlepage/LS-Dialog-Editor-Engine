@@ -179,7 +179,7 @@ describe( 'edge — condition resolve() called twice', () => {
 			uuid: 's1', label: 'S1', date: '2025-01-01',
 			blocks: [
 				{ uuid: 'cond1', type: 'CONDITION' as const, properties: [], isStartBlock: true,
-					conditions: [{ uuid: 'c1', key: 'x', operator: '=', value: 'y' }] },
+					conditions: [[{ uuid: 'c1', key: 'x', operator: '=', value: 'y' }]] },
 				dialog( 'yes' ),
 				dialog( 'no' ),
 			],

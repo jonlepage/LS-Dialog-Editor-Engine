@@ -311,7 +311,7 @@ describe( 'DialogueEngine', () => {
 				uuid: 'scene-cond-id', label: 'CondId', date: '2025-01-01',
 				blocks: [
 					{ uuid: 'cond1', type: 'CONDITION', properties: [], isStartBlock: true,
-						conditions: [{ uuid: 'c1', key: 'quest', operator: '=', value: 'active' }] },
+						conditions: [[{ uuid: 'c1', key: 'quest', operator: '=', value: 'active' }]] },
 					{ uuid: 'yes', type: 'DIALOG', properties: [] },
 					{ uuid: 'no', type: 'DIALOG', properties: [] },
 				],
@@ -328,7 +328,7 @@ describe( 'DialogueEngine', () => {
 
 			const handle = engine.scene( 'scene-cond-id' );
 			handle.onConditionId( 'cond1', ( { block, context, next } ) => {
-				// block is typed as ConditionBlock — conditions is directly accessible
+				// block is typed as ConditionBlock — conditions is directly accessible (2D array of groups)
 				expect( block.conditions?.length ).toBe( 1 );
 				// context is typed as ConditionContext — resolve(boolean) exists
 				expect( typeof context.resolve ).toBe( 'function' );
@@ -353,7 +353,7 @@ describe( 'DialogueEngine', () => {
 				uuid: 'scene-cond', label: 'Cond', date: '2025-01-01',
 				blocks: [
 					{ uuid: 'cond1', type: 'CONDITION', properties: [], isStartBlock: true,
-						conditions: [{ uuid: 'c1', key: 'quest', operator: '=', value: 'active' }] },
+						conditions: [[{ uuid: 'c1', key: 'quest', operator: '=', value: 'active' }]] },
 					{ uuid: 'yes', type: 'DIALOG', properties: [] },
 					{ uuid: 'no', type: 'DIALOG', properties: [] },
 				],
@@ -835,7 +835,7 @@ describe( 'DialogueEngine', () => {
 						] },
 					// Accept → condition check
 					{ uuid: 'cond', type: 'CONDITION', properties: [],
-						conditions: [{ uuid: 'cv1', key: 'player_level', operator: '>', value: '5' }] },
+						conditions: [[{ uuid: 'cv1', key: 'player_level', operator: '>', value: '5' }]] },
 					// Condition true → success dialog
 					{ uuid: 'success', type: 'DIALOG', properties: [], dialogueText: { en: 'You are worthy!' } },
 					// Condition false → fail dialog

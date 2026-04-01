@@ -22,7 +22,7 @@ for (const { code, message } of warnings)
 console.log(`📊`, { sceneCount, blockCount, connectionCount });
 
 // on peut changer les locales on the fly
-engine.setLocale("en");
+engine.setLocale("fr");
 
 // on ajoute l'algorithme de résolution de personnage
 // ex: ex esceque au moment T le actors est dispo dans le party en jeux ? si non , on met undefined et le flow arretera.
@@ -109,17 +109,23 @@ engine.onChoice(({ block, context, next }) => {
 });
 
 engine.onCondition(({ scene, block, context, next }) => {
-	const { conditions } = block;
-	const result = LsdeUtils.evaluateConditionChain(
-		conditions ?? [],
+	const groups = block.conditions ?? [];
+	const isDispatcher = !!block.nativeProperties?.enableDispatcher;
+
+	const result = LsdeUtils.evaluateConditionGroups(
+		groups,
 		(cond) =>
 			LsdeUtils.isChoiceCondition(cond) ? scene.evaluateCondition(cond) : true, // playground: all game conditions pass
+		isDispatcher,
 	);
-	for (const cond of conditions ?? []) {
-		console.log(`   ❓ condition: ${cond.key} ${cond.operator} ${cond.value}`);
+
+	for (const [i, group] of groups.entries()) {
+		for (const cond of group) {
+			console.log(`   [case ${i}] ${cond.key} ${cond.operator} ${cond.value}`);
+		}
 	}
 	console.log(
-		`\n🔀 CONDITION  ${block.label} — ${conditions?.length ?? 0} conditions → ${result}`,
+		`\n🔀 CONDITION  ${block.label} — ${groups.length} groups${isDispatcher ? ' [DISPATCHER]' : ''} → ${JSON.stringify(result)}`,
 	);
 	context.resolve(result);
 	next();

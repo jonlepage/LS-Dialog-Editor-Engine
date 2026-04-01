@@ -155,6 +155,13 @@ export interface NativeProperties {
 	 * Use case: second player controller, custom input events, etc.
 	 */
 	waitInput?: boolean;
+	/**
+	 * Dispatcher mode for CONDITION blocks. When `true`, all condition groups are evaluated
+	 * and every matching group fires its port as an async track. The `default`/`false` port
+	 * becomes the main continuation track (always executed).
+	 * When `false` or absent, the standard switch behavior applies: first matching group wins.
+	 */
+	enableDispatcher?: boolean;
 }
 
 /** Character (actor) assigned to a block. */
@@ -315,29 +322,43 @@ export interface ChoiceBlock extends BlueprintBlockBase {
  * Condition block — evaluates logic to branch the dialogue flow.
  *
  * @remarks
- * The developer MUST handle evaluation in the `onCondition` handler. Conditions are chained
- * left-to-right with no operator precedence: `'&'` = AND, `'|'` = OR. An empty array
- * evaluates to `true`.
+ * Conditions are organized as a 2D array of groups (`ExportCondition[][]`).
+ * Each inner array is a "case" — conditions chained with `&` (AND) / `|` (OR).
  *
- * The result maps to output ports: `true` follows port index 0, `false` follows port index 1.
- * Call `context.resolve(result)` to set the branch direction.
+ * **Single group** (classic true/false): `[[c1, c2]]` — `resolve(true)` → port 0, `resolve(false)` → port 1.
+ *
+ * **Multiple groups** (switch mode): `[[c1], [c2], [c3]]` — groups are evaluated in order,
+ * first matching group routes to its port (`case_0`, `case_1`, ...), otherwise routes to `default`.
+ * Call `context.resolve(matchingIndex)` or `context.resolve(-1)` for default.
+ *
+ * **Dispatcher mode** (`nativeProperties.enableDispatcher = true`): all groups are evaluated,
+ * every matching group fires its port as an async track, and the `default` port is the main
+ * continuation track (always executed). Call `context.resolve(matchingIndices[])`.
  *
  * @example
  * ```ts
  * engine.onCondition(({ block, context, next }) => {
- *   const result = myCustomEvaluator(block.conditions ?? []);
- *   context.resolve(result); // true → port 0, false → port 1
+ *   const result = LsdeUtils.evaluateConditionGroups(
+ *     block.conditions ?? [],
+ *     (cond) => myEvaluator(cond),
+ *     !!block.nativeProperties?.enableDispatcher,
+ *   );
+ *   context.resolve(result);
  *   next();
  * });
  * ```
  *
  * @see {@link ExportCondition} for condition structure and chaining rules
  * @see {@link ConditionContext} for handler context
+ * @see {@link NativeProperties.enableDispatcher} for dispatcher mode
  */
 export interface ConditionBlock extends BlueprintBlockBase {
 	type: 'CONDITION';
-	/** Conditions to evaluate. Chained left-to-right with `chain` operators. */
-	conditions?: ExportCondition[];
+	/**
+	 * 2D array of condition groups. Each inner array is a "case" — conditions chained with `&` / `|`.
+	 * Single group: classic true/false branching. Multiple groups: switch mode (case_0..N / default).
+	 */
+	conditions?: ExportCondition[][];
 	/** Designer note. Not displayed to players. */
 	note?: string;
 }
@@ -610,8 +631,13 @@ export interface ChoiceContext extends BaseBlockContext {
 
 /** Context for CONDITION block handlers. */
 export interface ConditionContext extends BaseBlockContext {
-	/** Resolve the condition: true → port index 0, false → port index 1. */
-	resolve: (result: boolean) => void;
+	/**
+	 * Resolve the condition evaluation result.
+	 * - `boolean`: legacy single-group mode — `true` → port index 0, `false` → port index 1.
+	 * - `number`: switch mode — `>= 0` follows the matching case port, `< 0` follows `default`.
+	 * - `number[]`: dispatcher mode — all matching case indices fire as async tracks, `default` is the main track.
+	 */
+	resolve: (result: boolean | number | number[]) => void;
 }
 
 /** Context for ACTION block handlers. */
@@ -988,8 +1014,13 @@ export interface PortResolutionInput {
 	connections: BlueprintConnection[];
 	/** CHOICE blocks only — UUID of the selected choice. Matches `connection.fromPort`. */
 	selectedChoiceUuid?: string;
-	/** CONDITION blocks only — evaluation result. `true` → port index 0, `false` → port index 1. */
-	conditionResult?: boolean;
+	/**
+	 * CONDITION blocks only — evaluation result.
+	 * - `boolean`: `true` → port index 0, `false` → port index 1 (legacy single-group).
+	 * - `number`: `>= 0` follows matching case port, `< 0` follows `default`/`false` (switch mode).
+	 * - `number[]`: all matching case indices + `default` (dispatcher mode).
+	 */
+	conditionResult?: boolean | number | number[];
 	/** ACTION blocks only — if `true`, the resolver looks for a `catch` port before falling back to `then`. */
 	actionRejected?: boolean;
 	/** DIALOG blocks with `portPerCharacter` — character index in metadata.characters to match against `connection.fromPortIndex`. */

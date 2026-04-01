@@ -492,7 +492,7 @@ function choiceBlock( uuid: string, choices: { uuid: string }[], start = false )
 }
 
 function conditionBlock( uuid: string, conditions: { uuid: string; key: string; operator: string; value: string; chain?: '|' | '&' }[], start = false ): BlueprintBlock {
-	return { uuid, type: 'CONDITION', properties: [], conditions, isStartBlock: start } as BlueprintBlock;
+	return { uuid, type: 'CONDITION', properties: [], conditions: [conditions], isStartBlock: start } as BlueprintBlock;
 }
 
 function condConn( fromId: string, toIdTrue: string, toIdFalse: string ) {
@@ -624,8 +624,8 @@ describe( 'SceneHandleImpl — Choice Condition Resolution', () => {
 		registerBaseHandlers( global );
 		global.choiceHandler = ( { context, next } ) => { context.selectChoice( 'opt-a' ); next(); };
 		global.conditionHandler = ( { scene: s, block, context, next } ) => {
-			const conditions = ( block as unknown as { conditions: ExportCondition[] } ).conditions;
-			const result = conditions.every( c => s.evaluateCondition( c ) );
+			const groups = ( block as unknown as { conditions: ExportCondition[][] } ).conditions;
+			const result = ( groups[0] ?? [] ).every( c => s.evaluateCondition( c ) );
 			context.resolve( result );
 			next();
 		};
@@ -654,8 +654,8 @@ describe( 'SceneHandleImpl — Choice Condition Resolution', () => {
 		registerBaseHandlers( global );
 		global.choiceHandler = ( { context, next } ) => { context.selectChoice( 'opt-a' ); next(); };
 		global.conditionHandler = ( { scene: s, block, context, next } ) => {
-			const conditions = ( block as unknown as { conditions: ExportCondition[] } ).conditions;
-			const result = conditions.every( c => s.evaluateCondition( c ) );
+			const groups = ( block as unknown as { conditions: ExportCondition[][] } ).conditions;
+			const result = ( groups[0] ?? [] ).every( c => s.evaluateCondition( c ) );
 			context.resolve( result );
 			next();
 		};
@@ -684,8 +684,8 @@ describe( 'SceneHandleImpl — Choice Condition Resolution', () => {
 		registerBaseHandlers( global );
 		global.choiceHandler = ( { context, next } ) => { context.selectChoice( 'opt-a' ); next(); };
 		global.conditionHandler = ( { scene: s, block, context, next } ) => {
-			const conditions = ( block as unknown as { conditions: ExportCondition[] } ).conditions;
-			const result = conditions.every( c => s.evaluateCondition( c ) );
+			const groups = ( block as unknown as { conditions: ExportCondition[][] } ).conditions;
+			const result = ( groups[0] ?? [] ).every( c => s.evaluateCondition( c ) );
 			context.resolve( result );
 			next();
 		};
@@ -709,8 +709,8 @@ describe( 'SceneHandleImpl — Choice Condition Resolution', () => {
 		const global = new HandlerRegistry();
 		registerBaseHandlers( global );
 		global.conditionHandler = ( { scene: s, block, context, next } ) => {
-			const conditions = ( block as unknown as { conditions: ExportCondition[] } ).conditions;
-			const result = conditions.every( c => s.evaluateCondition( c ) );
+			const groups = ( block as unknown as { conditions: ExportCondition[][] } ).conditions;
+			const result = ( groups[0] ?? [] ).every( c => s.evaluateCondition( c ) );
 			context.resolve( result );
 			next();
 		};
@@ -739,8 +739,8 @@ describe( 'SceneHandleImpl — Choice Condition Resolution', () => {
 		registerBaseHandlers( global );
 		global.choiceHandler = ( { context, next } ) => { context.selectChoice( 'opt-a' ); next(); };
 		global.conditionHandler = ( { scene: s, block, context, next } ) => {
-			const conditions = ( block as unknown as { conditions: ExportCondition[] } ).conditions;
-			const result = conditions.every( c => s.evaluateCondition( c ) );
+			const groups = ( block as unknown as { conditions: ExportCondition[][] } ).conditions;
+			const result = ( groups[0] ?? [] ).every( c => s.evaluateCondition( c ) );
 			context.resolve( result );
 			next();
 		};
@@ -772,9 +772,9 @@ describe( 'SceneHandleImpl — Choice Condition Resolution', () => {
 		registerBaseHandlers( global );
 		global.choiceHandler = ( { context, next } ) => { context.selectChoice( 'opt-a' ); next(); };
 		global.conditionHandler = ( { scene: s, block, context, next } ) => {
-			const conditions = ( block as unknown as { conditions: ExportCondition[] } ).conditions;
+			const groups = ( block as unknown as { conditions: ExportCondition[][] } ).conditions;
 			// Use scene.evaluateCondition for choice: keys, return true for external keys
-			const result = conditions.every( c =>
+			const result = ( groups[0] ?? [] ).every( c =>
 				c.key.startsWith( 'choice:' ) ? s.evaluateCondition( c ) : true,
 			);
 			context.resolve( result );
