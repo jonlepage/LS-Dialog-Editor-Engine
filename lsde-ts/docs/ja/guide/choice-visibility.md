@@ -4,15 +4,15 @@
 
 CHOICE block がディスパッチされると、`context.choices` には blueprint で定義された**すべての** choice が常に含まれます — 事前にフィルタリングされるものはありません。engine は配列から choice を削除することはありません。
 
-表示制御フィルタリングが必要な場合（例：ゲームステートや以前の選択に基づいて choice を非表示にする）、engine は**オプトイン方式のタグ付け**システムを提供します。フィルターを一度インストールすると、`onChoice` handler が呼ばれる前に、engine が各 choice に `visible: true | false` をタグ付けします。
+表示制御フィルタリングが必要な場合（例：ゲームステートや以前の選択に基づいて choice を非表示にする）、engine は**オプトイン方式のタグ付け**システムを提供します。condition リゾルバーを一度インストールすると、`onChoice` handler が呼ばれる前に、engine が各 choice に `visible: true | false` をタグ付けします。
 
 ## セットアップ
 
-engine に choice フィルターを登録します — scene を開始する前に一度だけ：
+engine に condition リゾルバーを登録します — scene を開始する前に一度だけ：
 
 <!--@include: ../../_shared/choice-filter-setup.md-->
 
-インストールされると、engine は `onChoice` を呼び出す**前に**各 choice の `visibilityConditions` を評価します：
+インストールされると、engine は `onChoice` を呼び出す**前に**各 choice の `visibilityConditions` を評価します。同じリゾルバーは condition block のグループも事前評価します — 詳細は [Condition blocks](/ja/guide/block-types#condition) を参照してください。
 
 - **`choice:` condition**（以前のプレイヤー選択を参照）は、engine の内部 choice 履歴によって自動的に解決されます — 登録された callback には渡されません。
 - **ゲームステート condition**（その他すべて）は、登録された callback に委任されます。
@@ -26,17 +26,17 @@ handler 内で、1行でフィルタリングできます：
 
 ### なぜ `visible !== false` であって `=== true` ではないのか？
 
-**フィルターがインストールされていない**場合、`visible` は `undefined` です。`undefined !== false` は `true` に評価されるため、すべての choice が通過します — デフォルトで後方互換性があります。フィルターが**インストールされている**場合、choice は明示的に `true` または `false` でタグ付けされます。
+**リゾルバーがインストールされていない**場合、`visible` は `undefined` です。`undefined !== false` は `true` に評価されるため、すべての choice が通過します — デフォルトで後方互換性があります。リゾルバーが**インストールされている**場合、choice は明示的に `true` または `false` でタグ付けされます。
 
 | `visible` の値 | 意味 | `!== false` |
 |---|---|---|
-| `true` | フィルターインストール済み、choice は通過 | `true` |
-| `false` | フィルターインストール済み、choice は非表示 | `false` |
-| `undefined` | フィルター未インストール | `true` |
+| `true` | リゾルバーインストール済み、choice は通過 | `true` |
+| `false` | リゾルバーインストール済み、choice は非表示 | `false` |
+| `undefined` | リゾルバー未インストール | `true` |
 
 ## RuntimeChoiceItem
 
-フィルターがインストールされている場合、`context.choices` 内の各 choice は `RuntimeChoiceItem` です — `visible` タグが追加された `ChoiceItem` の拡張です：
+リゾルバーがインストールされている場合、`context.choices` 内の各 choice は `RuntimeChoiceItem` です — `visible` タグが追加された `ChoiceItem` の拡張です：
 
 ::: code-group
 ```ts [TypeScript]
@@ -61,7 +61,7 @@ struct RuntimeChoiceItem : ChoiceItem {
 ```
 :::
 
-フィルターなしの場合、choice は `RuntimeChoiceItem` のままですが、`visible` は `undefined`/`null`/`nullopt`/absent のままです。
+リゾルバーなしの場合、choice は `RuntimeChoiceItem` のままですが、`visible` は `undefined`/`null`/`nullopt`/absent のままです。
 
 ## 使用例
 
@@ -321,17 +321,17 @@ tutorial.on_choice(func(args):
 
 ## エバリュエーターの共有
 
-一般的に、condition の評価はインベントリシステム、フラグマネージャー、クエストトラッカーなど1か所で行われます。`setChoiceFilter` と `onCondition` で**同じエバリュエーター関数**を共有することで、ロジックを1か所にまとめることができます：
+`onResolveCondition` を使えば、1つの callback で choice の可視性と condition block の事前評価の**両方**を処理できます。ロジックを重複させる必要はありません：
 
 <!--@include: ../../_shared/choice-reusable-filter.md-->
 
-::: tip なぜ共有するのか？
-このパターンを使わないと、同じ `gameState.check(...)` ロジックを2か所に書くことになります。ゲームステート API が変更された場合、一方のみ修正してもう一方を見落とすリスクがあります。1つの関数、2つの登録、ドリフトはゼロです。
+::: tip なぜ1つの callback なのか？
+`onResolveCondition` 以前は、同じ `gameState.check(...)` ロジックを `setChoiceFilter` と `onCondition` に別々に登録する必要がありました。統合リゾルバーでは1つの callback で済みます — engine が両方を自動的に処理します。
 :::
 
 ## 上級: 手動フィルタリング
 
-グローバルフィルターをインストールしたくない場合、`LsdeUtils` がローレベルのユーティリティを提供します：
+グローバルリゾルバーをインストールしたくない場合、`LsdeUtils` がローレベルのユーティリティを提供します：
 
 ::: code-group
 ```ts [TypeScript]
@@ -366,4 +366,4 @@ var visible = LsdeUtils.filter_visible_choices(
 ```
 :::
 
-`scene` パラメーターを指定すると、`choice:` condition の自動解決が有効になります。指定しない場合、すべての condition は登録されたエバリュエーター callback に委任されます。
+`scene` パラメーターを指定すると、`choice:` condition の自動解決が有効になります。指定しない場合、すべての condition は登録されたリゾルバー callback に委任されます。

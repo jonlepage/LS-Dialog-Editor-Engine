@@ -59,4 +59,8 @@ Les **langages dynamiques** (TypeScript, GDScript) gèrent ça automatiquement �
 
 Les **langages typés** (C#, C++) ont besoin d'un converter custom qui lit le champ `type` et construit le bon sous-type. Sans ça, les champs spécifiques comme `dialogueText` ou `choices` sont silencieusement perdus.
 
+::: info Packages compagnons
+Si vous utilisez `LsdeDialogEngine.Newtonsoft` ou `LsdeDialogEngine.SystemTextJson`, ces converters sont déjà inclus — appelez simplement `LsdeJson.Parse(json)`. Le code ci-dessous est pour l'intégration manuelle uniquement.
+:::
+
 <!--@include: ../../_shared/parsing-polymorphic.md-->

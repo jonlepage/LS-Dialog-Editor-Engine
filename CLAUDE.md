@@ -62,7 +62,7 @@ types → validator → graph → condition-evaluator → port-resolver
 - **scene-handle.ts** — `SceneHandleImpl`. Main traversal loop, Tier 2 (per-scene) handler overrides, AsyncTrack management.
 - **port-resolver.ts** — **Critical algorithm**, must produce identical results across all runtimes. Determines next block from port matching rules per block type.
 - **handler-registry.ts** — Two-tier handler resolution: `onBlock(uuid)` > `handle.onDialog()` > `engine.onDialog()`.
-- **condition-evaluator.ts** — Left-to-right AND/OR chain evaluation (no operator precedence).
+- **condition-evaluator.ts** — Left-to-right AND/OR chain evaluation (no operator precedence). 2D group evaluation (`evaluateConditionGroups`).
 - **graph.ts** — `BlueprintGraph`. Indexes blocks/connections for O(1) lookup.
 - **validator.ts** — Blueprint validation, produces `DiagnosticReport`.
 - **block-context.ts** — Context factories per block type (DialogContext, ChoiceContext, etc.).
@@ -434,28 +434,45 @@ scene terminée
 
 ---
 
-## 7. Évaluation des chaînes de conditions
+## 7. Évaluation des conditions
 
-Le moteur évalue les conditions en chaîne via `StateBridge.evaluateCondition()` :
+### 7.1 Chaînes de conditions (AND/OR)
+
+Chaque groupe de conditions est évalué de gauche à droite sans précédence d'opérateur :
 
 ```
-conditions: [c1(chain:&), c2(chain:|), c3]
-
-Évaluation :
-- Le chain d'une condition indique comment elle se connecte à la PRÉCÉDENTE
-- La première condition n'a pas de chain (c'est le début)
-- '&' = AND avec la précédente
-- '|' = OR avec la précédente
-
-Exemple: c1 AND c2 OR c3
+[c1, c2(chain:&), c3(chain:|)]
+→ c1 AND c2 OR c3
+→ (c1 AND c2) OR c3   // pas c1 AND (c2 OR c3)
 ```
 
-Ceci s'applique à :
+### 7.2 Conditions 2D (groupes)
 
-- `ConditionBlock.conditions[]`
-- `ChoiceItem.visibilityConditions[]`
+`ConditionBlock.conditions` est un tableau 2D : `ExportCondition[][]`. Chaque sous-tableau est un "case" (groupe) évalué indépendamment.
 
-Pour les `visibilityConditions`, le moteur filtre les choix AVANT de les passer au handler `onChoice`. Le handler reçoit uniquement les choix visibles.
+### 7.3 `onResolveCondition` — Résolveur unifié
+
+Un seul callback évalue les conditions game-state pour **deux** cas d'usage :
+- **Choice visibility** : tague chaque choix avec `visible: true|false` avant `onChoice`
+- **Condition blocks** : pré-évalue chaque groupe, disponible via `context.conditionGroups[i].result`
+
+Les conditions `choice:` (historique de sélection) sont résolues **internement** — jamais passées au callback.
+
+### 7.4 Modes de routage
+
+| Mode | `enableDispatcher` | `resolve()` accepte | Comportement |
+|------|-------------------|--------------------|-|
+| **Legacy** | absent | `boolean` | `true` → port 0, `false` → port 1 |
+| **Switch** | absent | `number` | `>= 0` → case port, `-1` → default |
+| **Dispatcher** | `true` | `number[]` | Tous les indices matchants fire en async, default = main track |
+
+### 7.5 `onCondition` optionnel
+
+Quand `onResolveCondition` est installé, `onCondition` devient optionnel. L'engine auto-route depuis les groupes pré-évalués. Le handler sert de hook de logging/override.
+
+### 7.6 Visibility des choix
+
+Quand `onResolveCondition` est installé, chaque choix dans `context.choices` est un `RuntimeChoiceItem` avec `visible: true|false|undefined`. Filtrer avec `visible !== false`.
 
 ---
 
@@ -478,7 +495,7 @@ Les types sont générés par l'export LSDE. Voir `blueprints/blueprint.types.ts
 
 **ChoiceBlock** : `choices: ChoiceItem[]`, `note`
 
-**ConditionBlock** : `conditions: ExportCondition[]`, `note`
+**ConditionBlock** : `conditions: ExportCondition[][]` (2D groupes), `note`
 
 **ActionBlock** : `actions: ExportAction[]`, `note`
 

@@ -4,15 +4,15 @@
 
 当 CHOICE block 被分发时，`context.choices` 始终包含 blueprint 中定义的**所有** choice — 不会有任何被预先过滤。engine 永远不会从数组中移除 choice。
 
-如果需要可见性过滤（例如，根据游戏状态或之前的选择来隐藏 choice），engine 提供了一个**可选的标记**系统。安装一次 filter 后，engine 会在 `onChoice` handler 接收数据之前，为每个 choice 标记 `visible: true | false`。
+如果需要可见性过滤（例如，根据游戏状态或之前的选择来隐藏 choice），engine 提供了一个**可选的标记**系统。安装一次 condition 解析器后，engine 会在 `onChoice` handler 接收数据之前，为每个 choice 标记 `visible: true | false`。
 
 ## 设置
 
-在 engine 上注册一个 choice filter — 在启动任何 scene 之前注册一次：
+在 engine 上注册一个 condition 解析器 — 在启动任何 scene 之前注册一次：
 
 <!--@include: ../../_shared/choice-filter-setup.md-->
 
-安装后，engine 在调用 `onChoice` **之前**评估每个 choice 的 `visibilityConditions`：
+安装后，engine 在调用 `onChoice` **之前**评估每个 choice 的 `visibilityConditions`。同一解析器也会预评估 condition block 的组 — 详见 [Condition blocks](/zh/guide/block-types#condition)。
 
 - **`choice:` condition**（引用之前的玩家选择）由 engine 通过其内部选择历史自动解析 — callback 永远不会接收到它们。
 - **游戏状态 condition**（其他所有情况）委托给已注册的 callback。
@@ -26,17 +26,17 @@
 
 ### 为什么用 `visible !== false` 而不是 `=== true`？
 
-当**未安装 filter** 时，`visible` 是 `undefined`。由于 `undefined !== false` 求值为 `true`，所有 choice 都会通过 — 默认向后兼容。当 filter **已安装**时，choice 会被显式标记为 `true` 或 `false`。
+当**未安装解析器**时，`visible` 是 `undefined`。由于 `undefined !== false` 求值为 `true`，所有 choice 都会通过 — 默认向后兼容。当解析器**已安装**时，choice 会被显式标记为 `true` 或 `false`。
 
 | `visible` 值 | 含义 | `!== false` |
 |---|---|---|
-| `true` | 已安装 filter，choice 通过 | `true` |
-| `false` | 已安装 filter，choice 隐藏 | `false` |
-| `undefined` | 未安装 filter | `true` |
+| `true` | 已安装解析器，choice 通过 | `true` |
+| `false` | 已安装解析器，choice 隐藏 | `false` |
+| `undefined` | 未安装解析器 | `true` |
 
 ## RuntimeChoiceItem
 
-安装 filter 后，`context.choices` 中的每个 choice 都是 `RuntimeChoiceItem` — 它是 `ChoiceItem` 的扩展，增加了 `visible` 标记：
+安装解析器后，`context.choices` 中的每个 choice 都是 `RuntimeChoiceItem` — 它是 `ChoiceItem` 的扩展，增加了 `visible` 标记：
 
 ::: code-group
 ```ts [TypeScript]
@@ -61,7 +61,7 @@ struct RuntimeChoiceItem : ChoiceItem {
 ```
 :::
 
-未安装 filter 时，choice 仍然是 `RuntimeChoiceItem`，但 `visible` 保持为 `undefined`/`null`/`nullopt`/absent。
+未安装解析器时，choice 仍然是 `RuntimeChoiceItem`，但 `visible` 保持为 `undefined`/`null`/`nullopt`/absent。
 
 ## 示例
 
@@ -321,17 +321,17 @@ tutorial.on_choice(func(args):
 
 ## 共享求值器
 
-宿主应用程序可能在一个地方评估 condition — 背包系统、标记管理器、任务追踪器。可以在 `setChoiceFilter` 和 `onCondition` 之间共享**同一个求值函数**，使逻辑集中在一处：
+使用 `onResolveCondition`，一个 callback 即可处理 choice 可见性和 condition block 预评估**两者**。无需再重复逻辑：
 
 <!--@include: ../../_shared/choice-reusable-filter.md-->
 
-::: tip 为什么要共享？
-如果不使用此模式，最终会在两个地方编写相同的 `gameState.check(...)` 逻辑。当游戏状态 API 发生变化时，容易修复一处而遗漏另一处。一个函数，两次注册，零偏差。
+::: tip 为什么用一个 callback？
+在 `onResolveCondition` 之前，相同的 `gameState.check(...)` 逻辑需要分别在 `setChoiceFilter` 和 `onCondition` 中注册。使用统一解析器后，只需一个 callback — engine 自动处理两者。
 :::
 
 ## 高级用法：手动过滤
 
-如果不需要安装全局 filter，`LsdeUtils` 提供了一个底层工具函数：
+如果不需要安装全局解析器，`LsdeUtils` 提供了一个底层工具函数：
 
 ::: code-group
 ```ts [TypeScript]
@@ -366,4 +366,4 @@ var visible = LsdeUtils.filter_visible_choices(
 ```
 :::
 
-`scene` 参数启用自动的 `choice:` condition 解析。如果不提供，所有 condition 都将委托给求值器 callback。
+`scene` 参数启用自动的 `choice:` condition 解析。如果不提供，所有 condition 都将委托给解析器 callback。

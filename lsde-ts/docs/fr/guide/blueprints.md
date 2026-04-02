@@ -24,7 +24,7 @@ Vous n'aurez normalement pas besoin d'inspecter les connections directement — 
 
 ## Dictionaries
 
-Les dictionaries décrivent les registres de votre jeu — switches, variables, inventaire. Le développeur les déclare dans [LSDE](https://lepasoft.com/fr/software/ls-dialog-editor "Lepasoft Dialog Editor") pour exposer au narrative designer les variables disponibles dans le moteur. Au runtime, le développeur mappe chaque dictionnaire vers le système correspondant de son jeu. Les [`conditions`](/api-ref/interfaces/ExportCondition) et [`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter) utilisent ces clés pour évaluer l'état du jeu. Définis par [`Dictionary`](/api-ref/interfaces/Dictionary) :
+Les dictionaries décrivent les registres de votre jeu — switches, variables, inventaire. Le développeur les déclare dans [LSDE](https://lepasoft.com/fr/software/ls-dialog-editor "Lepasoft Dialog Editor") pour exposer au narrative designer les variables disponibles dans le moteur. Au runtime, le développeur mappe chaque dictionnaire vers le système correspondant de son jeu. Les [`conditions`](/api-ref/interfaces/ExportCondition) et [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) utilisent ces clés pour évaluer l'état du jeu. Définis par [`Dictionary`](/api-ref/interfaces/Dictionary) :
 
 <!--@include: ../../_shared/blueprint-dictionary-type.md-->
 

@@ -4,15 +4,15 @@
 
 Quand un block CHOICE est dispatché, `context.choices` contient toujours **tous** les choix définis dans le blueprint — rien n'est pré-filtré. Le engine n'enlève jamais de choix du array.
 
-Pour du filtrage de visibilité (ex. cacher des choix basés sur le game state ou des sélections précédentes), le engine fournit un système de **tagging opt-in**. Un filter est installé une seule fois, et le engine tag chaque choix avec `visible: true | false` avant que le handler `onChoice` le reçoive.
+Pour du filtrage de visibilité (ex. cacher des choix basés sur le game state ou des sélections précédentes), le engine fournit un système de **tagging opt-in**. Un condition resolver est installé une seule fois, et le engine tag chaque choix avec `visible: true | false` avant que le handler `onChoice` le reçoive.
 
 ## Setup
 
-Enregistrez un choice filter sur le engine — une seule fois, avant de démarrer une scène :
+Enregistrez un condition resolver sur le engine — une seule fois, avant de démarrer une scène :
 
 <!--@include: ../../_shared/choice-filter-setup.md-->
 
-Quand le filter est installé, le engine évalue les `visibilityConditions` de chaque choix **avant** d'appeler `onChoice` :
+Quand le resolver est installé, le engine évalue les `visibilityConditions` de chaque choix **avant** d'appeler `onChoice`. Le même resolver pré-évalue aussi les groupes de condition blocks -- voir [Condition blocks](/fr/guide/block-types#condition) pour les détails.
 
 - **Conditions `choice:`** (qui référencent des sélections précédentes du joueur) sont résolues automatiquement par le engine via son historique de choix interne — le callback ne les reçoit jamais.
 - **Conditions de game-state** (tout le reste) sont déléguées au callback.
@@ -26,17 +26,17 @@ Dans le handler, le filtrage se fait avec une seule ligne :
 
 ### Pourquoi `visible !== false` et pas `=== true`?
 
-Quand **aucun filter n'est installé**, `visible` est `undefined`. Comme `undefined !== false` donne `true`, tous les choix passent — rétrocompatible par défaut. Quand un filter **est installé**, les choix sont taggés `true` ou `false` explicitement.
+Quand **aucun resolver n'est installé**, `visible` est `undefined`. Comme `undefined !== false` donne `true`, tous les choix passent — rétrocompatible par défaut. Quand un resolver **est installé**, les choix sont taggés `true` ou `false` explicitement.
 
 | Valeur de `visible` | Signification | `!== false` |
 |---|---|---|
-| `true` | Filter installé, le choix passe | `true` |
-| `false` | Filter installé, choix caché | `false` |
-| `undefined` | Pas de filter installé | `true` |
+| `true` | Resolver installé, le choix passe | `true` |
+| `false` | Resolver installé, choix caché | `false` |
+| `undefined` | Pas de resolver installé | `true` |
 
 ## RuntimeChoiceItem
 
-Quand un filter est installé, chaque choix dans `context.choices` est un `RuntimeChoiceItem` — une extension de `ChoiceItem` avec le tag `visible` :
+Quand un resolver est installé, chaque choix dans `context.choices` est un `RuntimeChoiceItem` — une extension de `ChoiceItem` avec le tag `visible` :
 
 ::: code-group
 ```ts [TypeScript]
@@ -61,7 +61,7 @@ struct RuntimeChoiceItem : ChoiceItem {
 ```
 :::
 
-Sans filter, les choix sont toujours des `RuntimeChoiceItem` mais `visible` reste `undefined`/`null`/`nullopt`/absent.
+Sans resolver, les choix sont toujours des `RuntimeChoiceItem` mais `visible` reste `undefined`/`null`/`nullopt`/absent.
 
 ## Exemples
 
@@ -321,17 +321,17 @@ tutorial.on_choice(func(args):
 
 ## Partager l'évaluateur
 
-Le jeu évalue probablement les conditions à un seul endroit — un système d'inventaire, un flag manager, un quest tracker. Il est possible de partager la **même fonction d'évaluation** entre `setChoiceFilter` et `onCondition` pour que la logique reste au même endroit :
+Avec `onResolveCondition`, un seul callback gère **à la fois** la visibilité des choix et la pré-évaluation des condition blocks. Plus besoin de dupliquer la logique :
 
 <!--@include: ../../_shared/choice-reusable-filter.md-->
 
-::: tip Pourquoi partager?
-Sans ce pattern, la même logique `gameState.check(...)` se retrouve à deux places. Quand l'API de game state change, un seul côté est corrigé et l'autre est oublié. Une seule fonction, deux registrations, zéro drift.
+::: tip Pourquoi un seul callback?
+Avant `onResolveCondition`, la même logique `gameState.check(...)` devait être enregistrée séparément dans `setChoiceFilter` et `onCondition`. Avec le resolver unifié, c'est un seul callback — le engine gère les deux automatiquement.
 :::
 
 ## Avancé : Filtrage manuel
 
-Si un filter global n'est pas souhaité, `LsdeUtils` fournit un utilitaire low-level :
+Si un resolver global n'est pas souhaité, `LsdeUtils` fournit un utilitaire low-level :
 
 ::: code-group
 ```ts [TypeScript]

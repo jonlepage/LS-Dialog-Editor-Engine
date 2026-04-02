@@ -24,7 +24,7 @@ Connection 是 block 之间的连线 — 定义哪个 block 通向哪个 block�
 
 ## Dictionary
 
-Dictionary 描述游戏的寄存器 — 开关、变量、背包等。开发者在 [LSDE](https://lepasoft.com/zh/software/ls-dialog-editor "Lepasoft Dialog Editor") 编辑器中声明，向叙事设计师公开游戏中可用的变量。运行时，开发者将每个 dictionary 映射到游戏中对应的系统。[`condition`](/api-ref/interfaces/ExportCondition) 和 [`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter) 使用这些键来评估游戏状态。由 [`Dictionary`](/api-ref/interfaces/Dictionary) 接口定义：
+Dictionary 描述游戏的寄存器 — 开关、变量、背包等。开发者在 [LSDE](https://lepasoft.com/zh/software/ls-dialog-editor "Lepasoft Dialog Editor") 编辑器中声明，向叙事设计师公开游戏中可用的变量。运行时，开发者将每个 dictionary 映射到游戏中对应的系统。[`condition`](/api-ref/interfaces/ExportCondition) 和 [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) 使用这些键来评估游戏状态。由 [`Dictionary`](/api-ref/interfaces/Dictionary) 接口定义：
 
 <!--@include: ../../_shared/blueprint-dictionary-type.md-->
 

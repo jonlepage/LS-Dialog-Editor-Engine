@@ -295,7 +295,7 @@ namespace LsdeDialogEngine
 
     /// <summary>Choice block — presents selectable options to the player.
     /// <para>Context.Choices returns ALL choices — none are filtered out.
-    /// When SetChoiceFilter() is configured, the engine tags each RuntimeChoiceItem with
+    /// When OnResolveCondition() is configured, the engine tags each RuntimeChoiceItem with
     /// Visible = true/false. Filter with <c>choices.Where(c => c.Visible != false)</c>.
     /// Without a filter, Visible is null and all choices pass.</para>
     /// <para>The handler must call Context.SelectChoice(uuid) to pick a choice.</para></summary>
@@ -551,7 +551,7 @@ namespace LsdeDialogEngine
     /// <summary>Context for CHOICE block handlers.</summary>
     public interface IChoiceContext : IBaseBlockContext
     {
-        /// <summary>All choices with optional visibility tags. When SetChoiceFilter() is configured,
+        /// <summary>All choices with optional visibility tags. When OnResolveCondition() is configured,
         /// each choice is tagged Visible = true/false. Filter with <c>choices.Where(c => c.Visible != false)</c>.
         /// Without a filter, Visible is null and all choices pass.</summary>
         IReadOnlyList<RuntimeChoiceItem> Choices { get; }
@@ -802,7 +802,12 @@ namespace LsdeDialogEngine
         /// <summary>Set the active locale for text resolution. Validates against blueprint.Locales. Syncs LsdeUtils.Locale.</summary>
         void SetLocale(string locale);
 
-        /// <summary>Install a condition evaluator for choice visibility tagging. The engine handles choice: conditions internally via choice history — this callback evaluates game-state conditions only.</summary>
+        /// <summary>Install a unified condition evaluator for both choice visibility and condition block pre-evaluation.
+        /// The engine handles choice: conditions internally via choice history — this callback evaluates game-state conditions only.</summary>
+        void OnResolveCondition(Func<ExportCondition, bool> evaluator);
+
+        /// <summary>Install a condition evaluator for choice visibility tagging.</summary>
+        [Obsolete("Use OnResolveCondition() instead.")]
         void SetChoiceFilter(Func<ExportCondition, bool> evaluator);
 
         /// <summary>Register a global character resolver. Called for every block with Metadata.Characters. Default: first character.</summary>

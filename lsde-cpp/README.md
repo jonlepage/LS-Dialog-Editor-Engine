@@ -60,8 +60,9 @@ int main() {
         return chars.empty() ? nullptr : &chars[0];
     });
 
-    // Choice visibility filter (optional — tags each choice with visible = true/false)
-    engine.setChoiceFilter([](const ExportCondition& cond) -> bool {
+    // Unified condition resolver — handles choice visibility + condition block pre-evaluation.
+    // choice: conditions are handled internally by the engine via choice history.
+    engine.onResolveCondition([](const ExportCondition& cond) -> bool {
         return true; // delegate to your game state
     });
 
@@ -88,14 +89,12 @@ int main() {
         return {};
     });
 
-    engine.onCondition([](ISceneHandle* scene, const ConditionBlock* block, IConditionContext* ctx,
+    // onCondition is OPTIONAL when onResolveCondition is installed.
+    // The engine pre-evaluates condition groups and auto-routes.
+    engine.onCondition([](ISceneHandle*, const ConditionBlock* block, IConditionContext* ctx,
                           std::function<void()> next) -> CleanupFn {
-        auto result = LsdeUtils::EvaluateConditionChain(
-            block->conditions,
-            [scene](const ExportCondition& cond) {
-                return isChoiceCondition(cond) ? scene->evaluateCondition(cond) : true;
-            });
-        ctx->resolve(result);
+        // Result is already pre-resolved by the engine.
+        // Override with ctx->resolve(result) if needed.
         next();
         return {};
     });
@@ -199,7 +198,7 @@ All 4 type handlers are **required** — the engine will throw if a scene starts
 | Method | Description |
 |--------|-------------|
 | `engine.onDialog(handler)` | Handle DIALOG blocks. |
-| `engine.onChoice(handler)` | Handle CHOICE blocks (choices tagged with `visible` when `setChoiceFilter` is set). |
+| `engine.onChoice(handler)` | Handle CHOICE blocks (choices tagged with `visible` when `onResolveCondition` is set). |
 | `engine.onCondition(handler)` | Handle CONDITION blocks. Developer **must** call `ctx->resolve(bool)`. |
 | `engine.onAction(handler)` | Handle ACTION blocks. Developer **must** call `ctx->resolve()` or `ctx->reject()`. |
 
@@ -208,7 +207,8 @@ All 4 type handlers are **required** — the engine will throw if a scene starts
 | Method | Description |
 |--------|-------------|
 | `engine.onResolveCharacter(fn)` | Character resolver. Default: first character in the list. |
-| `engine.setChoiceFilter(fn)` | Install choice visibility evaluator (game-state conditions). |
+| `engine.onResolveCondition(fn)` | Unified condition resolver (choice visibility + condition pre-evaluation). |
+| ~~`engine.setChoiceFilter(fn)`~~ | _Deprecated — use `onResolveCondition` instead._ |
 | `engine.onBeforeBlock(handler)` | Pre-execution gate. Must call `resolve()` to continue. |
 | `engine.onValidateNextBlock(handler)` | Validate before entering a block. |
 | `engine.onInvalidateBlock(handler)` | Called when a block fails validation. |

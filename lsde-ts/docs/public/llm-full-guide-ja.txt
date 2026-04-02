@@ -101,7 +101,7 @@ connection は block 間のワイヤーです — どの block がどの block �
 
 ## Dictionary
 
-dictionary はゲームのレジスタを記述します — スイッチ、変数、インベントリなど。開発者が [LSDE](https://lepasoft.com/ja/software/ls-dialog-editor "Lepasoft Dialog Editor") エディターで宣言し、ナラティブデザイナーにゲーム内で利用可能な変数を公開します。ランタイムでは、開発者が各 dictionary をゲームの対応するシステムにマッピングします。[`condition`](/api-ref/interfaces/ExportCondition) と [`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter) がこれらのキーを使ってゲーム状態を評価します。[`Dictionary`](/api-ref/interfaces/Dictionary) インターフェースで定義されます：
+dictionary はゲームのレジスタを記述します — スイッチ、変数、インベントリなど。開発者が [LSDE](https://lepasoft.com/ja/software/ls-dialog-editor "Lepasoft Dialog Editor") エディターで宣言し、ナラティブデザイナーにゲーム内で利用可能な変数を公開します。ランタイムでは、開発者が各 dictionary をゲームの対応するシステムにマッピングします。[`condition`](/api-ref/interfaces/ExportCondition) と [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) がこれらのキーを使ってゲーム状態を評価します。[`Dictionary`](/api-ref/interfaces/Dictionary) インターフェースで定義されます：
 
 <!--@include: ../../_shared/blueprint-dictionary-type.md-->
 
@@ -131,7 +131,7 @@ dialog block はセリフを表します — キャラクターの会話、ナ�
 
 ## CHOICE
 
-choice block はプレイヤーが選択する分岐点です — ダイアログメニュー、選択肢リスト。`context.choices` に全ての選択肢が含まれます。[`setChoiceFilter()`](/ja/guide/choice-visibility) が設定されている場合、各選択肢は `visible: true | false` でタグ付けされ、handler が表示する選択肢をフィルタリングします。プレイヤーの操作後、`selectChoice(uuid)` で engine にどのパスを辿るかを伝え、`next()` でフローを進めます。
+choice block はプレイヤーが選択する分岐点です — ダイアログメニュー、選択肢リスト。`context.choices` に全ての選択肢が含まれます。[`onResolveCondition()`](/ja/guide/choice-visibility) が設定されている場合、各選択肢は `visible: true | false` でタグ付けされ、handler が表示する選択肢をフィルタリングします。プレイヤーの操作後、`selectChoice(uuid)` で engine にどのパスを辿るかを伝え、`next()` でフローを進めます。
 
 <!--@include: ../../_shared/block-choice.md-->
 
@@ -190,15 +190,15 @@ note block はナラティブデザイナーのためのメモです — コメ�
 
 CHOICE block がディスパッチされると、`context.choices` には blueprint で定義された**すべての** choice が常に含まれます — 事前にフィルタリングされるものはありません。engine は配列から choice を削除することはありません。
 
-表示制御フィルタリングが必要な場合（例：ゲームステートや以前の選択に基づいて choice を非表示にする）、engine は**オプトイン方式のタグ付け**システムを提供します。フィルターを一度インストールすると、`onChoice` handler が呼ばれる前に、engine が各 choice に `visible: true | false` をタグ付けします。
+表示制御フィルタリングが必要な場合（例：ゲームステートや以前の選択に基づいて choice を非表示にする）、engine は**オプトイン方式のタグ付け**システムを提供します。condition リゾルバーを一度インストールすると、`onChoice` handler が呼ばれる前に、engine が各 choice に `visible: true | false` をタグ付けします。
 
 ## セットアップ
 
-engine に choice フィルターを登録します — scene を開始する前に一度だけ：
+engine に condition リゾルバーを登録します — scene を開始する前に一度だけ：
 
 <!--@include: ../../_shared/choice-filter-setup.md-->
 
-インストールされると、engine は `onChoice` を呼び出す**前に**各 choice の `visibilityConditions` を評価します：
+インストールされると、engine は `onChoice` を呼び出す**前に**各 choice の `visibilityConditions` を評価します。同じリゾルバーは condition block のグループも事前評価します — 詳細は [Condition blocks](/ja/guide/block-types#condition) を参照してください。
 
 - **`choice:` condition**（以前のプレイヤー選択を参照）は、engine の内部 choice 履歴によって自動的に解決されます — 登録された callback には渡されません。
 - **ゲームステート condition**（その他すべて）は、登録された callback に委任されます。
@@ -212,17 +212,17 @@ handler 内で、1行でフィルタリングできます：
 
 ### なぜ `visible !== false` であって `=== true` ではないのか？
 
-**フィルターがインストールされていない**場合、`visible` は `undefined` です。`undefined !== false` は `true` に評価されるため、すべての choice が通過します — デフォルトで後方互換性があります。フィルターが**インストールされている**場合、choice は明示的に `true` または `false` でタグ付けされます。
+**リゾルバーがインストールされていない**場合、`visible` は `undefined` です。`undefined !== false` は `true` に評価されるため、すべての choice が通過します — デフォルトで後方互換性があります。リゾルバーが**インストールされている**場合、choice は明示的に `true` または `false` でタグ付けされます。
 
 | `visible` の値 | 意味 | `!== false` |
 |---|---|---|
-| `true` | フィルターインストール済み、choice は通過 | `true` |
-| `false` | フィルターインストール済み、choice は非表示 | `false` |
-| `undefined` | フィルター未インストール | `true` |
+| `true` | リゾルバーインストール済み、choice は通過 | `true` |
+| `false` | リゾルバーインストール済み、choice は非表示 | `false` |
+| `undefined` | リゾルバー未インストール | `true` |
 
 ## RuntimeChoiceItem
 
-フィルターがインストールされている場合、`context.choices` 内の各 choice は `RuntimeChoiceItem` です — `visible` タグが追加された `ChoiceItem` の拡張です：
+リゾルバーがインストールされている場合、`context.choices` 内の各 choice は `RuntimeChoiceItem` です — `visible` タグが追加された `ChoiceItem` の拡張です：
 
 
 ```ts [TypeScript]
@@ -246,7 +246,7 @@ struct RuntimeChoiceItem : ChoiceItem {
 # { "uuid": "...", "dialogueText": {...}, "visible": true/false/absent }
 ```
 
-フィルターなしの場合、choice は `RuntimeChoiceItem` のままですが、`visible` は `undefined`/`null`/`nullopt`/absent のままです。
+リゾルバーなしの場合、choice は `RuntimeChoiceItem` のままですが、`visible` は `undefined`/`null`/`nullopt`/absent のままです。
 
 ## 使用例
 
@@ -502,16 +502,16 @@ tutorial.on_choice(func(args):
 
 ## エバリュエーターの共有
 
-一般的に、condition の評価はインベントリシステム、フラグマネージャー、クエストトラッカーなど1か所で行われます。`setChoiceFilter` と `onCondition` で**同じエバリュエーター関数**を共有することで、ロジックを1か所にまとめることができます：
+`onResolveCondition` を使えば、1つの callback で choice の可視性と condition block の事前評価の**両方**を処理できます。ロジックを重複させる必要はありません：
 
 <!--@include: ../../_shared/choice-reusable-filter.md-->
 
 > TIP:
-このパターンを使わないと、同じ `gameState.check(...)` ロジックを2か所に書くことになります。ゲームステート API が変更された場合、一方のみ修正してもう一方を見落とすリスクがあります。1つの関数、2つの登録、ドリフトはゼロです。
+`onResolveCondition` 以前は、同じ `gameState.check(...)` ロジックを `setChoiceFilter` と `onCondition` に別々に登録する必要がありました。統合リゾルバーでは1つの callback で済みます — engine が両方を自動的に処理します。
 
 ## 上級: 手動フィルタリング
 
-グローバルフィルターをインストールしたくない場合、`LsdeUtils` がローレベルのユーティリティを提供します：
+グローバルリゾルバーをインストールしたくない場合、`LsdeUtils` がローレベルのユーティリティを提供します：
 
 
 ```ts [TypeScript]
@@ -545,7 +545,7 @@ var visible = LsdeUtils.filter_visible_choices(
 )
 ```
 
-`scene` パラメーターを指定すると、`choice:` condition の自動解決が有効になります。指定しない場合、すべての condition は登録されたエバリュエーター callback に委任されます。
+`scene` パラメーターを指定すると、`choice:` condition の自動解決が有効になります。指定しない場合、すべての condition は登録されたリゾルバー callback に委任されます。
 
 ================================================================================
 
@@ -574,9 +574,10 @@ engine は以下の handler を公開しています：
 | [`onChoiceId`](/api-ref/interfaces/SceneHandle#onchoiceid) | scene | UUID で特定の CHOICE block をオーバーライド（型安全） |
 | [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | UUID で特定の CONDITION block をオーバーライド（型安全） |
 | [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | UUID で特定の ACTION block をオーバーライド（型安全） |
-| [`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter) | global | choice の可視性エバリュエーター |
+| [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) | global | 統合 condition リゾルバー（choice の可視性 + condition の事前評価） |
+| ~~[`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter)~~ | global | _非推奨 — 代わりに `onResolveCondition` を使用してください_ |
 
-最初の4つ（`onDialog`、`onChoice`、`onCondition`、`onAction`）は**必須**です — `start()` 呼び出し時に engine がその存在を検証し、欠けている場合は記述的なエラーをスローします。
+`onDialog`、`onChoice`、`onAction` は**必須**です — `start()` 呼び出し時に engine がその存在を検証し、欠けている場合は記述的なエラーをスローします。`onCondition` は `onResolveCondition` がインストールされている場合は**オプション**です — engine が事前評価された condition グループから自動ルーティングします。
 
 <!--@include: ../../_shared/handler-basic.md-->
 

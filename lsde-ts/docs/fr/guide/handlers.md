@@ -23,9 +23,10 @@ Le engine expose les handlers suivants :
 | [`onChoiceId`](/api-ref/interfaces/SceneHandle#onchoiceid) | scene | Override un block CHOICE spécifique par UUID (type-safe) |
 | [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | Override un block CONDITION spécifique par UUID (type-safe) |
 | [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | Override un block ACTION spécifique par UUID (type-safe) |
-| [`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter) | global | Évaluateur de visibilité des choix |
+| [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) | global | Résolveur unifié de conditions (visibilité des choix + pré-évaluation des conditions) |
+| ~~[`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter)~~ | global | _Déprécié — utilisez `onResolveCondition` à la place_ |
 
-Les 4 premiers (`onDialog`, `onChoice`, `onCondition`, `onAction`) sont **required** — le engine valide leur présence à l'appel de `start()` et throw une erreur descriptive si un manque.
+`onDialog`, `onChoice` et `onAction` sont **required** — le engine valide leur présence à l'appel de `start()` et throw une erreur descriptive si un manque. `onCondition` est **optionnel** quand `onResolveCondition` est installé — le engine auto-route depuis les groupes de conditions pré-évalués.
 
 <!--@include: ../../_shared/handler-basic.md-->
 

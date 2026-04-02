@@ -6,7 +6,12 @@ import blueprintJson from './blueprint.json';
 const engine = new DialogueEngine();
 engine.init({ data: blueprintJson });
 
-// 4 required handlers — bridge between the engine and your game
+// Unified condition resolver — evaluates game-state conditions for both
+// choice visibility and condition block pre-evaluation.
+engine.onResolveCondition((cond) => game.evaluateCondition(cond));
+
+// 3 required handlers — bridge between the engine and your game
+// (onCondition is optional when onResolveCondition is installed)
 engine.onDialog(({ scene, block, context, next }) => {
   game
     .createDialogAuto(block, context)
@@ -18,14 +23,6 @@ engine.onChoice(({ scene, block, context, next }) => {
   game
     .createChoiceAuto(block, context)
     .catch(() => scene.cancel())
-    .finally(() => next());
-});
-
-engine.onCondition(({ scene, block, context, next }) => {
-  game
-    .evaluateConditions(block.conditions)
-    .catch(() => scene.cancel())
-    .then((result) => context.resolve(result))
     .finally(() => next());
 });
 
@@ -51,7 +48,11 @@ var blueprint = LsdeJson.Parse(File.ReadAllText("blueprint.json"));
 var engine = new DialogueEngine();
 engine.Init(new InitOptions { Data = blueprint });
 
-// 4 required handlers — bridge between the engine and your game
+// Unified condition resolver — evaluates game-state conditions for both
+// choice visibility and condition block pre-evaluation.
+engine.OnResolveCondition(cond => Game.EvaluateCondition(cond));
+
+// 3 required handlers — bridge between the engine and your game
 engine.OnDialog(args => {
     var (scene, block, context, next) = args;
     Game.ShowDialog(block, context, onComplete: next);
@@ -60,13 +61,6 @@ engine.OnDialog(args => {
 engine.OnChoice(args => {
     var (scene, block, context, next) = args;
     Game.ShowChoices(block, context, onSelected: next);
-});
-
-engine.OnCondition(args => {
-    var (scene, block, context, next) = args;
-    var result = Game.EvaluateConditions(block.Conditions);
-    context.Resolve(result);
-    next();
 });
 
 engine.OnAction(args => {
@@ -90,7 +84,13 @@ using namespace lsde;
 DialogueEngine engine;
 engine.init({blueprint});
 
-// 4 required handlers — bridge between the engine and your game
+// Unified condition resolver — evaluates game-state conditions for both
+// choice visibility and condition block pre-evaluation.
+engine.onResolveCondition([](const ExportCondition& cond) {
+    return game->evaluateCondition(cond);
+});
+
+// 3 required handlers — bridge between the engine and your game
 engine.onDialog([](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn {
     game->showDialog(block, ctx, [next]() { next(); });
     return {};
@@ -98,13 +98,6 @@ engine.onDialog([](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn 
 
 engine.onChoice([](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn {
     game->showChoices(block, ctx, [next]() { next(); });
-    return {};
-});
-
-engine.onCondition([](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn {
-    auto result = game->evaluateConditions(block->conditions);
-    ctx->resolve(result);
-    next();
     return {};
 });
 
@@ -123,7 +116,13 @@ scene->start();
 var engine = LsdeDialogueEngine.new()
 engine.init({"data": blueprint})
 
-# 4 required handlers — bridge between the engine and your game
+# Unified condition resolver — evaluates game-state conditions for both
+# choice visibility and condition block pre-evaluation.
+engine.on_resolve_condition(func(cond):
+    return game.evaluate_condition(cond)
+)
+
+# 3 required handlers — bridge between the engine and your game
 engine.on_dialog(func(args):
     await game.show_dialog(args["block"], args["context"])
     args["next"].call()
@@ -131,12 +130,6 @@ engine.on_dialog(func(args):
 
 engine.on_choice(func(args):
     await game.show_choices(args["block"], args["context"])
-    args["next"].call()
-)
-
-engine.on_condition(func(args):
-    var result = game.evaluate_conditions(args["block"].conditions)
-    args["context"].resolve(result)
     args["next"].call()
 )
 

@@ -1,77 +1,77 @@
 ::: code-group
 ```ts [TypeScript]
-// Define once, use everywhere
-const evaluateGameCondition = (cond: ExportCondition) =>
-  gameState.check(cond.key, cond.operator, cond.value);
+// One callback handles both choice visibility AND condition block pre-evaluation.
+// choice: conditions are resolved internally — you only evaluate game-state conditions.
+engine.onResolveCondition((cond) =>
+  gameState.check(cond.key, cond.operator, cond.value)
+);
 
-// Choice visibility — uses your evaluator for game-state conditions
-engine.setChoiceFilter(evaluateGameCondition);
+// onCondition receives pre-evaluated conditionGroups — just route the result.
+// onCondition is optional when onResolveCondition is installed.
+engine.onCondition(({ block, context, next }) => {
+  const { conditionGroups } = context;
+  const isDispatcher = !!block.nativeProperties?.enableDispatcher;
 
-// Condition blocks — same evaluator, plus choice: handling
-engine.onCondition(({ scene, block, context, next }) => {
-  const result = LsdeUtils.evaluateConditionChain(
-    block.conditions ?? [],
-    (cond) => LsdeUtils.isChoiceCondition(cond)
-      ? scene.evaluateCondition(cond)  // engine handles choice history
-      : evaluateGameCondition(cond),   // your shared function
-  );
+  const matched = conditionGroups
+    .filter((g) => g.result)
+    .map((g) => g.portIndex);
+
+  const result = isDispatcher ? matched : (matched[0] ?? -1);
   context.resolve(result);
   next();
 });
 ```
 ```csharp [C# — Unity]
-// One evaluator to rule them all
-Func<ExportCondition, bool> evalGameCond = cond =>
-    GameState.Instance.Evaluate(cond.Key, cond.Operator, cond.Value);
+// One callback handles both choice visibility AND condition block pre-evaluation.
+engine.OnResolveCondition(cond =>
+    GameState.Instance.Evaluate(cond.Key, cond.Operator, cond.Value));
 
-engine.SetChoiceFilter(evalGameCond);
-
+// onCondition receives pre-evaluated ConditionGroups — just route the result.
 engine.OnCondition(args => {
-    var result = LsdeUtils.EvaluateConditionChain(
-        args.Block.Conditions ?? new(),
-        cond => LsdeUtils.IsChoiceCondition(cond)
-            ? args.Scene.EvaluateCondition(cond)
-            : evalGameCond(cond));
+    var groups = args.Context.ConditionGroups!;
+    var isDispatcher = args.Block.NativeProperties?.EnableDispatcher == true;
+
+    var matched = groups.Where(g => g.Result == true).Select(g => g.PortIndex).ToList();
+    object result = isDispatcher ? (object)matched : (object)(matched.Count > 0 ? matched[0] : -1);
     args.Context.Resolve(result);
     args.Next();
     return null;
 });
 ```
 ```cpp [C++ — Unreal]
-// Shared lambda — capture your game state once
-auto evalGameCond = [this](const ExportCondition& cond) {
+// One callback handles both choice visibility AND condition block pre-evaluation.
+engine.onResolveCondition([this](const ExportCondition& cond) {
     return GetGameState()->Evaluate(cond.key, cond.op, cond.value);
-};
+});
 
-engine.setChoiceFilter(evalGameCond);
-
-engine.onCondition([this, evalGameCond](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn {
-    auto* cb = dynamic_cast<const ConditionBlock*>(block);
-    auto result = LsdeUtils::EvaluateConditionChain(cb->conditions,
-        [scene, &evalGameCond](const auto& cond) {
-            return isChoiceCondition(cond) ? scene->evaluateCondition(cond) : evalGameCond(cond);
-        });
-    ctx->resolve(result);
+// onCondition receives auto-resolved result — just call next().
+// The engine pre-evaluates and routes automatically.
+engine.onCondition([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
+    // Result is already pre-resolved by the engine.
     next();
     return {};
 });
 ```
 ```gdscript [GDScript — Godot]
-# One function, two uses
-var eval_game_cond = func(cond):
+# One callback handles both choice visibility AND condition block pre-evaluation.
+engine.on_resolve_condition(func(cond):
     return GameState.evaluate(cond.get("key"), cond.get("operator"), cond.get("value"))
+)
 
-engine.set_choice_filter(eval_game_cond)
-
+# on_condition receives pre-evaluated condition_groups — just route the result.
 engine.on_condition(func(args):
-    var result = LsdeUtils.evaluate_condition_chain(
-        args["block"].get("conditions", []),
-        func(cond):
-            if LsdeUtils.is_choice_condition(cond):
-                return args["scene"].evaluate_condition(cond)
-            return eval_game_cond.call(cond)
-    )
-    args["context"].resolve(result)
+    var ctx = args["context"]
+    var groups = ctx.condition_groups
+    var np = args["block"].get("nativeProperties")
+    var is_dispatcher = np is Dictionary and np.get("enableDispatcher", false)
+
+    var matched = []
+    for g in groups:
+        if g.get("result", false):
+            matched.append(g.get("port_index", 0))
+
+    var result = matched if is_dispatcher else (matched[0] if matched.size() > 0 else -1)
+    ctx.resolve(result)
     args["next"].call()
     return Callable()
 )

@@ -101,7 +101,7 @@ Connection 是 block 之间的连线 — 定义哪个 block 通向哪个 block�
 
 ## Dictionary
 
-Dictionary 描述游戏的寄存器 — 开关、变量、背包等。开发者在 [LSDE](https://lepasoft.com/zh/software/ls-dialog-editor "Lepasoft Dialog Editor") 编辑器中声明，向叙事设计师公开游戏中可用的变量。运行时，开发者将每个 dictionary 映射到游戏中对应的系统。[`condition`](/api-ref/interfaces/ExportCondition) 和 [`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter) 使用这些键来评估游戏状态。由 [`Dictionary`](/api-ref/interfaces/Dictionary) 接口定义：
+Dictionary 描述游戏的寄存器 — 开关、变量、背包等。开发者在 [LSDE](https://lepasoft.com/zh/software/ls-dialog-editor "Lepasoft Dialog Editor") 编辑器中声明，向叙事设计师公开游戏中可用的变量。运行时，开发者将每个 dictionary 映射到游戏中对应的系统。[`condition`](/api-ref/interfaces/ExportCondition) 和 [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) 使用这些键来评估游戏状态。由 [`Dictionary`](/api-ref/interfaces/Dictionary) 接口定义：
 
 <!--@include: ../../_shared/blueprint-dictionary-type.md-->
 
@@ -131,7 +131,7 @@ dialog block 代表一句台词 — 角色对话、旁白、屏幕文字。engin
 
 ## CHOICE
 
-choice block 是玩家做出选择的分支点 — 对话菜单、选项列表。`context.choices` 包含所有可用选项。当配置了 [`setChoiceFilter()`](/zh/guide/choice-visibility) 时，每个选项被标记为 `visible: true | false` — handler 过滤并显示想要的选项。玩家交互后，`selectChoice(uuid)` 告诉 engine 走哪条路径，然后 `next()` 推进 flow。
+choice block 是玩家做出选择的分支点 — 对话菜单、选项列表。`context.choices` 包含所有可用选项。当配置了 [`onResolveCondition()`](/zh/guide/choice-visibility) 时，每个选项被标记为 `visible: true | false` — handler 过滤并显示想要的选项。玩家交互后，`selectChoice(uuid)` 告诉 engine 走哪条路径，然后 `next()` 推进 flow。
 
 <!--@include: ../../_shared/block-choice.md-->
 
@@ -190,15 +190,15 @@ note block 是叙事设计师的便签 — 注释、提醒、上下文。在遍�
 
 当 CHOICE block 被分发时，`context.choices` 始终包含 blueprint 中定义的**所有** choice — 不会有任何被预先过滤。engine 永远不会从数组中移除 choice。
 
-如果需要可见性过滤（例如，根据游戏状态或之前的选择来隐藏 choice），engine 提供了一个**可选的标记**系统。安装一次 filter 后，engine 会在 `onChoice` handler 接收数据之前，为每个 choice 标记 `visible: true | false`。
+如果需要可见性过滤（例如，根据游戏状态或之前的选择来隐藏 choice），engine 提供了一个**可选的标记**系统。安装一次 condition 解析器后，engine 会在 `onChoice` handler 接收数据之前，为每个 choice 标记 `visible: true | false`。
 
 ## 设置
 
-在 engine 上注册一个 choice filter — 在启动任何 scene 之前注册一次：
+在 engine 上注册一个 condition 解析器 — 在启动任何 scene 之前注册一次：
 
 <!--@include: ../../_shared/choice-filter-setup.md-->
 
-安装后，engine 在调用 `onChoice` **之前**评估每个 choice 的 `visibilityConditions`：
+安装后，engine 在调用 `onChoice` **之前**评估每个 choice 的 `visibilityConditions`。同一解析器也会预评估 condition block 的组 — 详见 [Condition blocks](/zh/guide/block-types#condition)。
 
 - **`choice:` condition**（引用之前的玩家选择）由 engine 通过其内部选择历史自动解析 — callback 永远不会接收到它们。
 - **游戏状态 condition**（其他所有情况）委托给已注册的 callback。
@@ -212,17 +212,17 @@ note block 是叙事设计师的便签 — 注释、提醒、上下文。在遍�
 
 ### 为什么用 `visible !== false` 而不是 `=== true`？
 
-当**未安装 filter** 时，`visible` 是 `undefined`。由于 `undefined !== false` 求值为 `true`，所有 choice 都会通过 — 默认向后兼容。当 filter **已安装**时，choice 会被显式标记为 `true` 或 `false`。
+当**未安装解析器**时，`visible` 是 `undefined`。由于 `undefined !== false` 求值为 `true`，所有 choice 都会通过 — 默认向后兼容。当解析器**已安装**时，choice 会被显式标记为 `true` 或 `false`。
 
 | `visible` 值 | 含义 | `!== false` |
 |---|---|---|
-| `true` | 已安装 filter，choice 通过 | `true` |
-| `false` | 已安装 filter，choice 隐藏 | `false` |
-| `undefined` | 未安装 filter | `true` |
+| `true` | 已安装解析器，choice 通过 | `true` |
+| `false` | 已安装解析器，choice 隐藏 | `false` |
+| `undefined` | 未安装解析器 | `true` |
 
 ## RuntimeChoiceItem
 
-安装 filter 后，`context.choices` 中的每个 choice 都是 `RuntimeChoiceItem` — 它是 `ChoiceItem` 的扩展，增加了 `visible` 标记：
+安装解析器后，`context.choices` 中的每个 choice 都是 `RuntimeChoiceItem` — 它是 `ChoiceItem` 的扩展，增加了 `visible` 标记：
 
 
 ```ts [TypeScript]
@@ -246,7 +246,7 @@ struct RuntimeChoiceItem : ChoiceItem {
 # { "uuid": "...", "dialogueText": {...}, "visible": true/false/absent }
 ```
 
-未安装 filter 时，choice 仍然是 `RuntimeChoiceItem`，但 `visible` 保持为 `undefined`/`null`/`nullopt`/absent。
+未安装解析器时，choice 仍然是 `RuntimeChoiceItem`，但 `visible` 保持为 `undefined`/`null`/`nullopt`/absent。
 
 ## 示例
 
@@ -502,16 +502,16 @@ tutorial.on_choice(func(args):
 
 ## 共享求值器
 
-宿主应用程序可能在一个地方评估 condition — 背包系统、标记管理器、任务追踪器。可以在 `setChoiceFilter` 和 `onCondition` 之间共享**同一个求值函数**，使逻辑集中在一处：
+使用 `onResolveCondition`，一个 callback 即可处理 choice 可见性和 condition block 预评估**两者**。无需再重复逻辑：
 
 <!--@include: ../../_shared/choice-reusable-filter.md-->
 
 > TIP:
-如果不使用此模式，最终会在两个地方编写相同的 `gameState.check(...)` 逻辑。当游戏状态 API 发生变化时，容易修复一处而遗漏另一处。一个函数，两次注册，零偏差。
+在 `onResolveCondition` 之前，相同的 `gameState.check(...)` 逻辑需要分别在 `setChoiceFilter` 和 `onCondition` 中注册。使用统一解析器后，只需一个 callback — engine 自动处理两者。
 
 ## 高级用法：手动过滤
 
-如果不需要安装全局 filter，`LsdeUtils` 提供了一个底层工具函数：
+如果不需要安装全局解析器，`LsdeUtils` 提供了一个底层工具函数：
 
 
 ```ts [TypeScript]
@@ -545,7 +545,7 @@ var visible = LsdeUtils.filter_visible_choices(
 )
 ```
 
-`scene` 参数启用自动的 `choice:` condition 解析。如果不提供，所有 condition 都将委托给求值器 callback。
+`scene` 参数启用自动的 `choice:` condition 解析。如果不提供，所有 condition 都将委托给解析器 callback。
 
 ================================================================================
 
@@ -574,9 +574,10 @@ engine 公开以下 handler：
 | [`onChoiceId`](/api-ref/interfaces/SceneHandle#onchoiceid) | scene | 按 UUID 覆盖特定 CHOICE block（类型安全） |
 | [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | 按 UUID 覆盖特定 CONDITION block（类型安全） |
 | [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | 按 UUID 覆盖特定 ACTION block（类型安全） |
-| [`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter) | global | choice 可见性评估器 |
+| [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) | global | 统一 condition 解析器（choice 可见性 + condition 预评估） |
+| ~~[`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter)~~ | global | _已弃用 — 请使用 `onResolveCondition` 代替_ |
 
-前 4 个（`onDialog`、`onChoice`、`onCondition`、`onAction`）是**必需的** — `start()` 调用时 engine 验证它们是否存在，缺失时抛出描述性错误。
+`onDialog`、`onChoice` 和 `onAction` 是**必需的** — `start()` 调用时 engine 验证它们是否存在，缺失时抛出描述性错误。当安装了 `onResolveCondition` 时，`onCondition` 是**可选的** — engine 从预评估的 condition 组中自动路由。
 
 <!--@include: ../../_shared/handler-basic.md-->
 

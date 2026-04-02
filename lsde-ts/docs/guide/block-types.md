@@ -16,7 +16,7 @@ When the narrative designer assigns a dedicated output per character ([`portPerC
 
 ## CHOICE
 
-A choice block represents a branching point where the player picks a response — a dialogue menu, a list of options. `context.choices` contains all available options. When [`setChoiceFilter()`](/guide/choice-visibility) is configured, each option is tagged `visible: true | false` — the handler filters and displays whichever it wants. After the player interacts, `selectChoice(uuid)` tells the engine which path to follow, then `next()` advances the flow.
+A choice block represents a branching point where the player picks a response — a dialogue menu, a list of options. `context.choices` contains all available options. When [`onResolveCondition()`](/guide/choice-visibility) is configured, each option is tagged `visible: true | false` — the handler filters and displays whichever it wants. After the player interacts, `selectChoice(uuid)` tells the engine which path to follow, then `next()` advances the flow.
 
 <!--@include: ../_shared/block-choice.md-->
 
@@ -24,7 +24,15 @@ See [Choice Visibility](/guide/choice-visibility) for the full opt-in tagging sy
 
 ## CONDITION
 
-A condition block is an invisible switch — it evaluates game state and silently sends the flow down one of two paths without the player seeing it. The handler evaluates the block's conditions (variables, flags, inventory…) then calls `context.resolve(result)` — `true` follows port 0, `false` follows port 1. Conditions whose key starts with `choice:` reference a previous player selection — `scene.evaluateCondition(cond)` resolves them automatically via the internal history.
+A condition block is an invisible switch — it evaluates game state and silently sends the flow down one or more paths without the player seeing it. Conditions are grouped in a 2D array: each group is a "case" evaluated as an AND/OR chain.
+
+**When `onResolveCondition` is installed**, the engine pre-evaluates all groups before calling `onCondition`. Each group in `context.conditionGroups` has a `result` (true/false) and a `portIndex`. The engine auto-resolves the routing — `onCondition` is optional and serves as a logging/override hook.
+
+**Routing modes:**
+- **Switch mode** (default): first matching group index routes the flow. `-1` (no match) follows the default port.
+- **Dispatcher mode** (`enableDispatcher: true`): all matching group indices fire as independent async tracks, default port is the main continuation.
+
+`context.resolve()` accepts `boolean` (legacy), `number` (switch), or `number[]` (dispatcher).
 
 <!--@include: ../_shared/block-condition.md-->
 
@@ -66,3 +74,4 @@ All blocks share these base fields ([`BlueprintBlockBase`](/api-ref/interfaces/B
 | [`debug`](/api-ref/interfaces/NativeProperties#debug) | `boolean?` | Debug flag for the editor |
 | [`waitForBlocks`](/api-ref/interfaces/NativeProperties#waitforblocks) | `string[]?` | Block UUIDs that must be visited before this block can progress |
 | [`waitInput`](/api-ref/interfaces/NativeProperties#waitinput) | `boolean?` | Passive flag for explicit player input control |
+| [`enableDispatcher`](/api-ref/interfaces/NativeProperties#enabledispatcher) | `boolean?` | Condition block: all matching groups fire as async tracks |

@@ -23,9 +23,10 @@ The engine exposes the following handlers:
 | [`onChoiceId`](/api-ref/interfaces/SceneHandle#onchoiceid) | scene | Override a specific CHOICE block by UUID (type-safe) |
 | [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | Override a specific CONDITION block by UUID (type-safe) |
 | [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | Override a specific ACTION block by UUID (type-safe) |
-| [`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter) | global | Choice visibility evaluator |
+| [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) | global | Unified condition resolver (choice visibility + condition pre-evaluation) |
+| ~~[`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter)~~ | global | _Deprecated — use `onResolveCondition` instead_ |
 
-The first 4 (`onDialog`, `onChoice`, `onCondition`, `onAction`) are **required** — the engine validates their presence when `start()` is called and throws a descriptive error if any are missing.
+`onDialog`, `onChoice`, and `onAction` are **required** — the engine validates their presence when `start()` is called and throws a descriptive error if any are missing. `onCondition` is **optional** when `onResolveCondition` is installed — the engine auto-routes from pre-evaluated condition groups.
 
 <!--@include: ../_shared/handler-basic.md-->
 

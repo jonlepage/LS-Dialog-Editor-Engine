@@ -4,15 +4,15 @@
 
 When a CHOICE block is dispatched, `context.choices` always contains **all** choices defined in the blueprint — none are pre-filtered. The engine never removes choices from the array.
 
-If visibility filtering is needed (e.g., hiding choices based on game state or previous selections), the engine provides an **opt-in tagging** system. A filter is installed once, and the engine tags each choice with `visible: true | false` before the `onChoice` handler sees it.
+If visibility filtering is needed (e.g., hiding choices based on game state or previous selections), the engine provides an **opt-in tagging** system. A condition resolver is installed once, and the engine tags each choice with `visible: true | false` before the `onChoice` handler sees it.
 
 ## Setup
 
-Register a choice filter on the engine — once, before starting any scene:
+Register a condition resolver on the engine — once, before starting any scene:
 
 <!--@include: ../_shared/choice-filter-setup.md-->
 
-When installed, the engine evaluates each choice's `visibilityConditions` **before** calling `onChoice`:
+When installed, the engine evaluates each choice's `visibilityConditions` **before** calling `onChoice`. The same resolver also pre-evaluates condition block groups — see [Condition blocks](/guide/block-types#condition) for details.
 
 - **`choice:` conditions** (referencing previous player selections) are resolved automatically by the engine via its internal choice history — the callback never sees them.
 - **Game-state conditions** (everything else) are delegated to the callback.
@@ -26,17 +26,17 @@ In the handler, filter with one line:
 
 ### Why `visible !== false` and not `=== true`?
 
-When **no filter is installed**, `visible` is `undefined`. Since `undefined !== false` evaluates to `true`, all choices pass — backward compatible by default. When a filter **is installed**, choices are tagged `true` or `false` explicitly.
+When **no resolver is installed**, `visible` is `undefined`. Since `undefined !== false` evaluates to `true`, all choices pass — backward compatible by default. When a resolver **is installed**, choices are tagged `true` or `false` explicitly.
 
 | `visible` value | Meaning | `!== false` |
 |---|---|---|
-| `true` | Filter installed, choice passes | `true` |
-| `false` | Filter installed, choice hidden | `false` |
-| `undefined` | No filter installed | `true` |
+| `true` | Resolver installed, choice passes | `true` |
+| `false` | Resolver installed, choice hidden | `false` |
+| `undefined` | No resolver installed | `true` |
 
 ## RuntimeChoiceItem
 
-When a filter is installed, each choice in `context.choices` is a `RuntimeChoiceItem` — an extension of `ChoiceItem` with the `visible` tag:
+When a resolver is installed, each choice in `context.choices` is a `RuntimeChoiceItem` — an extension of `ChoiceItem` with the `visible` tag:
 
 ::: code-group
 ```ts [TypeScript]
@@ -61,7 +61,7 @@ struct RuntimeChoiceItem : ChoiceItem {
 ```
 :::
 
-Without a filter, choices are still `RuntimeChoiceItem` but `visible` remains `undefined`/`null`/`nullopt`/absent.
+Without a resolver, choices are still `RuntimeChoiceItem` but `visible` remains `undefined`/`null`/`nullopt`/absent.
 
 ## Examples
 
@@ -321,17 +321,17 @@ tutorial.on_choice(func(args):
 
 ## Sharing the Evaluator
 
-Most games evaluate conditions in one place — an inventory system, a flag manager, a quest tracker. The **same evaluator function** can be shared between `setChoiceFilter` and `onCondition` so the logic stays in one place:
+With `onResolveCondition`, a single callback handles **both** choice visibility and condition block pre-evaluation. No more duplicating logic:
 
 <!--@include: ../_shared/choice-reusable-filter.md-->
 
-::: tip Why share?
-Without this pattern, the same `gameState.check(...)` logic ends up in two places. When the game state API changes, one gets fixed and the other is forgotten. One function, two registrations, zero drift.
+::: tip Why one callback?
+Before `onResolveCondition`, the same `gameState.check(...)` logic had to be registered in both `setChoiceFilter` and `onCondition` separately. With the unified resolver, it's one callback — the engine handles both automatically.
 :::
 
 ## Advanced: Manual Filtering
 
-If a global filter is not desired, `LsdeUtils` provides a low-level utility:
+If a global resolver is not desired, `LsdeUtils` provides a low-level utility:
 
 ::: code-group
 ```ts [TypeScript]

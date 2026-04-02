@@ -23,9 +23,10 @@ engine 公开以下 handler：
 | [`onChoiceId`](/api-ref/interfaces/SceneHandle#onchoiceid) | scene | 按 UUID 覆盖特定 CHOICE block（类型安全） |
 | [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | 按 UUID 覆盖特定 CONDITION block（类型安全） |
 | [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | 按 UUID 覆盖特定 ACTION block（类型安全） |
-| [`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter) | global | choice 可见性评估器 |
+| [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) | global | 统一 condition 解析器（choice 可见性 + condition 预评估） |
+| ~~[`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter)~~ | global | _已弃用 — 请使用 `onResolveCondition` 代替_ |
 
-前 4 个（`onDialog`、`onChoice`、`onCondition`、`onAction`）是**必需的** — `start()` 调用时 engine 验证它们是否存在，缺失时抛出描述性错误。
+`onDialog`、`onChoice` 和 `onAction` 是**必需的** — `start()` 调用时 engine 验证它们是否存在，缺失时抛出描述性错误。当安装了 `onResolveCondition` 时，`onCondition` 是**可选的** — engine 从预评估的 condition 组中自动路由。
 
 <!--@include: ../../_shared/handler-basic.md-->
 

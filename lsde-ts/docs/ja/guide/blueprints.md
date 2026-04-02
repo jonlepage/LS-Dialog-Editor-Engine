@@ -24,7 +24,7 @@ connection は block 間のワイヤーです — どの block がどの block �
 
 ## Dictionary
 
-dictionary はゲームのレジスタを記述します — スイッチ、変数、インベントリなど。開発者が [LSDE](https://lepasoft.com/ja/software/ls-dialog-editor "Lepasoft Dialog Editor") エディターで宣言し、ナラティブデザイナーにゲーム内で利用可能な変数を公開します。ランタイムでは、開発者が各 dictionary をゲームの対応するシステムにマッピングします。[`condition`](/api-ref/interfaces/ExportCondition) と [`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter) がこれらのキーを使ってゲーム状態を評価します。[`Dictionary`](/api-ref/interfaces/Dictionary) インターフェースで定義されます：
+dictionary はゲームのレジスタを記述します — スイッチ、変数、インベントリなど。開発者が [LSDE](https://lepasoft.com/ja/software/ls-dialog-editor "Lepasoft Dialog Editor") エディターで宣言し、ナラティブデザイナーにゲーム内で利用可能な変数を公開します。ランタイムでは、開発者が各 dictionary をゲームの対応するシステムにマッピングします。[`condition`](/api-ref/interfaces/ExportCondition) と [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) がこれらのキーを使ってゲーム状態を評価します。[`Dictionary`](/api-ref/interfaces/Dictionary) インターフェースで定義されます：
 
 <!--@include: ../../_shared/blueprint-dictionary-type.md-->
 

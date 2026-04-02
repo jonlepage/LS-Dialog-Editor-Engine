@@ -101,7 +101,7 @@ You won't typically need to inspect connections directly — the engine handles 
 
 ## Dictionaries
 
-Dictionaries describe the registers of your game — switches, variables, inventory. The developer declares them in the [LSDE](https://lepasoft.com/en/software/ls-dialog-editor "Lepasoft Dialog Editor") editor to expose available game variables to the narrative designer. At runtime, the developer maps each dictionary to the corresponding system in their game. [`Conditions`](/api-ref/interfaces/ExportCondition) and [`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter) use these keys to evaluate game state. Defined by the [`Dictionary`](/api-ref/interfaces/Dictionary) interface:
+Dictionaries describe the registers of your game — switches, variables, inventory. The developer declares them in the [LSDE](https://lepasoft.com/en/software/ls-dialog-editor "Lepasoft Dialog Editor") editor to expose available game variables to the narrative designer. At runtime, the developer maps each dictionary to the corresponding system in their game. [`Conditions`](/api-ref/interfaces/ExportCondition) and [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) use these keys to evaluate game state. Defined by the [`Dictionary`](/api-ref/interfaces/Dictionary) interface:
 
 <!--@include: ../_shared/blueprint-dictionary-type.md-->
 
@@ -131,7 +131,7 @@ When the narrative designer assigns a dedicated output per character ([`portPerC
 
 ## CHOICE
 
-A choice block represents a branching point where the player picks a response — a dialogue menu, a list of options. `context.choices` contains all available options. When [`setChoiceFilter()`](/guide/choice-visibility) is configured, each option is tagged `visible: true | false` — the handler filters and displays whichever it wants. After the player interacts, `selectChoice(uuid)` tells the engine which path to follow, then `next()` advances the flow.
+A choice block represents a branching point where the player picks a response — a dialogue menu, a list of options. `context.choices` contains all available options. When [`onResolveCondition()`](/guide/choice-visibility) is configured, each option is tagged `visible: true | false` — the handler filters and displays whichever it wants. After the player interacts, `selectChoice(uuid)` tells the engine which path to follow, then `next()` advances the flow.
 
 <!--@include: ../_shared/block-choice.md-->
 
@@ -139,7 +139,15 @@ See [Choice Visibility](/guide/choice-visibility) for the full opt-in tagging sy
 
 ## CONDITION
 
-A condition block is an invisible switch — it evaluates game state and silently sends the flow down one of two paths without the player seeing it. The handler evaluates the block's conditions (variables, flags, inventory…) then calls `context.resolve(result)` — `true` follows port 0, `false` follows port 1. Conditions whose key starts with `choice:` reference a previous player selection — `scene.evaluateCondition(cond)` resolves them automatically via the internal history.
+A condition block is an invisible switch — it evaluates game state and silently sends the flow down one or more paths without the player seeing it. Conditions are grouped in a 2D array: each group is a "case" evaluated as an AND/OR chain.
+
+**When `onResolveCondition` is installed**, the engine pre-evaluates all groups before calling `onCondition`. Each group in `context.conditionGroups` has a `result` (true/false) and a `portIndex`. The engine auto-resolves the routing — `onCondition` is optional and serves as a logging/override hook.
+
+**Routing modes:**
+- **Switch mode** (default): first matching group index routes the flow. `-1` (no match) follows the default port.
+- **Dispatcher mode** (`enableDispatcher: true`): all matching group indices fire as independent async tracks, default port is the main continuation.
+
+`context.resolve()` accepts `boolean` (legacy), `number` (switch), or `number[]` (dispatcher).
 
 <!--@include: ../_shared/block-condition.md-->
 
@@ -181,6 +189,7 @@ All blocks share these base fields ([`BlueprintBlockBase`](/api-ref/interfaces/B
 | [`debug`](/api-ref/interfaces/NativeProperties#debug) | `boolean?` | Debug flag for the editor |
 | [`waitForBlocks`](/api-ref/interfaces/NativeProperties#waitforblocks) | `string[]?` | Block UUIDs that must be visited before this block can progress |
 | [`waitInput`](/api-ref/interfaces/NativeProperties#waitinput) | `boolean?` | Passive flag for explicit player input control |
+| [`enableDispatcher`](/api-ref/interfaces/NativeProperties#enabledispatcher) | `boolean?` | Condition block: all matching groups fire as async tracks |
 
 ================================================================================
 
@@ -190,15 +199,15 @@ All blocks share these base fields ([`BlueprintBlockBase`](/api-ref/interfaces/B
 
 When a CHOICE block is dispatched, `context.choices` always contains **all** choices defined in the blueprint — none are pre-filtered. The engine never removes choices from the array.
 
-If visibility filtering is needed (e.g., hiding choices based on game state or previous selections), the engine provides an **opt-in tagging** system. A filter is installed once, and the engine tags each choice with `visible: true | false` before the `onChoice` handler sees it.
+If visibility filtering is needed (e.g., hiding choices based on game state or previous selections), the engine provides an **opt-in tagging** system. A condition resolver is installed once, and the engine tags each choice with `visible: true | false` before the `onChoice` handler sees it.
 
 ## Setup
 
-Register a choice filter on the engine — once, before starting any scene:
+Register a condition resolver on the engine — once, before starting any scene:
 
 <!--@include: ../_shared/choice-filter-setup.md-->
 
-When installed, the engine evaluates each choice's `visibilityConditions` **before** calling `onChoice`:
+When installed, the engine evaluates each choice's `visibilityConditions` **before** calling `onChoice`. The same resolver also pre-evaluates condition block groups — see [Condition blocks](/guide/block-types#condition) for details.
 
 - **`choice:` conditions** (referencing previous player selections) are resolved automatically by the engine via its internal choice history — the callback never sees them.
 - **Game-state conditions** (everything else) are delegated to the callback.
@@ -212,17 +221,17 @@ In the handler, filter with one line:
 
 ### Why `visible !== false` and not `=== true`?
 
-When **no filter is installed**, `visible` is `undefined`. Since `undefined !== false` evaluates to `true`, all choices pass — backward compatible by default. When a filter **is installed**, choices are tagged `true` or `false` explicitly.
+When **no resolver is installed**, `visible` is `undefined`. Since `undefined !== false` evaluates to `true`, all choices pass — backward compatible by default. When a resolver **is installed**, choices are tagged `true` or `false` explicitly.
 
 | `visible` value | Meaning | `!== false` |
 |---|---|---|
-| `true` | Filter installed, choice passes | `true` |
-| `false` | Filter installed, choice hidden | `false` |
-| `undefined` | No filter installed | `true` |
+| `true` | Resolver installed, choice passes | `true` |
+| `false` | Resolver installed, choice hidden | `false` |
+| `undefined` | No resolver installed | `true` |
 
 ## RuntimeChoiceItem
 
-When a filter is installed, each choice in `context.choices` is a `RuntimeChoiceItem` — an extension of `ChoiceItem` with the `visible` tag:
+When a resolver is installed, each choice in `context.choices` is a `RuntimeChoiceItem` — an extension of `ChoiceItem` with the `visible` tag:
 
 
 ```ts [TypeScript]
@@ -246,7 +255,7 @@ struct RuntimeChoiceItem : ChoiceItem {
 # { "uuid": "...", "dialogueText": {...}, "visible": true/false/absent }
 ```
 
-Without a filter, choices are still `RuntimeChoiceItem` but `visible` remains `undefined`/`null`/`nullopt`/absent.
+Without a resolver, choices are still `RuntimeChoiceItem` but `visible` remains `undefined`/`null`/`nullopt`/absent.
 
 ## Examples
 
@@ -502,16 +511,16 @@ tutorial.on_choice(func(args):
 
 ## Sharing the Evaluator
 
-Most games evaluate conditions in one place — an inventory system, a flag manager, a quest tracker. The **same evaluator function** can be shared between `setChoiceFilter` and `onCondition` so the logic stays in one place:
+With `onResolveCondition`, a single callback handles **both** choice visibility and condition block pre-evaluation. No more duplicating logic:
 
 <!--@include: ../_shared/choice-reusable-filter.md-->
 
 > TIP:
-Without this pattern, the same `gameState.check(...)` logic ends up in two places. When the game state API changes, one gets fixed and the other is forgotten. One function, two registrations, zero drift.
+Before `onResolveCondition`, the same `gameState.check(...)` logic had to be registered in both `setChoiceFilter` and `onCondition` separately. With the unified resolver, it's one callback — the engine handles both automatically.
 
 ## Advanced: Manual Filtering
 
-If a global filter is not desired, `LsdeUtils` provides a low-level utility:
+If a global resolver is not desired, `LsdeUtils` provides a low-level utility:
 
 
 ```ts [TypeScript]
@@ -574,9 +583,10 @@ The engine exposes the following handlers:
 | [`onChoiceId`](/api-ref/interfaces/SceneHandle#onchoiceid) | scene | Override a specific CHOICE block by UUID (type-safe) |
 | [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | Override a specific CONDITION block by UUID (type-safe) |
 | [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | Override a specific ACTION block by UUID (type-safe) |
-| [`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter) | global | Choice visibility evaluator |
+| [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) | global | Unified condition resolver (choice visibility + condition pre-evaluation) |
+| ~~[`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter)~~ | global | _Deprecated — use `onResolveCondition` instead_ |
 
-The first 4 (`onDialog`, `onChoice`, `onCondition`, `onAction`) are **required** — the engine validates their presence when `start()` is called and throws a descriptive error if any are missing.
+`onDialog`, `onChoice`, and `onAction` are **required** — the engine validates their presence when `start()` is called and throws a descriptive error if any are missing. `onCondition` is **optional** when `onResolveCondition` is installed — the engine auto-routes from pre-evaluated condition groups.
 
 <!--@include: ../_shared/handler-basic.md-->
 

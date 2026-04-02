@@ -26,12 +26,13 @@ engine.setLocale('en');
 // Character resolver (optional — default: first character in list)
 engine.onResolveCharacter((chars) => chars[0]);
 
-// Choice visibility filter (optional — tags each choice with visible = true/false)
-engine.setChoiceFilter((condition) => {
+// Unified condition resolver — handles choice visibility + condition block pre-evaluation.
+// choice: conditions are handled internally by the engine via choice history.
+engine.onResolveCondition((condition) => {
   return gameState.evaluate(condition);
 });
 
-// ─── 4 Required Handlers ────────────────────────────────────────
+// ─── 3 Required Handlers (onCondition is optional with onResolveCondition) ──
 
 engine.onDialog(({ block, context, next }) => {
   const text = LsdeUtils.getLocalizedText(block.dialogueText);
@@ -46,14 +47,13 @@ engine.onChoice(({ context, next }) => {
   next();
 });
 
-engine.onCondition(({ scene, block, context, next }) => {
-  const result = LsdeUtils.evaluateConditionChain(
-    block.conditions,
-    (cond) => LsdeUtils.isChoiceCondition(cond)
-      ? scene.evaluateCondition(cond)
-      : gameState.evaluate(cond),
-  );
-  context.resolve(result);
+// onCondition is OPTIONAL — the engine auto-routes from pre-evaluated groups.
+// Add it only for logging, UI feedback, or to override the auto-resolved result.
+engine.onCondition(({ block, context, next }) => {
+  const { conditionGroups } = context;
+  const matched = conditionGroups.filter((g) => g.result).map((g) => g.portIndex);
+  const isDispatcher = !!block.nativeProperties?.enableDispatcher;
+  context.resolve(isDispatcher ? matched : (matched[0] ?? -1));
   next();
 });
 
@@ -126,8 +126,8 @@ All 4 type handlers are **required** — the engine will throw if a scene starts
 | Method | Description |
 |--------|-------------|
 | `engine.onDialog(handler)` | Handle DIALOG blocks. |
-| `engine.onChoice(handler)` | Handle CHOICE blocks (choices tagged with `visible` when `setChoiceFilter` is set). |
-| `engine.onCondition(handler)` | Handle CONDITION blocks. Developer **must** call `context.resolve(bool)`. |
+| `engine.onChoice(handler)` | Handle CHOICE blocks (choices tagged with `visible` when `onResolveCondition` is set). |
+| `engine.onCondition(handler)` | Handle CONDITION blocks. **Optional** when `onResolveCondition` is installed. |
 | `engine.onAction(handler)` | Handle ACTION blocks. Developer **must** call `context.resolve()` or `context.reject()`. |
 
 ### Optional Handlers
@@ -135,7 +135,8 @@ All 4 type handlers are **required** — the engine will throw if a scene starts
 | Method | Description |
 |--------|-------------|
 | `engine.onResolveCharacter(fn)` | Character resolver. Default: first character in the list. |
-| `engine.setChoiceFilter(fn)` | Install choice visibility evaluator (game-state conditions). |
+| `engine.onResolveCondition(fn)` | Unified condition resolver (choice visibility + condition pre-evaluation). |
+| ~~`engine.setChoiceFilter(fn)`~~ | _Deprecated — use `onResolveCondition` instead._ |
 | `engine.onBeforeBlock(handler)` | Pre-execution gate. Must call `resolve()` to continue. |
 | `engine.onValidateNextBlock(handler)` | Validate before entering a block. |
 | `engine.onInvalidateBlock(handler)` | Called when a block fails validation. |

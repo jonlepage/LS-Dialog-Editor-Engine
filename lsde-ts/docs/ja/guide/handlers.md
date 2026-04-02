@@ -23,9 +23,10 @@ engine は以下の handler を公開しています：
 | [`onChoiceId`](/api-ref/interfaces/SceneHandle#onchoiceid) | scene | UUID で特定の CHOICE block をオーバーライド（型安全） |
 | [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | UUID で特定の CONDITION block をオーバーライド（型安全） |
 | [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | UUID で特定の ACTION block をオーバーライド（型安全） |
-| [`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter) | global | choice の可視性エバリュエーター |
+| [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) | global | 統合 condition リゾルバー（choice の可視性 + condition の事前評価） |
+| ~~[`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter)~~ | global | _非推奨 — 代わりに `onResolveCondition` を使用してください_ |
 
-最初の4つ（`onDialog`、`onChoice`、`onCondition`、`onAction`）は**必須**です — `start()` 呼び出し時に engine がその存在を検証し、欠けている場合は記述的なエラーをスローします。
+`onDialog`、`onChoice`、`onAction` は**必須**です — `start()` 呼び出し時に engine がその存在を検証し、欠けている場合は記述的なエラーをスローします。`onCondition` は `onResolveCondition` がインストールされている場合は**オプション**です — engine が事前評価された condition グループから自動ルーティングします。
 
 <!--@include: ../../_shared/handler-basic.md-->
 

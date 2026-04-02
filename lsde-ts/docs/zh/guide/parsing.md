@@ -59,4 +59,8 @@ CSV 导出按区域设置的对话文本扁平表。它**不包含**连接、条
 
 **静态类型语言**（C#、C++）需要自定义转换器来读取 `type` 字段并构造正确的子类型。否则，`dialogueText` 或 `choices` 等子类型特有字段将被静默丢失。
 
+::: info 配套包
+如果您使用 `LsdeDialogEngine.Newtonsoft` 或 `LsdeDialogEngine.SystemTextJson`，这些转换器已经包含在内 — 只需调用 `LsdeJson.Parse(json)` 即可。以下代码仅用于手动集成。
+:::
+
 <!--@include: ../../_shared/parsing-polymorphic.md-->

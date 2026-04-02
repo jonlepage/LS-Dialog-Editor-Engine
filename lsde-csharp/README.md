@@ -38,8 +38,9 @@ engine.SetLocale("en");
 // Character resolver (optional — default: first character in list)
 engine.OnResolveCharacter(chars => chars.Count > 0 ? chars[0] : null);
 
-// Choice visibility filter (optional — tags each choice with Visible)
-engine.SetChoiceFilter(cond => GameState.Evaluate(cond));
+// Unified condition resolver — handles choice visibility + condition block pre-evaluation.
+// choice: conditions are handled internally by the engine via choice history.
+engine.OnResolveCondition(cond => GameState.Evaluate(cond));
 
 // ─── 4 Required Handlers ────────────────────────────────────────
 
@@ -60,12 +61,14 @@ engine.OnChoice(args => {
     return null;
 });
 
+// onCondition is OPTIONAL when OnResolveCondition is installed.
+// The engine pre-evaluates condition groups and auto-routes.
+// Add it only for logging, UI, or custom override logic.
 engine.OnCondition(args => {
-    var result = LsdeUtils.EvaluateConditionChain(
-        args.Block.Conditions,
-        cond => LsdeUtils.IsChoiceCondition(cond)
-            ? args.Scene.EvaluateCondition(cond)
-            : GameState.Evaluate(cond));
+    var groups = args.Context.ConditionGroups!;
+    var matched = groups.Where(g => g.Result == true).Select(g => g.PortIndex).ToList();
+    var isDispatcher = args.Block.NativeProperties?.EnableDispatcher == true;
+    object result = isDispatcher ? (object)matched : (object)(matched.Count > 0 ? matched[0] : -1);
     args.Context.Resolve(result);
     args.Next();
     return null;
@@ -164,8 +167,8 @@ All 4 type handlers are **required** — the engine will throw if a scene starts
 | Method | Description |
 |--------|-------------|
 | `engine.OnDialog(handler)` | Handle DIALOG blocks. |
-| `engine.OnChoice(handler)` | Handle CHOICE blocks (choices tagged with `Visible` when `SetChoiceFilter` is set). |
-| `engine.OnCondition(handler)` | Handle CONDITION blocks. Developer **must** call `context.Resolve(bool)`. |
+| `engine.OnChoice(handler)` | Handle CHOICE blocks (choices tagged with `Visible` when `OnResolveCondition` is set). |
+| `engine.OnCondition(handler)` | Handle CONDITION blocks. **Optional** when `OnResolveCondition` is installed. |
 | `engine.OnAction(handler)` | Handle ACTION blocks. Developer **must** call `context.Resolve()` or `context.Reject()`. |
 
 ### Optional Handlers
@@ -173,7 +176,8 @@ All 4 type handlers are **required** — the engine will throw if a scene starts
 | Method | Description |
 |--------|-------------|
 | `engine.OnResolveCharacter(fn)` | Character resolver. Default: first character in the list. |
-| `engine.SetChoiceFilter(fn)` | Install choice visibility evaluator (game-state conditions). |
+| `engine.OnResolveCondition(fn)` | Unified condition resolver (choice visibility + condition pre-evaluation). |
+| ~~`engine.SetChoiceFilter(fn)`~~ | _Deprecated — use `OnResolveCondition` instead._ |
 | `engine.OnBeforeBlock(handler)` | Pre-execution gate. Must call `Resolve()` to continue. |
 | `engine.OnValidateNextBlock(handler)` | Validate before entering a block. |
 | `engine.OnInvalidateBlock(handler)` | Called when a block fails validation. |
@@ -237,6 +241,7 @@ engine.OnDialog(args => {
 | `LsdeUtils.IsChoiceCondition(condition)` | True if condition references a previous choice (`choice:<uuid>`). |
 | `LsdeUtils.GetChoiceConditionBlockUuid(condition)` | Extract block UUID from a choice condition. |
 | `LsdeUtils.EvaluateConditionChain(conditions, evaluator)` | Evaluate AND/OR condition chain. Empty = `true`. |
+| `LsdeUtils.EvaluateConditionGroups(groups, evaluator, dispatcher?)` | Evaluate 2D condition groups. Returns `int` (switch) or `List<int>` (dispatcher). |
 | `LsdeUtils.FilterVisibleChoices(choices, evaluator, scene?)` | Filter choices by visibility conditions. |
 
 ---

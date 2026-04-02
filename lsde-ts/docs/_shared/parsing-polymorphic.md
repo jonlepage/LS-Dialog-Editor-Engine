@@ -1,7 +1,3 @@
-::: info Companion packages
-If you use `LsdeDialogEngine.Newtonsoft` or `LsdeDialogEngine.SystemTextJson`, these converters are already included — just call `LsdeJson.Parse(json)`. The code below is for manual integration only.
-:::
-
 ### CSharp — Newtonsoft.Json (Unity)
 
 ```csharp

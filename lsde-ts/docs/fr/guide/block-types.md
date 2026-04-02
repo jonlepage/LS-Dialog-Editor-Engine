@@ -16,7 +16,7 @@ Quand le narrative designer assigne un output dédié par personnage ([`portPerC
 
 ## CHOICE
 
-Un block choice représente un embranchement où le joueur choisit — un menu de réponses, des options de dialogue. Le `context.choices` contient toutes les options disponibles. Quand [`setChoiceFilter()`](/fr/guide/choice-visibility) est configuré, chaque option est taggée `visible: true | false` — le handler filtre et affiche celles qu'il veut. Après l'interaction du joueur, `selectChoice(uuid)` indique au engine quel chemin suivre, puis `next()` avance le flow.
+Un block choice représente un embranchement où le joueur choisit — un menu de réponses, des options de dialogue. Le `context.choices` contient toutes les options disponibles. Quand [`onResolveCondition()`](/fr/guide/choice-visibility) est configuré, chaque option est taggée `visible: true | false` — le handler filtre et affiche celles qu'il veut. Après l'interaction du joueur, `selectChoice(uuid)` indique au engine quel chemin suivre, puis `next()` avance le flow.
 
 <!--@include: ../../_shared/block-choice.md-->
 
