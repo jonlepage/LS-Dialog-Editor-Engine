@@ -40,18 +40,67 @@ static PortResolutionResult resolveChoicePort(
     return filterByFromPort(connections, *selectedChoiceUuid);
 }
 
-static PortResolutionResult resolveConditionPort(
-    const std::vector<BlueprintConnection>& connections,
-    const std::optional<bool>& conditionResult)
-{
-    if (!conditionResult.has_value()) return {};
-    int targetIndex = *conditionResult ? 0 : 1;
+static PortResolutionResult filterDefaultPort(const std::vector<BlueprintConnection>& connections) {
     PortResolutionResult result;
     for (const auto& c : connections) {
-        if (c.fromPortIndex && *c.fromPortIndex == targetIndex)
+        if (c.fromPort == "default" || c.fromPort == "false")
             result.connections.push_back(&c);
     }
     return result;
+}
+
+static PortResolutionResult resolveConditionPort(
+    const std::vector<BlueprintConnection>& connections,
+    const std::optional<ConditionResult>& conditionResult)
+{
+    if (!conditionResult.has_value()) return {};
+
+    return std::visit([&connections](const auto& val) -> PortResolutionResult {
+        using T = std::decay_t<decltype(val)>;
+
+        if constexpr (std::is_same_v<T, bool>) {
+            // Legacy boolean: true → port 0, false → port 1
+            int targetIndex = val ? 0 : 1;
+            PortResolutionResult result;
+            for (const auto& c : connections) {
+                if (c.fromPortIndex && *c.fromPortIndex == targetIndex)
+                    result.connections.push_back(&c);
+            }
+            return result;
+        }
+        else if constexpr (std::is_same_v<T, int>) {
+            if (val >= 0) {
+                // Switch mode: matched case index
+                PortResolutionResult result;
+                for (const auto& c : connections) {
+                    if (c.fromPortIndex && *c.fromPortIndex == val)
+                        result.connections.push_back(&c);
+                }
+                return result;
+            }
+            // No match (-1): default/false port
+            return filterDefaultPort(connections);
+        }
+        else if constexpr (std::is_same_v<T, std::vector<int>>) {
+            // Dispatcher mode: all matched case ports + default port
+            std::unordered_set<int> indices(val.begin(), val.end());
+            PortResolutionResult result;
+            // Default port (main continuation)
+            for (const auto& c : connections) {
+                if (c.fromPort == "default" || c.fromPort == "false")
+                    result.connections.push_back(&c);
+            }
+            // Matched case ports (async tracks)
+            for (const auto& c : connections) {
+                if (c.fromPortIndex && indices.count(*c.fromPortIndex))
+                    result.connections.push_back(&c);
+            }
+            return result;
+        }
+        else {
+            return {};
+        }
+    }, *conditionResult);
 }
 
 static PortResolutionResult resolveActionPort(

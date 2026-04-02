@@ -171,14 +171,17 @@ engine.OnCondition(args =>
 {
     var block = (ConditionBlock)args.Block;
     var scene = args.Scene;
-    var conditions = block.Conditions ?? new List<ExportCondition>();
-    var result = LsdeUtils.EvaluateConditionChain(
-        conditions,
-        cond => LsdeUtils.IsChoiceCondition(cond) ? scene.EvaluateCondition(cond) : true // playground: all game conditions pass
+    var groups = block.Conditions ?? new List<List<ExportCondition>>();
+    var isDispatcher = block.NativeProperties?.EnableDispatcher == true;
+    var result = LsdeUtils.EvaluateConditionGroups(
+        groups,
+        cond => LsdeUtils.IsChoiceCondition(cond) ? scene.EvaluateCondition(cond) : true, // playground: all game conditions pass
+        isDispatcher
     );
-    foreach (var cond in conditions)
-        Console.WriteLine($"   ❓ condition: {cond.Key} {cond.Operator} {cond.Value}");
-    Console.WriteLine($"\n🔀 CONDITION  {block.Label} — {conditions.Count} conditions → {result}");
+    for (int i = 0; i < groups.Count; i++)
+        foreach (var cond in groups[i])
+            Console.WriteLine($"   [case {i}] {cond.Key} {cond.Operator} {cond.Value}");
+    Console.WriteLine($"\n🔀 CONDITION  {block.Label} — {groups.Count} groups{(isDispatcher ? " [DISPATCHER]" : "")} → {result}");
     args.Context.Resolve(result);
     args.Next();
     return null;

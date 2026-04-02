@@ -274,16 +274,19 @@ namespace LsdeDialogEngine.Tests
                 // Not the expected step — auto-advance (async track or passthrough)
                 if (blockType == "CONDITION" && context is IConditionContext condCtx)
                 {
-                    // Evaluate conditions using suite bridge config
+                    // Evaluate 2D condition groups using suite bridge config
                     var condBlock = block as ConditionBlock;
-                    var conditions = condBlock?.Conditions ?? new List<ExportCondition>();
-                    var result = ConditionEvaluator.EvaluateConditionChain(conditions, cond =>
+                    var groups = condBlock?.Conditions ?? new List<List<ExportCondition>>();
+                    Func<ExportCondition, bool> evaluator = cond =>
                     {
                         if (suite?.StateBridge?.Conditions != null
                             && suite.StateBridge.Conditions.TryGetValue(cond.Key, out var val))
                             return val;
                         return true;
-                    });
+                    };
+                    var result = ConditionEvaluator.EvaluateConditionGroups(
+                        groups, evaluator,
+                        condBlock?.NativeProperties?.EnableDispatcher == true);
                     condCtx.Resolve(result);
                 }
                 else if (blockType == "ACTION" && context is IActionContext actCtx)

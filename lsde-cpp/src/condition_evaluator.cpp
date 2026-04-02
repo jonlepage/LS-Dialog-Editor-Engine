@@ -27,6 +27,27 @@ bool evaluateConditionChain(
     return result;
 }
 
+ConditionResult evaluateConditionGroups(
+    const std::vector<std::vector<ExportCondition>>& groups,
+    const std::function<bool(const ExportCondition&)>& evaluator,
+    bool dispatcher)
+{
+    if (dispatcher) {
+        std::vector<int> matched;
+        for (size_t i = 0; i < groups.size(); ++i) {
+            if (evaluateConditionChain(groups[i], evaluator))
+                matched.push_back(static_cast<int>(i));
+        }
+        return matched;
+    }
+    // Switch mode: first match wins
+    for (size_t i = 0; i < groups.size(); ++i) {
+        if (evaluateConditionChain(groups[i], evaluator))
+            return static_cast<int>(i);
+    }
+    return -1;
+}
+
 std::vector<ChoiceItem> filterVisibleChoices(
     const std::vector<ChoiceItem>& choices,
     const std::function<bool(const ExportCondition&)>& evaluator,

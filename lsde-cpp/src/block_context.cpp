@@ -66,7 +66,7 @@ InternalConditionContext::InternalConditionContext(const BlockCharacter* resolve
     : _character(resolvedCharacter) {}
 
 const BlockCharacter* InternalConditionContext::character() const { return _character; }
-void InternalConditionContext::resolve(bool result) { conditionResult = result; }
+void InternalConditionContext::resolve(const ConditionResult& result) { conditionResult = result; }
 void InternalConditionContext::preventGlobalHandler() { globalPrevented = true; }
 
 // ─── InternalActionContext ───────────────────────────────────────────────────

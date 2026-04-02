@@ -36,15 +36,46 @@ static func _resolve_choice_port(connections: Array, selected_choice_uuid: Varia
 		return []
 	return _filter_by_from_port(connections, selected_choice_uuid)
 
+static func _filter_default_port(connections: Array) -> Array:
+	var matches: Array = []
+	for c in connections:
+		var port: String = c.get("fromPort", "")
+		if port == "default" or port == "false":
+			matches.append(c)
+	return matches
+
 static func _resolve_condition_port(connections: Array, condition_result: Variant) -> Array:
 	if condition_result == null:
 		return []
-	var target_index: int = 0 if condition_result else 1
-	var matches: Array = []
-	for c in connections:
-		if c.get("fromPortIndex") == target_index:
-			matches.append(c)
-	return matches
+	# Legacy boolean: true -> port 0, false -> port 1
+	if condition_result is bool:
+		var target_index: int = 0 if condition_result else 1
+		var matches: Array = []
+		for c in connections:
+			if c.get("fromPortIndex") == target_index:
+				matches.append(c)
+		return matches
+	# Dispatcher mode: Array of matched indices -> all case ports + default
+	if condition_result is Array:
+		var matches: Array = []
+		for c in connections:
+			var port: String = c.get("fromPort", "")
+			if port == "default" or port == "false":
+				matches.append(c)
+		for c in connections:
+			if c.get("fromPortIndex") != null and c.get("fromPortIndex") in condition_result:
+				matches.append(c)
+		return matches
+	# Switch mode: int >= 0 = matched case, < 0 = no match -> default
+	if condition_result is int:
+		if condition_result >= 0:
+			var matches: Array = []
+			for c in connections:
+				if c.get("fromPortIndex") == condition_result:
+					matches.append(c)
+			return matches
+		return _filter_default_port(connections)
+	return []
 
 static func _resolve_action_port(connections: Array, action_rejected: Variant) -> Array:
 	if action_rejected == true:

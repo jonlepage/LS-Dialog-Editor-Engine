@@ -63,7 +63,11 @@ static std::shared_ptr<BlueprintBlock> parseBlock(const nlohmann::json& j) {
         case BlockType::Condition: {
             auto b = std::make_shared<ConditionBlock>();
             parseBaseFields(j, *b);
-            if (j.contains("conditions")) b->conditions = j["conditions"].get<std::vector<ExportCondition>>();
+            if (j.contains("conditions") && j["conditions"].is_array()) {
+                for (const auto& group : j["conditions"]) {
+                    b->conditions.push_back(group.get<std::vector<ExportCondition>>());
+                }
+            }
             if (j.contains("note") && !j["note"].is_null()) b->note = j["note"].get<std::string>();
             return b;
         }
@@ -137,6 +141,7 @@ void from_json(const nlohmann::json& j, NativeProperties& v) {
     if (j.contains("skipIfMissingActor") && !j["skipIfMissingActor"].is_null()) v.skipIfMissingActor = j["skipIfMissingActor"].get<bool>();
     if (j.contains("waitForBlocks") && !j["waitForBlocks"].is_null()) v.waitForBlocks = j["waitForBlocks"].get<std::vector<std::string>>();
     if (j.contains("waitInput") && !j["waitInput"].is_null()) v.waitInput = j["waitInput"].get<bool>();
+    if (j.contains("enableDispatcher") && !j["enableDispatcher"].is_null()) v.enableDispatcher = j["enableDispatcher"].get<bool>();
 }
 
 void from_json(const nlohmann::json& j, BlockCharacter& v) {

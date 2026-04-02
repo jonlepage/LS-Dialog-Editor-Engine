@@ -15,6 +15,17 @@ bool evaluateConditionChain(
     const std::vector<ExportCondition>& conditions,
     const std::function<bool(const ExportCondition&)>& evaluator);
 
+/// Evaluate 2D condition groups. Each group is an AND/OR chain evaluated independently.
+/// Switch mode (dispatcher=false): returns the index of the first matching group, or -1 if none match.
+/// Dispatcher mode (dispatcher=true): returns a vector of all matching group indices.
+/// @param groups The 2D condition groups to evaluate.
+/// @param evaluator A callback that evaluates a single condition against the game state.
+/// @param dispatcher When true, returns all matching indices instead of just the first.
+ConditionResult evaluateConditionGroups(
+    const std::vector<std::vector<ExportCondition>>& groups,
+    const std::function<bool(const ExportCondition&)>& evaluator,
+    bool dispatcher = false);
+
 /// Filter choices by their visibilityConditions.
 /// Choices with no conditions are always visible.
 /// When scene is provided, choice: conditions are resolved automatically via the scene's

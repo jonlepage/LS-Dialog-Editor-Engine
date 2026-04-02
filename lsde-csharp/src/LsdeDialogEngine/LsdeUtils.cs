@@ -67,6 +67,12 @@ namespace LsdeDialogEngine
             return ConditionEvaluator.EvaluateConditionChain(conditions, evaluator);
         }
 
+        /// <summary>Evaluate 2D condition groups. Returns int (switch) or List&lt;int&gt; (dispatcher).</summary>
+        public static object EvaluateConditionGroups(List<List<ExportCondition>> groups, System.Func<ExportCondition, bool> evaluator, bool dispatcher = false)
+        {
+            return ConditionEvaluator.EvaluateConditionGroups(groups, evaluator, dispatcher);
+        }
+
         /// <summary>Filters choice items by their visibility conditions. Choices without conditions are always visible.
         /// When scene is provided, choice: conditions are resolved via the scene's internal history.</summary>
         public static List<ChoiceItem> FilterVisibleChoices(List<ChoiceItem> choices, System.Func<ExportCondition, bool> evaluator, ISceneHandle? scene = null)

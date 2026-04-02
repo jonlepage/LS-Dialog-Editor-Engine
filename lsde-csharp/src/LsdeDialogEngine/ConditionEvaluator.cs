@@ -39,6 +39,35 @@ namespace LsdeDialogEngine
         }
 
         /// <summary>
+        /// Evaluate 2D condition groups. Each group is an AND/OR chain evaluated independently.
+        /// Switch mode: returns the index of the first matching group, or -1 if none match.
+        /// Dispatcher mode: returns a List of all matching group indices.
+        /// </summary>
+        public static object EvaluateConditionGroups(
+            List<List<ExportCondition>> groups,
+            Func<ExportCondition, bool> evaluator,
+            bool dispatcher = false)
+        {
+            if (dispatcher)
+            {
+                var matched = new List<int>();
+                for (int i = 0; i < groups.Count; i++)
+                {
+                    if (EvaluateConditionChain(groups[i], evaluator))
+                        matched.Add(i);
+                }
+                return matched;
+            }
+            // Switch mode: first match wins
+            for (int i = 0; i < groups.Count; i++)
+            {
+                if (EvaluateConditionChain(groups[i], evaluator))
+                    return i;
+            }
+            return -1;
+        }
+
+        /// <summary>
         /// Filter choices by their visibilityConditions.
         /// Choices with no conditions or passing conditions are kept.
         ///

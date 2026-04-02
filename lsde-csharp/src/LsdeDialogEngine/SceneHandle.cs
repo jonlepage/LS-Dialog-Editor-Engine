@@ -241,7 +241,7 @@ namespace LsdeDialogEngine
                 Block = block,
                 Connections = connections,
                 SelectedChoiceUuid = (context as InternalChoiceContext)?.SelectedChoiceUuid,
-                ConditionResult = (context as InternalConditionContext)?.ConditionResult,
+                ConditionResult = (context as InternalConditionContext)?._conditionResult,
                 ActionRejected = (context as InternalActionContext)?.ActionRejected,
                 CharacterPortIndex = (context as InternalDialogContext)?.CharacterPortIndex
             });
@@ -819,7 +819,7 @@ namespace LsdeDialogEngine
                 Block = block,
                 Connections = connections,
                 SelectedChoiceUuid = (context as InternalChoiceContext)?.SelectedChoiceUuid,
-                ConditionResult = (context as InternalConditionContext)?.ConditionResult,
+                ConditionResult = (context as InternalConditionContext)?._conditionResult,
                 ActionRejected = (context as InternalActionContext)?.ActionRejected,
                 CharacterPortIndex = (context as InternalDialogContext)?.CharacterPortIndex
             });

@@ -905,4 +905,269 @@ describe( 'DialogueEngine', () => {
 
 	} );
 
+	// ─── onResolveCondition integration ─────────────────────────────────────
+
+	describe( 'onResolveCondition', () => {
+
+		const condScene: BlueprintScene = {
+			uuid: 'scene-rc', label: 'ResolveCondition', date: '2025-01-01',
+			blocks: [
+				{ uuid: 'cond1', type: 'CONDITION', properties: [], isStartBlock: true,
+					conditions: [[{ uuid: 'c1', key: 'flag', operator: '=', value: 'true' }]] },
+				{ uuid: 'yes', type: 'DIALOG', properties: [] },
+				{ uuid: 'no', type: 'DIALOG', properties: [] },
+			],
+			connections: [
+				{ id: 'ct', fromId: 'cond1', toId: 'yes', fromPort: 'true', toPort: 'in', fromPortIndex: 0 },
+				{ id: 'cf', fromId: 'cond1', toId: 'no', fromPort: 'false', toPort: 'in', fromPortIndex: 1 },
+			],
+		};
+
+		// ── P0: onCondition optionnel quand resolver installe ────────────
+
+		it( 'start() does not throw when onCondition is omitted but onResolveCondition is installed', () => {
+			const engine = new DialogueEngine();
+			engine.init( { data: makeExport( [condScene] ) } );
+			engine.onResolveCondition( () => true );
+			engine.onDialog( ( { next } ) => next() );
+			engine.onChoice( ( { next } ) => next() );
+			// NO engine.onCondition()
+			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
+			expect( () => engine.scene( 'scene-rc' ).start() ).not.toThrow();
+		} );
+
+		it( 'start() throws when neither onCondition nor onResolveCondition is installed', () => {
+			const engine = new DialogueEngine();
+			engine.init( { data: makeExport( [condScene] ) } );
+			engine.onDialog( ( { next } ) => next() );
+			engine.onChoice( ( { next } ) => next() );
+			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
+			expect( () => engine.scene( 'scene-rc' ).start() ).toThrow( /onCondition/ );
+		} );
+
+		// ── P0: Auto-resolve sans resolve() ─────────────────────────────
+
+		it( 'auto-resolves condition when handler does not call resolve()', () => {
+			const visited: string[] = [];
+			const engine = new DialogueEngine();
+			engine.init( { data: makeExport( [condScene] ) } );
+			engine.onResolveCondition( () => true ); // flag=true → group matches → portIndex 0 → 'yes'
+			engine.onCondition( ( { next } ) => next() ); // no resolve() call
+			engine.onDialog( ( { block, next } ) => { visited.push( block.uuid ); next(); } );
+			engine.onChoice( ( { next } ) => next() );
+			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
+			engine.scene( 'scene-rc' ).start();
+			expect( visited ).toEqual( ['yes'] );
+		} );
+
+		it( 'auto-resolves to default when no group matches', () => {
+			const visited: string[] = [];
+			const engine = new DialogueEngine();
+			engine.init( { data: makeExport( [condScene] ) } );
+			engine.onResolveCondition( () => false ); // flag=false → no match → portIndex -1 → 'false' port
+			engine.onCondition( ( { next } ) => next() );
+			engine.onDialog( ( { block, next } ) => { visited.push( block.uuid ); next(); } );
+			engine.onChoice( ( { next } ) => next() );
+			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
+			engine.scene( 'scene-rc' ).start();
+			expect( visited ).toEqual( ['no'] );
+		} );
+
+		it( 'auto-resolves without onCondition handler at all', () => {
+			const visited: string[] = [];
+			const engine = new DialogueEngine();
+			engine.init( { data: makeExport( [condScene] ) } );
+			engine.onResolveCondition( () => true );
+			// No onCondition registered — engine routes automatically
+			engine.onDialog( ( { block, next } ) => { visited.push( block.uuid ); next(); } );
+			engine.onChoice( ( { next } ) => next() );
+			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
+			engine.scene( 'scene-rc' ).start();
+			expect( visited ).toEqual( ['yes'] );
+		} );
+
+		// ── P0: onResolveCondition pre-evalue les groupes ────────────────
+
+		it( 'handler receives pre-evaluated conditionGroups with portIndex and result', () => {
+			const engine = new DialogueEngine();
+			engine.init( { data: makeExport( [condScene] ) } );
+			engine.onResolveCondition( () => true );
+
+			let receivedGroups: unknown;
+			engine.onCondition( ( { context, next } ) => {
+				receivedGroups = context.conditionGroups;
+				next();
+			} );
+			engine.onDialog( ( { next } ) => next() );
+			engine.onChoice( ( { next } ) => next() );
+			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
+			engine.scene( 'scene-rc' ).start();
+
+			expect( receivedGroups ).toHaveLength( 1 );
+			expect( ( receivedGroups as any )[0].portIndex ).toBe( 0 );
+			expect( ( receivedGroups as any )[0].result ).toBe( true );
+		} );
+
+		it( 'handler can override auto-resolve with explicit resolve()', () => {
+			const visited: string[] = [];
+			const engine = new DialogueEngine();
+			engine.init( { data: makeExport( [condScene] ) } );
+			engine.onResolveCondition( () => true ); // would auto-route to 'yes'
+			engine.onCondition( ( { context, next } ) => {
+				context.resolve( false ); // override → route to 'no' instead
+				next();
+			} );
+			engine.onDialog( ( { block, next } ) => { visited.push( block.uuid ); next(); } );
+			engine.onChoice( ( { next } ) => next() );
+			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
+			engine.scene( 'scene-rc' ).start();
+			expect( visited ).toEqual( ['no'] );
+		} );
+
+		// ── P1: Switch mode integration ─────────────────────────────────
+
+		it( 'switch mode: routes to matching case port', () => {
+			const switchScene: BlueprintScene = {
+				uuid: 'scene-sw', label: 'Switch', date: '2025-01-01',
+				blocks: [
+					{ uuid: 'cond', type: 'CONDITION', properties: [], isStartBlock: true,
+						conditions: [
+							[{ uuid: 'c1', key: 'x', operator: '=', value: '1' }],
+							[{ uuid: 'c2', key: 'y', operator: '=', value: '2' }],
+						] },
+					{ uuid: 'case0', type: 'DIALOG', properties: [] },
+					{ uuid: 'case1', type: 'DIALOG', properties: [] },
+					{ uuid: 'default', type: 'DIALOG', properties: [] },
+				],
+				connections: [
+					{ id: 's0', fromId: 'cond', toId: 'case0', fromPort: 'case_0', toPort: 'in', fromPortIndex: 0 },
+					{ id: 's1', fromId: 'cond', toId: 'case1', fromPort: 'case_1', toPort: 'in', fromPortIndex: 1 },
+					{ id: 'sd', fromId: 'cond', toId: 'default', fromPort: 'default', toPort: 'in', fromPortIndex: 2 },
+				],
+			};
+			const visited: string[] = [];
+			const engine = new DialogueEngine();
+			engine.init( { data: makeExport( [switchScene] ) } );
+			// x != 1 (false), y == 2 (true) → case_1 matches
+			engine.onResolveCondition( ( c ) => c.key === 'y' );
+			engine.onDialog( ( { block, next } ) => { visited.push( block.uuid ); next(); } );
+			engine.onChoice( ( { next } ) => next() );
+			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
+			engine.scene( 'scene-sw' ).start();
+			expect( visited ).toEqual( ['case1'] );
+		} );
+
+		it( 'switch mode: routes to default when no case matches', () => {
+			const switchScene: BlueprintScene = {
+				uuid: 'scene-sw2', label: 'Switch2', date: '2025-01-01',
+				blocks: [
+					{ uuid: 'cond', type: 'CONDITION', properties: [], isStartBlock: true,
+						conditions: [
+							[{ uuid: 'c1', key: 'x', operator: '=', value: '1' }],
+							[{ uuid: 'c2', key: 'y', operator: '=', value: '2' }],
+						] },
+					{ uuid: 'case0', type: 'DIALOG', properties: [] },
+					{ uuid: 'default', type: 'DIALOG', properties: [] },
+				],
+				connections: [
+					{ id: 's0', fromId: 'cond', toId: 'case0', fromPort: 'case_0', toPort: 'in', fromPortIndex: 0 },
+					{ id: 'sd', fromId: 'cond', toId: 'default', fromPort: 'default', toPort: 'in', fromPortIndex: 2 },
+				],
+			};
+			const visited: string[] = [];
+			const engine = new DialogueEngine();
+			engine.init( { data: makeExport( [switchScene] ) } );
+			engine.onResolveCondition( () => false ); // nothing matches
+			engine.onDialog( ( { block, next } ) => { visited.push( block.uuid ); next(); } );
+			engine.onChoice( ( { next } ) => next() );
+			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
+			engine.scene( 'scene-sw2' ).start();
+			expect( visited ).toEqual( ['default'] );
+		} );
+
+		// ── P1: Dispatcher mode integration ─────────────────────────────
+
+		it( 'dispatcher mode: spawns async tracks for matched cases + main on default', () => {
+			const dispatchScene: BlueprintScene = {
+				uuid: 'scene-disp', label: 'Dispatch', date: '2025-01-01',
+				blocks: [
+					{ uuid: 'cond', type: 'CONDITION', properties: [], isStartBlock: true,
+						nativeProperties: { enableDispatcher: true },
+						conditions: [
+							[{ uuid: 'c1', key: 'a', operator: '=', value: '1' }],
+							[{ uuid: 'c2', key: 'b', operator: '=', value: '2' }],
+						] },
+					{ uuid: 'async0', type: 'DIALOG', properties: [], nativeProperties: { isAsync: true } },
+					{ uuid: 'async1', type: 'DIALOG', properties: [], nativeProperties: { isAsync: true } },
+					{ uuid: 'main', type: 'DIALOG', properties: [] },
+				],
+				connections: [
+					{ id: 'd0', fromId: 'cond', toId: 'async0', fromPort: 'case_0', toPort: 'in', fromPortIndex: 0 },
+					{ id: 'd1', fromId: 'cond', toId: 'async1', fromPort: 'case_1', toPort: 'in', fromPortIndex: 1 },
+					{ id: 'dd', fromId: 'cond', toId: 'main', fromPort: 'default', toPort: 'in', fromPortIndex: 2 },
+				],
+			};
+			const visited: string[] = [];
+			const engine = new DialogueEngine();
+			engine.init( { data: makeExport( [dispatchScene] ) } );
+			engine.onResolveCondition( () => true ); // both match
+			engine.onDialog( ( { block, next } ) => { visited.push( block.uuid ); next(); } );
+			engine.onChoice( ( { next } ) => next() );
+			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
+			engine.scene( 'scene-disp' ).start();
+			// main (default) + async0 + async1 — all 3 should be visited
+			expect( visited.sort() ).toEqual( ['async0', 'async1', 'main'] );
+		} );
+
+		// ── P1: evaluateCondition() uses resolver as fallback ────────────
+
+		it( 'scene.evaluateCondition() uses onResolveCondition for non-choice conditions', () => {
+			const engine = new DialogueEngine();
+			engine.init( { data: makeExport( [condScene] ) } );
+			engine.onResolveCondition( ( c ) => c.key === 'flag' );
+			registerAllHandlers( engine );
+
+			const handle = engine.scene( 'scene-rc' );
+			let evalResult: boolean | undefined;
+			handle.onCondition( ( { scene, next } ) => {
+				evalResult = scene.evaluateCondition( { uuid: 't', key: 'flag', operator: '=', value: '' } );
+				next();
+			} );
+			handle.start();
+			expect( evalResult ).toBe( true );
+		} );
+
+		it( 'scene.evaluateCondition() returns false for non-choice conditions without resolver', () => {
+			const engine = new DialogueEngine();
+			engine.init( { data: makeExport( [condScene] ) } );
+			registerAllHandlers( engine );
+
+			const handle = engine.scene( 'scene-rc' );
+			let evalResult: boolean | undefined;
+			handle.onCondition( ( { scene, context, next } ) => {
+				evalResult = scene.evaluateCondition( { uuid: 't', key: 'flag', operator: '=', value: '' } );
+				context.resolve( true );
+				next();
+			} );
+			handle.start();
+			expect( evalResult ).toBe( false );
+		} );
+
+		// ── P1: setChoiceFilter backward compat alias ───────────────────
+
+		it( 'setChoiceFilter still works as alias for onResolveCondition', () => {
+			const visited: string[] = [];
+			const engine = new DialogueEngine();
+			engine.init( { data: makeExport( [condScene] ) } );
+			engine.setChoiceFilter( () => true ); // alias
+			engine.onDialog( ( { block, next } ) => { visited.push( block.uuid ); next(); } );
+			engine.onChoice( ( { next } ) => next() );
+			// No onCondition — should auto-resolve via setChoiceFilter alias
+			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
+			engine.scene( 'scene-rc' ).start();
+			expect( visited ).toEqual( ['yes'] );
+		} );
+
+	} );
+
 } );

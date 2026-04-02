@@ -61,17 +61,17 @@ private:
 };
 
 /// Internal context for CONDITION block handlers.
-/// Stores the boolean result set by resolve().
+/// Stores the evaluation result set by resolve().
 class InternalConditionContext : public IConditionContext {
 public:
     /// When true, the global (Tier 1) handler will be skipped.
     bool globalPrevented = false;
-    /// Condition result set by resolve(). true -> port 0, false -> port 1.
-    std::optional<bool> conditionResult;
+    /// Condition result. bool (legacy), int (switch), or vector<int> (dispatcher).
+    std::optional<ConditionResult> conditionResult;
 
     explicit InternalConditionContext(const BlockCharacter* resolvedCharacter);
     const BlockCharacter* character() const override;
-    void resolve(bool result) override;
+    void resolve(const ConditionResult& result) override;
     void preventGlobalHandler() override;
 
 private:

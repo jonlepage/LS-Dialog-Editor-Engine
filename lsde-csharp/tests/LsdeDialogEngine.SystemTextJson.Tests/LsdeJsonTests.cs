@@ -70,6 +70,18 @@ namespace LsdeDialogEngine.SystemTextJson.Tests
         }
 
         [Fact]
+        public void Parse_ConditionBlock_Has2DConditions()
+        {
+            var blueprint = LsdeJson.Parse(LoadBlueprint());
+            var cond = blueprint.Scenes[0].Blocks.FirstOrDefault(b => b.Type == BlockType.CONDITION) as ConditionBlock;
+            Assert.NotNull(cond);
+            Assert.NotNull(cond!.Conditions);
+            Assert.True(cond.Conditions!.Count > 0, "Should have condition groups");
+            Assert.True(cond.Conditions[0].Count > 0, "First group should have conditions");
+            Assert.False(string.IsNullOrEmpty(cond.Conditions[0][0].Key), "Condition should have a key");
+        }
+
+        [Fact]
         public void Parse_PolymorphicBlocks_ActionBlock()
         {
             var blueprint = LsdeJson.Parse(LoadBlueprint());

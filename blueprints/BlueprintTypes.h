@@ -236,6 +236,12 @@ struct NativeProperties {
 	 * it is up to the game developer to decide how to handle it.
 	 */
 	bool waitInput = false;
+	/**
+	 * Dispatcher mode: all matching conditions fire their async port simultaneously.
+	 * The default/false port becomes the main continuation track (always executed).
+	 * Targets of condition ports MUST be async blocks.
+	 */
+	bool enableDispatcher = false;
 };
 
 /**

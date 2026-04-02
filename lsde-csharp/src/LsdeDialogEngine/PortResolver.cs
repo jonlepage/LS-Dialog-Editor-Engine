@@ -64,19 +64,75 @@ namespace LsdeDialogEngine
             return FilterByFromPort(connections, selectedChoiceUuid);
         }
 
-        private static PortResolutionResult ResolveConditionPort(
-            List<BlueprintConnection> connections,
-            bool? conditionResult)
+        private static PortResolutionResult FilterDefaultPort(List<BlueprintConnection> connections)
         {
-            if (!conditionResult.HasValue) return PortResolutionResult.None;
-            int targetIndex = conditionResult.Value ? 0 : 1;
             var matches = new List<BlueprintConnection>();
             foreach (var c in connections)
             {
-                if (c.FromPortIndex == targetIndex)
+                if (c.FromPort == "default" || c.FromPort == "false")
                     matches.Add(c);
             }
             return new PortResolutionResult(matches);
+        }
+
+        private static PortResolutionResult ResolveConditionPort(
+            List<BlueprintConnection> connections,
+            object? conditionResult)
+        {
+            if (conditionResult == null) return PortResolutionResult.None;
+
+            switch (conditionResult)
+            {
+                case bool b:
+                {
+                    // Legacy boolean: true → port 0, false → port 1
+                    int targetIndex = b ? 0 : 1;
+                    var matches = new List<BlueprintConnection>();
+                    foreach (var c in connections)
+                    {
+                        if (c.FromPortIndex == targetIndex)
+                            matches.Add(c);
+                    }
+                    return new PortResolutionResult(matches);
+                }
+                case int n:
+                {
+                    if (n >= 0)
+                    {
+                        // Switch mode: matched case index
+                        var matches = new List<BlueprintConnection>();
+                        foreach (var c in connections)
+                        {
+                            if (c.FromPortIndex == n)
+                                matches.Add(c);
+                        }
+                        return new PortResolutionResult(matches);
+                    }
+                    // No match (-1): default/false port
+                    return FilterDefaultPort(connections);
+                }
+                case List<int> indices:
+                {
+                    // Dispatcher mode: all matched case ports + default port
+                    var indexSet = new HashSet<int>(indices);
+                    var matches = new List<BlueprintConnection>();
+                    // Default port (main continuation)
+                    foreach (var c in connections)
+                    {
+                        if (c.FromPort == "default" || c.FromPort == "false")
+                            matches.Add(c);
+                    }
+                    // Matched case ports (async tracks)
+                    foreach (var c in connections)
+                    {
+                        if (c.FromPortIndex.HasValue && indexSet.Contains(c.FromPortIndex.Value))
+                            matches.Add(c);
+                    }
+                    return new PortResolutionResult(matches);
+                }
+                default:
+                    return PortResolutionResult.None;
+            }
         }
 
         private static PortResolutionResult ResolveActionPort(

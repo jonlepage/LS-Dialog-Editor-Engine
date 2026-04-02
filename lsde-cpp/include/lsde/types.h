@@ -162,6 +162,9 @@ struct NativeProperties {
     /// Passive flag indicating this block should wait for explicit player input.
     /// The engine does NOT interpret this flag — it is exposed as-is to game handlers.
     std::optional<bool> waitInput;
+    /// When true, all matching condition groups fire as independent async tracks (dispatcher mode).
+    /// When false/absent, only the first matching group routes (switch mode).
+    std::optional<bool> enableDispatcher;
 };
 
 /// Character (actor) assigned to a block.
@@ -274,8 +277,9 @@ struct ChoiceBlock : BlueprintBlock {
 /// The result maps to output ports: true follows port index 0, false follows port index 1.
 /// Call context->resolve(result) to set the branch direction.
 struct ConditionBlock : BlueprintBlock {
-    /// Conditions to evaluate. Chained left-to-right with chain operators.
-    std::vector<ExportCondition> conditions;
+    /// Condition groups (2D). Each inner vector is a "case" evaluated as an AND/OR chain.
+    /// Switch mode: first matching group wins. Dispatcher mode: all matching groups fire.
+    std::vector<std::vector<ExportCondition>> conditions;
     /// Designer note. Not displayed to players.
     std::optional<std::string> note;
 };
@@ -496,8 +500,8 @@ public:
 /// Context for CONDITION block handlers.
 class IConditionContext : public IBaseBlockContext {
 public:
-    /// Resolve the condition: true -> port index 0, false -> port index 1.
-    virtual void resolve(bool result) = 0;
+    /// Resolve the condition. Accepts bool (legacy), int (switch), or vector<int> (dispatcher).
+    virtual void resolve(const ConditionResult& result) = 0;
 };
 
 /// Context for ACTION block handlers.
@@ -708,10 +712,16 @@ public:
 
 // ─── Port Resolution Types ──────────────────────────────────────────────────
 
+/// Condition evaluation result — supports legacy boolean, switch (int), and dispatcher (vector<int>) modes.
+/// - bool: legacy true/false routing (true → port 0, false → port 1)
+/// - int: switch mode (>= 0 = matched case index, -1 = no match → default port)
+/// - vector<int>: dispatcher mode (all matched case indices fire as async tracks + default port)
+using ConditionResult = std::variant<bool, int, std::vector<int>>;
+
 /// Input data for port resolution. The block's type determines the routing rules:
 /// - DIALOG: characterPortIndex selects the character port, fallback to "out"
 /// - CHOICE: selectedChoiceUuid matches connection.fromPort
-/// - CONDITION: conditionResult true -> port index 0, false -> port index 1
+/// - CONDITION: conditionResult — bool (legacy), int (switch), vector<int> (dispatcher)
 /// - ACTION: actionRejected=true tries "catch" port, fallback "then"; otherwise "then"
 /// - NOTE: returns all connections
 struct PortResolutionInput {
@@ -721,8 +731,8 @@ struct PortResolutionInput {
     const std::vector<BlueprintConnection>* connections = nullptr;
     /// CHOICE blocks only — UUID of the selected choice. Matches connection.fromPort.
     std::optional<std::string> selectedChoiceUuid;
-    /// CONDITION blocks only — evaluation result. true -> port index 0, false -> port index 1.
-    std::optional<bool> conditionResult;
+    /// CONDITION blocks only — evaluation result. Supports bool, int (switch), vector<int> (dispatcher).
+    std::optional<ConditionResult> conditionResult;
     /// ACTION blocks only — if true, the resolver looks for a "catch" port before falling back to "then".
     std::optional<bool> actionRejected;
     /// DIALOG blocks with portPerCharacter — character index to match against connection.fromPortIndex.

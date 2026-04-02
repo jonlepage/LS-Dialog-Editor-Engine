@@ -69,6 +69,10 @@ static func get_choice_condition_block_uuid(condition: Dictionary) -> Variant:
 static func evaluate_condition_chain(conditions: Array, evaluator: Callable) -> bool:
 	return LsdeConditionEvaluator.evaluate_condition_chain(conditions, evaluator)
 
+## Evaluate 2D condition groups. Returns int (switch) or Array of int (dispatcher).
+static func evaluate_condition_groups(groups: Array, evaluator: Callable, dispatcher: bool = false) -> Variant:
+	return LsdeConditionEvaluator.evaluate_condition_groups(groups, evaluator, dispatcher)
+
 ## Filters choice items by their visibility conditions.
 ## Choices without conditions are always visible.
 ## When scene is provided, choice: conditions are resolved automatically via the scene's

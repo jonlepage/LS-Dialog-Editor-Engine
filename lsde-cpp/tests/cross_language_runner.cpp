@@ -67,14 +67,18 @@ static CleanupFn handleStep(
         if (blockType == "CONDITION") {
             if (auto* condCtx = dynamic_cast<IConditionContext*>(context)) {
                 auto* condBlock = dynamic_cast<const ConditionBlock*>(block);
-                const auto& conditions = condBlock ? condBlock->conditions : std::vector<ExportCondition>{};
-                auto result = evaluateConditionChain(conditions, [&suite](const ExportCondition& cond) {
+                const auto& groups = condBlock ? condBlock->conditions : std::vector<std::vector<ExportCondition>>{};
+                auto evaluator = [&suite](const ExportCondition& cond) {
                     if (suite && suite->stateBridge) {
                         auto it = suite->stateBridge->conditions.find(cond.key);
                         if (it != suite->stateBridge->conditions.end()) return it->second;
                     }
                     return true;
-                });
+                };
+                bool isDispatcher = condBlock && condBlock->nativeProperties
+                    && condBlock->nativeProperties->enableDispatcher
+                    && *condBlock->nativeProperties->enableDispatcher;
+                auto result = evaluateConditionGroups(groups, evaluator, isDispatcher);
                 condCtx->resolve(result);
             }
         } else if (blockType == "ACTION") {

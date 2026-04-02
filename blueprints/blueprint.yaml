@@ -1,6 +1,6 @@
 # Blueprint export - LSDE
 version: "1.0.0"
-exportDate: "2026-04-01T19:37:17.785Z"
+exportDate: "2026-04-02T01:29:05.200Z"
 projectName: blueprint-with-actors-emotions
 primaryLanguage: fr
 locales:
@@ -81,6 +81,8 @@ scenes:
         type: CONDITION
         properties: []
         label: CONDITION-001
+        nativeProperties:
+          enableDispatcher: true
         conditions:
           -
             0:

@@ -171,6 +171,10 @@ class NativeProperties extends Resource:
 	## before proceeding. This is a passive flag — the engine does not interpret it;
 	## it is up to the game developer to decide how to handle it.
 	@export var waitInput: bool
+	## Dispatcher mode: all matching conditions fire their async port simultaneously.
+	## The default/false port becomes the main continuation track (always executed).
+	## Targets of condition ports MUST be async blocks.
+	@export var enableDispatcher: bool
 
 ## A character (actor) assigned to a dialogue block.
 ## Characters represent the speakers or participants in a dialogue exchange.

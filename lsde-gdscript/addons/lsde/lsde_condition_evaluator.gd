@@ -19,6 +19,22 @@ static func evaluate_condition_chain(conditions: Array, evaluator: Callable) -> 
 			result = result and current
 	return result
 
+## Evaluate 2D condition groups. Each group is an AND/OR chain evaluated independently.
+## Switch mode (dispatcher=false): returns the index of the first matching group, or -1 if none match.
+## Dispatcher mode (dispatcher=true): returns an Array of all matching group indices.
+static func evaluate_condition_groups(groups: Array, evaluator: Callable, dispatcher: bool = false) -> Variant:
+	if dispatcher:
+		var matched: Array = []
+		for i in range(groups.size()):
+			if evaluate_condition_chain(groups[i], evaluator):
+				matched.append(i)
+		return matched
+	# Switch mode: first match wins
+	for i in range(groups.size()):
+		if evaluate_condition_chain(groups[i], evaluator):
+			return i
+	return -1
+
 ## Filter choices by their visibilityConditions.
 ## Choices with no conditions are always visible.
 ## When scene is provided, choice: conditions are resolved automatically via the scene's

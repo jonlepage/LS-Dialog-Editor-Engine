@@ -122,6 +122,19 @@ namespace LsdeDialogEngine
         public bool? Visible { get; set; }
     }
 
+    /// <summary>Runtime condition group with pre-evaluated result. Symmetric with RuntimeChoiceItem.Visible.</summary>
+    public class RuntimeConditionGroup
+    {
+        /// <summary>Conditions in this group (AND/OR chain).</summary>
+        public List<ExportCondition> Conditions { get; set; } = new List<ExportCondition>();
+
+        /// <summary>Port index for this group (0-based).</summary>
+        public int PortIndex { get; set; }
+
+        /// <summary>Pre-evaluated result (when resolver is installed). null = no resolver.</summary>
+        public bool? Result { get; set; }
+    }
+
     /// <summary>LSDE native execution properties controlling how a block is dispatched by the engine.
     /// <para>These properties affect the engine's execution flow, not the block's content:</para>
     /// <para>- <b>IsAsync</b>: Block runs on a parallel track. Async tracks call OnBeforeBlock, can spawn sub-tracks, auto-cancel on scene end.</para>
@@ -155,6 +168,10 @@ namespace LsdeDialogEngine
         /// <summary>Passive flag indicating this block should wait for explicit player input.
         /// The engine does NOT interpret this flag — it is exposed as-is to game handlers.</summary>
         public bool? WaitInput { get; set; }
+
+        /// <summary>When true, all matching condition groups fire as independent async tracks (dispatcher mode).
+        /// When false/absent, only the first matching group routes (switch mode).</summary>
+        public bool? EnableDispatcher { get; set; }
     }
 
     /// <summary>Read-only snapshot of an async track's state.
@@ -292,12 +309,12 @@ namespace LsdeDialogEngine
     }
 
     /// <summary>Condition block — evaluates logic to branch the dialogue flow.
-    /// <para>The developer MUST handle evaluation in the OnCondition handler.
-    /// Call Context.Resolve(result): true → port index 0, false → port index 1.</para></summary>
+    /// <para>Conditions are grouped (2D): each inner list is a "case" evaluated as an AND/OR chain.
+    /// Switch mode: first matching group wins. Dispatcher mode: all matching groups fire.</para></summary>
     public class ConditionBlock : BlueprintBlock
     {
-        /// <summary>Conditions to evaluate. Chained left-to-right with Chain operators.</summary>
-        public List<ExportCondition>? Conditions { get; set; }
+        /// <summary>Condition groups (2D). Each inner list is a "case" evaluated as an AND/OR chain.</summary>
+        public List<List<ExportCondition>>? Conditions { get; set; }
 
         /// <summary>Designer note. Not displayed to players.</summary>
         public string? Note { get; set; }
@@ -546,8 +563,11 @@ namespace LsdeDialogEngine
     /// <summary>Context for CONDITION block handlers.</summary>
     public interface IConditionContext : IBaseBlockContext
     {
-        /// <summary>Resolve the condition: true → port index 0, false → port index 1.</summary>
-        void Resolve(bool result);
+        /// <summary>Resolve the condition. Accepts bool (legacy), int (switch), or List&lt;int&gt; (dispatcher).</summary>
+        void Resolve(object result);
+
+        /// <summary>Pre-evaluated condition groups with PortIndex and Result (when resolver is installed).</summary>
+        IReadOnlyList<RuntimeConditionGroup>? ConditionGroups { get; }
     }
 
     /// <summary>Context for ACTION block handlers.</summary>
@@ -849,8 +869,8 @@ namespace LsdeDialogEngine
         /// <summary>CHOICE blocks only — UUID of the selected choice.</summary>
         public string? SelectedChoiceUuid { get; set; }
 
-        /// <summary>CONDITION blocks only — true → port 0, false → port 1.</summary>
-        public bool? ConditionResult { get; set; }
+        /// <summary>CONDITION blocks only — bool (legacy), int (switch), or List&lt;int&gt; (dispatcher).</summary>
+        public object? ConditionResult { get; set; }
 
         /// <summary>ACTION blocks only — if true, resolver looks for "catch" port first.</summary>
         public bool? ActionRejected { get; set; }

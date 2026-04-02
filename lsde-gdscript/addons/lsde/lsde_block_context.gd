@@ -68,20 +68,23 @@ class ChoiceContext extends RefCounted:
 		global_prevented = true
 
 ## Context for CONDITION block handlers.
-## Stores the boolean result set by resolve().
+## Stores the evaluation result set by resolve().
 class ConditionContext extends RefCounted:
 	## When true, the global (Tier 1) handler will be skipped.
 	var global_prevented: bool = false
-	## Condition result set by resolve(). true -> port 0, false -> port 1.
-	var condition_result: Variant = null  # bool or null
+	## Condition result set by resolve(). bool (legacy), int (switch), or Array (dispatcher).
+	var condition_result: Variant = null
+	## Pre-evaluated condition groups with port_index and result fields (when resolver is installed).
+	var condition_groups: Array = []
 	## Character resolved by on_resolve_character for this block, or null if none.
 	var character: Variant = null
 
-	func _init(resolved_character: Variant = null) -> void:
+	func _init(resolved_character: Variant = null, groups: Array = []) -> void:
 		character = resolved_character
+		condition_groups = groups
 
-	## Resolve the condition: true -> port index 0, false -> port index 1.
-	func resolve(result: bool) -> void:
+	## Resolve the condition. Accepts bool (legacy), int (switch), or Array of int (dispatcher).
+	func resolve(result: Variant) -> void:
 		condition_result = result
 
 	## Prevent the global (Tier 1) handler from executing after this scene handler.
@@ -123,9 +126,9 @@ static func create_dialog_context(block: Dictionary, resolved_character: Variant
 static func create_choice_context(block: Dictionary, tagged_choices: Array, resolved_character: Variant, on_choice_selected: Callable = Callable()) -> ChoiceContext:
 	return ChoiceContext.new(tagged_choices, resolved_character, block.get("uuid", ""), on_choice_selected)
 
-## Create a condition context.
-static func create_condition_context(resolved_character: Variant = null) -> ConditionContext:
-	return ConditionContext.new(resolved_character)
+## Create a condition context with optional pre-evaluated groups.
+static func create_condition_context(resolved_character: Variant = null, groups: Array = []) -> ConditionContext:
+	return ConditionContext.new(resolved_character, groups)
 
 ## Create an action context.
 static func create_action_context(resolved_character: Variant = null) -> ActionContext:

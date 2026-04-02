@@ -81,18 +81,22 @@ namespace LsdeDialogEngine
     internal class InternalConditionContext : IConditionContext
     {
         internal bool GlobalPrevented;
-        internal bool? ConditionResult;
+        internal object? _conditionResult;
 
         public BlockCharacter? Character { get; }
+        public IReadOnlyList<RuntimeConditionGroup>? ConditionGroups { get; }
 
-        internal InternalConditionContext(BlockCharacter? resolvedCharacter)
+        internal InternalConditionContext(
+            BlockCharacter? resolvedCharacter,
+            IReadOnlyList<RuntimeConditionGroup>? conditionGroups = null)
         {
             Character = resolvedCharacter;
+            ConditionGroups = conditionGroups;
         }
 
-        public void Resolve(bool result)
+        public void Resolve(object result)
         {
-            ConditionResult = result;
+            _conditionResult = result;
         }
 
         public void PreventGlobalHandler() => GlobalPrevented = true;
@@ -141,9 +145,11 @@ namespace LsdeDialogEngine
             return new InternalChoiceContext(block.Uuid, taggedChoices, resolvedCharacter, onChoiceSelected);
         }
 
-        internal static InternalConditionContext CreateConditionContext(BlockCharacter? resolvedCharacter)
+        internal static InternalConditionContext CreateConditionContext(
+            BlockCharacter? resolvedCharacter,
+            IReadOnlyList<RuntimeConditionGroup>? conditionGroups = null)
         {
-            return new InternalConditionContext(resolvedCharacter);
+            return new InternalConditionContext(resolvedCharacter, conditionGroups);
         }
 
         internal static InternalActionContext CreateActionContext(BlockCharacter? resolvedCharacter)
