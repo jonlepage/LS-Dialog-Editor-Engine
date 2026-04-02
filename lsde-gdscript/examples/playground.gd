@@ -35,18 +35,23 @@ func _init() -> void:
 		return
 
 	# on peut changer les locales on the fly
-	engine.set_locale("en")
+	engine.set_locale("fr")
 
 	# on ajoute l'algorithme de résolution de personnage
 	engine.on_resolve_character(func(characters: Array) -> Variant:
 		return characters[0] if characters.size() > 0 else null
 	)
 
-	# Opt-in: install choice visibility filter (playground: all game-state conditions pass)
-	engine.set_choice_filter(func(cond: Dictionary) -> bool:
-		# Simule un game state où variable_0 = "something_else"
-		if cond.get("key", "") == "variable_0":
-			return cond.get("value", "") == "something_else"
+	# Unified condition resolver — evaluates game-state conditions for both choice visibility and condition blocks.
+	# choice: conditions are handled internally by the engine via choice history.
+	engine.on_resolve_condition(func(cond: Dictionary) -> bool:
+		print("◽on_resolve_condition: %s %s %s" % [cond.get("key", ""), cond.get("operator", ""), cond.get("value", "")])
+		var key: String = cond.get("key", "")
+		var parts: PackedStringArray = key.split(".")
+		if parts.size() == 2 and parts[0] == "VariableGlobal":
+			match parts[1]:
+				"key1": return true
+				"key2": return false
 		return true
 	)
 
@@ -117,17 +122,32 @@ func _init() -> void:
 
 	engine.on_condition(func(args: Dictionary) -> Callable:
 		var block: Dictionary = args["block"]
-		var scene: Variant = args["scene"]
-		var conditions: Array = block.get("conditions", [])
-		var result: bool = LsdeUtils.evaluate_condition_chain(
-			conditions,
-			func(cond: Dictionary) -> bool:
-				return scene.evaluate_condition(cond) if LsdeUtils.is_choice_condition(cond) else true
-		)
-		for cond in conditions:
-			print("   ❓ condition: %s %s %s" % [cond.get("key", ""), cond.get("operator", ""), cond.get("value", "")])
-		print("\n🔀 CONDITION  %s — %d conditions → %s" % [block.get("label", ""), conditions.size(), "true" if result else "false"])
-		args["context"].resolve(result)
+		var ctx: Variant = args["context"]
+		var condition_groups: Array = ctx.condition_groups
+		var np: Variant = block.get("nativeProperties")
+		var is_dispatcher: bool = np is Dictionary and np.get("enableDispatcher", false)
+
+		for i in range(condition_groups.size()):
+			var g: Variant = condition_groups[i]
+			for cond in g.get("conditions", []) if g is Dictionary else g.conditions:
+				var port_idx: Variant = g.get("port_index", i) if g is Dictionary else g.port_index
+				var res: Variant = g.get("result", null) if g is Dictionary else g.result
+				print("   [case %d] %d key:%s %s %s → %s" % [i, port_idx, cond.get("key", ""), cond.get("operator", ""), cond.get("value", ""), str(res)])
+
+		# Derive result from pre-evaluated groups
+		var matched: Array = []
+		for g in condition_groups:
+			var res: Variant = g.get("result", false) if g is Dictionary else g.result
+			var port_idx: Variant = g.get("port_index", 0) if g is Dictionary else g.port_index
+			if res:
+				matched.append(port_idx)
+
+		var result: Variant = matched if is_dispatcher else (matched[0] if matched.size() > 0 else -1)
+
+		print("\n🔀 CONDITION  %s — %d groups%s → %s" % [
+			block.get("label", ""), condition_groups.size(),
+			" [DISPATCHER]" if is_dispatcher else "", str(result)])
+		ctx.resolve(result)
 		args["next"].call()
 		return Callable()
 	)
@@ -164,7 +184,11 @@ func _init() -> void:
 
 	engine.on_validate_next_block(func(args: Dictionary) -> Dictionary:
 		if args.get("fromBlock") != null:
-			print("   ✔️  validate: %s → %s" % [args["fromBlock"].get("label", ""), args["nextBlock"].get("label", "")])
+			var next_ctx: Variant = args.get("nextContext")
+			var char_name: String = "none"
+			if next_ctx is Dictionary and next_ctx.get("character") != null:
+				char_name = next_ctx["character"].get("name", "none")
+			print("   ✔️  validate: %s → %s (char: %s)" % [args["fromBlock"].get("label", ""), args["nextBlock"].get("label", ""), char_name])
 		return {"valid": true}
 	)
 

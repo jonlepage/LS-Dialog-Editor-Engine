@@ -10,7 +10,7 @@ namespace LsdeDialogEngine
         internal Action<SceneHandleImpl>? OnSceneStarted;
         internal Action<SceneHandleImpl>? OnSceneEnded;
         internal Func<Func<List<BlockCharacter>, BlockCharacter?>>? GetResolveCharacter;
-        internal Func<Func<ExportCondition, bool>?>? GetChoiceFilter;
+        internal Func<Func<ExportCondition, bool>?>? GetConditionResolver;
         internal Func<string>? GetLocale;
     }
 
@@ -336,8 +336,6 @@ namespace LsdeDialogEngine
         private BlueprintBlock? _currentBlock;
         private BlueprintBlock? _previousBlock;
         private BlockCharacter? _previousCharacter;
-        private BlockCharacter? _preResolvedNextCharacter;
-        private bool _hasPreResolvedCharacter;
         private readonly HashSet<string> _visited = new HashSet<string>();
         private readonly Dictionary<string, List<string>> _choiceHistory = new Dictionary<string, List<string>>();
         private Action? _previousCleanup;
@@ -365,7 +363,10 @@ namespace LsdeDialogEngine
             var missing = new List<string>();
             if (_sceneRegistry.DialogHandler == null && _globalRegistry.DialogHandler == null) missing.Add("OnDialog");
             if (_sceneRegistry.ChoiceHandler == null && _globalRegistry.ChoiceHandler == null) missing.Add("OnChoice");
-            if (_sceneRegistry.ConditionHandler == null && _globalRegistry.ConditionHandler == null) missing.Add("OnCondition");
+            // onCondition is optional when onResolveCondition is installed — the engine auto-routes
+            // from pre-evaluated conditionGroups. The handler becomes a logging/override hook.
+            if (_sceneRegistry.ConditionHandler == null && _globalRegistry.ConditionHandler == null
+                && _callbacks.GetConditionResolver?.Invoke() == null) missing.Add("OnCondition");
             if (_sceneRegistry.ActionHandler == null && _globalRegistry.ActionHandler == null) missing.Add("OnAction");
             if (missing.Count > 0)
             {
@@ -555,10 +556,12 @@ namespace LsdeDialogEngine
         }
 
         /// <summary>Evaluate a condition against the scene's choice history.
-        /// Returns false for non-choice conditions (game-state conditions are not resolved here).</summary>
+        /// Uses the unified resolver as fallback for non-choice conditions.
+        /// Without a resolver, non-choice conditions default to false.</summary>
         public bool EvaluateCondition(ExportCondition condition)
         {
-            return EvaluateConditionWithHistory(condition, _ => false);
+            var resolver = _callbacks.GetConditionResolver?.Invoke();
+            return EvaluateConditionWithHistory(condition, resolver ?? (_ => false));
         }
 
         /// <summary>Set a scene-level character resolution override.</summary>
@@ -712,8 +715,6 @@ namespace LsdeDialogEngine
                     });
                     return;
                 }
-                _hasPreResolvedCharacter = true;
-                _preResolvedNextCharacter = nextCharacter;
             }
 
             if (_cancelled) return;
@@ -845,11 +846,6 @@ namespace LsdeDialogEngine
                 }
             }
 
-            // Clear pre-resolved cache before spawning async tracks to prevent
-            // an async track from consuming the main track's cached character.
-            _hasPreResolvedCharacter = false;
-            _preResolvedNextCharacter = null;
-
             // Spawn async tracks
             foreach (var conn in asyncConnections)
             {
@@ -979,18 +975,11 @@ namespace LsdeDialogEngine
 
         private IBaseBlockContext? CreateContext(BlueprintBlock block)
         {
-            BlockCharacter? resolvedCharacter;
-            if (_hasPreResolvedCharacter)
-            {
-                resolvedCharacter = _preResolvedNextCharacter;
-                _hasPreResolvedCharacter = false;
-                _preResolvedNextCharacter = null;
-            }
-            else
-            {
-                var characters = block.Metadata?.Characters ?? new List<BlockCharacter>();
-                resolvedCharacter = GetResolveCharacterFn()(characters);
-            }
+            // Character resolved fresh every time — no caching.
+            // A pre-resolve cache was removed because async tracks (spawned via waitForBlocks →
+            // notifyWaitSatisfied) consumed the main track's cached character, producing wrong results.
+            var characters = block.Metadata?.Characters ?? new List<BlockCharacter>();
+            var resolvedCharacter = GetResolveCharacterFn()(characters);
 
             switch (block)
             {
@@ -998,12 +987,49 @@ namespace LsdeDialogEngine
                     return BlockContextFactory.CreateDialogContext(db, resolvedCharacter);
                 case ChoiceBlock cb:
                 {
-                    var choiceFilter = _callbacks.GetChoiceFilter?.Invoke();
-                    var taggedChoices = TagChoiceVisibility(cb.Choices ?? new List<ChoiceItem>(), choiceFilter);
+                    var resolver = _callbacks.GetConditionResolver?.Invoke();
+                    var taggedChoices = TagChoiceVisibility(cb.Choices ?? new List<ChoiceItem>(), resolver);
                     return BlockContextFactory.CreateChoiceContext(cb, taggedChoices, RecordChoice, resolvedCharacter);
                 }
-                case ConditionBlock _:
-                    return BlockContextFactory.CreateConditionContext(resolvedCharacter);
+                case ConditionBlock condBlock:
+                {
+                    var resolver = _callbacks.GetConditionResolver?.Invoke();
+                    if (resolver != null)
+                    {
+                        var rawGroups = condBlock.Conditions ?? new List<List<ExportCondition>>();
+                        // Unified evaluator: choice: conditions resolved internally via choice history,
+                        // game-state conditions delegated to the onResolveCondition callback.
+                        Func<ExportCondition, bool> evaluate = cond =>
+                            cond.Key.StartsWith("choice:")
+                                ? EvaluateConditionWithHistory(cond, _ => false)
+                                : resolver(cond);
+                        var conditionGroups = new List<RuntimeConditionGroup>();
+                        for (int i = 0; i < rawGroups.Count; i++)
+                        {
+                            conditionGroups.Add(new RuntimeConditionGroup
+                            {
+                                Conditions = rawGroups[i],
+                                PortIndex = i,
+                                Result = ConditionEvaluator.EvaluateConditionChain(rawGroups[i], evaluate),
+                            });
+                        }
+                        var ctx = BlockContextFactory.CreateConditionContext(resolvedCharacter, conditionGroups);
+                        // Auto-resolve from pre-evaluated groups — the handler can override with Resolve().
+                        var matched = new List<int>();
+                        foreach (var g in conditionGroups)
+                            if (g.Result == true) matched.Add(g.PortIndex);
+                        ctx._conditionResult = condBlock.NativeProperties?.EnableDispatcher == true
+                            ? (object)matched
+                            : (object)(matched.Count > 0 ? matched[0] : -1);
+                        return ctx;
+                    }
+                    // No resolver installed — raw groups without pre-evaluation
+                    var groups = new List<RuntimeConditionGroup>();
+                    var conds = condBlock.Conditions ?? new List<List<ExportCondition>>();
+                    for (int i = 0; i < conds.Count; i++)
+                        groups.Add(new RuntimeConditionGroup { Conditions = conds[i], PortIndex = i });
+                    return BlockContextFactory.CreateConditionContext(resolvedCharacter, groups);
+                }
                 case ActionBlock _:
                     return BlockContextFactory.CreateActionContext(resolvedCharacter);
                 default:

@@ -11,8 +11,8 @@ namespace lsde {
 
 /// Callback type for character resolution.
 using ResolveCharacterFn = std::function<const BlockCharacter*(const std::vector<BlockCharacter>&)>;
-/// Callback type for choice visibility filtering (game-state conditions only).
-using ChoiceFilterFn = std::function<bool(const ExportCondition&)>;
+/// Callback type for unified condition resolution (game-state conditions only).
+using ConditionResolverFn = std::function<bool(const ExportCondition&)>;
 
 /// Internal callbacks passed from DialogueEngine to SceneHandleImpl.
 struct SceneHandleCallbacks {
@@ -22,8 +22,8 @@ struct SceneHandleCallbacks {
     std::function<void(ISceneHandle*)> onSceneEnded;
     /// Returns the engine-level character resolver.
     std::function<ResolveCharacterFn()> getResolveCharacter;
-    /// Returns the engine-level choice filter, or empty function if none installed.
-    std::function<ChoiceFilterFn()> getChoiceFilter;
+    /// Returns the unified condition resolver, or empty function if none installed.
+    std::function<ConditionResolverFn()> getConditionResolver;
     /// Returns the current locale.
     std::function<std::string()> getLocale;
 };
@@ -149,11 +149,11 @@ private:
     std::unique_ptr<IBaseBlockContext> createContext(const BlueprintBlock& block);
     /// Returns the scene-level resolver if set, otherwise the engine-level resolver.
     ResolveCharacterFn getResolveCharacterFn() const;
-    /// Tag each choice with visible = true/false based on the installed filter.
-    /// If no filter, returns choices as RuntimeChoiceItem with visible = nullopt.
+    /// Tag each choice with visible = true/false based on the installed resolver.
+    /// If no resolver, returns choices as RuntimeChoiceItem with visible = nullopt.
     std::vector<RuntimeChoiceItem> tagChoiceVisibility(
         const std::vector<ChoiceItem>& choices,
-        const ChoiceFilterFn& filter);
+        const ConditionResolverFn& resolver);
     static bool getGlobalPrevented(IBaseBlockContext* context);
     static CleanupFn combineCleanups(CleanupFn a, CleanupFn b);
 
@@ -167,8 +167,6 @@ private:
     const BlueprintBlock* _currentBlock = nullptr;
     const BlueprintBlock* _previousBlock = nullptr;
     const BlockCharacter* _previousCharacter = nullptr;
-    const BlockCharacter* _preResolvedNextCharacter = nullptr;
-    bool _hasPreResolvedCharacter = false;
     std::unordered_set<std::string> _visitedSet;
     std::vector<std::string> _visitedOrder;
     std::unordered_map<std::string, std::vector<std::string>> _choiceHistory;

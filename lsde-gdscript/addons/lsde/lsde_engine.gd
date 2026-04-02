@@ -13,8 +13,8 @@ var _initialized: bool = false
 ## Character resolution callback. Default: first character in the list.
 var _resolve_character: Callable = func(characters: Array) -> Variant:
 	return characters[0] if characters.size() > 0 else null
-## Choice visibility evaluator. When set, the engine tags each choice with visible before calling on_choice.
-var _choice_filter: Callable
+## Unified condition resolver for choice visibility and condition block pre-evaluation.
+var _condition_resolver: Callable
 
 # ─── Initialization ───────────────────────────────────────────────────────
 
@@ -43,14 +43,17 @@ func set_locale(locale: String) -> void:
 func on_resolve_character(resolver: Callable) -> void:
 	_resolve_character = resolver
 
-# ─── Choice visibility ───────────────────────────────────────────────────
+# ─── Condition resolution ────────────────────────────────────────────────
 
-## Install a condition evaluator for choice visibility tagging.
-## When set, the engine evaluates each choice's visibilityConditions before calling on_choice,
-## tagging each choice with visible = true/false. The engine handles choice: conditions
-## internally via choice history — this callback evaluates game-state conditions only.
+## Install a unified condition evaluator for both choice visibility and condition block pre-evaluation.
+## The engine handles choice: conditions internally via choice history — this callback evaluates
+## game-state conditions only.
+func on_resolve_condition(evaluator: Callable) -> void:
+	_condition_resolver = evaluator
+
+## @deprecated Use on_resolve_condition() instead.
 func set_choice_filter(evaluator: Callable) -> void:
-	_choice_filter = evaluator
+	_condition_resolver = evaluator
 
 # ─── Validation ───────────────────────────────────────────────────────────
 
@@ -109,7 +112,7 @@ func scene(scene_id: String) -> LsdeSceneHandle:
 		"on_scene_started": func(h: Variant) -> void: _active_scenes[scene_id] = h,
 		"on_scene_ended": func(_h: Variant) -> void: _active_scenes.erase(scene_id),
 		"get_resolve_character": func() -> Callable: return _resolve_character,
-		"get_choice_filter": func() -> Callable: return _choice_filter,
+		"get_condition_resolver": func() -> Callable: return _condition_resolver,
 		"get_locale": func() -> String: return _locale,
 	})
 	return handle

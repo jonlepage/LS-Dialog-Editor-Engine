@@ -45,8 +45,12 @@ void DialogueEngine::onResolveCharacter(std::function<const BlockCharacter*(cons
     _resolveCharacter = std::move(fn);
 }
 
+void DialogueEngine::onResolveCondition(std::function<bool(const ExportCondition&)> evaluator) {
+    _conditionResolver = std::move(evaluator);
+}
+
 void DialogueEngine::setChoiceFilter(std::function<bool(const ExportCondition&)> evaluator) {
-    _choiceFilter = std::move(evaluator);
+    _conditionResolver = std::move(evaluator);
 }
 
 void DialogueEngine::onValidateNextBlock(ValidateNextBlockHandler h) { _globalRegistry.validateNextBlockHandler = std::move(h); }
@@ -75,7 +79,7 @@ std::unique_ptr<ISceneHandle> DialogueEngine::scene(const std::string& sceneId) 
         [this, sceneId](ISceneHandle* h) { _activeScenes[sceneId] = h; },
         [this, sceneId](ISceneHandle*) { _activeScenes.erase(sceneId); },
         [this]() { return _resolveCharacter; },
-        [this]() -> std::function<bool(const ExportCondition&)> { return _choiceFilter; },
+        [this]() -> std::function<bool(const ExportCondition&)> { return _conditionResolver; },
         [this]() -> std::string { return _locale; },
     });
 

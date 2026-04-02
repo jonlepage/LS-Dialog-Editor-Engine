@@ -80,17 +80,26 @@ if (report.Errors.Count > 0)
 }
 
 // on peut changer les locales on the fly
-engine.SetLocale("en");
+engine.SetLocale("fr");
 
 // on ajoute l'algorithme de résolution de personnage
 engine.OnResolveCharacter(characters => characters.Count > 0 ? characters[0] : null);
 
-// Opt-in: install choice visibility filter (playground: all game-state conditions pass)
-engine.SetChoiceFilter(cond =>
+// Unified condition resolver — evaluates game-state conditions for both choice visibility and condition blocks.
+// choice: conditions are handled internally by the engine via choice history.
+engine.OnResolveCondition(cond =>
 {
-    // Simule un game state où variable_0 = "something_else"
-    if (cond.Key == "variable_0")
-        return cond.Value == "something_else";
+    Console.WriteLine($"◽onResolveCondition: {cond.Key} {cond.Operator} {cond.Value}");
+    var parts = cond.Key.Split('.');
+    if (parts.Length == 2 && parts[0] == "VariableGlobal")
+    {
+        return parts[1] switch
+        {
+            "key1" => true,
+            "key2" => false,
+            _ => true,
+        };
+    }
     return true;
 });
 
@@ -170,18 +179,19 @@ engine.OnChoice(args =>
 engine.OnCondition(args =>
 {
     var block = (ConditionBlock)args.Block;
-    var scene = args.Scene;
-    var groups = block.Conditions ?? new List<List<ExportCondition>>();
+    var conditionGroups = args.Context.ConditionGroups!;
     var isDispatcher = block.NativeProperties?.EnableDispatcher == true;
-    var result = LsdeUtils.EvaluateConditionGroups(
-        groups,
-        cond => LsdeUtils.IsChoiceCondition(cond) ? scene.EvaluateCondition(cond) : true, // playground: all game conditions pass
-        isDispatcher
-    );
-    for (int i = 0; i < groups.Count; i++)
-        foreach (var cond in groups[i])
-            Console.WriteLine($"   [case {i}] {cond.Key} {cond.Operator} {cond.Value}");
-    Console.WriteLine($"\n🔀 CONDITION  {block.Label} — {groups.Count} groups{(isDispatcher ? " [DISPATCHER]" : "")} → {result}");
+
+    foreach (var (g, i) in conditionGroups.Select((g, i) => (g, i)))
+        foreach (var cond in g.Conditions)
+            Console.WriteLine($"   [case {i}] {g.PortIndex} key:{cond.Key} {cond.Operator} {cond.Value} → {g.Result}");
+
+    // Derive result from pre-evaluated groups
+    var matched = conditionGroups.Where(c => c.Result == true).Select(c => c.PortIndex).ToList();
+    object result = isDispatcher ? (object)matched : (object)(matched.Count > 0 ? matched[0] : -1);
+
+    Console.WriteLine(
+        $"\n🔀 CONDITION  {block.Label} — {conditionGroups.Count} groups{(isDispatcher ? " [DISPATCHER]" : "")} → {FormatResult(result)}");
     args.Context.Resolve(result);
     args.Next();
     return null;
@@ -219,7 +229,7 @@ engine.OnSceneExit(_ => Console.WriteLine("🔴 ━━━ Scene Exit ━━━\n
 engine.OnValidateNextBlock(args =>
 {
     if (args.FromBlock != null)
-        Console.WriteLine($"   ✔️  validate: {args.FromBlock.Label} → {args.NextBlock.Label}");
+        Console.WriteLine($"   ✔️  validate: {args.FromBlock.Label} → {args.NextBlock.Label} (char: {args.NextContext?.Character?.Name ?? "none"})");
     return ValidationResult.Ok();
 });
 
@@ -263,6 +273,15 @@ foreach (var kvp in handle.GetChoiceHistory())
     historyEntries.Add($"{kvp.Key}: [{string.Join(", ", kvp.Value)}]");
 Console.WriteLine($"📊 Choice History: {{{string.Join(", ", historyEntries)}}}");
 Console.WriteLine($"🏁 Engine running: {engine.IsRunning()}");
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+static string FormatResult(object result)
+{
+    if (result is List<int> list)
+        return $"[{string.Join(",", list)}]";
+    return result?.ToString() ?? "null";
+}
 
 // ─── JSON Converters ────────────────────────────────────────────────────────
 

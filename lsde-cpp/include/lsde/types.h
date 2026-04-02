@@ -24,6 +24,9 @@ class IChoiceContext;
 class IConditionContext;
 class IActionContext;
 
+/// Condition evaluation result — supports legacy boolean, switch (int), and dispatcher (vector<int>) modes.
+using ConditionResult = std::variant<bool, int, std::vector<int>>;
+
 // ─── Blueprint Data Types ────────────────────────────────────────────────────
 
 /// All possible block types in a blueprint.
@@ -711,12 +714,6 @@ public:
 };
 
 // ─── Port Resolution Types ──────────────────────────────────────────────────
-
-/// Condition evaluation result — supports legacy boolean, switch (int), and dispatcher (vector<int>) modes.
-/// - bool: legacy true/false routing (true → port 0, false → port 1)
-/// - int: switch mode (>= 0 = matched case index, -1 = no match → default port)
-/// - vector<int>: dispatcher mode (all matched case indices fire as async tracks + default port)
-using ConditionResult = std::variant<bool, int, std::vector<int>>;
 
 /// Input data for port resolution. The block's type determines the routing rules:
 /// - DIALOG: characterPortIndex selects the character port, fallback to "out"

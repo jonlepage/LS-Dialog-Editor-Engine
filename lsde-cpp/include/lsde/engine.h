@@ -42,12 +42,14 @@ public:
     /// Default: returns the first character in the list.
     void onResolveCharacter(std::function<const BlockCharacter*(const std::vector<BlockCharacter>&)> fn);
 
-    // ─── Choice visibility ───────────────────────────────────────────
+    // ─── Condition resolution ────────────────────────────────────────
 
-    /// Install a condition evaluator for choice visibility tagging.
-    /// When set, the engine evaluates each choice's visibilityConditions before calling onChoice,
-    /// tagging each choice with visible = true/false. The engine handles choice: conditions
-    /// internally via choice history — this callback evaluates game-state conditions only.
+    /// Install a unified condition evaluator for both choice visibility and condition block pre-evaluation.
+    /// The engine handles choice: conditions internally via choice history — this callback evaluates
+    /// game-state conditions only.
+    void onResolveCondition(std::function<bool(const ExportCondition&)> evaluator);
+
+    /// @deprecated Use onResolveCondition() instead.
     void setChoiceFilter(std::function<bool(const ExportCondition&)> evaluator);
 
     // ─── Validation ──────────────────────────────────────────────────
@@ -107,8 +109,8 @@ private:
     /// Character resolution callback. Default: first character in the list.
     std::function<const BlockCharacter*(const std::vector<BlockCharacter>&)> _resolveCharacter =
         [](const std::vector<BlockCharacter>& chars) -> const BlockCharacter* { return chars.empty() ? nullptr : &chars[0]; };
-    /// Choice visibility evaluator. When set, the engine tags each choice with visible before calling onChoice.
-    std::function<bool(const ExportCondition&)> _choiceFilter;
+    /// Unified condition resolver for choice visibility and condition block pre-evaluation.
+    std::function<bool(const ExportCondition&)> _conditionResolver;
 };
 
 } // namespace lsde

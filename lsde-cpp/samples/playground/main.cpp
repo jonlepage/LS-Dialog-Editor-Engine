@@ -28,6 +28,7 @@ std::string Label(const BlueprintBlock& b) {
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 int main(int argc, char* argv[]) {
+ try {
     // Find blueprint
     std::string blueprintPath;
     if (argc > 1) {
@@ -71,17 +72,26 @@ int main(int argc, char* argv[]) {
     }
 
     // on peut changer les locales on the fly
-    engine.setLocale("en");
+    engine.setLocale("fr");
 
     // on ajoute l'algorithme de résolution de personnage
     engine.onResolveCharacter([](const std::vector<BlockCharacter>& chars) -> const BlockCharacter* {
         return chars.empty() ? nullptr : &chars[0];
     });
 
-    // Opt-in: install choice visibility filter (playground: all game-state conditions pass)
-    engine.setChoiceFilter([](const ExportCondition& cond) -> bool {
-        // Simule un game state où variable_0 = "something_else"
-        if (cond.key == "variable_0") return cond.value == "something_else";
+    // Unified condition resolver — evaluates game-state conditions for both choice visibility and condition blocks.
+    // choice: conditions are handled internally by the engine via choice history.
+    engine.onResolveCondition([](const ExportCondition& cond) -> bool {
+        std::cout << "◽onResolveCondition: " << cond.key << " " << cond.op << " " << cond.value << "\n";
+        auto dot = cond.key.find('.');
+        if (dot != std::string::npos) {
+            auto target = cond.key.substr(0, dot);
+            auto key = cond.key.substr(dot + 1);
+            if (target == "VariableGlobal") {
+                if (key == "key1") return true;
+                if (key == "key2") return false;
+            }
+        }
         return true;
     });
 
@@ -152,18 +162,21 @@ int main(int argc, char* argv[]) {
         return [block]() { std::cout << "   🧹 cleanup: " << Label(*block) << "\n"; };
     });
 
-    engine.onCondition([](ISceneHandle* scene, const ConditionBlock* block, IConditionContext* ctx, std::function<void()> next) -> CleanupFn {
-        const auto& conditions = block->conditions;
-        auto result = LsdeUtils::EvaluateConditionChain(
-            conditions,
-            [scene](const ExportCondition& cond) {
-                return isChoiceCondition(cond) ? scene->evaluateCondition(cond) : true; // playground: all game conditions pass
-            }
-        );
-        for (const auto& cond : conditions)
-            std::cout << "   ❓ condition: " << cond.key << " " << cond.op << " " << cond.value << "\n";
-        std::cout << "\n🔀 CONDITION  " << Label(*block) << " — " << conditions.size() << " conditions → " << (result ? "true" : "false") << "\n";
-        ctx->resolve(result);
+    engine.onCondition([](ISceneHandle*, const ConditionBlock* block, IConditionContext* ctx, std::function<void()> next) -> CleanupFn {
+        const auto& groups = block->conditions;
+        bool isDispatcher = block->nativeProperties && block->nativeProperties->enableDispatcher
+            && *block->nativeProperties->enableDispatcher;
+
+        for (size_t i = 0; i < groups.size(); ++i) {
+            for (const auto& cond : groups[i])
+                std::cout << "   [case " << i << "] " << i << " key:" << cond.key << " " << cond.op << " " << cond.value << "\n";
+        }
+
+        // Result is pre-evaluated by the engine via onResolveCondition.
+        // We just forward what the engine already computed.
+        std::cout << "\n🔀 CONDITION  " << Label(*block) << " — " << groups.size() << " groups"
+                  << (isDispatcher ? " [DISPATCHER]" : "") << "\n";
+        // next() proceeds with auto-resolved result
         next();
         return {};
     });
@@ -208,7 +221,8 @@ int main(int argc, char* argv[]) {
 
     engine.onValidateNextBlock([](const ValidateNextBlockArgs& args) -> ValidationResult {
         if (args.fromBlock) {
-            std::cout << "   ✔️  validate: " << Label(*args.fromBlock) << " → " << Label(*args.nextBlock) << "\n";
+            std::cout << "   ✔️  validate: " << Label(*args.fromBlock) << " → " << Label(*args.nextBlock)
+                      << " (char: " << (args.nextContext.character ? args.nextContext.character->name : "none") << ")\n";
         }
         return ValidationResult::ok();
     });
@@ -262,4 +276,8 @@ int main(int argc, char* argv[]) {
     std::cout << "🏁 Engine running: " << (engine.isRunning() ? "true" : "false") << "\n";
 
     return 0;
+ } catch (const std::exception& e) {
+    std::cerr << "\n❌ CRASH: " << e.what() << "\n";
+    return 1;
+ }
 }

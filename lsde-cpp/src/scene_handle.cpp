@@ -257,7 +257,10 @@ void SceneHandleImpl::start() {
     std::vector<std::string> missing;
     if (!_sceneRegistry.dialogHandler && !_globalRegistry.dialogHandler) missing.push_back("onDialog");
     if (!_sceneRegistry.choiceHandler && !_globalRegistry.choiceHandler) missing.push_back("onChoice");
-    if (!_sceneRegistry.conditionHandler && !_globalRegistry.conditionHandler) missing.push_back("onCondition");
+    // onCondition is optional when onResolveCondition is installed — the engine auto-routes
+    // from pre-evaluated conditionGroups. The handler becomes a logging/override hook.
+    auto condResolver = _callbacks.getConditionResolver ? _callbacks.getConditionResolver() : ConditionResolverFn{};
+    if (!_sceneRegistry.conditionHandler && !_globalRegistry.conditionHandler && !condResolver) missing.push_back("onCondition");
     if (!_sceneRegistry.actionHandler && !_globalRegistry.actionHandler) missing.push_back("onAction");
     if (!missing.empty()) {
         std::string msg = "Cannot start scene — missing required handler(s): ";
@@ -403,8 +406,11 @@ const std::vector<std::string>* SceneHandleImpl::getChoice(const std::string& bl
     return &it->second;
 }
 
+// Uses the unified resolver as fallback for non-choice conditions.
+// Without a resolver, non-choice conditions default to false.
 bool SceneHandleImpl::evaluateCondition(const ExportCondition& condition) {
-    return evaluateConditionWithHistory(condition, [](const ExportCondition&) { return false; });
+    auto resolver = _callbacks.getConditionResolver ? _callbacks.getConditionResolver() : ConditionResolverFn{};
+    return evaluateConditionWithHistory(condition, resolver ? resolver : [](const ExportCondition&) { return false; });
 }
 
 void SceneHandleImpl::onResolveCharacter(std::function<const BlockCharacter*(const std::vector<BlockCharacter>&)> fn) {
@@ -451,8 +457,6 @@ void SceneHandleImpl::processBlock(const BlueprintBlock& block) {
             }
             return;
         }
-        _hasPreResolvedCharacter = true;
-        _preResolvedNextCharacter = nextCharacter;
     }
 
     if (_cancelled) return;
@@ -563,11 +567,6 @@ void SceneHandleImpl::advanceToNextBlock(const BlueprintBlock& block, IBaseBlock
         }
     }
 
-    // Clear pre-resolved cache before spawning async tracks to prevent
-    // an async track from consuming the main track's cached character.
-    _hasPreResolvedCharacter = false;
-    _preResolvedNextCharacter = nullptr;
-
     // Spawn async tracks
     for (auto* conn : asyncConnections) {
         auto* targetBlock = _sceneGraph.getBlock(conn->toId);
@@ -623,7 +622,7 @@ bool SceneHandleImpl::evaluateConditionWithHistory(const ExportCondition& condit
 
 std::vector<RuntimeChoiceItem> SceneHandleImpl::tagChoiceVisibility(
     const std::vector<ChoiceItem>& choices,
-    const ChoiceFilterFn& filter)
+    const ConditionResolverFn& resolver)
 {
     std::vector<RuntimeChoiceItem> result;
     result.reserve(choices.size());
@@ -633,8 +632,8 @@ std::vector<RuntimeChoiceItem> SceneHandleImpl::tagChoiceVisibility(
         // Copy base ChoiceItem fields
         static_cast<ChoiceItem&>(tagged) = choice;
 
-        if (!filter) {
-            // No filter → visible stays nullopt (undefined)
+        if (!resolver) {
+            // No resolver → visible stays nullopt (undefined)
             result.push_back(std::move(tagged));
             continue;
         }
@@ -642,11 +641,11 @@ std::vector<RuntimeChoiceItem> SceneHandleImpl::tagChoiceVisibility(
         if (choice.visibilityConditions.empty()) {
             tagged.visible = true;
         } else {
-            tagged.visible = evaluateConditionChain(choice.visibilityConditions, [this, &filter](const ExportCondition& cond) {
+            tagged.visible = evaluateConditionChain(choice.visibilityConditions, [this, &resolver](const ExportCondition& cond) {
                 if (cond.key.size() >= 7 && cond.key.substr(0, 7) == "choice:") {
                     return evaluateConditionWithHistory(cond, [](const ExportCondition&) { return false; });
                 }
-                return filter(cond);
+                return resolver(cond);
             });
         }
         result.push_back(std::move(tagged));
@@ -677,30 +676,54 @@ ResolveCharacterFn SceneHandleImpl::getResolveCharacterFn() const {
 }
 
 std::unique_ptr<IBaseBlockContext> SceneHandleImpl::createContext(const BlueprintBlock& block) {
-    const BlockCharacter* resolvedCharacter = nullptr;
-    if (_hasPreResolvedCharacter) {
-        resolvedCharacter = _preResolvedNextCharacter;
-        _hasPreResolvedCharacter = false;
-        _preResolvedNextCharacter = nullptr;
-    } else {
-        static const std::vector<BlockCharacter> emptyCharacters;
-        const auto& characters = block.metadata ? block.metadata->characters : emptyCharacters;
-        auto resolverFn = getResolveCharacterFn();
-        resolvedCharacter = resolverFn ? resolverFn(characters) : nullptr;
-    }
+    // Character resolved fresh every time — no caching.
+    // A pre-resolve cache was removed because async tracks (spawned via waitForBlocks →
+    // notifyWaitSatisfied) consumed the main track's cached character, producing wrong results.
+    static const std::vector<BlockCharacter> emptyCharacters;
+    const auto& characters = block.metadata ? block.metadata->characters : emptyCharacters;
+    auto resolverFn = getResolveCharacterFn();
+    const BlockCharacter* resolvedCharacter = resolverFn ? resolverFn(characters) : nullptr;
 
     if (auto* db = dynamic_cast<const DialogBlock*>(&block)) {
         return createDialogContext(*db, resolvedCharacter);
     }
     if (auto* cb = dynamic_cast<const ChoiceBlock*>(&block)) {
-        auto choiceFilter = _callbacks.getChoiceFilter ? _callbacks.getChoiceFilter() : ChoiceFilterFn{};
-        auto taggedChoices = tagChoiceVisibility(cb->choices, choiceFilter);
+        auto resolver = _callbacks.getConditionResolver ? _callbacks.getConditionResolver() : ConditionResolverFn{};
+        auto taggedChoices = tagChoiceVisibility(cb->choices, resolver);
         auto onChoiceSelected = [this](const std::string& blockUuid, const std::string& choiceUuid) {
             recordChoice(blockUuid, choiceUuid);
         };
         return createChoiceContext(*cb, std::move(taggedChoices), resolvedCharacter, std::move(onChoiceSelected));
     }
-    if (dynamic_cast<const ConditionBlock*>(&block)) {
+    if (auto* condBlock = dynamic_cast<const ConditionBlock*>(&block)) {
+        auto resolver = _callbacks.getConditionResolver ? _callbacks.getConditionResolver() : ConditionResolverFn{};
+        if (resolver) {
+            const auto& rawGroups = condBlock->conditions;
+            // Unified evaluator: choice: conditions resolved internally via choice history,
+            // game-state conditions delegated to the onResolveCondition callback.
+            auto evaluate = [this, &resolver](const ExportCondition& cond) -> bool {
+                if (cond.key.size() >= 7 && cond.key.substr(0, 7) == "choice:")
+                    return evaluateConditionWithHistory(cond, [](const ExportCondition&) { return false; });
+                return resolver(cond);
+            };
+            auto ctx = createConditionContext(resolvedCharacter);
+            auto* condCtx = dynamic_cast<InternalConditionContext*>(ctx.get());
+            // Auto-resolve from pre-evaluated groups
+            std::vector<int> matched;
+            for (size_t i = 0; i < rawGroups.size(); ++i) {
+                if (evaluateConditionChain(rawGroups[i], evaluate))
+                    matched.push_back(static_cast<int>(i));
+            }
+            bool isDispatcher = condBlock->nativeProperties
+                && condBlock->nativeProperties->enableDispatcher
+                && *condBlock->nativeProperties->enableDispatcher;
+            if (isDispatcher) {
+                condCtx->conditionResult = matched;
+            } else {
+                condCtx->conditionResult = matched.empty() ? -1 : matched[0];
+            }
+            return ctx;
+        }
         return createConditionContext(resolvedCharacter);
     }
     if (dynamic_cast<const ActionBlock*>(&block)) {

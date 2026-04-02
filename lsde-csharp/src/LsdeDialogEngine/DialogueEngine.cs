@@ -15,8 +15,8 @@ namespace LsdeDialogEngine
         private bool _initialized;
         /// <summary>Character resolution callback. Default: first character in the list.</summary>
         private Func<List<BlockCharacter>, BlockCharacter?> _resolveCharacter = chars => chars.Count > 0 ? chars[0] : null;
-        /// <summary>Choice visibility evaluator. When set, the engine tags each choice with Visible before calling onChoice.</summary>
-        private Func<ExportCondition, bool>? _choiceFilter;
+        /// <summary>Unified condition resolver for choice visibility and condition block pre-evaluation.</summary>
+        private Func<ExportCondition, bool>? _conditionResolver;
 
         // ─── Initialization ──────────────────────────────────────────────
 
@@ -58,10 +58,18 @@ namespace LsdeDialogEngine
             _resolveCharacter = resolver;
         }
 
-        /// <summary>Set the choice visibility evaluator. When set, each choice is tagged with Visible before the handler sees it.</summary>
+        /// <summary>Install a unified condition evaluator for both choice visibility and condition block pre-evaluation.
+        /// The engine handles choice: conditions internally via choice history — this callback evaluates game-state conditions only.</summary>
+        public void OnResolveCondition(Func<ExportCondition, bool> evaluator)
+        {
+            _conditionResolver = evaluator;
+        }
+
+        /// <summary>Set the choice visibility evaluator.</summary>
+        [Obsolete("Use OnResolveCondition() instead.")]
         public void SetChoiceFilter(Func<ExportCondition, bool> evaluator)
         {
-            _choiceFilter = evaluator;
+            _conditionResolver = evaluator;
         }
 
         // ─── Validation ──────────────────────────────────────────────────
@@ -171,7 +179,7 @@ namespace LsdeDialogEngine
                 OnSceneStarted = h => _activeScenes[sceneId] = h,
                 OnSceneEnded = _ => _activeScenes.Remove(sceneId),
                 GetResolveCharacter = () => _resolveCharacter,
-                GetChoiceFilter = () => _choiceFilter,
+                GetConditionResolver = () => _conditionResolver,
                 GetLocale = () => _locale,
             });
 

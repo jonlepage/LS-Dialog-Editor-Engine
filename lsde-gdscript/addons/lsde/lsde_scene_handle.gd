@@ -11,15 +11,13 @@ signal scene_exited(handle)
 var _scene_graph: LsdeGraph.SceneGraph
 var _global_registry: LsdeHandlerRegistry
 var _scene_registry: LsdeHandlerRegistry.SceneRegistry
-var _callbacks: Dictionary  # {on_scene_started, on_scene_ended, get_resolve_character, get_choice_filter, get_locale}
+var _callbacks: Dictionary  # {on_scene_started, on_scene_ended, get_resolve_character, get_condition_resolver, get_locale}
 
 var _running: bool = false
 var _cancelled: bool = false
 var _current_block: Variant = null
 var _previous_block: Variant = null
 var _previous_character: Variant = null
-var _pre_resolved_next_character: Variant = null
-var _has_pre_resolved_character: bool = false
 var _visited: Array = []  # ordered list of visited UUIDs
 var _visited_set: Dictionary = {}  # fast lookup
 var _choice_history: Dictionary = {}  # {block_uuid: [choice_uuid, ...]}
@@ -50,7 +48,9 @@ func start() -> void:
 		missing.append("on_dialog")
 	if not _scene_registry.choice_handler.is_valid() and not _global_registry.choice_handler.is_valid():
 		missing.append("on_choice")
-	if not _scene_registry.condition_handler.is_valid() and not _global_registry.condition_handler.is_valid():
+	# on_condition is optional when on_resolve_condition is installed
+	var cond_resolver: Callable = _callbacks.get("get_condition_resolver", Callable()).call() if _callbacks.has("get_condition_resolver") else Callable()
+	if not _scene_registry.condition_handler.is_valid() and not _global_registry.condition_handler.is_valid() and not cond_resolver.is_valid():
 		missing.append("on_condition")
 	if not _scene_registry.action_handler.is_valid() and not _global_registry.action_handler.is_valid():
 		missing.append("on_action")
@@ -168,7 +168,12 @@ func get_choice(block_uuid: String) -> Variant:
 
 ## Evaluate a condition. Handles choice: conditions via internal choice history.
 ## Returns false for non-choice conditions (the engine cannot evaluate game state).
+## Uses the unified resolver as fallback for non-choice conditions.
+## Without a resolver, non-choice conditions default to false.
 func evaluate_condition(condition: Dictionary) -> bool:
+	var resolver: Callable = _callbacks.get("get_condition_resolver", Callable()).call() if _callbacks.has("get_condition_resolver") else Callable()
+	if resolver.is_valid():
+		return _evaluate_condition_with_history(condition, resolver)
 	return _evaluate_condition_with_history(condition, func(_c: Dictionary) -> bool: return false)
 
 ## Override character resolution for this scene. Defaults to engine-level resolver.
@@ -283,8 +288,6 @@ func _process_block(block: Dictionary) -> void:
 					"scene": self, "reason": result.get("reason", "validation_failed")
 				})
 			return
-		_has_pre_resolved_character = true
-		_pre_resolved_next_character = next_char
 
 	if _cancelled:
 		return
@@ -386,10 +389,6 @@ func _advance_to_next_block(block: Dictionary, context: Variant) -> void:
 		else:
 			async_connections.append(conn)
 
-	# Clear pre-resolved cache before spawning async tracks to prevent
-	# an async track from consuming the main track's cached character.
-	_has_pre_resolved_character = false
-	_pre_resolved_next_character = null
 
 	# Spawn async tracks
 	for conn in async_connections:
@@ -439,12 +438,12 @@ func _evaluate_condition_with_history(condition: Dictionary, fallback_evaluator:
 
 # ─── Choice visibility tagging ────────────────────────────────────────────
 
-func _tag_choice_visibility(choices: Array, filter: Callable) -> Array:
+func _tag_choice_visibility(choices: Array, resolver: Callable) -> Array:
 	var result: Array = []
 	for choice in choices:
 		var tagged: Dictionary = choice.duplicate()
-		if not filter.is_valid():
-			# No filter → no visible tag (treat as visible by default)
+		if not resolver.is_valid():
+			# No resolver → no visible tag (treat as visible by default)
 			result.append(tagged)
 			continue
 		var vis_conds: Array = choice.get("visibilityConditions", [])
@@ -454,7 +453,7 @@ func _tag_choice_visibility(choices: Array, filter: Callable) -> Array:
 			tagged["visible"] = LsdeConditionEvaluator.evaluate_condition_chain(vis_conds, func(cond: Dictionary) -> bool:
 				if cond.get("key", "").begins_with("choice:"):
 					return _evaluate_condition_with_history(cond, func(_c: Dictionary) -> bool: return false)
-				return filter.call(cond)
+				return resolver.call(cond)
 			)
 		result.append(tagged)
 	return result
@@ -484,32 +483,62 @@ func _get_resolve_character_fn() -> Callable:
 	return func(chars: Array) -> Variant: return chars[0] if chars.size() > 0 else null
 
 func _create_context(block: Dictionary) -> Variant:
-	var resolved_character: Variant = null
-	if _has_pre_resolved_character:
-		resolved_character = _pre_resolved_next_character
-		_has_pre_resolved_character = false
-		_pre_resolved_next_character = null
-	else:
-		var characters: Array = []
-		var metadata: Variant = block.get("metadata")
-		if metadata is Dictionary:
-			characters = metadata.get("characters", [])
-		var resolver_fn: Callable = _get_resolve_character_fn()
-		resolved_character = resolver_fn.call(characters) if resolver_fn.is_valid() else null
+	# Character resolved fresh every time — no caching.
+	# A pre-resolve cache was removed because async tracks (spawned via waitForBlocks →
+	# notifyWaitSatisfied) consumed the main track's cached character, producing wrong results.
+	var characters: Array = []
+	var metadata: Variant = block.get("metadata")
+	if metadata is Dictionary:
+		characters = metadata.get("characters", [])
+	var resolver_fn: Callable = _get_resolve_character_fn()
+	var resolved_character: Variant = resolver_fn.call(characters) if resolver_fn.is_valid() else null
 
 	match block.get("type", ""):
 		"DIALOG":
 			return LsdeBlockContext.create_dialog_context(block, resolved_character)
 		"CHOICE":
-			var choice_filter: Callable = Callable()
-			if _callbacks.has("get_choice_filter"):
-				choice_filter = _callbacks["get_choice_filter"].call()
-			var tagged_choices: Array = _tag_choice_visibility(block.get("choices", []), choice_filter)
+			var resolver: Callable = Callable()
+			if _callbacks.has("get_condition_resolver"):
+				resolver = _callbacks["get_condition_resolver"].call()
+			var tagged_choices: Array = _tag_choice_visibility(block.get("choices", []), resolver)
 			var on_choice_selected: Callable = func(block_uuid: String, choice_uuid: String) -> void:
 				_record_choice(block_uuid, choice_uuid)
 			return LsdeBlockContext.create_choice_context(block, tagged_choices, resolved_character, on_choice_selected)
 		"CONDITION":
-			return LsdeBlockContext.create_condition_context(resolved_character)
+			var resolver: Callable = Callable()
+			if _callbacks.has("get_condition_resolver"):
+				resolver = _callbacks["get_condition_resolver"].call()
+			if resolver.is_valid():
+				var raw_groups: Array = block.get("conditions", [])
+				# Unified evaluator: choice: conditions resolved internally via choice history,
+				# game-state conditions delegated to the on_resolve_condition callback.
+				var evaluate: Callable = func(cond: Dictionary) -> bool:
+					if cond.get("key", "").begins_with("choice:"):
+						return _evaluate_condition_with_history(cond, func(_c: Dictionary) -> bool: return false)
+					return resolver.call(cond)
+				var condition_groups: Array = []
+				for i in range(raw_groups.size()):
+					condition_groups.append({
+						"conditions": raw_groups[i],
+						"port_index": i,
+						"result": LsdeConditionEvaluator.evaluate_condition_chain(raw_groups[i], evaluate),
+					})
+				var ctx: LsdeBlockContext.ConditionContext = LsdeBlockContext.create_condition_context(resolved_character, condition_groups)
+				# Auto-resolve from pre-evaluated groups
+				var matched: Array = []
+				for g in condition_groups:
+					if g["result"]:
+						matched.append(g["port_index"])
+				var np: Variant = block.get("nativeProperties")
+				var is_dispatcher: bool = np is Dictionary and np.get("enableDispatcher", false)
+				ctx.condition_result = matched if is_dispatcher else (matched[0] if matched.size() > 0 else -1)
+				return ctx
+			# No resolver installed — raw groups without pre-evaluation
+			var raw_groups: Array = block.get("conditions", [])
+			var condition_groups: Array = []
+			for i in range(raw_groups.size()):
+				condition_groups.append({"conditions": raw_groups[i], "port_index": i})
+			return LsdeBlockContext.create_condition_context(resolved_character, condition_groups)
 		"ACTION":
 			return LsdeBlockContext.create_action_context(resolved_character)
 	return null
