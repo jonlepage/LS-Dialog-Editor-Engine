@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.3.0 (2026-04-01)
+
+### Features
+ Ajouter des modes d'évaluation pour le block condition avec support pour le mode dispatcher
+ Enhance condition evaluation with 2D condition groups
+ implement unified condition resolver for choice visibility and condition evaluation
+ refactor condition handling to support multi-group evaluation
+ Add JSON loaders for LSDE blueprints using Newtonsoft.Json and System.Text.Json
+
+### Other
+- Refactor documentation to replace deprecated `setChoiceFilter` with `onResolveCondition` across multiple language guides. Update descriptions for choice visibility handling, condition evaluation, and related concepts to improve clarity and consistency. Ensure all instances reflect the new unified condition resolver approach, enhancing the overall understanding of the engine's functionality.
+- Add integration and unit tests for OnResolveCondition and condition evaluator
+- Refactor condition handling in the dialogue engine
+- Enhance LSDE documentation and parsing guides
+- Add initial blueprint configuration with scenes, actions, choices, and dialogues
+- Refactor code structure for improved readability and maintainability
+
+
+
 ## v0.2.0 (2026-03-30)
 
 ### Features

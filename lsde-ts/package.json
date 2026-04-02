@@ -1,6 +1,6 @@
 {
   "name": "@lsde/dialog-engine",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Callback-driven dialogue graph engine — load LSDE blueprints and dispatch dialog, choice, condition and action blocks to handler callbacks",
   "sideEffects": false,
   "type": "module",
