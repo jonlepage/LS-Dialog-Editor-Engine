@@ -26,6 +26,11 @@ choice block はプレイヤーが選択する分岐点です — ダイアロ�
 
 condition block は不可視のスイッチです — ゲーム状態を評価し、プレイヤーに見えることなくフローを2つのパスのどちらかに送ります。handler は block の条件（変数、フラグ、インベントリ…）を評価し、`context.resolve(result)` を呼び出します — `true` は port 0 に、`false` は port 1 に従います。`choice:` で始まるキーの条件はプレイヤーの過去の選択を参照しており、`scene.evaluateCondition(cond)` が内部の履歴から自動的に解決します。
 
+condition block は2つの評価モードをサポートしています：
+
+- **switch モード**（デフォルト）：条件グループを順番に評価します。最初にマッチしたグループが対応する port（`true`/`case_N`）にルーティングします。マッチしない場合は `false`/`default` port に従います。
+- **dispatcher モード**（[`enableDispatcher`](/api-ref/interfaces/NativeProperties#enabledispatcher) `= true`）：マッチした**すべて**のグループが async track として同時に発火します。`false`/`default` port はメインの継続 track（"Continue"）となり、**常に実行されます**。条件 port に接続される block は async でなければなりません。
+
 <!--@include: ../../_shared/block-condition.md-->
 
 ## ACTION
@@ -66,3 +71,4 @@ note block はナラティブデザイナーのためのメモです — コメ�
 | [`debug`](/api-ref/interfaces/NativeProperties#debug) | `boolean?` | エディタ用デバッグフラグ |
 | [`waitForBlocks`](/api-ref/interfaces/NativeProperties#waitforblocks) | `string[]?` | この block が進行する前に訪問済みでなければならない block UUID |
 | [`waitInput`](/api-ref/interfaces/NativeProperties#waitinput) | `boolean?` | プレイヤー入力制御用パッシブフラグ |
+| [`enableDispatcher`](/api-ref/interfaces/NativeProperties#enabledispatcher) | `boolean?` | dispatcher モード：マッチしたすべての条件が async track として発火、false/default port は継続 track |
