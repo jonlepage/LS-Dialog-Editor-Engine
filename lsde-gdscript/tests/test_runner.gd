@@ -10,6 +10,19 @@ func _init() -> void:
 	_run_flow_tests("test-port-routing.json")
 	_run_validation_tests("test-init-validation.json")
 
+	# ── Native condition tests (unit + integration) ──
+	var cond_eval_tests := preload("res://tests/test_condition_evaluator.gd").new()
+	var cond_eval_result: Dictionary = cond_eval_tests.run()
+	_passed += cond_eval_result["passed"]
+	_failed += cond_eval_result["failed"]
+	_total += cond_eval_result["total"]
+
+	var resolve_tests := preload("res://tests/test_on_resolve_condition.gd").new()
+	var resolve_result: Dictionary = resolve_tests.run()
+	_passed += resolve_result["passed"]
+	_failed += resolve_result["failed"]
+	_total += resolve_result["total"]
+
 	print("\n━━━ Results ━━━")
 	print("Total: %d | Passed: %d | Failed: %d" % [_total, _passed, _failed])
 	if _failed > 0:
@@ -184,15 +197,15 @@ func _handle_step(block_type: String, args: Dictionary, steps: Array, step_index
 
 	# Not the expected step — auto-advance
 	if block_type == "CONDITION":
-		var cond_block_conditions: Array = block.get("conditions", [])
-		var result: bool = LsdeConditionEvaluator.evaluate_condition_chain(cond_block_conditions, func(cond: Dictionary) -> bool:
+		var raw_groups: Array = block.get("conditions", [])
+		var evaluator: Callable = func(cond: Dictionary) -> bool:
 			if suite is Dictionary and suite.has("stateBridge") and suite["stateBridge"] is Dictionary:
 				var conditions: Dictionary = suite["stateBridge"].get("conditions", {})
 				if conditions.has(cond.get("key", "")):
 					return conditions[cond.get("key", "")]
 			return true
-		)
-		context.resolve(result)
+		var group_result: Variant = LsdeConditionEvaluator.evaluate_condition_groups(raw_groups, evaluator)
+		context.resolve(group_result)
 	elif block_type == "ACTION":
 		context.resolve()
 	next_fn.call()

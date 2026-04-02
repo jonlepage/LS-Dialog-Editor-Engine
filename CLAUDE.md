@@ -22,16 +22,19 @@ npm run playground    # Interactive test harness (tsx)
 ```
 
 Run a single test file:
+
 ```bash
 cd lsde-ts && npx vitest run src/engine.test.ts
 ```
 
 Run tests matching a pattern:
+
 ```bash
 cd lsde-ts && npx vitest run -t "pattern"
 ```
 
 Documentation:
+
 ```bash
 cd lsde-ts
 npm run docs:dev      # VitePress dev server (4 locales: en, ja, zh, fr)
@@ -95,8 +98,6 @@ npm run publish:major
 ```
 
 The script (`scripts/publish.sh`) syncs versions across `package.json`, `.csproj`, and `CMakeLists.txt`, runs tests, builds, publishes to npm and NuGet, then creates a git tag.
-
-
 
 ## Contexte
 
@@ -196,6 +197,7 @@ engine.init({
 ```
 
 **`init()`** :
+
 - Valide l'intégrité des données (tous les blocks référencés dans connections existent)
 - Vérifie qu'une seule `isStartBlock` par scène
 - Construit des index internes pour accès rapide (blocks par UUID, connections par blockId)
@@ -219,10 +221,12 @@ engine.setStateBridge({
 ```
 
 **`evaluateCondition`** — Appelé AUTOMATIQUEMENT par le moteur pour :
+
 - `ChoiceItem.visibilityConditions[]` (filtrage des choix visibles)
 - `ConditionBlock.conditions[]` si aucun `onCondition` handler n'est enregistré (auto-évaluation)
 
 **`executeAction`** — Appelé AUTOMATIQUEMENT par le moteur pour :
+
 - `ActionBlock.actions[]` si aucun `onAction` handler n'est enregistré (auto-exécution)
 
 **`resolveDictionary`** — Appelé quand un paramètre d'action est de type "dictionary".
@@ -271,20 +275,25 @@ engine.onAction(handler)    → blocks de type ACTION
 ### 3.6 Context API par type de block
 
 **Commun à tous** :
+
 - `context.preventGlobalHandler()` — dans un handler Tier 2, empêche le handler global de s'exécuter
 
 **DialogContext** :
+
 - `context.character` — personnage du block (name, emotion, emotionIntensity)
 - `context.resolveCharacterPort(characterName)` — quand `portPerCharacter = true`, indique quel port suivre
 
 **ChoiceContext** :
+
 - `context.choices` — choix visibles (déjà filtrés par visibilityConditions via StateBridge)
 - `context.selectChoice(choiceUuid)` — sélectionne un choix, le moteur suivra le port correspondant
 
 **ConditionContext** :
+
 - `context.resolve(boolean)` — true → port index 0, false → port index 1
 
 **ActionContext** :
+
 - `context.resolve()` — action réussie
 - `context.reject(error)` — action échouée
 
@@ -305,6 +314,7 @@ handle.start()                        // lance le flow depuis entryBlockId
 ```
 
 **Overrides** :
+
 ```
 handle.onEnter(callback)              // remplace engine.onSceneEnter pour cette scène
 handle.onExit(callback)               // remplace engine.onSceneExit pour cette scène
@@ -316,6 +326,7 @@ handle.onAction(handler)              // idem pour ACTION
 ```
 
 **Introspection** :
+
 ```
 handle.getCurrentBlock()              // block en cours d'exécution
 handle.getVisitedBlocks()             // Set<UUID> des blocks visités
@@ -323,6 +334,7 @@ handle.isRunning()                    // true si le flow est actif
 ```
 
 **Contrôle** :
+
 ```
 handle.cancel()                       // arrête le flow de cette scène
 ```
@@ -361,13 +373,13 @@ Ce module doit être **identique** dans tous les runtimes. C'est le coeur déter
 
 ### Règles par type de block
 
-| Type | Comportement |
-|------|-------------|
-| **DIALOG** | Port unique `out`. Si `portPerCharacter = true` : match `connection.fromPort === characterName`, fallback sur `out` |
-| **CHOICE** | Match `connection.fromPort === selectedChoiceUuid` |
-| **CONDITION** | `fromPortIndex === 0` pour true, `fromPortIndex === 1` pour false |
-| **ACTION** | Port unique `out` en succès. Si reject : cherche port `catch`, sinon `out` |
-| **NOTE** | Jamais exécuté, ignoré |
+| Type          | Comportement                                                                                                        |
+| ------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **DIALOG**    | Port unique `out`. Si `portPerCharacter = true` : match `connection.fromPort === characterName`, fallback sur `out` |
+| **CHOICE**    | Match `connection.fromPort === selectedChoiceUuid`                                                                  |
+| **CONDITION** | `fromPortIndex === 0` pour true, `fromPortIndex === 1` pour false                                                   |
+| **ACTION**    | Port unique `out` en succès. Si reject : cherche port `catch`, sinon `out`                                          |
+| **NOTE**      | Jamais exécuté, ignoré                                                                                              |
 
 ### Connections
 
@@ -439,6 +451,7 @@ Exemple: c1 AND c2 OR c3
 ```
 
 Ceci s'applique à :
+
 - `ConditionBlock.conditions[]`
 - `ChoiceItem.visibilityConditions[]`
 
@@ -453,6 +466,7 @@ Les types sont générés par l'export LSDE. Voir `blueprints/blueprint.types.ts
 ### BlueprintBlock = DialogBlock | ChoiceBlock | ConditionBlock | ActionBlock | NoteBlock
 
 **Commun (BlueprintBlockBase)** :
+
 - `uuid`, `type`, `label`, `parentLabels[]`
 - `properties: BlockProperty[]` — key/value custom
 - `userProperties: Record<string, string|number|boolean>` — données designer
@@ -472,14 +486,14 @@ Les types sont générés par l'export LSDE. Voir `blueprints/blueprint.types.ts
 
 ### 8.1 NativeProperties
 
-| Propriété | Type | Description |
-|-----------|------|-------------|
-| `delay` | number | Secondes d'attente avant exécution. Géré par le dev dans `onBeforeBlock`. |
-| `timeout` | number | Temps max en secondes. Géré par le dev dans ses handlers. |
-| `debug` | boolean | Flag de développement. Le dev décide quoi en faire. |
-| `isAsync` | boolean | Block parallèle. Le dev gère l'exécution parallèle dans son moteur. |
-| `portPerCharacter` | boolean | DIALOG uniquement. Crée des ports de sortie par personnage. |
-| `skipIfMissingActor` | boolean | Skip si le personnage n'est pas présent. Géré via `onValidateNextBlock`. |
+| Propriété            | Type    | Description                                                               |
+| -------------------- | ------- | ------------------------------------------------------------------------- |
+| `delay`              | number  | Secondes d'attente avant exécution. Géré par le dev dans `onBeforeBlock`. |
+| `timeout`            | number  | Temps max en secondes. Géré par le dev dans ses handlers.                 |
+| `debug`              | boolean | Flag de développement. Le dev décide quoi en faire.                       |
+| `isAsync`            | boolean | Block parallèle. Le dev gère l'exécution parallèle dans son moteur.       |
+| `portPerCharacter`   | boolean | DIALOG uniquement. Crée des ports de sortie par personnage.               |
+| `skipIfMissingActor` | boolean | Skip si le personnage n'est pas présent. Géré via `onValidateNextBlock`.  |
 
 ---
 
@@ -489,49 +503,58 @@ Les types sont générés par l'export LSDE. Voir `blueprints/blueprint.types.ts
 
 ```json
 {
-    "version": "1.0",
-    "suites": [{
-        "id": "linear-dialog",
-        "description": "Three dialog blocks in sequence",
-        "blueprint": "simple-linear.json",
-        "locale": "en",
-        "stateBridge": {
-            "conditions": { "quest_active": true },
-            "dictionaries": {},
-            "actions": {}
-        },
-        "cases": [{
-            "id": "linear-001",
-            "steps": [
-                {
-                    "expect": { "type": "DIALOG", "blockUuid": "uuid-1", "dialogueText": "Hello" },
-                    "action": { "type": "next" }
-                },
-                {
-                    "expect": { "type": "END_OF_SCENE" }
-                }
-            ],
-            "expectedVisited": ["uuid-1"],
-            "expectedCleanupCalls": 1
-        }]
-    }]
+	"version": "1.0",
+	"suites": [
+		{
+			"id": "linear-dialog",
+			"description": "Three dialog blocks in sequence",
+			"blueprint": "simple-linear.json",
+			"locale": "en",
+			"stateBridge": {
+				"conditions": { "quest_active": true },
+				"dictionaries": {},
+				"actions": {}
+			},
+			"cases": [
+				{
+					"id": "linear-001",
+					"steps": [
+						{
+							"expect": {
+								"type": "DIALOG",
+								"blockUuid": "uuid-1",
+								"dialogueText": "Hello"
+							},
+							"action": { "type": "next" }
+						},
+						{
+							"expect": { "type": "END_OF_SCENE" }
+						}
+					],
+					"expectedVisited": ["uuid-1"],
+					"expectedCleanupCalls": 1
+				}
+			]
+		}
+	]
 }
 ```
 
 ### Types d'actions de test
 
-| Action | Description |
-|--------|-------------|
-| `{ type: "next" }` | Appelle `next()` |
-| `{ type: "selectChoice", choiceUuid: "..." }` | Appelle `context.selectChoice(uuid)` puis `next()` |
-| `{ type: "resolve", value: true/false }` | Appelle `context.resolve(value)` puis `next()` |
-| `{ type: "resolveAction" }` | Appelle `context.resolve()` puis `next()` |
-| `{ type: "rejectAction", error: "..." }` | Appelle `context.reject(error)` puis `next()` |
+| Action                                          | Description                                                |
+| ----------------------------------------------- | ---------------------------------------------------------- |
+| `{ type: "next" }`                              | Appelle `next()`                                           |
+| `{ type: "selectChoice", choiceUuid: "..." }`   | Appelle `context.selectChoice(uuid)` puis `next()`         |
+| `{ type: "resolve", value: true/false }`        | Appelle `context.resolve(value)` puis `next()`             |
+| `{ type: "resolveAction" }`                     | Appelle `context.resolve()` puis `next()`                  |
+| `{ type: "rejectAction", error: "..." }`        | Appelle `context.reject(error)` puis `next()`              |
 | `{ type: "resolveCharacterPort", name: "..." }` | Appelle `context.resolveCharacterPort(name)` puis `next()` |
 
 ### Pattern du test runner
 
 Chaque runtime implémente un runner générique qui :
+
 1. Lit `test-cases.json`
 2. Charge le blueprint JSON référencé
 3. Crée un `DialogueEngine` avec un StateBridge configuré depuis le test case
@@ -576,11 +599,13 @@ lsde-ts/src/
 ## 11. Conventions par langage
 
 ### TypeScript (lsde-ts/) — RÉFÉRENCE
+
 - Strict TS, pas de `any`
 - ESM, vitest pour les tests
 - Les types exportés doivent correspondre exactement à `blueprints/blueprint.types.ts`
 
 ### C# (lsde-csharp/)
+
 - .NET Standard 2.1 (Unity 2021+)
 - PascalCase méthodes, camelCase params
 - `Action<T>` et `Func<T>` pour callbacks
@@ -588,6 +613,7 @@ lsde-ts/src/
 - `StateBridge` = interface (pas objet littéral)
 
 ### GDScript (lsde-gdscript/)
+
 - snake_case partout
 - `class_name` pour toutes les classes
 - `Callable` pour les callbacks
@@ -595,6 +621,7 @@ lsde-ts/src/
 - `JSON.parse_string()` pour le parsing
 
 ### C++ (lsde-cpp/)
+
 - C++17 minimum
 - `std::function` pour callbacks
 - `std::unordered_map` pour index
@@ -603,18 +630,21 @@ lsde-ts/src/
 - Pas d'exceptions dans les hot paths
 
 ### Rust (lsde-rust/)
+
 - Edition 2021
 - `serde` + `serde_json`
 - `Box<dyn Fn>` pour callbacks
 - `Result<DiagnosticReport, InitError>` pour init
 
 ### Lua (lsde-lua/)
+
 - Lua 5.1+ (compatible Defold)
 - Tables pour tout
 - Module pattern
 - Pas de dépendances externes pour le core
 
 ### Python (lsde-python/)
+
 - Python 3.10+
 - `dataclasses` pour types
 - `typing.Callable` pour callbacks
@@ -636,13 +666,13 @@ lsde-ts/src/
 
 ## 13. Décisions de design
 
-| Décision | Rationale |
-|----------|-----------|
-| Callbacks partout (pas async/await) | Cross-language : Lua, C, GDScript n'ont pas d'async natif |
-| NativeProperties = données pures | Le moteur ne peut pas savoir comment le jeu gère ses timers/UI |
-| NOTE blocks ignorés silencieusement | Contenu designer-only, pas de connections dans l'export |
-| Visibility conditions filtrées avant onChoice | Toujours nécessaire, évite le boilerplate |
+| Décision                                                             | Rationale                                                                                                                                     |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Callbacks partout (pas async/await)                                  | Cross-language : Lua, C, GDScript n'ont pas d'async natif                                                                                     |
+| NativeProperties = données pures                                     | Le moteur ne peut pas savoir comment le jeu gère ses timers/UI                                                                                |
+| NOTE blocks ignorés silencieusement                                  | Contenu designer-only, pas de connections dans l'export                                                                                       |
+| Visibility conditions filtrées avant onChoice                        | Toujours nécessaire, évite le boilerplate                                                                                                     |
 | Connections inter-scènes = metadata consultable, pas auto-traversées | Les transitions impliquent du game-specific ; le dev lit les connections via `engine.getSceneConnections(sceneId)` pour décider la navigation |
-| Auto-évaluation conditions si pas de handler | Réduit le boilerplate pour le cas commun |
-| Auto-exécution actions si pas de handler | Idem |
-| TypeScript = implémentation de référence | En cas d'ambiguïté dans ce document, le comportement TS fait foi |
+| Auto-évaluation conditions si pas de handler                         | Réduit le boilerplate pour le cas commun                                                                                                      |
+| Auto-exécution actions si pas de handler                             | Idem                                                                                                                                          |
+| TypeScript = implémentation de référence                             | En cas d'ambiguïté dans ce document, le comportement TS fait foi                                                                              |
