@@ -71,7 +71,7 @@ engine.onDialog(({ block, context, next }) => {
 	return () => console.log(`   🧹 cleanup: ${block.label}`);
 });
 
-engine.onChoice(({ block, context, next }) => {
+engine.onChoice(({ block, context, next, }) => {
 	const { choices, selectChoice } = context;
 
 	// choices are tagged with .visible by the engine (onResolveCondition installed above)

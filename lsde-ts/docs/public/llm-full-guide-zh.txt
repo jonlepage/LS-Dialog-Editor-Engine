@@ -141,6 +141,11 @@ choice block 是玩家做出选择的分支点 — 对话菜单、选项列表�
 
 condition block 是一个不可见的开关 — 它评估游戏状态，在玩家看不到的情况下将 flow 送入两条路径之一。handler 评估 block 中的条件（变量、标志、背包…）然后调用 `context.resolve(result)` — `true` 走 port 0，`false` 走 port 1。以 `choice:` 开头的 key 的条件引用了玩家之前的选择 — `scene.evaluateCondition(cond)` 通过内部历史自动解析。
 
+condition block 支持两种评估模式：
+
+- **switch 模式**（默认）：按顺序评估条件组。第一个匹配的组路由到对应的 port（`true`/`case_N`）。如果没有匹配，则走 `false`/`default` port。
+- **dispatcher 模式**（[`enableDispatcher`](/api-ref/interfaces/NativeProperties#enabledispatcher) `= true`）：**所有**匹配的组同时作为 async track 触发。`false`/`default` port 变为主继续 track（"Continue"），**始终执行**。连接到条件 port 的 block 必须是 async 的。
+
 <!--@include: ../../_shared/block-condition.md-->
 
 ## ACTION
@@ -181,6 +186,7 @@ note block 是叙事设计师的便签 — 注释、提醒、上下文。在遍�
 | [`debug`](/api-ref/interfaces/NativeProperties#debug) | `boolean?` | 编辑器调试标志 |
 | [`waitForBlocks`](/api-ref/interfaces/NativeProperties#waitforblocks) | `string[]?` | 此 block 可以继续之前必须已访问的 block UUID |
 | [`waitInput`](/api-ref/interfaces/NativeProperties#waitinput) | `boolean?` | 用于显式玩家输入控制的被动标志 |
+| [`enableDispatcher`](/api-ref/interfaces/NativeProperties#enabledispatcher) | `boolean?` | dispatcher 模式：所有匹配的条件作为 async track 触发，false/default port 变为继续 track |
 
 ================================================================================
 

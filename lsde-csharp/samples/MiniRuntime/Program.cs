@@ -183,15 +183,18 @@ engine.OnCondition(args =>
     var isDispatcher = block.NativeProperties?.EnableDispatcher == true;
 
     foreach (var (g, i) in conditionGroups.Select((g, i) => (g, i)))
-        foreach (var cond in g.Conditions)
-            Console.WriteLine($"   [case {i}] {g.PortIndex} key:{cond.Key} {cond.Operator} {cond.Value} → {g.Result}");
+    foreach (var cond in g.Conditions)
+        Console.WriteLine(
+            $"   [case {i}] {g.PortIndex} key:{cond.Key} {cond.Operator} {cond.Value} → {g.Result}"
+        );
 
     // Derive result from pre-evaluated groups
     var matched = conditionGroups.Where(c => c.Result == true).Select(c => c.PortIndex).ToList();
     object result = isDispatcher ? (object)matched : (object)(matched.Count > 0 ? matched[0] : -1);
 
     Console.WriteLine(
-        $"\n🔀 CONDITION  {block.Label} — {conditionGroups.Count} groups{(isDispatcher ? " [DISPATCHER]" : "")} → {FormatResult(result)}");
+        $"\n🔀 CONDITION  {block.Label} — {conditionGroups.Count} groups{(isDispatcher ? " [DISPATCHER]" : "")} → {FormatResult(result)}"
+    );
     args.Context.Resolve(result);
     args.Next();
     return null;
@@ -229,7 +232,9 @@ engine.OnSceneExit(_ => Console.WriteLine("🔴 ━━━ Scene Exit ━━━\n
 engine.OnValidateNextBlock(args =>
 {
     if (args.FromBlock != null)
-        Console.WriteLine($"   ✔️  validate: {args.FromBlock.Label} → {args.NextBlock.Label} (char: {args.NextContext?.Character?.Name ?? "none"})");
+        Console.WriteLine(
+            $"   ✔️  validate: {args.FromBlock.Label} → {args.NextBlock.Label} (char: {args.NextContext?.Character?.Name ?? "none"})"
+        );
     return ValidationResult.Ok();
 });
 

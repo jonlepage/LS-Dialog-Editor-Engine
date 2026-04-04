@@ -12,6 +12,9 @@ hero:
     - theme: alt
       text: API リファレンス
       link: /api-ref/
+    - theme: alt
+      text: ⚡ ライブで試す
+      link: https://jonlepage.github.io/LSDEDE-DEMO-TS/
 
 features:
   - title: ビジュアル Blueprint
