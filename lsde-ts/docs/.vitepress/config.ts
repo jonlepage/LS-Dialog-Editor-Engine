@@ -1,6 +1,7 @@
 import { defineConfig, type DefaultTheme } from "vitepress";
 import { withMermaid } from "vitepress-plugin-mermaid";
 import typedocSidebar from "../api-ref/typedoc-sidebar.json";
+import type { HeadConfig, TransformContext } from "vitepress";
 
 const labels: Record<string, Record<string, string>> = {
 	"": {
@@ -117,11 +118,45 @@ const localeNav = (prefix: string): DefaultTheme.NavItem[] => {
 	];
 };
 
+const SITE_URL = "https://jonlepage.github.io/LS-Dialog-Editor-Engine";
+const OG_IMAGE = `${SITE_URL}/og-banner.png`;
+const SITE_TITLE = "LSDEDE — Dialogue Engine for Games";
+const SITE_DESC = "Callback-driven graph dispatcher for interactive dialogue blueprints. Supports choices, conditions, async tracks and multi-engine export.";
+
 export default withMermaid(defineConfig({
 	title: "LSDEDE",
-	description:
-		"Callback-driven graph dispatcher for interactive dialogue blueprints",
+	description: "Callback-driven graph dispatcher for interactive dialogue blueprints",
 	base: "/LS-Dialog-Editor-Engine/",
+
+	head: [
+		[ "meta", { property: "og:type",         content: "website" } ],
+		[ "meta", { property: "og:site_name",    content: "LSDEDE" } ],
+		[ "meta", { property: "og:image",        content: OG_IMAGE } ],
+		[ "meta", { property: "og:image:width",  content: "1200" } ],
+		[ "meta", { property: "og:image:height", content: "630" } ],
+		[ "meta", { property: "og:image:alt",    content: "LSDEDE — Dialogue Engine for Games" } ],
+		[ "meta", { name: "twitter:card",        content: "summary_large_image" } ],
+		[ "meta", { name: "twitter:image",       content: OG_IMAGE } ],
+		[ "link", { rel: "icon", type: "image/webp", href: "/LS-Dialog-Editor-Engine/lsde-64x64.webp" } ],
+	],
+
+	transformHead({ pageData }: TransformContext): HeadConfig[] {
+		const pageTitle = pageData.frontmatter.title
+			? `${pageData.frontmatter.title} — LSDEDE`
+			: SITE_TITLE;
+		const pageDesc = pageData.frontmatter.description ?? SITE_DESC;
+		const pageUrl = pageData.relativePath
+			? `${SITE_URL}/${pageData.relativePath.replace(/\.md$/, "").replace(/index$/, "")}`
+			: SITE_URL;
+
+		return [
+			[ "meta", { property: "og:url",         content: pageUrl } ],
+			[ "meta", { property: "og:title",        content: pageTitle } ],
+			[ "meta", { property: "og:description",  content: pageDesc } ],
+			[ "meta", { name: "twitter:title",        content: pageTitle } ],
+			[ "meta", { name: "twitter:description",  content: pageDesc } ],
+		];
+	},
 
 	locales: {
 		root: {
