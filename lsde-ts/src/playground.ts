@@ -121,6 +121,8 @@ engine.onChoice(({ block, context, next, }) => {
 	};
 });
 
+
+// no need LSDEDE runtime solve this , but this is juste example for manual hack (very rare case, onResolveCondition should cover 99% of use cases)
 engine.onCondition(({ block, context, next }) => {
 	const { conditionGroups } = context;
 	const { nativeProperties } = block;
