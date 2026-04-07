@@ -12,9 +12,6 @@ hero:
     - theme: alt
       text: API 参考
       link: /api-ref/
-    - theme: alt
-      text: ⚡ 在线体验
-      link: https://jonlepage.github.io/LSDEDE-DEMO-TS/
 
 features:
   - title: 可视化 Blueprint

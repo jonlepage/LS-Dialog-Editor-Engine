@@ -3,6 +3,7 @@ import DefaultTheme from 'vitepress/theme'
 import { useRoute } from 'vitepress'
 import { computed } from 'vue'
 import HeroCode from './HeroCode.vue'
+import PlaygroundCards from './PlaygroundCards.vue'
 
 const route = useRoute()
 const isApiRef = computed(() => route.path.includes('/api-ref'))
@@ -51,6 +52,9 @@ const isApiRef = computed(() => route.path.includes('/api-ref'))
       </template>
       <template #home-hero-image>
         <HeroCode />
+      </template>
+      <template #home-hero-actions-after>
+        <PlaygroundCards />
       </template>
     </DefaultTheme.Layout>
   </div>

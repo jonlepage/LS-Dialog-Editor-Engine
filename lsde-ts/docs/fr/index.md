@@ -12,9 +12,6 @@ hero:
     - theme: alt
       text: Référence API
       link: /api-ref/
-    - theme: alt
-      text: ⚡ Essayer en direct
-      link: https://jonlepage.github.io/LSDEDE-DEMO-TS/
 
 features:
   - title: Blueprints visuels

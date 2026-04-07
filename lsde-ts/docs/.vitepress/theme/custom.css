@@ -1,3 +1,11 @@
+/* ─── Light mode seulement — adoucir le blanc pur ─── */
+html:not(.dark) {
+  --vp-c-bg:        #e8e6e1;
+  --vp-c-bg-soft:   #dfddda;
+  --vp-c-bg-alt:    #d8d6d2;
+  --vp-c-bg-elv:    #dddbd7;
+}
+
 /* Sharp corners — kill all rounded borders globally */
 :root {
 	--vp-border-radius: 1px;
