@@ -12,7 +12,7 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.*" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/LsdeDialogEngine/LsdeDialogEngine.csproj" />
+    <ProjectReference Include="../../Runtime/LsdeDialogEngine.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Include="../../../tests/*.json" Link="TestData/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

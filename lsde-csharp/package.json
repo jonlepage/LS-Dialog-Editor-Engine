@@ -1,12 +1,29 @@
 {
-  "name": "@lsde/dialog-engine-csharp",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Task runner for the C# LSDE Dialog Engine (requires .NET SDK)",
-  "scripts": {
-    "build": "dotnet build",
-    "test": "dotnet test --verbosity normal",
-    "playground": "dotnet run --project samples/MiniRuntime --",
-    "clean": "dotnet clean"
-  }
+  "name": "com.lepasoft.lsde-dialog-engine",
+  "version": "0.3.0",
+  "displayName": "LSDE Dialog Engine",
+  "description": "Multi-runtime callback-driven dialogue graph dispatcher for LepaSoft Dialogue Editor. Executes blueprints (scenes, blocks, connections) exported from LSDE.",
+  "unity": "2021.3",
+  "unityRelease": "0f1",
+  "keywords": [
+    "dialogue",
+    "dialog",
+    "engine",
+    "blueprint",
+    "lsde",
+    "lepasoft",
+    "narrative"
+  ],
+  "author": {
+    "name": "LepaSoft",
+    "url": "https://lepasoft.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jonlepage/LS-Dialog-Editor-Engine.git"
+  },
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
+  },
+  "samples": []
 }

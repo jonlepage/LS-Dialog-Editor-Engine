@@ -17,10 +17,14 @@
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+
+    <!-- Build output outside Runtime/ to avoid Unity importing compiled DLLs -->
+    <BaseOutputPath>..\..\build\bin\LsdeDialogEngine.Newtonsoft\</BaseOutputPath>
+    <BaseIntermediateOutputPath>..\..\build\obj\LsdeDialogEngine.Newtonsoft\</BaseIntermediateOutputPath>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\LsdeDialogEngine\LsdeDialogEngine.csproj" />
+    <ProjectReference Include="..\LsdeDialogEngine.csproj" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 

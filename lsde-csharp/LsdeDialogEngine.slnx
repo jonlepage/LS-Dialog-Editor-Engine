@@ -2,10 +2,12 @@
   <Folder Name="/samples/">
     <Project Path="samples/MiniRuntime/MiniRuntime.csproj" />
   </Folder>
+  <Folder Name="/Runtime/">
+    <Project Path="Runtime/LsdeDialogEngine.csproj" />
+    <Project Path="Runtime/Newtonsoft/LsdeDialogEngine.Newtonsoft.csproj" />
+  </Folder>
   <Folder Name="/src/">
-    <Project Path="src/LsdeDialogEngine/LsdeDialogEngine.csproj" />
     <Project Path="src/LsdeDialogEngine.SystemTextJson/LsdeDialogEngine.SystemTextJson.csproj" />
-    <Project Path="src/LsdeDialogEngine.Newtonsoft/LsdeDialogEngine.Newtonsoft.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/LsdeDialogEngine.Tests/LsdeDialogEngine.Tests.csproj" />

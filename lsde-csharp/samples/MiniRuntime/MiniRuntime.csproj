@@ -6,6 +6,6 @@
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/LsdeDialogEngine/LsdeDialogEngine.csproj" />
+    <ProjectReference Include="../../Runtime/LsdeDialogEngine.csproj" />
   </ItemGroup>
 </Project>

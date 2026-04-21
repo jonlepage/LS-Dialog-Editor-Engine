@@ -20,7 +20,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\LsdeDialogEngine\LsdeDialogEngine.csproj" />
+    <ProjectReference Include="..\..\Runtime\LsdeDialogEngine.csproj" />
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
 
