@@ -26,9 +26,8 @@ obj/
 Library/
 Temp/
 
-# Unity .meta files outside UPM Runtime/ (parasites from local dev)
-lsde-csharp/*.meta
-lsde-csharp/Runtime/**/obj.meta
+# Unity .meta for dotnet build artifacts (not part of UPM package)
+lsde-csharp/**/obj.meta
 
 # C++
 *.o
