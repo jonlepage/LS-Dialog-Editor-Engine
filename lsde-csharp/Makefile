@@ -14,7 +14,7 @@ test:
 ## Run the mini-runtime with a blueprint file
 ## Usage: make runtime BP=../path/to/blueprint.json
 runtime:
-	dotnet run --project samples/MiniRuntime -- $(BP)
+	dotnet run --project samples~/MiniRuntime -- $(BP)
 
 ## Clean build artifacts
 clean:

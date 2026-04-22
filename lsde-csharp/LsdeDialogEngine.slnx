@@ -1,17 +1,17 @@
 <Solution>
-  <Folder Name="/samples/">
-    <Project Path="samples/MiniRuntime/MiniRuntime.csproj" />
+  <Folder Name="/samples~/">
+    <Project Path="samples~/MiniRuntime/MiniRuntime.csproj" />
   </Folder>
   <Folder Name="/Runtime/">
     <Project Path="Runtime/LsdeDialogEngine.csproj" />
     <Project Path="Runtime/Newtonsoft/LsdeDialogEngine.Newtonsoft.csproj" />
   </Folder>
-  <Folder Name="/src/">
-    <Project Path="src/LsdeDialogEngine.SystemTextJson/LsdeDialogEngine.SystemTextJson.csproj" />
+  <Folder Name="/src~/">
+    <Project Path="src~/LsdeDialogEngine.SystemTextJson/LsdeDialogEngine.SystemTextJson.csproj" />
   </Folder>
-  <Folder Name="/tests/">
-    <Project Path="tests/LsdeDialogEngine.Tests/LsdeDialogEngine.Tests.csproj" />
-    <Project Path="tests/LsdeDialogEngine.SystemTextJson.Tests/LsdeDialogEngine.SystemTextJson.Tests.csproj" />
-    <Project Path="tests/LsdeDialogEngine.Newtonsoft.Tests/LsdeDialogEngine.Newtonsoft.Tests.csproj" />
+  <Folder Name="/tests~/">
+    <Project Path="tests~/LsdeDialogEngine.Tests/LsdeDialogEngine.Tests.csproj" />
+    <Project Path="tests~/LsdeDialogEngine.SystemTextJson.Tests/LsdeDialogEngine.SystemTextJson.Tests.csproj" />
+    <Project Path="tests~/LsdeDialogEngine.Newtonsoft.Tests/LsdeDialogEngine.Newtonsoft.Tests.csproj" />
   </Folder>
 </Solution>

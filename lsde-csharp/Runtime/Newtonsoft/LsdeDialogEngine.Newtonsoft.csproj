@@ -19,8 +19,8 @@
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
 
     <!-- Build output outside Runtime/ to avoid Unity importing compiled DLLs -->
-    <BaseOutputPath>..\..\build\bin\LsdeDialogEngine.Newtonsoft\</BaseOutputPath>
-    <BaseIntermediateOutputPath>..\..\build\obj\LsdeDialogEngine.Newtonsoft\</BaseIntermediateOutputPath>
+    <BaseOutputPath>..\..\build~\bin\LsdeDialogEngine.Newtonsoft\</BaseOutputPath>
+    <BaseIntermediateOutputPath>..\..\build~\obj\LsdeDialogEngine.Newtonsoft\</BaseIntermediateOutputPath>
   </PropertyGroup>
 
   <ItemGroup>

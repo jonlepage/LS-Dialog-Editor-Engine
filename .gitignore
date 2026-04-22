@@ -5,6 +5,7 @@ package-lock.json
 # Build outputs
 dist/
 build/
+build~/
 out/
 *.js.map
 
@@ -24,6 +25,10 @@ obj/
 *.csproj.user
 Library/
 Temp/
+
+# Unity .meta files outside UPM Runtime/ (parasites from local dev)
+lsde-csharp/*.meta
+lsde-csharp/Runtime/**/obj.meta
 
 # C++
 *.o

@@ -20,7 +20,7 @@ ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -W 2>/dev/null || pwd)"
 TS_DIR="$ROOT/lsde-ts"
 CS_DIR="$ROOT/lsde-csharp/Runtime"
 CSPROJ="$CS_DIR/LsdeDialogEngine.csproj"
-CS_STJ_CSPROJ="$ROOT/lsde-csharp/src/LsdeDialogEngine.SystemTextJson/LsdeDialogEngine.SystemTextJson.csproj"
+CS_STJ_CSPROJ="$ROOT/lsde-csharp/src~/LsdeDialogEngine.SystemTextJson/LsdeDialogEngine.SystemTextJson.csproj"
 CS_NJ_CSPROJ="$ROOT/lsde-csharp/Runtime/Newtonsoft/LsdeDialogEngine.Newtonsoft.csproj"
 
 TARGET="both"
