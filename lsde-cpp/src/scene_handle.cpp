@@ -1,4 +1,6 @@
-// LSDE Dialog Engine — SceneHandle + AsyncTrack (C++ port of scene-handle.ts)
+// LSDE Dialog Engine — SceneHandle: the scene and everything its tracks share
+//
+// This file does NOT walk the graph. Walking is one thing, written once, in track.cpp.
 
 #include <lsde/scene_handle.h>
 #include <lsde/port_resolver.h>
@@ -10,331 +12,6 @@
 #include <unordered_set>
 
 namespace lsde {
-
-// ─── Helper ──────────────────────────────────────────────────────────────────
-
-// Walk past NOTE blocks to the first block the engine actually dispatches.
-//
-// NOTE blocks are designer-only: they carry no handler and are never executed, so the
-// traversal steps over them and follows their first outgoing connection.
-//
-// Returns nullptr when the walk runs out of connections — and also when it comes back to a
-// NOTE it already stepped over. A designer can wire a NOTE into a loop, and following it
-// recursively overflowed the stack instead of ending the flow.
-static const BlueprintBlock* skipNotes(const BlueprintBlock& block, const SceneGraph& sceneGraph) {
-    const BlueprintBlock* current = &block;
-    std::unordered_set<std::string> seen;
-
-    while (current && current->type == BlockType::Note) {
-        if (!seen.insert(current->id).second) return nullptr;
-
-        const auto& links = sceneGraph.getOutgoingLinks(current->id);
-        current = links.empty() ? nullptr : sceneGraph.getBlock(links[0].to);
-    }
-
-    return current;
-}
-
-static bool getGlobalPreventedImpl(IBaseBlockContext* ctx) {
-    if (auto* dc = dynamic_cast<InternalDialogContext*>(ctx)) return dc->globalPrevented;
-    if (auto* cc = dynamic_cast<InternalChoiceContext*>(ctx)) return cc->globalPrevented;
-    if (auto* cndc = dynamic_cast<InternalConditionContext*>(ctx)) return cndc->globalPrevented;
-    if (auto* ac = dynamic_cast<InternalActionContext*>(ctx)) return ac->globalPrevented;
-    return false;
-}
-
-/// Run a cleanup and hand back what it threw instead of letting it escape.
-///
-/// A cleanup runs while the engine is tearing something down - leaving a block, ending a track,
-/// closing a scene. An exception escaping mid-teardown STOPPED the teardown: the scene stayed
-/// running, onSceneExit never fired, the remaining tracks were never cancelled, and the handle sat
-/// in the engine's registry forever. The game got its exception and an engine it could no longer
-/// use.
-///
-/// So the shutdown always finishes and the fault is re-thrown once there is nothing left to
-/// unwind - the same contract as a handler that throws.
-static std::exception_ptr runCleanup(const CleanupFn& cleanup) {
-    if (!cleanup) return nullptr;
-    try {
-        cleanup();
-        return nullptr;
-    } catch (...) {
-        return std::current_exception();
-    }
-}
-
-/// Combine a scene cleanup and a global one. BOTH always run.
-///
-/// They release unrelated things - a scene handler's panel and a global handler's audio voice - so
-/// letting the first one's failure skip the second leaked whatever the second owned. The first
-/// fault is re-thrown once both have had their turn.
-static CleanupFn combineCleanupsImpl(CleanupFn a, CleanupFn b) {
-    if (a && b) {
-        return [a = std::move(a), b = std::move(b)]() {
-            auto first = runCleanup(a);
-            auto second = runCleanup(b);
-            auto fault = first ? first : second;
-            if (fault) std::rethrow_exception(fault);
-        };
-    }
-    if (a) return a;
-    if (b) return b;
-    return {};
-}
-
-// ─── AsyncTrack ──────────────────────────────────────────────────────────────
-
-AsyncTrack::AsyncTrack(const SceneGraph& sg, SceneHandleImpl& parent, const BlueprintBlock& startBlock, int id_, int parentTrackId_)
-    : id(id_), parentTrackId(parentTrackId_), startBlockUuid(startBlock.id),
-      _startBlock(&startBlock), _sceneGraph(sg), _parent(parent)
-{
-}
-
-void AsyncTrack::start() {
-    {
-        const auto waitBlocks = getNativeProperties(*_startBlock).waitForBlocks;
-        if (!waitBlocks.empty()) {
-            bool allVisited = true;
-            for (const auto& uuid : waitBlocks) {
-                if (!_parent.isVisited(uuid)) { allVisited = false; break; }
-            }
-            if (!allVisited) {
-                _pendingAdvance = [this]() { processBlock(*_startBlock); };
-                _parent.registerWaitForBlocks(this, waitBlocks);
-                return;
-            }
-        }
-    }
-    processBlock(*_startBlock);
-}
-
-/// Stop this track and every track it spawned.
-///
-/// Returns a fault instead of throwing one: endScene() cancels the whole pool in a loop, and one
-/// badly-behaved cleanup must not leave the tracks after it running.
-std::exception_ptr AsyncTrack::cancel() {
-    if (!_running) return nullptr;
-    _running = false;
-
-    auto cleanup = std::move(_previousCleanup);
-    _previousCleanup = {};
-    auto fault = runCleanup(cleanup);
-
-    _currentBlock = nullptr;
-    _pendingAdvance = {};
-    for (auto childId : _childTrackIds) {
-        auto childFault = _parent.cancelTrack(childId);
-        if (!fault) fault = childFault;
-    }
-    _childTrackIds.clear();
-    return fault;
-}
-
-bool AsyncTrack::isRunning() const { return _running; }
-
-void AsyncTrack::notifyWaitSatisfied() {
-    if (!_running || !_pendingAdvance) return;
-    auto advance = std::move(_pendingAdvance);
-    _pendingAdvance = {};
-    advance();
-}
-
-TrackInfo AsyncTrack::getTrackInfo() const {
-    TrackInfo info;
-    info.id = id;
-    info.parentTrackId = parentTrackId;
-    info.startBlockUuid = startBlockUuid;
-    info.currentBlockUuid = _currentBlock ? _currentBlock->id : "";
-    info.running = _running;
-    return info;
-}
-
-void AsyncTrack::processBlock(const BlueprintBlock& startingBlock) {
-    if (!_running) return;
-
-    const BlueprintBlock* resolvedBlock = skipNotes(startingBlock, _sceneGraph);
-    if (!resolvedBlock) {
-        if (auto fault = endTrack()) std::rethrow_exception(fault);
-        return;
-    }
-    const BlueprintBlock& block = *resolvedBlock;
-
-    // The same gate the main flow goes through. A parallel track is still the game's dialogue.
-    if (!_parent.runValidation(block, _previousBlock,
-                               _previousCard ? &(*_previousCard) : nullptr)) {
-        return;
-    }
-
-    _currentBlock = &block;
-    _parent.addVisited(block.id);
-
-    // Fire onBeforeBlock — same gate pattern as SceneHandleImpl::processBlock
-    const auto& registry = _parent.getGlobalRegistry();
-    if (registry.beforeBlockHandler) {
-        BeforeBlockArgs args;
-        args.block = &block;
-        args.scene = &_parent;
-        // The natives live in `props` alongside the writer's own properties. Ids cannot
-        // collide, so this is a lookup, not a guess.
-        NativeProperties natives = getNativeProperties(block);
-        args.context.nativeProperties = &natives;
-        auto resolvedOnce = std::make_shared<bool>(false);
-        args.resolve = [this, &block, resolvedOnce]() {
-            if (*resolvedOnce) return;
-            *resolvedOnce = true;
-            executeBlockHandler(block);
-        };
-        registry.beforeBlockHandler(args);
-    } else {
-        executeBlockHandler(block);
-    }
-}
-
-void AsyncTrack::executeBlockHandler(const BlueprintBlock& block) {
-    if (!_running) return;
-
-    auto resolved = resolveHandler(block.type, block.id, &_parent.getSceneRegistry(), _parent.getGlobalRegistry());
-
-    _ownedContext = _parent.createBlockContext(block);
-    auto* context = _ownedContext.get();
-    if (!context) {
-        advanceToNextBlock(block, nullptr);
-        return;
-    }
-
-    if (!resolved.sceneHandler && !resolved.globalHandler) {
-        advanceToNextBlock(block, context);
-        return;
-    }
-
-    bool nextCalled = false;
-    bool syncPhase = true;
-    CleanupFn sceneCleanup, globalCleanup;
-
-    const BlueprintBlock* blockPtr = &block;
-    auto next = [&nextCalled, &syncPhase, this, blockPtr, context]() {
-        if (nextCalled) return;
-        nextCalled = true;
-
-        // waitForBlocks: defer advance until all required blocks are visited
-        {
-            const auto waitBlocks = getNativeProperties(*blockPtr).waitForBlocks;
-            if (!waitBlocks.empty()) {
-                bool allVisited = true;
-                for (const auto& uuid : waitBlocks) {
-                    if (!_parent.isVisited(uuid)) { allVisited = false; break; }
-                }
-                if (!allVisited) {
-                    _pendingAdvance = [this, blockPtr, context]() { advanceToNextBlock(*blockPtr, context); };
-                    _parent.registerWaitForBlocks(this, waitBlocks);
-                    return;
-                }
-            }
-        }
-
-        if (syncPhase) return;
-        advanceToNextBlock(*blockPtr, context);
-    };
-
-    std::function<void()> nextFn = next;
-
-    try {
-        if (resolved.sceneHandler) {
-            sceneCleanup = resolved.sceneHandler(&_parent, &block, context, nextFn);
-            if (!getGlobalPreventedImpl(context) && resolved.globalHandler) {
-                globalCleanup = resolved.globalHandler(&_parent, &block, context, nextFn);
-            }
-        } else if (resolved.globalHandler) {
-            globalCleanup = resolved.globalHandler(&_parent, &block, context, nextFn);
-        }
-    } catch (...) {
-        // The track is closed down first, THEN the error is re-thrown. By the time it reaches the
-        // game, the cleanups have run and the track is gone. Swallowing it here was the v1
-        // behaviour, and it made the same fault behave in two opposite ways depending on whether
-        // it happened in a handler or in the cleanup that handler returned.
-        endTrack();
-        throw;
-    }
-
-    _previousCleanup = combineCleanupsImpl(std::move(sceneCleanup), std::move(globalCleanup));
-
-    syncPhase = false;
-    if (nextCalled && !_pendingAdvance) {
-        advanceToNextBlock(block, context);
-    }
-}
-
-void AsyncTrack::advanceToNextBlock(const BlueprintBlock& block, IBaseBlockContext* context) {
-    if (!_running) return;
-
-    _previousBlock = &block;
-    if (context && context->character()) {
-        _previousCard = *context->character();
-    } else {
-        _previousCard.reset();
-    }
-
-    PortResolutionInput input;
-    input.block = &block;
-    input.links = _sceneGraph.getOutgoingLinks(block.id);
-    if (auto* cc = dynamic_cast<InternalChoiceContext*>(context)) input.selectedOptionId = cc->selectedOptionId;
-    if (auto* cndc = dynamic_cast<InternalConditionContext*>(context)) input.conditionPort = cndc->conditionPort;
-    if (auto* ac = dynamic_cast<InternalActionContext*>(context)) input.actionRejected = ac->actionRejected;
-    if (auto* dc = dynamic_cast<InternalDialogContext*>(context)) input.actorPort = dc->actorPort;
-
-    auto resolution = resolvePort(input);
-
-    // Separate main (first non-async) from async connections
-    const Link* mainLink = nullptr;
-    std::vector<const Link*> asyncLinks;
-
-    for (const auto& link : resolution.links) {
-        auto* targetBlock = _sceneGraph.getBlock(link.to);
-        if (!targetBlock) continue;
-        if (!mainLink && !getNativeProperties(*targetBlock).isAsync.value_or(false)) {
-            mainLink = &link;
-        } else {
-            asyncLinks.push_back(&link);
-        }
-    }
-
-    // Spawn sub-tracks
-    for (const auto* link : asyncLinks) {
-        auto* targetBlock = _sceneGraph.getBlock(link->to);
-        if (targetBlock) {
-            int trackId = _parent.spawnAsyncTrack(*targetBlock, this->id);
-            _childTrackIds.push_back(trackId);
-        }
-    }
-
-    if (mainLink) {
-        auto* nextBlock = _sceneGraph.getBlock(mainLink->to);
-        if (nextBlock) {
-            auto cleanup = std::move(_previousCleanup);
-            _previousCleanup = {};
-            if (auto fault = runCleanup(cleanup)) {
-                endTrack();
-                std::rethrow_exception(fault);
-            }
-            processBlock(*nextBlock);
-            return;
-        }
-    }
-    if (auto fault = endTrack()) std::rethrow_exception(fault);
-}
-
-/// Close this track down. Returns what its cleanup threw, having finished regardless.
-std::exception_ptr AsyncTrack::endTrack() {
-    auto cleanup = std::move(_previousCleanup);
-    _previousCleanup = {};
-    auto fault = runCleanup(cleanup);
-
-    // Child tracks survive — only explicit cancel() cascades
-    _running = false;
-    _currentBlock = nullptr;
-    _parent.removeTrack(this);
-    return fault;
-}
 
 // ─── SceneHandleImpl ─────────────────────────────────────────────────────────
 
@@ -366,22 +43,26 @@ void SceneHandleImpl::start() {
     }
 
     _running = true;
-    _cancelled = false;
     if (_callbacks.onSceneStarted) _callbacks.onSceneStarted(this);
 
     fireSceneEnter();
 
     auto* startBlock = _sceneGraph.getStartBlock();
     if (startBlock) {
-        processBlock(*startBlock);
+        // The flow the player watches is a track like any other. The only thing that sets it
+        // apart is what happens when it ends — see trackEnded.
+        auto track = std::make_unique<Track>(*this, *startBlock, kMainTrackId, -1);
+        _mainTrack = track.get();
+        _tracks.push_back(std::move(track));
+        _mainTrack->start();
     } else {
-        if (auto fault = endScene()) std::rethrow_exception(fault);
+        if (auto fault = shutdown()) std::rethrow_exception(fault);
     }
 }
 
 void SceneHandleImpl::cancel() {
     if (!_running) return;
-    _cancelled = true;
+
     if (auto fault = shutdown()) std::rethrow_exception(fault);
 }
 
@@ -397,22 +78,35 @@ void SceneHandleImpl::onChoice(TypedBlockHandler<BlueprintBlock, IChoiceContext>
 void SceneHandleImpl::onCondition(TypedBlockHandler<BlueprintBlock, IConditionContext> h) { _sceneRegistry.conditionHandler = wrapHandler<BlueprintBlock, IConditionContext>(std::move(h)); }
 void SceneHandleImpl::onAction(TypedBlockHandler<BlueprintBlock, IActionContext> h) { _sceneRegistry.actionHandler = wrapHandler<BlueprintBlock, IActionContext>(std::move(h)); }
 
-const BlueprintBlock* SceneHandleImpl::getCurrentBlock() const { return _currentBlock; }
+/// The block the flow the player is watching is on. Parallel tracks have their own.
+const BlueprintBlock* SceneHandleImpl::getCurrentBlock() const {
+    return _mainTrack ? _mainTrack->getCurrentBlock() : nullptr;
+}
 const std::vector<std::string>& SceneHandleImpl::getVisitedBlocks() const { return _visitedOrder; }
 bool SceneHandleImpl::isRunning() const { return _running; }
 
 int SceneHandleImpl::getActiveTracks() const {
     int count = 0;
-    for (const auto& t : _asyncTracks) { if (t->isRunning()) count++; }
+    for (const auto* t : parallelTracks()) { (void)t; count++; }
     return count;
 }
 
-const SceneGraph& SceneHandleImpl::getSceneGraph() const { return _sceneGraph; }
-const SceneHandlerRegistry& SceneHandleImpl::getSceneRegistry() const { return _sceneRegistry; }
-const HandlerRegistry& SceneHandleImpl::getGlobalRegistry() const { return _globalRegistry; }
+const SceneGraph& SceneHandleImpl::hostSceneGraph() const { return _sceneGraph; }
+const SceneHandlerRegistry& SceneHandleImpl::hostSceneRegistry() const { return _sceneRegistry; }
+const HandlerRegistry& SceneHandleImpl::hostGlobalRegistry() const { return _globalRegistry; }
+ISceneHandle* SceneHandleImpl::asSceneHandle() { return this; }
+bool SceneHandleImpl::isSceneRunning() const { return _running; }
+
+std::vector<Track*> SceneHandleImpl::parallelTracks() const {
+    std::vector<Track*> result;
+    for (const auto& t : _tracks) {
+        if (t->id != kMainTrackId && t->isRunning()) result.push_back(t.get());
+    }
+    return result;
+}
 std::vector<TrackInfo> SceneHandleImpl::getTrackInfos() const {
     std::vector<TrackInfo> result;
-    for (const auto& t : _asyncTracks) {
+    for (const auto* t : parallelTracks()) {
         if (t->isRunning()) result.push_back(t->getTrackInfo());
     }
     return result;
@@ -443,17 +137,19 @@ void SceneHandleImpl::addVisited(const std::string& uuid) {
     }
 }
 
-int SceneHandleImpl::spawnAsyncTrack(const BlueprintBlock& startBlock, int parentTrackId) {
+int SceneHandleImpl::spawnTrack(const BlueprintBlock& startBlock, int parentTrackId) {
     int trackId = _nextTrackId++;
-    auto track = std::make_unique<AsyncTrack>(_sceneGraph, *this, startBlock, trackId, parentTrackId);
+    // -1 when the main flow opened it — the convention TrackInfo publishes.
+    const int parent = parentTrackId == kMainTrackId ? -1 : parentTrackId;
+    auto track = std::make_unique<Track>(*this, startBlock, trackId, parent);
     auto* trackPtr = track.get();
-    _asyncTracks.push_back(std::move(track));
+    _tracks.push_back(std::move(track));
     trackPtr->start();
     return trackId;
 }
 
 std::exception_ptr SceneHandleImpl::cancelTrack(int trackId) {
-    for (auto& t : _asyncTracks) {
+    for (auto& t : _tracks) {
         if (t->id == trackId) return t->cancel();
     }
     return nullptr;
@@ -466,11 +162,10 @@ void SceneHandleImpl::registerWaitForBlocks(IWaiter* waiter, const std::vector<s
     _pendingWaits.emplace_back(waiter, blockIds);
 }
 
-void SceneHandleImpl::notifyWaitSatisfied() {
-    if (!_running || _cancelled || !_pendingAdvance) return;
-    auto advance = std::move(_pendingAdvance);
-    _pendingAdvance = {};
-    advance();
+std::exception_ptr SceneHandleImpl::trackEnded(Track* track) {
+    if (track->id == kMainTrackId) return shutdown();
+    retireTrack(track);
+    return nullptr;
 }
 
 bool SceneHandleImpl::runValidation(const BlueprintBlock& block, const BlueprintBlock* fromBlock,
@@ -502,11 +197,13 @@ bool SceneHandleImpl::isVisited(const std::string& uuid) const {
     return _visitedSet.find(uuid) != _visitedSet.end();
 }
 
-void SceneHandleImpl::removeTrack(AsyncTrack* track) {
-    auto it = std::find_if(_asyncTracks.begin(), _asyncTracks.end(),
-        [track](const std::unique_ptr<AsyncTrack>& t) { return t.get() == track; });
-    if (it != _asyncTracks.end()) _asyncTracks.erase(it);
-}
+/// A track that ended is stopped, not deleted — see the note in shutdown().
+/// A parallel track that reached its end is retired IN PLACE, not erased.
+///
+/// Erasing it would destroy it, and a game can be holding a next() or an onBeforeBlock resolve()
+/// that captured it — see the note in shutdown(). Nothing reads a stopped track any more:
+/// parallelTracks() filters on isRunning(). It is freed with the scene handle.
+void SceneHandleImpl::retireTrack(Track*) {}
 
 std::unique_ptr<IBaseBlockContext> SceneHandleImpl::createBlockContext(const BlueprintBlock& block) {
     return createContext(block);
@@ -545,226 +242,32 @@ void SceneHandleImpl::onResolveCharacter(std::function<const Card*(const std::ve
     _resolveCharacter = std::move(fn);
 }
 
-// ─── Traversal ───────────────────────────────────────────────────────────────
-
-void SceneHandleImpl::processBlock(const BlueprintBlock& startingBlock) {
-    if (!_running || _cancelled) return;
-
-    // Skip NOTE
-    const BlueprintBlock* resolvedBlock = skipNotes(startingBlock, _sceneGraph);
-    if (!resolvedBlock) {
-        if (auto fault = endScene()) std::rethrow_exception(fault);
-        return;
-    }
-    const BlueprintBlock& block = *resolvedBlock;
-
-    // Validate
-    if (!runValidation(block, _previousBlock, _previousCharacter)) return;
-
-    if (_cancelled) return;
-
-    _currentBlock = &block;
-    addVisited(block.id);
-
-    // onBeforeBlock
-    if (_globalRegistry.beforeBlockHandler) {
-        BeforeBlockArgs args;
-        args.block = &block;
-        args.scene = this;
-        // The natives live in `props` alongside the writer's own properties. Ids cannot
-        // collide, so this is a lookup, not a guess.
-        NativeProperties natives = getNativeProperties(block);
-        args.context.nativeProperties = &natives;
-        // GUARDED like next(): a delay timer that fires twice would otherwise dispatch
-        // the same block twice.
-        auto resolvedOnce = std::make_shared<bool>(false);
-        args.resolve = [this, &block, resolvedOnce]() {
-            if (*resolvedOnce) return;
-            *resolvedOnce = true;
-            executeBlockHandler(block);
-        };
-        _globalRegistry.beforeBlockHandler(args);
-    } else {
-        executeBlockHandler(block);
-    }
-}
-
-void SceneHandleImpl::executeBlockHandler(const BlueprintBlock& block) {
-    // `_running` and not just `_cancelled`: a resolve() kept in a closure and fired after
-    // the scene ended on its own would otherwise restart traversal on a dead scene.
-    if (!_running || _cancelled) return;
-
-    auto resolved = resolveHandler(block.type, block.id, &_sceneRegistry, _globalRegistry);
-
-    _ownedContext = createContext(block);
-    auto* context = _ownedContext.get();
-    if (!context) {
-        advanceToNextBlock(block, nullptr);
-        return;
-    }
-
-    // No handler → advance silently (handlers are validated at start())
-    if (!resolved.sceneHandler && !resolved.globalHandler) {
-        advanceToNextBlock(block, context);
-        return;
-    }
-
-    bool nextCalled = false;
-    bool syncPhase = true;
-    CleanupFn sceneCleanup, globalCleanup;
-
-    const BlueprintBlock* blockPtr = &block;
-    auto next = [&nextCalled, &syncPhase, this, blockPtr, context]() {
-        if (nextCalled) return;
-        nextCalled = true;
-
-        // waitForBlocks: park until every listed block has been visited. The main flow honours it
-        // exactly like a parallel track - this is the join half of the fork isAsync opens.
-        {
-            const auto waitBlocks = getNativeProperties(*blockPtr).waitForBlocks;
-            if (!waitBlocks.empty()) {
-                bool allVisited = true;
-                for (const auto& id : waitBlocks) {
-                    if (!isVisited(id)) { allVisited = false; break; }
-                }
-                if (!allVisited) {
-                    _pendingAdvance = [this, blockPtr, context]() {
-                        advanceToNextBlock(*blockPtr, context);
-                    };
-                    registerWaitForBlocks(this, waitBlocks);
-                    return;
-                }
-            }
-        }
-
-        if (syncPhase) return;
-        advanceToNextBlock(*blockPtr, context);
-    };
-
-    std::function<void()> nextFn = next;
-
-    try {
-        if (resolved.sceneHandler) {
-            sceneCleanup = resolved.sceneHandler(this, blockPtr, context, nextFn);
-            if (!getGlobalPreventedImpl(context) && resolved.globalHandler) {
-                globalCleanup = resolved.globalHandler(this, &block, context, nextFn);
-            }
-        } else if (resolved.globalHandler) {
-            globalCleanup = resolved.globalHandler(this, &block, context, nextFn);
-        }
-    } catch (...) {
-        // The scene is closed down first, THEN the error is re-thrown. The order is what makes
-        // this usable: by the time the game sees the error, the cleanups have run, the async
-        // tracks are cancelled and onSceneExit has fired. The dialogue stopped PROPERLY, and the
-        // error surfaces where the game called start() or next().
-        //
-        // v1 swallowed it — silently, not even logged — while an exception from the cleanup that
-        // same handler returned reached the caller.
-        endScene();
-        throw;
-    }
-
-    _previousCleanup = combineCleanupsImpl(std::move(sceneCleanup), std::move(globalCleanup));
-
-    // Unless the block is parked on waitForBlocks: releasing it is notifyWaitSatisfied's job.
-    syncPhase = false;
-    if (nextCalled && !_pendingAdvance) {
-        advanceToNextBlock(block, context);
-    }
-}
-
-void SceneHandleImpl::advanceToNextBlock(const BlueprintBlock& block, IBaseBlockContext* context) {
-    if (_cancelled) return;
-
-    _previousBlock = &block;
-    // Owned, not borrowed: the context that produced this card is destroyed when we leave.
-    if (context != nullptr && context->character() != nullptr) {
-        _previousCard = *context->character();
-        _previousCharacter = &(*_previousCard);
-    } else {
-        _previousCard.reset();
-        _previousCharacter = nullptr;
-    }
-
-    PortResolutionInput input;
-    input.block = &block;
-    input.links = _sceneGraph.getOutgoingLinks(block.id);
-    if (auto* cc = dynamic_cast<InternalChoiceContext*>(context)) input.selectedOptionId = cc->selectedOptionId;
-    if (auto* cndc = dynamic_cast<InternalConditionContext*>(context)) input.conditionPort = cndc->conditionPort;
-    if (auto* ac = dynamic_cast<InternalActionContext*>(context)) input.actionRejected = ac->actionRejected;
-    if (auto* dc = dynamic_cast<InternalDialogContext*>(context)) input.actorPort = dc->actorPort;
-
-    auto resolution = resolvePort(input);
-
-    // Separate: first non-async = main, rest = async
-    const Link* mainLink = nullptr;
-    std::vector<const Link*> asyncLinks;
-
-    for (const auto& link : resolution.links) {
-        auto* targetBlock = _sceneGraph.getBlock(link.to);
-        if (!targetBlock) continue;
-        if (!mainLink && !getNativeProperties(*targetBlock).isAsync.value_or(false)) {
-            mainLink = &link;
-        } else {
-            asyncLinks.push_back(&link);
-        }
-    }
-
-    // Spawn async tracks
-    for (const auto* link : asyncLinks) {
-        auto* targetBlock = _sceneGraph.getBlock(link->to);
-        if (targetBlock) {
-            spawnAsyncTrack(*targetBlock, -1);
-        }
-    }
-
-    // Continue main track
-    if (mainLink) {
-        auto* nextBlock = _sceneGraph.getBlock(mainLink->to);
-        if (nextBlock) {
-            auto cleanup = std::move(_previousCleanup);
-            _previousCleanup = {};
-            if (auto fault = runCleanup(cleanup)) {
-                // Same order as a handler that throws: the scene is closed down first, and the
-                // error reaches the game with the dialogue already stopped properly.
-                endScene();
-                std::rethrow_exception(fault);
-            }
-            processBlock(*nextBlock);
-            return;
-        }
-    }
-
-    if (auto fault = endScene()) std::rethrow_exception(fault);
-}
-
-/// Close the scene down: cancel every track, run the pending cleanup, fire onSceneExit.
-///
-/// Returns what a cleanup threw rather than throwing it, so the teardown always runs to the end.
-/// Callers re-throw once there is nothing left to unwind.
-std::exception_ptr SceneHandleImpl::endScene() {
-    return shutdown();
-}
 
 std::exception_ptr SceneHandleImpl::shutdown() {
     _pendingWaits.clear();
-    _pendingAdvance = {};
 
     std::exception_ptr fault = nullptr;
-    for (auto& track : _asyncTracks) {
-        // Every track is cancelled even if an earlier one's cleanup threw: leaving live tracks
-        // behind on a closed scene is how a dialogue kept running after it ended.
+    // A copy of the raw pointers: cancelling a track cascades to its children, and every track is
+    // cancelled even if an earlier cleanup threw. Leaving live tracks behind on a closed scene is
+    // how a dialogue kept running after it ended.
+    std::vector<Track*> pool;
+    pool.reserve(_tracks.size());
+    for (const auto& track : _tracks) pool.push_back(track.get());
+    for (auto* track : pool) {
         auto trackFault = track->cancel();
         if (!fault) fault = trackFault;
     }
-    _asyncTracks.clear();
 
-    auto cleanup = std::move(_previousCleanup);
-    _previousCleanup = {};
-    if (auto cleanupFault = runCleanup(cleanup)) { if (!fault) fault = cleanupFault; }
+    // The pool is NOT cleared: a cancelled track is stopped, not deleted. A game can hold an
+    // onBeforeBlock resolve() past the end of the scene, and that closure captures its track —
+    // destroying it here turns a stale callback into a dangling pointer. In the three garbage
+    // collected runtimes the object simply outlives the pool; C++ has to say so. It is a bounded
+    // cost: the tracks of one scene, freed with the handle.
+    //
+    // Nothing reads them any more either — getActiveTracks() and getTrackInfos() filter on
+    // isRunning(), and a stopped track answers false.
 
     _running = false;
-    _currentBlock = nullptr;
     fireSceneExit();
     if (_callbacks.onSceneEnded) _callbacks.onSceneEnded(this);
     return fault;

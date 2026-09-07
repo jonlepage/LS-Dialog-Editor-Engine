@@ -277,3 +277,84 @@ TEST(Robustness, AnExceptionInACleanupReachesTheCallerToo) {
 
     EXPECT_THROW(handle->start(), std::runtime_error);
 }
+
+// ─── next() kept for later ───────────────────────────────────────────────────
+//
+// The normal way a game drives this engine: onDialog shows the line, returns, and next() is called
+// a frame later when the player presses a key. `next` is handed over BY VALUE, so the game keeps
+// its own copy of the std::function — and it must still work once executeBlockHandler's frame is
+// gone.
+//
+// This was never covered: every other C++ test calls next() synchronously, inside the handler.
+
+TEST(Robustness, NextKeptForLaterStillAdvancesTheFlow) {
+    std::vector<std::string> dispatched;
+    std::function<void()> deferred;
+
+    DialogueEngine engine;
+    auto b1 = dialog("b1");
+    wire(b1, "b2");
+    auto b2 = dialog("b2");
+    wire(b2, "b3");
+    ASSERT_TRUE(engine.init({oneScene({b1, b2, dialog("b3")})}).errors.empty());
+    registerAllHandlers(engine);
+
+    engine.onDialog([&](ISceneHandle*, const BlueprintBlock* b, IDialogContext*, std::function<void()> next) -> CleanupFn {
+        dispatched.push_back(b->id);
+        if (b->id == "b1") {
+            deferred = next;  // the game waits for the player
+            return {};
+        }
+        next();
+        return {};
+    });
+
+    auto handle = engine.scene("s1");
+    handle->start();
+    EXPECT_EQ(dispatched, std::vector<std::string>({"b1"}));
+    EXPECT_TRUE(handle->isRunning());
+
+    deferred();
+
+    EXPECT_EQ(dispatched, std::vector<std::string>({"b1", "b2", "b3"}));
+    EXPECT_FALSE(handle->isRunning());
+}
+
+// The same, with the stack deliberately churned in between: a second scene played to its end
+// reuses exactly the frame executeBlockHandler left behind. A next() that reads its guards from
+// that frame is reading whatever the second scene wrote there.
+
+TEST(Robustness, NextKeptForLaterSurvivesAnotherSceneOnTheSameStack) {
+    std::vector<std::string> dispatched;
+    std::function<void()> deferred;
+
+    DialogueEngine engine;
+    auto b1 = dialog("b1");
+    wire(b1, "b2");
+    ASSERT_TRUE(engine.init({oneScene({b1, dialog("b2")})}).errors.empty());
+    registerAllHandlers(engine);
+
+    engine.onDialog([&](ISceneHandle*, const BlueprintBlock* b, IDialogContext*, std::function<void()> next) -> CleanupFn {
+        dispatched.push_back(b->id);
+        if (b->id == "b1" && !deferred) {
+            deferred = next;
+            return {};
+        }
+        next();
+        return {};
+    });
+
+    auto handle = engine.scene("s1");
+    handle->start();
+    ASSERT_EQ(dispatched, std::vector<std::string>({"b1"}));
+
+    // Churn: a second handle walks the same scene to the end, over the same stack region.
+    auto other = engine.scene("s1");
+    other->start();
+    ASSERT_FALSE(other->isRunning());
+
+    deferred();
+
+    EXPECT_EQ(dispatched.back(), "b2");
+    EXPECT_FALSE(handle->isRunning());
+}

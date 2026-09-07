@@ -244,4 +244,71 @@ describe( 'robustness — an exception in game code', () => {
 		expect( handle.isRunning() ).toBe( false );
 	} );
 
+	// ─── next() kept for later ───────────────────────────────────────────
+	//
+	// The normal way a game drives this engine: the handler shows the line, returns, and next() is
+	// called a frame later when the player presses a key. Nothing covered it in any of the four
+	// runtimes — and the C++ port was broken, because its next() read its guards off a stack frame
+	// that was already gone.
+
+	it( 'advances when next() is kept and called after the handler returned', () => {
+		const scene = makeScene( [
+			dialog( 'b1', { next: [link( 'b2' )] } ),
+			dialog( 'b2', { next: [link( 'b3' )] } ),
+			dialog( 'b3' ),
+		] );
+		const seen: string[] = [];
+		let deferred: ( () => void ) | null = null;
+
+		const global = new HandlerRegistry();
+		global.dialogHandler = ( { block, next } ) => {
+			seen.push( block.id );
+			if ( block.id === 'b1' ) {
+				deferred = next;   // the game waits for the player
+				return;
+			}
+			next();
+		};
+		fillRequiredHandlers( global );
+
+		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		handle.start();
+
+		expect( seen ).toEqual( ['b1'] );
+		expect( handle.isRunning() ).toBe( true );
+
+		deferred!();
+
+		expect( seen ).toEqual( ['b1', 'b2', 'b3'] );
+		expect( handle.isRunning() ).toBe( false );
+	} );
+
+	it( 'ignores a kept next() called twice', () => {
+		const scene = makeScene( [
+			dialog( 'b1', { next: [link( 'b2' )] } ),
+			dialog( 'b2', { next: [link( 'b3' )] } ),
+			dialog( 'b3' ),
+		] );
+		const seen: string[] = [];
+		let deferred: ( () => void ) | null = null;
+
+		const global = new HandlerRegistry();
+		global.dialogHandler = ( { block, next } ) => {
+			seen.push( block.id );
+			if ( block.id === 'b1' ) {
+				deferred = next;
+				return;
+			}
+			next();
+		};
+		fillRequiredHandlers( global );
+
+		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		handle.start();
+		deferred!();
+		deferred!();   // a double-fired input event
+
+		expect( seen ).toEqual( ['b1', 'b2', 'b3'] );
+	} );
+
 } );

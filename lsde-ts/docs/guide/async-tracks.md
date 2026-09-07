@@ -18,17 +18,23 @@ This applies to both the main track **and** async tracks — an async track can 
 - When a track finishes naturally (no more connections), its sub-tracks **continue to live** independently
 - When a track is explicitly cancelled (`cancel()`), the cancellation **cascades** to all child tracks
 
-## waitForBlocks — Track Synchronization
+## waitForBlocks — waiting for another track
 
-Use `props.waitForBlocks` to synchronize parallel tracks. It accepts an array of block UUIDs that must be visited before the block can proceed:
+`props.waitForBlocks` holds a block until the blocks it names have been visited. It is the join half of the fork `isAsync` opens: a branch runs in parallel, and a block downstream waits for it to have got somewhere before it plays.
 
-- **On the start block**: The entire track waits before even beginning execution. `onBeforeBlock` is not called until all required blocks are visited.
-- **On any other block**: When the handler calls `next()`, the advance is deferred until the condition is met.
+**It holds the block BEFORE the block is dispatched.** No handler is called, so your game never learns the block exists until the wait lifts — nothing of it can reach the screen early. That is the engine's decision and not a rendering choice you could make differently: `waitForBlocks` is a native property, the designer ticks it in LSDE, and the engine owes them the behaviour.
 
-The full execution sequence with `delay` and `waitForBlocks`:
+The rule is the same on **every** track, the one the player is watching included.
+
+- The ids name blocks **of this scene**. A wire has never crossed a scene boundary.
+- **All** of them must have been visited, not just one.
+- Visiting a block releases everything waiting on it, in turn.
+- A block that is never visited parks its track for good. `init()` reports `UNKNOWN_WAIT_BLOCK` when an id is not a block of the scene at all.
+
+The sequence for a block carrying both `waitForBlocks` and `delay`:
 
 ```
-spawn → waitForBlocks gate → onBeforeBlock (delay) → handler → next()
+waitForBlocks gate → onBeforeBlock (delay) → handler → next()
 ```
 
 ## waitInput — Player Input Flag

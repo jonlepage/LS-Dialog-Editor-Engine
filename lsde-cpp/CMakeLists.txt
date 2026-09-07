@@ -15,6 +15,7 @@ add_library(lsde STATIC
     src/handler_registry.cpp
     src/block_context.cpp
     src/scene_handle.cpp
+    src/track.cpp
     src/engine.cpp
 )
 

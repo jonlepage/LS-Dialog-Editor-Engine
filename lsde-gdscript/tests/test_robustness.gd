@@ -189,6 +189,62 @@ func _test_note_chain_reaches_the_real_block() -> void:
 
 	_assert_eq(dispatched, ["b1"], "NOTE chain reaches the block behind it")
 
+# ─── next() kept for later ────────────────────────────────────────────────
+#
+# The normal way a game drives this engine: the handler shows the line, returns, and next() is
+# called a frame later when the player presses a key. Nothing covered it in any of the four
+# runtimes — and the C++ port was broken, because its next() read its guards off a stack frame
+# that was already gone.
+
+func _test_next_kept_for_later_still_advances() -> void:
+	var seen: Array = []
+	var kept: Array = []
+	var engine := _ready_engine(_one_scene([
+		_dialog("b1", [_link("b2")]),
+		_dialog("b2", [_link("b3")]),
+		_dialog("b3"),
+	]))
+	engine.on_dialog(func(args: Dictionary) -> Variant:
+		seen.append(args["block"]["id"])
+		if args["block"]["id"] == "b1":
+			kept.append(args["next"])  # the game waits for the player
+			return null
+		args["next"].call()
+		return null)
+
+	var handle: LsdeSceneHandle = engine.scene("s1")
+	handle.start()
+
+	_assert_eq(seen, ["b1"], "a kept next() leaves the flow on its block")
+	_assert_eq(handle.is_running(), true, "the scene is still running, waiting")
+
+	kept[0].call()
+
+	_assert_eq(seen, ["b1", "b2", "b3"], "a kept next() still advances the flow")
+	_assert_eq(handle.is_running(), false, "the scene ends once the flow runs out")
+
+func _test_a_kept_next_called_twice_is_ignored() -> void:
+	var seen: Array = []
+	var kept: Array = []
+	var engine := _ready_engine(_one_scene([
+		_dialog("b1", [_link("b2")]),
+		_dialog("b2", [_link("b3")]),
+		_dialog("b3"),
+	]))
+	engine.on_dialog(func(args: Dictionary) -> Variant:
+		seen.append(args["block"]["id"])
+		if args["block"]["id"] == "b1":
+			kept.append(args["next"])
+			return null
+		args["next"].call()
+		return null)
+
+	engine.scene("s1").start()
+	kept[0].call()
+	kept[0].call()  # a double-fired input event
+
+	_assert_eq(seen, ["b1", "b2", "b3"], "the second call is ignored")
+
 # ─── Entry point ──────────────────────────────────────────────────────────
 
 func run() -> Dictionary:
@@ -199,4 +255,6 @@ func run() -> Dictionary:
 	_test_note_wired_to_itself_ends_scene()
 	_test_two_notes_in_a_loop_end_scene()
 	_test_note_chain_reaches_the_real_block()
+	_test_next_kept_for_later_still_advances()
+	_test_a_kept_next_called_twice_is_ignored()
 	return {"passed": _passed, "failed": _failed, "total": _total}

@@ -200,5 +200,77 @@ namespace LsdeDialogEngine.Tests
             var error = Assert.Throws<InvalidOperationException>(() => handle.Start());
             Assert.Equal("cleanup blew up", error.Message);
         }
+
+        // ─── Next() kept for later ───────────────────────────────────────────
+        //
+        // The normal way a game drives this engine: the handler shows the line, returns, and
+        // Next() is called a frame later when the player presses a key. Nothing covered it in any
+        // of the four runtimes — and the C++ port was broken, because its next() read its guards
+        // off a stack frame that was already gone.
+
+        [Fact]
+        public void NextKeptForLaterStillAdvancesTheFlow()
+        {
+            var seen = new List<string>();
+            Action? deferred = null;
+
+            var engine = Ready(Build.OneScene(
+                Build.Dialog("b1").Wire("b2"),
+                Build.Dialog("b2").Wire("b3"),
+                Build.Dialog("b3")));
+
+            engine.OnDialog(args =>
+            {
+                seen.Add(args.Block.Id);
+                if (args.Block.Id == "b1")
+                {
+                    deferred = args.Next;  // the game waits for the player
+                    return null;
+                }
+                args.Next();
+                return null;
+            });
+
+            var handle = engine.Scene("s1");
+            handle.Start();
+
+            Assert.Equal(new List<string> { "b1" }, seen);
+            Assert.True(handle.IsRunning());
+
+            deferred!();
+
+            Assert.Equal(new List<string> { "b1", "b2", "b3" }, seen);
+            Assert.False(handle.IsRunning());
+        }
+
+        [Fact]
+        public void AKeptNextCalledTwiceIsIgnored()
+        {
+            var seen = new List<string>();
+            Action? deferred = null;
+
+            var engine = Ready(Build.OneScene(
+                Build.Dialog("b1").Wire("b2"),
+                Build.Dialog("b2").Wire("b3"),
+                Build.Dialog("b3")));
+
+            engine.OnDialog(args =>
+            {
+                seen.Add(args.Block.Id);
+                if (args.Block.Id == "b1")
+                {
+                    deferred = args.Next;
+                    return null;
+                }
+                args.Next();
+                return null;
+            });
+
+            engine.Scene("s1").Start();
+            deferred!();
+            deferred!();  // a double-fired input event
+
+            Assert.Equal(new List<string> { "b1", "b2", "b3" }, seen);
+        }
     }
 }

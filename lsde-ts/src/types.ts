@@ -71,7 +71,8 @@ export type NoteBlock = BlockOfType<typeof BlockType.Note>;
  *
  * Most of these are inert: the engine passes `delay`, `timeout`, `debug`, `waitInput`,
  * `portPerCharacter` and `skipIfMissingActor` through untouched and lets the game decide. Two are
- * not: `isAsync` spawns a parallel track, and `waitForBlocks` parks one until its blocks are seen.
+ * not: `isAsync` opens a parallel track, and `waitForBlocks` holds a block until the ones it
+ * names have been visited.
  *
  * **`delay` and `timeout` are MILLISECONDS in v2.** They were seconds in v1, and nothing will
  * report the difference at runtime — a migrated project turns a 3-second pause into 3 ms.
@@ -93,7 +94,25 @@ export interface NativeProperties {
 	skipIfMissingActor?: boolean;
 	/** Condition blocks: each case exits by its own port instead of sharing `out`. */
 	portPerCase?: boolean;
-	/** Block ids OF THIS SCENE that must have been visited before this block may advance. */
+	/**
+	 * Block ids OF THIS SCENE that must have been visited before this block STARTS.
+	 *
+	 * The join half of the fork {@link NativeProperties.isAsync} opens: a branch runs in parallel,
+	 * and a block downstream waits for it to have got somewhere before it plays.
+	 *
+	 * **The engine holds the block BEFORE dispatching it.** No handler is called, so the game
+	 * never learns the block exists until the wait lifts — nothing of it can reach the screen
+	 * early. That is the engine's decision and not a rendering choice a game could make
+	 * differently: this is a NATIVE property, the designer ticks it in LSDE, and the engine owes
+	 * them the behaviour.
+	 *
+	 * The rule is the same on every track, the one the player is watching included.
+	 *
+	 * - **All** the listed blocks must have been visited, not just one.
+	 * - Visiting a block releases everything waiting on it, in turn.
+	 * - A block that is never visited parks its track for good. `init()` reports
+	 *   `UNKNOWN_WAIT_BLOCK` when an id is not a block of the scene at all.
+	 */
 	waitForBlocks?: string[];
 }
 

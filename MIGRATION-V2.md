@@ -1336,3 +1336,193 @@ partagés — mais les deux copies subsistent.
 Les fusionner pour de bon veut dire faire de la piste principale une piste comme les autres, d'id 0.
 C'est la bonne forme, et c'est un chantier à part : quatre langages, avec l'héritage virtuel du C++
 et les classes internes de GDScript. À faire délibérément, pas en marge d'une revue.
+
+---
+
+# Une seule logique de parcours
+
+La revue avait laissé la duplication en place, et je l'avais écartée de moi-même. C'était la cause
+racine de deux des sept défauts, pas une remarque de style — Jonathan a demandé qu'elle soit
+traitée comme le reste.
+
+## Ce que l'évaluation a montré, avant de toucher au code
+
+Les deux exemplaires — le flux principal écrit dans `SceneHandleImpl`, les branches parallèles dans
+une classe `AsyncTrack` — ne diffèrent que par **deux choses réelles** :
+
+1. **Ce que « ce flux est terminé » veut dire.** Le principal : la scène se termine. Une branche :
+   on la retire, la scène continue.
+2. **Qui est le parent d'une piste qu'on ouvre.** Le principal n'en a pas ; une branche garde ses
+   enfants pour l'annulation en cascade.
+
+Tout le reste était du copier-coller : `this.parentHandle.x` contre `this.x`, un nom de variable,
+une accolade placée autrement — plus une dérive accidentelle où l'un teste `running` et l'autre
+`cancelled`. Deux points de variation pour une logique : le cas qui se centralise proprement.
+
+## La forme retenue
+
+Un fichier `track.ts` (`Track.cs`, `track.cpp`, `lsde_track.gd`) qui contient **le** parcours. Une
+piste est un curseur : elle sait sur quel bloc elle est, ce qu'il lui reste à nettoyer, si elle est
+garée. **Elle ne sait pas qu'elle est la principale** — seule la scène le sait, et seulement au
+moment où la piste se termine :
+
+```
+trackEnded( track )  →  track.id == 0 ? la scène se ferme : on retire la branche
+```
+
+C'est le seul endroit du moteur où le flux principal se distingue d'une branche. Il porte l'id 0,
+ce que le commentaire du code d'origine annonçait déjà (« *0 is reserved for the implicit main
+track* ») sans que ce soit vrai.
+
+La scène garde ce que les pistes **partagent** et qu'aucune ne peut posséder : les blocs visités,
+l'historique des réponses, les registres de handlers, les pistes garées. `ITrackHost` est
+volontairement étroit : une piste qui pourrait atteindre tout `SceneHandleImpl` redériverait vers
+le travail de la scène.
+
+## `waitForBlocks` : une case, un sens
+
+En cherchant où placer l'attente dans le parcours unifié, une troisième incohérence est sortie —
+celle qui explique pourquoi la propriété était si mal comprise. **Elle voulait dire deux choses
+selon l'endroit du bloc :**
+
+- premier bloc d'une piste → retenu **avant d'être dispatché** ;
+- n'importe quel autre → dispatché, puis retenu **avant d'avancer**.
+
+Même case à cocher, deux comportements, et le second montre la réplique trop tôt. Mon correctif de
+la revue avait d'ailleurs choisi le mauvais des deux pour le flux principal.
+
+Ce qui tranche, ce n'est pas un test : c'est le format lui-même, dans les types que LSDE génère —
+« *waitForBlocks, an array of block ids OF THIS SCENE **the block waits for before it advances*** ».
+Une propriété du **bloc**. Et le demo v1 (`LSDEDE-DEMO-TS`), écrit contre le moteur publié, le
+documente du côté jeu : « *waitForBlocks → LSDE handles this internally (defers dispatch)* ».
+Vérification faite dans la source v1 : c'est bien le moteur qui diffère `processBlock`, le jeu ne
+peut rien y faire — le handler n'est jamais appelé, donc le jeu n'apprend même pas que le bloc
+existe.
+
+Un seul sens désormais, dans `processBlock`, pour toutes les pistes : **le bloc est retenu avant
+d'être dispatché**. C'est aussi la frontière que la philosophie du moteur pose — le moteur décide
+**quand** un bloc part, le jeu décide **à quoi ça ressemble** — et elle tient ici parce que
+`waitForBlocks` est une native : le designer la coche dans LSDE, le moteur la lui doit.
+
+Documenté une fois pour toutes : dans le type `NativeProperties`, dans `CLAUDE.md`, et dans le
+guide `async-tracks` des quatre locales. Il ne devrait plus jamais falloir fouiller pour savoir ce
+que fait cette case.
+
+## Ce que la vérification a attrapé
+
+**Le C++ a levé une régression que j'avais introduite.** Le test
+`Robustness.ResolveAfterCancelDoesNotDispatch` : un jeu garde le `resolve()` d'`onBeforeBlock` et
+le déclenche après la fin de la scène. Comme la piste est maintenant un objet à part, la vider du
+pool la **détruisait**, et la fermeture capturée pointait dans le vide.
+
+Les trois autres runtimes n'ont rien vu : leur ramasse-miettes garde l'objet en vie tant que la
+fermeture le référence. Le C++ doit le dire. Une piste annulée est donc **arrêtée, pas supprimée** —
+elle vit jusqu'à la poignée de scène. Le coût est borné (les pistes d'une scène), et
+`getActiveTracks()` / `getTrackInfos()` filtrent déjà sur `isRunning()`.
+
+Le même risque existait avant pour les pistes parallèles, qui étaient bien supprimées du pool. Il
+n'était couvert par aucun test.
+
+**La spec partagée a attrapé le reste.** La suite `wait-for-blocks-main-track` que j'avais écrite
+la veille encodait l'ancien sens — bloc affiché puis retenu. Elle a échoué au bon moment, et le
+compte des blocs visités est passé de deux à un : la preuve, dans le contrat cross-langage, que le
+bloc n'est plus dispatché.
+
+## Résultat
+
+| | avant | après |
+|---|---|---|
+| TypeScript | `scene-handle.ts` 1059 l | `scene-handle.ts` 503 l + `track.ts` 498 l |
+| C# | `SceneHandle.cs` 1211 l | `SceneHandle.cs` 559 l + `Track.cs` 521 l |
+| C++ | `scene_handle.cpp` 907 l | `scene_handle.cpp` 405 l + `track.cpp` 348 l |
+| GDScript | `lsde_scene_handle.gd` 897 l | `lsde_scene_handle.gd` 478 l + `lsde_track.gd` 367 l |
+
+`processBlock`, `executeBlockHandler` et `advanceToNextBlock` : **zéro occurrence** dans les quatre
+fichiers de scène. 698 tests verts, et les quatre playgrounds impriment la même scène — 8 blocs
+visités, 27 fils, mêmes acteurs, même émotion, même branche, mêmes marqueurs bruts.
+
+---
+
+# Revue d'avant-commit — ce que la relecture a trouvé
+
+Relecture fichier par fichier des vingt-et-un fichiers non commités, avant que Jonathan commite.
+Quatre choses, dont une vraie.
+
+## Le C++ perdait un `next()` gardé pour plus tard
+
+La façon normale de piloter ce moteur : le handler affiche la réplique, rend la main, et le jeu
+appelle `next()` une frame plus tard quand le joueur appuie. `next` est passé **par valeur**, le jeu
+en garde donc sa propre copie.
+
+En C++, cette copie tenait ses deux drapeaux — `nextCalled` et `syncPhase` — **par référence à la
+pile de `executeBlockHandler`**. Quand le jeu rappelle `next()`, cette frame n'existe plus : la
+lambda lit ce que l'appel suivant a écrit par-dessus. Comportement indéfini, et en pratique un
+`next()` qui ne fait plus rien — le dialogue se fige, sans message.
+
+Deux tests le montrent, et c'est la paire qui compte :
+
+- `NextKeptForLaterStillAdvancesTheFlow` **passait déjà** — par chance, l'emplacement de pile
+  contenait encore les bonnes valeurs.
+- `NextKeptForLaterSurvivesAnotherSceneOnTheSameStack` **échouait** — dès qu'une autre scène occupe
+  la même région de pile, le `next()` différé lit n'importe quoi.
+
+Le défaut est **antérieur à la centralisation** : il était dans les *deux* copies d'origine,
+identique, depuis le jour où le port C++ a été écrit. Le déplacement ne l'a ni créé ni aggravé ; il
+l'a rendu visible, parce qu'un fichier neuf se relit. Aucun test C++ n'appelait `next()` en différé —
+tous l'appelaient dans le handler.
+
+Les trois autres runtimes n'ont jamais eu le problème : TS et C# capturent la variable, pas son
+emplacement, et GDScript utilise déjà un `Array` partagé pour exactement cette raison. Le C++ dit
+maintenant la même chose avec un `shared_ptr<NextState>` — le patron que `resolvedOnce` employait
+déjà deux lignes plus haut.
+
+Même classe de bug, corrigée en même temps : `args.context.nativeProperties` pointait sur un
+`NativeProperties` local. `onBeforeBlock` est précisément le handler qu'un jeu est *censé* différer
+— lire `delay`, armer un minuteur, `resolve()` au déclenchement — donc le contexte qu'on lui a passé
+doit rester lisible à ce moment-là.
+
+**La leçon pour les ports :** ce que le ramasse-miettes offre gratuitement aux trois autres langages,
+le C++ doit l'écrire. Toute fermeture que le jeu peut garder au-delà de l'appel ne capture que des
+choses qui lui survivent.
+
+Le trou de couverture était partout, pas seulement en C++ : **aucun** des quatre runtimes ne testait
+un `next()` différé. Les quatre le testent maintenant, avec le cas du double appel.
+
+## Le reste
+
+- **GDScript** — treize lignes de documentation orpheline en fin de `lsde_scene_handle.gd` : la
+  docstring de `skip_notes` dont la fonction est partie dans `lsde_track.gd`, une bannière
+  `AsyncTrack`, et la docstring d'une classe qui n'existe plus. Du texte décrivant du code absent.
+- **C++** — `removeTrack()` était un no-op silencieux, sans un mot d'explication. C'est délibéré (une
+  piste annulée est arrêtée, pas détruite, cf. plus haut), mais un lecteur l'aurait « réparé ».
+  Renommé `retireTrack()` et documenté sur place.
+- **`CLAUDE.md`** — parlait encore d'`AsyncTrack` et d'`endScene()`, deux noms que la centralisation
+  a supprimés. La phrase historique du tableau garde `AsyncTrack` : elle raconte le passé.
+
+## Ce que la relecture a confirmé, et laissé tel quel
+
+- L'ordre de `advanceToNextBlock` est **identique** à celui de l'original : résoudre le port,
+  séparer principal/parallèle, ouvrir les pistes, puis nettoyer, puis suivre. Rien n'a bougé.
+- L'API publique des quatre handles de scène est **inchangée** par rapport à HEAD. La seule méthode
+  retirée est `notify_wait_satisfied()` en GDScript : la scène n'est plus un waiter, les pistes le
+  sont. Aucun jeu ne l'appelait.
+- Le double appel de `notifyWaitSatisfied()` est possible en cascade — un réveil peut en réveiller
+  un autre — et il est inoffensif dans les quatre : `pendingAdvance` est vidé avant l'appel. La
+  garde porte.
+- Le warning `ObjectDB instances leaked` de Godot est **antérieur** : il sort à l'identique sur
+  l'arbre propre.
+- Les trois specs partagées sont idempotentes — regénérées, aucun octet ne bouge. Le générateur
+  s'exécute depuis la racine, pas depuis `tests/`.
+
+## Compte final
+
+| | tests |
+|---|---|
+| TypeScript | 408 |
+| C# | 122 |
+| C++ | 54 |
+| GDScript | 127 |
+| **total** | **711** |
+
+Les quatre playgrounds impriment la même scène : 8 blocs visités, 27 fils, mêmes acteurs, même
+émotion, même branche, mêmes marqueurs bruts.

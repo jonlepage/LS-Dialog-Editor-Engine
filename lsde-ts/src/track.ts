@@ -1,0 +1,498 @@
+// LSDE Dialog Engine — one track walking the graph
+//
+// This is THE traversal. There is one of it, and every track uses it: the one the player is
+// watching and every parallel branch `isAsync` opens. A track is a cursor — it knows which block
+// it is on, what it still has to clean up, and whether it is parked. It does not know it is the
+// main one; only the scene knows that, and only when the track ends.
+//
+// It used to be written twice. `SceneHandleImpl` walked the graph itself for the main flow, and
+// `AsyncTrack` walked it again for the parallel ones — the same five methods, side by side in one
+// file. Nobody wrote it twice on purpose; the second one was needed the day `isAsync` arrived, and
+// copying was the short path. Then the two drifted, because a change to one is silent in the
+// other:
+//
+//   `waitForBlocks` was added to the parallel copy      → inert on the main flow, for months
+//   `onValidateNextBlock` was added to the main copy    → never fired on a parallel branch
+//
+// Both shipped in v1 and neither showed up at runtime. That is the whole argument for this file:
+// not tidiness, but the fact that the duplication had already cost two bugs by the time anyone
+// looked.
+//
+// What the scene keeps, and a track asks it for, is everything SHARED: the visited set, the choice
+// history, the handler registries, the pending waits. A track owns only its own position.
+
+import type {
+	BlueprintBlock, SceneHandle, CleanupFn, Card, NativeProperties, TrackInfo,
+} from './types.js';
+import { BlockType } from './types.js';
+import type { SceneGraph } from './graph.js';
+import type { HandlerRegistry, SceneHandlerRegistry } from './handler-registry.js';
+import { resolveHandler } from './handler-registry.js';
+import { resolvePort } from './port-resolver.js';
+import type {
+	InternalDialogContext, InternalChoiceContext, InternalConditionContext, InternalActionContext,
+} from './block-context.js';
+
+export type InternalContext =
+	InternalDialogContext | InternalChoiceContext | InternalConditionContext | InternalActionContext;
+
+/**
+ * The id of the track the player is watching. Every other track is numbered from 1.
+ *
+ * It is a number and not a flag because the main track is not special: it is the first one, and
+ * the scene ends when it ends. That is the ONLY thing that sets it apart.
+ */
+export const MAIN_TRACK_ID = 0;
+
+// ─── Cleanup faults ──────────────────────────────────────────────────────────
+
+/**
+ * What a cleanup threw, or `null` when it returned normally.
+ *
+ * A fault has to be CARRIED rather than propagated on the spot. A cleanup runs while the engine is
+ * tearing something down — leaving a block, ending a track, closing a scene — and an exception
+ * escaping mid-teardown stopped the teardown: the scene stayed running, `onSceneExit` never fired,
+ * the remaining tracks were never cancelled, and the handle sat in the engine's registry forever.
+ * The game got its exception and an engine it could no longer use.
+ *
+ * So: the shutdown always finishes, and the fault is re-thrown once there is nothing left to
+ * unwind. Same contract as a handler that throws — one fault, one behaviour.
+ */
+export type CleanupFault = { value: unknown } | null;
+
+/** Run a cleanup and hand back what it threw instead of letting it escape. */
+export function runCleanup( cleanup: CleanupFn | null | undefined ): CleanupFault {
+	if ( !cleanup ) return null;
+	try {
+		cleanup();
+		return null;
+	} catch ( value ) {
+		// `{ value }` rather than the bare value: `throw undefined` is legal, and a bare
+		// `undefined` would read as "nothing went wrong".
+		return { value };
+	}
+}
+
+/**
+ * Combine a scene cleanup and a global one into the single cleanup a track keeps.
+ *
+ * BOTH always run. They release unrelated things — a scene handler's panel and a global handler's
+ * audio voice — so letting the first one's failure skip the second leaked whatever the second
+ * owned. The first fault is re-thrown once both have had their turn.
+ */
+export function combineCleanups( a: CleanupFn | void, b: CleanupFn | void ): CleanupFn | null {
+	if ( a && b ) {
+		return () => {
+			const first = runCleanup( a );
+			const second = runCleanup( b );
+			const fault = first ?? second;
+			if ( fault ) throw fault.value;
+		};
+	}
+	if ( a ) return a;
+	if ( b ) return b;
+	return null;
+}
+
+// ─── Shared reading helpers ──────────────────────────────────────────────────
+
+/**
+ * The engine-facing properties of a block, read straight out of `props`.
+ *
+ * v2 has one bag: natives and the designer's own properties share `props`, keyed by bare id. Ids
+ * cannot collide — LSDE refuses a project property that takes a native name — so reading a native
+ * is a plain lookup. Only two of them mean anything here: `isAsync` opens a track, `waitForBlocks`
+ * holds one. The rest are passed through untouched for the game to interpret.
+ */
+export function natives( block: BlueprintBlock ): NativeProperties {
+	return ( block.props ?? {} ) as NativeProperties;
+}
+
+/**
+ * Walk past NOTE blocks to the first block the engine actually dispatches.
+ *
+ * NOTE blocks are designer-only: they carry no handler and are never executed, so a track steps
+ * over them and follows their first outgoing link.
+ *
+ * Returns `null` when the walk runs out of connections — and also when it comes back to a NOTE it
+ * already stepped over. A designer can wire a NOTE into a loop, and following it recursively
+ * overflowed the stack: the scene died on a `RangeError` instead of ending. Ending the flow is
+ * what a dead end does everywhere else in the engine.
+ */
+export function skipNotes( block: BlueprintBlock, sceneGraph: SceneGraph ): BlueprintBlock | null {
+	let current: BlueprintBlock | undefined = block;
+	let seen: Set<string> | null = null;
+
+	while ( current && current.type === BlockType.Note ) {
+		seen ??= new Set<string>();
+		if ( seen.has( current.id ) ) return null;
+		seen.add( current.id );
+
+		const links = sceneGraph.getOutgoingLinks( current.id );
+		current = links.length > 0 ? sceneGraph.getBlock( links[0]!.to ) : undefined;
+	}
+
+	return current ?? null;
+}
+
+// ─── The scene, seen from a track ────────────────────────────────────────────
+
+/** Anything the engine can park until a set of blocks has been visited. */
+export interface Waiter {
+	notifyWaitSatisfied(): void;
+}
+
+/**
+ * What a track needs from the scene that owns it.
+ *
+ * Deliberately narrow. Everything here is SHARED between tracks — the visited set, the registries,
+ * the pending waits — which is exactly why it lives on the scene and not on a track. A track that
+ * could reach the whole `SceneHandleImpl` would drift back into doing the scene's job.
+ */
+export interface TrackHost {
+	getSceneGraph(): SceneGraph;
+	getGlobalRegistry(): HandlerRegistry;
+	getSceneRegistry(): SceneHandlerRegistry;
+	/** The handle handed to handlers as `scene`. Always the scene, never the track. */
+	asSceneHandle(): SceneHandle;
+	/** Is the scene still playing? A track stops the moment its scene does. */
+	isSceneRunning(): boolean;
+
+	addVisited( blockId: string ): void;
+	isVisited( blockId: string ): boolean;
+	registerWaitForBlocks( waiter: Waiter, blockIds: string[] ): void;
+
+	createBlockContext( block: BlueprintBlock ): InternalContext | null;
+	runValidation(
+		block: BlueprintBlock,
+		fromBlock: BlueprintBlock | null,
+		fromCharacter: Card | undefined,
+	): boolean;
+
+	/** Open a parallel track on `startBlock`. Returns its id. */
+	spawnTrack( startBlock: BlueprintBlock, parentTrackId: number | null ): number;
+	cancelTrack( trackId: number ): CleanupFault;
+	/** This track reached the end of its flow. The scene decides what that means. */
+	trackEnded( track: Track ): CleanupFault;
+}
+
+// ─── Track ───────────────────────────────────────────────────────────────────
+
+/** One cursor walking the graph. The main flow is one of these, with id 0. */
+export class Track implements Waiter {
+
+	/** Unique within the scene. `MAIN_TRACK_ID` is the flow the player is watching. */
+	public readonly id: number;
+	/** The track that opened this one, or `null` when the main flow opened it. */
+	public readonly parentTrackId: number | null;
+	/** The block this track started on. */
+	public readonly startBlockUuid: string;
+
+	private readonly host: TrackHost;
+	private readonly startBlock: BlueprintBlock;
+	/** Tracks this one opened. Only an explicit `cancel()` cascades to them. */
+	private readonly childTrackIds: number[] = [];
+
+	private running = true;
+	private currentBlock: BlueprintBlock | null = null;
+	/** Where this track came from, for `onValidateNextBlock`. Its own, not another track's. */
+	private previousBlock: BlueprintBlock | null = null;
+	private previousCharacter: Card | undefined = undefined;
+	private previousCleanup: CleanupFn | null = null;
+	/** What to resume when a `waitForBlocks` is satisfied. */
+	private pendingAdvance: ( () => void ) | null = null;
+
+	constructor(
+		host: TrackHost,
+		startBlock: BlueprintBlock,
+		id: number,
+		parentTrackId: number | null,
+	) {
+		this.host = host;
+		this.startBlock = startBlock;
+		this.id = id;
+		this.parentTrackId = parentTrackId;
+		this.startBlockUuid = startBlock.id;
+	}
+
+	/** Begin walking. Must be called after the track is in the scene's pool. */
+	start(): void {
+		this.processBlock( this.startBlock );
+	}
+
+	/**
+	 * Stop this track and every track it opened.
+	 *
+	 * Returns a fault instead of throwing one: the scene cancels the whole pool in a loop, and one
+	 * badly-behaved cleanup must not leave the tracks after it running.
+	 */
+	cancel(): CleanupFault {
+		if ( !this.running ) return null;
+		this.running = false;
+
+		const cleanup = this.previousCleanup;
+		this.previousCleanup = null;
+		let fault = runCleanup( cleanup );
+
+		this.currentBlock = null;
+		this.pendingAdvance = null;
+		for ( const childId of this.childTrackIds ) {
+			fault = fault ?? this.host.cancelTrack( childId );
+		}
+		this.childTrackIds.length = 0;
+		return fault;
+	}
+
+	isRunning(): boolean {
+		return this.running;
+	}
+
+	getCurrentBlock(): BlueprintBlock | null {
+		return this.currentBlock;
+	}
+
+	/** Called once every block this track was waiting on has been visited. */
+	notifyWaitSatisfied(): void {
+		if ( !this.running || !this.host.isSceneRunning() || !this.pendingAdvance ) return;
+		const advance = this.pendingAdvance;
+		this.pendingAdvance = null;
+		advance();
+	}
+
+	/** A read-only snapshot, for a debug view. */
+	getTrackInfo(): TrackInfo {
+		return {
+			id: this.id,
+			parentTrackId: this.parentTrackId,
+			startBlockUuid: this.startBlockUuid,
+			currentBlockUuid: this.currentBlock?.id ?? null,
+			running: this.running,
+		};
+	}
+
+	// ─── The traversal ───────────────────────────────────────────────────
+
+	/**
+	 * Take a block, and either park on it or dispatch it.
+	 *
+	 * The order matters and each step earns its place:
+	 *
+	 * 1. **Step over NOTEs.** They are designer-only and never dispatched.
+	 * 2. **Honour `waitForBlocks`.** BEFORE anything else — see the note below.
+	 * 3. **Ask `onValidateNextBlock`.** The game's gate; a refusal stops this track.
+	 * 4. **Mark it current and visited.** Visiting it may release another parked track.
+	 * 5. **Fire `onBeforeBlock`**, whose `resolve()` releases the type handler.
+	 */
+	private processBlock( startingBlock: BlueprintBlock ): void {
+		if ( !this.running || !this.host.isSceneRunning() ) return;
+
+		const sceneGraph = this.host.getSceneGraph();
+
+		const block = skipNotes( startingBlock, sceneGraph );
+		if ( !block ) {
+			const fault = this.endFlow();
+			if ( fault ) throw fault.value;
+			return;
+		}
+
+		// `waitForBlocks` holds the block BEFORE it is dispatched — the handler is never called,
+		// so the game does not even learn the block exists until the wait lifts. That is the
+		// engine's decision, not a rendering choice a game could make differently: the property is
+		// native, the designer ticks it in LSDE, and the engine owes them the behaviour.
+		//
+		// It used to mean two different things depending on where the block sat: a track's FIRST
+		// block was held before dispatch, any later one was dispatched and held before advancing.
+		// Same checkbox, two meanings, and the second one showed the line early.
+		const waitBlocks = natives( block ).waitForBlocks;
+		if ( waitBlocks?.length && !waitBlocks.every( id => this.host.isVisited( id ) ) ) {
+			this.pendingAdvance = () => this.processBlock( block );
+			this.host.registerWaitForBlocks( this, waitBlocks );
+			return;
+		}
+
+		if ( !this.host.runValidation( block, this.previousBlock, this.previousCharacter ) ) return;
+
+		this.currentBlock = block;
+		this.host.addVisited( block.id );
+
+		const registry = this.host.getGlobalRegistry();
+		if ( registry.beforeBlockHandler ) {
+			// GUARDED like next(): a delay timer that fires twice would otherwise dispatch the
+			// same block twice — the handler runs again, cleanups pile up, and the track advances
+			// from a block it already left.
+			let resolved = false;
+			registry.beforeBlockHandler( {
+				block,
+				scene: this.host.asSceneHandle(),
+				context: { nativeProperties: natives( block ) },
+				resolve: () => {
+					if ( resolved ) return;
+					resolved = true;
+					this.executeBlockHandler( block );
+				},
+			} );
+		} else {
+			this.executeBlockHandler( block );
+		}
+	}
+
+	/**
+	 * Run the handlers for a block, then leave when the game says so.
+	 *
+	 * `next()` is guarded and deferred: called during the handler it only raises a flag, and the
+	 * advance happens once both handlers have returned. Otherwise a scene handler calling `next()`
+	 * would move the flow on before the global handler ever ran.
+	 */
+	private executeBlockHandler( block: BlueprintBlock ): void {
+		// `running` and not just the scene's: a `resolve()` kept in a closure and fired after this
+		// track ended would otherwise restart it on a dead flow.
+		if ( !this.running || !this.host.isSceneRunning() ) return;
+
+		const { sceneHandler, globalHandler } = resolveHandler(
+			block.type, block.id,
+			this.host.getSceneRegistry(),
+			this.host.getGlobalRegistry(),
+		);
+
+		const context = this.host.createBlockContext( block );
+		if ( !context ) {
+			this.advanceToNextBlock( block, null );
+			return;
+		}
+
+		// No handler → advance silently. `start()` already refused a scene missing one.
+		if ( !sceneHandler && !globalHandler ) {
+			this.advanceToNextBlock( block, context );
+			return;
+		}
+
+		let nextCalled = false;
+		let syncPhase = true;
+		let sceneCleanup: CleanupFn | void = undefined;
+		let globalCleanup: CleanupFn | void = undefined;
+
+		const next = () => {
+			if ( nextCalled ) return;
+			nextCalled = true;
+			if ( syncPhase ) return;
+			this.advanceToNextBlock( block, context );
+		};
+
+		const handlerArgs = { scene: this.host.asSceneHandle(), block, context, next };
+
+		try {
+			if ( sceneHandler ) {
+				sceneCleanup = sceneHandler( handlerArgs );
+				if ( !context._globalPrevented && globalHandler ) {
+					globalCleanup = globalHandler( handlerArgs );
+				}
+			} else if ( globalHandler ) {
+				globalCleanup = globalHandler( handlerArgs );
+			}
+		} catch ( err ) {
+			// The flow is closed down first, THEN the error is re-thrown. By the time the game
+			// sees it, the cleanups have run and `onSceneExit` has fired if this was the main
+			// track. The dialogue stopped PROPERLY, and the error surfaces where the game called
+			// `start()` or `next()`.
+			//
+			// v1 swallowed it — silently, not even logged — while an exception from the cleanup
+			// that same handler returned reached the caller. One fault, two opposite behaviours.
+			this.endFlow();
+			throw err;
+		}
+
+		// Stored BEFORE any advance runs, so leaving the block finds it.
+		this.previousCleanup = combineCleanups( sceneCleanup, globalCleanup );
+
+		syncPhase = false;
+		if ( nextCalled ) {
+			this.advanceToNextBlock( block, context );
+		}
+	}
+
+	/**
+	 * Leave a block: pick the outgoing links, open a track per parallel target, follow the rest.
+	 *
+	 * The FIRST non-async target continues this track; every other resolved link opens one. A port
+	 * with several non-async targets is a `MULTIPLE_NON_ASYNC_FORK` warning at init, and here the
+	 * second one simply never becomes the continuation.
+	 */
+	private advanceToNextBlock( block: BlueprintBlock, context: InternalContext | null ): void {
+		if ( !this.running || !this.host.isSceneRunning() ) return;
+
+		this.previousBlock = block;
+		this.previousCharacter = context?.character;
+
+		const sceneGraph = this.host.getSceneGraph();
+		const resolution = resolvePort( {
+			block,
+			links: sceneGraph.getOutgoingLinks( block.id ),
+			selectedOptionId: context && '_selectedOptionId' in context ? context._selectedOptionId : undefined,
+			conditionPort: context && '_conditionPort' in context ? context._conditionPort : undefined,
+			actionRejected: context && '_actionRejected' in context ? context._actionRejected : undefined,
+			actorPort: context && '_actorPort' in context ? context._actorPort : undefined,
+		} );
+
+		let mainLink: ( typeof resolution.links )[number] | null = null;
+		const asyncLinks: typeof resolution.links = [];
+
+		for ( const link of resolution.links ) {
+			const targetBlock = sceneGraph.getBlock( link.to );
+			if ( !targetBlock ) continue;
+
+			if ( !mainLink && !natives( targetBlock ).isAsync ) {
+				mainLink = link;
+			} else {
+				asyncLinks.push( link );
+			}
+		}
+
+		for ( const link of asyncLinks ) {
+			const targetBlock = sceneGraph.getBlock( link.to );
+			if ( targetBlock ) {
+				this.childTrackIds.push( this.host.spawnTrack( targetBlock, this.id ) );
+			}
+		}
+
+		if ( mainLink ) {
+			const nextBlock = sceneGraph.getBlock( mainLink.to );
+			if ( nextBlock ) {
+				const cleanupToRun = this.previousCleanup;
+				this.previousCleanup = null;
+				const fault = runCleanup( cleanupToRun );
+				if ( fault ) {
+					// Same order as a handler that throws: close down first, surface after.
+					this.endFlow();
+					throw fault.value;
+				}
+				this.processBlock( nextBlock );
+				return;
+			}
+		}
+
+		const fault = this.endFlow();
+		if ( fault ) throw fault.value;
+	}
+
+	/**
+	 * This track has nowhere left to go.
+	 *
+	 * Its own cleanup runs, then the scene is told. Whether that ends the scene or just retires a
+	 * branch is the scene's call — a track does not know which one it is.
+	 *
+	 * Child tracks SURVIVE: they live independently in the pool, and only an explicit `cancel()`
+	 * cascades to them.
+	 */
+	private endFlow(): CleanupFault {
+		const cleanup = this.previousCleanup;
+		this.previousCleanup = null;
+		const fault = runCleanup( cleanup );
+
+		this.running = false;
+		this.currentBlock = null;
+		this.pendingAdvance = null;
+
+		const hostFault = this.host.trackEnded( this );
+		return fault ?? hostFault;
+	}
+}

@@ -829,13 +829,16 @@ flow_suites += [
         ])]),
         "sceneId": "s1",
         "cases": [{
-            "id": "parks-on-an-unreachable-wait",
-            "description": "DIALOG-404 is not in the scene, so DIALOG-002 never advances.",
+            "id": "parks-before-dispatching",
+            "description": "DIALOG-404 is not in the scene, so DIALOG-002 is never even dispatched.",
+            # The wait holds the block BEFORE the handler is called: the game never learns
+            # DIALOG-002 exists, so nothing of it reaches the screen. That is the engine's
+            # decision, not a rendering choice - waitForBlocks is a native, and the designer who
+            # ticks it in LSDE is owed the behaviour.
             "steps": [
                 {"expect": {"type": "dialog", "blockId": "DIALOG-001"}, "action": {"type": "next"}},
-                {"expect": {"type": "dialog", "blockId": "DIALOG-002"}, "action": {"type": "next"}},
             ],
-            "expectedVisited": ["DIALOG-001", "DIALOG-002"],
+            "expectedVisited": ["DIALOG-001"],
             # The scene is PARKED, not finished: no onSceneExit, and it resumes if the block it
             # waits for is ever visited. Every other suite ends, so the field defaults to false.
             "expectedRunning": True,

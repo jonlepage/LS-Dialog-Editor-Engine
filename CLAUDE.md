@@ -96,13 +96,14 @@ callback model is what makes the engine portable to languages without async/awai
 
 ```
 types → validator → graph → condition-evaluator → port-resolver
-      → handler-registry → block-context → scene-handle → engine → index
+      → handler-registry → block-context → track → scene-handle → engine → index
 ```
 
 | Module | Role |
 |---|---|
 | `engine.ts` | `DialogueEngine` facade. Tier 1 handlers, locale, scene factory. |
-| `scene-handle.ts` | `SceneHandleImpl` — the traversal loop, Tier 2 overrides, `AsyncTrack`. The big one. |
+| `track.ts` | **The traversal, written ONCE.** One `Track` walks the graph; the main flow is one of them, with id 0. It used to be written twice — here for the main flow, again in an `AsyncTrack` class — and the two drifted into two shipped bugs. |
+| `scene-handle.ts` | `SceneHandleImpl` — the scene: public API, Tier 2 overrides, and everything its tracks SHARE (visited set, choice history, pending waits). It does not walk the graph. |
 | `port-resolver.ts` | **Critical**: must be byte-for-byte equivalent across runtimes. Pure function. |
 | `handler-registry.ts` | Handler resolution priority. |
 | `condition-evaluator.ts` | Left-to-right AND/OR chains, **no operator precedence**. |
@@ -148,14 +149,20 @@ behavior" holds for `delay`, `timeout`, `waitInput`, `debug`, `portPerCharacter`
 `skipIfMissingActor` and `portPerCase` — the engine passes them through untouched. **It does not
 hold for two of them**, and this is the part that surprises people:
 
-- **`isAsync`** — in `advanceToNextBlock`, the first non-async target becomes the main track; every
-  other resolved link spawns an `AsyncTrack` running in parallel. A port with several non-async
-  targets is a `MULTIPLE_NON_ASYNC_FORK` warning at init.
-- **`waitForBlocks`** — a track holding a list of block ids is parked in `pendingWaits` until all
-  of them have been visited, then released.
+- **`isAsync`** — in `Track.advanceToNextBlock`, the first non-async target continues THIS track;
+  every other resolved link opens a parallel `Track`. A port with several non-async targets is a
+  `MULTIPLE_NON_ASYNC_FORK` warning at init.
+- **`waitForBlocks`** — the join half of that fork. The engine holds the block **before
+  dispatching it**: no handler is called, so the game never learns the block exists until every
+  listed id has been visited. Same rule on EVERY track, the main flow included — it used to be
+  read only by parallel tracks, which made the property silently inert on the main flow, and it
+  used to mean "hold the exit" rather than "hold the block" when it sat anywhere but a track's
+  first block. One rule now, in `track.ts`.
 
-`endScene()` cancels every live track. Tracks carry `id` / `parentTrackId` and cancel recursively;
-`handle.getTrackInfos()` and `getActiveTracks()` expose them for debug and rendering.
+Closing the scene (`handle.cancel()`, or the main track running out of graph) cancels every live
+track. Tracks carry `id` / `parentTrackId` and cancel recursively; `handle.getTrackInfos()` and
+`getActiveTracks()` expose the PARALLEL ones for debug and rendering — the main track, id 0, is not
+one of them.
 
 ### Conditions and choices
 

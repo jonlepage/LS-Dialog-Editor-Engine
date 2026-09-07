@@ -3643,8 +3643,8 @@
       "sceneId": "s1",
       "cases": [
         {
-          "id": "parks-on-an-unreachable-wait",
-          "description": "DIALOG-404 is not in the scene, so DIALOG-002 never advances.",
+          "id": "parks-before-dispatching",
+          "description": "DIALOG-404 is not in the scene, so DIALOG-002 is never even dispatched.",
           "steps": [
             {
               "expect": {
@@ -3654,20 +3654,10 @@
               "action": {
                 "type": "next"
               }
-            },
-            {
-              "expect": {
-                "type": "dialog",
-                "blockId": "DIALOG-002"
-              },
-              "action": {
-                "type": "next"
-              }
             }
           ],
           "expectedVisited": [
-            "DIALOG-001",
-            "DIALOG-002"
+            "DIALOG-001"
           ],
           "expectedRunning": true
         }

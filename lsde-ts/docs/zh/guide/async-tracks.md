@@ -18,17 +18,23 @@
 - 当轨道自然结束时（没有更多连接），其子轨道**继续独立存在**
 - 当轨道被显式取消时（`cancel()`），取消会**级联**到所有子轨道
 
-## waitForBlocks — 轨道同步
+## waitForBlocks — 等待另一条轨道
 
-使用 `props.waitForBlocks` 来同步并行轨道。它接受一个 block UUID 数组，这些 block 必须在当前 block 可以继续之前被访问：
+`props.waitForBlocks` 会保留一个 block，直到它所指定的 block 都已被访问。它是 `isAsync` 所开分支的「汇合」一半：一条分支并行运行，下游的 block 等它到达某处之后才播放。
 
-- **在起始 block 上**：整个轨道在开始执行之前等待。在所有必需的 block 被访问之前，不会调用 `onBeforeBlock`。
-- **在其他 block 上**：当 handler 调用 `next()` 时，推进会被延迟直到条件满足。
+**block 在被派发之前就被保留。** handler 不会被调用，因此在等待解除之前，你的游戏根本不知道这个 block 存在 —— 它的任何内容都不会过早出现在画面上。这是引擎的决定，而不是你可以另作选择的渲染行为：`waitForBlocks` 是 **native** 属性，设计师在 LSDE 中勾选了它，引擎就应当兑现。
 
-使用 `delay` 和 `waitForBlocks` 的完整执行序列：
+这条规则在**每一条**轨道上都相同，包括玩家正在观看的那一条。
+
+- 这些 id 指向**本场景的** block。连线从未跨越过场景。
+- 必须**全部**被访问，而不是其中之一。
+- 访问一个 block 会连锁释放所有等待它的对象。
+- 永远不会被访问的 block 会让轨道永久停留。当某个 id 根本不是场景中的 block 时，`init()` 会报告 `UNKNOWN_WAIT_BLOCK`。
+
+同时带有 `waitForBlocks` 和 `delay` 的 block 的顺序：
 
 ```
-spawn → waitForBlocks 门控 → onBeforeBlock (delay) → handler → next()
+waitForBlocks 门控 → onBeforeBlock (delay) → handler → next()
 ```
 
 ## waitInput — 玩家输入标志

@@ -18,17 +18,23 @@ Ceci s'applique au main track **et** aux async tracks — un async track peut cr
 - Quand un track se termine naturellement (plus de connections), ses sub-tracks **continuent de vivre** indépendamment
 - Quand un track est explicitement annulé (`cancel()`), l'annulation **cascade** vers tous les tracks enfants
 
-## waitForBlocks — Synchronisation de tracks
+## waitForBlocks — attendre une autre piste
 
-Utilisez `props.waitForBlocks` pour synchroniser les tracks parallèles. Il accepte un array de block UUIDs qui doivent être visités avant que le block puisse progresser :
+`props.waitForBlocks` retient un bloc tant que les blocs qu'il nomme n'ont pas été visités. C'est la moitié « jonction » de l'embranchement qu'ouvre `isAsync` : une branche part en parallèle, et un bloc en aval attend qu'elle soit arrivée quelque part avant de jouer.
 
-- **Sur le block de départ** : Le track entier attend avant même de commencer l'exécution. `onBeforeBlock` n'est pas appelé tant que tous les blocks requis ne sont pas visités.
-- **Sur tout autre block** : Quand le handler appelle `next()`, l'avancement est différé jusqu'à ce que la condition soit remplie.
+**Le bloc est retenu AVANT d'être dispatché.** Aucun handler n'est appelé, donc votre jeu n'apprend jamais que le bloc existe tant que l'attente n'est pas levée — rien de lui ne peut arriver à l'écran trop tôt. C'est une décision du moteur, pas un choix d'affichage que vous pourriez faire autrement : `waitForBlocks` est une propriété **native**, le designer la coche dans LSDE, et le moteur la lui doit.
 
-La séquence d'exécution complète avec `delay` et `waitForBlocks` :
+La règle est la même sur **toutes** les pistes, celle que le joueur regarde comprise.
+
+- Les ids nomment des blocs **de cette scène**. Un fil n'a jamais franchi de frontière de scène.
+- Il faut que **tous** aient été visités, pas seulement un.
+- Visiter un bloc libère tout ce qui l'attendait, en chaîne.
+- Un bloc jamais visité gare sa piste pour de bon. `init()` signale `UNKNOWN_WAIT_BLOCK` quand un id n'est pas un bloc de la scène.
+
+La séquence pour un bloc portant à la fois `waitForBlocks` et `delay` :
 
 ```
-spawn → waitForBlocks gate → onBeforeBlock (delay) → handler → next()
+waitForBlocks gate → onBeforeBlock (delay) → handler → next()
 ```
 
 ## waitInput — Flag d'input joueur

@@ -1,4 +1,4 @@
-## LSDE Dialog Engine — SceneHandle + AsyncTrack
+## LSDE Dialog Engine — SceneHandle: the scene and everything its tracks share
 ##
 ## Manages the main traversal loop, async tracks, two-tier handler resolution
 ## (scene Tier 2 + global Tier 1), choice history, and character resolution.
@@ -14,24 +14,25 @@ var _scene_registry: LsdeHandlerRegistry.SceneRegistry
 var _callbacks: Dictionary  # {on_scene_started, on_scene_ended, get_resolve_character, get_condition_resolver, get_card}
 
 var _running: bool = false
-var _cancelled: bool = false
-var _current_block: Variant = null
-var _previous_block: Variant = null
-var _previous_character: Variant = null
-var _visited: Array = []  # ordered list of visited UUIDs
+
+# ─── Shared by every track of this scene ──────────────────────────────────
+var _visited: Array = []  # ordered list of visited block ids
 var _visited_set: Dictionary = {}  # fast lookup
 var _choice_history: Dictionary = {}  # {block_id: [option_id, ...]}
-var _previous_cleanup: Callable
-var _async_tracks: Array = []
-var _next_track_id: int = 1
+
+# ─── The tracks ───────────────────────────────────────────────────────────
+## Every live track, the main flow first.
+var _tracks: Array = []
+## The flow the player is watching. Null until start().
+var _main_track: Variant = null
+## Auto-incremented track id. LsdeTrack.MAIN_TRACK_ID (0) belongs to the main flow.
+var _next_track_id: int = LsdeTrack.MAIN_TRACK_ID + 1
 ## Tracks - and the main flow - parked until a set of blocks has been visited.
 ##
 ## waitForBlocks is a property of the BLOCK: "the block waits for these before it advances", in the
-## format's own words. Only AsyncTrack read it, so a designer who set it on a block of the main flow
+## format's own words. Only the parallel copy read it, so a designer who set it on a block of the main flow
 ## got nothing at all, silently, with the checkbox ticked in the editor.
-var _pending_waits: Dictionary = {}  # {AsyncTrack | LsdeSceneHandle: [block_ids]}
-## The main flow's own parked advance, when its block carries waitForBlocks.
-var _pending_advance: Callable
+var _pending_waits: Dictionary = {}  # {LsdeTrack: [block_ids]}
 ## Scene-level character resolver override.
 var _resolve_character: Callable
 
@@ -65,33 +66,26 @@ func start() -> void:
 		assert(false, "Cannot start scene — missing required handler(s): %s.\nRegister all 4 handlers before starting:\n  engine.on_dialog(handler)\n  engine.on_choice(handler)\n  engine.on_condition(handler)\n  engine.on_action(handler)" % ", ".join(missing))
 
 	_running = true
-	_cancelled = false
 	if _callbacks.has("on_scene_started"):
 		_callbacks["on_scene_started"].call(self)
 	_fire_scene_enter()
+
 	var start_block: Variant = _scene_graph.get_start_block()
-	if start_block != null:
-		_process_block(start_block)
-	else:
-		_end_scene()
+	if start_block == null:
+		_shutdown()
+		return
+
+	# The flow the player watches is a track like any other. The only thing that sets it apart is
+	# what happens when it ends — see _track_ended.
+	_main_track = LsdeTrack.new(self, start_block, LsdeTrack.MAIN_TRACK_ID, -1)
+	_tracks.append(_main_track)
+	_main_track.start()
 
 ## Cancel the scene flow. All async tracks are cancelled, cleanup runs, on_scene_exit fires.
 func cancel() -> void:
 	if not _running:
 		return
-	_cancelled = true
-	_pending_waits.clear()
-	for track in _async_tracks:
-		track.cancel()
-	_async_tracks.clear()
-	if _previous_cleanup.is_valid():
-		_previous_cleanup.call()
-		_previous_cleanup = Callable()
-	_running = false
-	_current_block = null
-	_fire_scene_exit()
-	if _callbacks.has("on_scene_ended"):
-		_callbacks["on_scene_ended"].call(self)
+	_shutdown()
 
 ## Override the global on_scene_enter for this scene.
 func on_enter(handler: Callable) -> void:
@@ -138,8 +132,9 @@ func on_action(handler: Callable) -> void:
 	_scene_registry.action_handler = handler
 
 ## Get the block currently being executed, or null.
+## The block the flow the player is watching is on. Parallel tracks have their own.
 func get_current_block() -> Variant:
-	return _current_block
+	return _main_track.get_current_block() if _main_track != null else null
 
 ## Get UUIDs of all blocks visited so far, in order.
 func get_visited_blocks() -> Array:
@@ -150,19 +145,15 @@ func is_running() -> bool:
 	return _running
 
 ## Get the number of async tracks currently running in parallel.
+## How many PARALLEL tracks are running. The main flow is not one of them.
 func get_active_tracks() -> int:
-	var count: int = 0
-	for track in _async_tracks:
-		if track.is_running():
-			count += 1
-	return count
+	return _parallel_tracks().size()
 
 ## Get detailed info for all currently running async tracks.
 func get_track_infos() -> Array:
 	var result: Array = []
-	for track in _async_tracks:
-		if track.is_running():
-			result.append(track.get_track_info())
+	for track in _parallel_tracks():
+		result.append(track.get_track_info())
 	return result
 
 ## Get the full choice history. Keys are block UUIDs, values are arrays of selected choice UUIDs.
@@ -187,13 +178,20 @@ func evaluate_condition(condition: Dictionary) -> bool:
 func on_resolve_character(resolver: Callable) -> void:
 	_resolve_character = resolver
 
-# ─── Internal API (used by AsyncTrack) ────────────────────────────────────
+# ─── What a track asks the scene for ──────────────────────────────────────
 
 func _get_scene_registry() -> LsdeHandlerRegistry.SceneRegistry:
 	return _scene_registry
 
 func _get_global_registry() -> LsdeHandlerRegistry:
 	return _global_registry
+
+func _get_scene_graph() -> LsdeGraph.SceneGraph:
+	return _scene_graph
+
+## Is the scene still playing? A track stops the moment its scene does.
+func _is_scene_running() -> bool:
+	return _running
 
 func _add_visited(uuid: String) -> void:
 	if not _visited_set.has(uuid):
@@ -214,35 +212,40 @@ func _add_visited(uuid: String) -> void:
 			_pending_waits.erase(waiter)
 			waiter.notify_wait_satisfied()
 
-## Spawn a new async track in the flat pool. Returns the assigned track ID.
-func _spawn_async_track(start_block: Dictionary, parent_track_id: int) -> int:
+## Open a parallel track. Returns its id.
+func _spawn_track(start_block: Dictionary, parent_track_id: int) -> int:
 	var track_id: int = _next_track_id
 	_next_track_id += 1
-	var track: AsyncTrack = AsyncTrack.new(_scene_graph, self, start_block, track_id, parent_track_id)
-	_async_tracks.append(track)
+	# -1 when the main flow opened it — the convention get_track_infos publishes.
+	var parent: int = -1 if parent_track_id == LsdeTrack.MAIN_TRACK_ID else parent_track_id
+	var track: LsdeTrack = LsdeTrack.new(self, start_block, track_id, parent)
+	_tracks.append(track)
 	track.start()
 	return track_id
 
 ## Cancel a specific track by ID (used for parent->child cascade).
 func _cancel_track(track_id: int) -> void:
-	for track in _async_tracks:
+	for track in _tracks:
 		if track.id == track_id:
 			track.cancel()
 			return
+
+## A track has nowhere left to go.
+##
+## This is the ONE thing that tells the main flow apart from a parallel branch: when the main flow
+## ends the scene is over — every other track is cancelled and on_scene_exit fires. When a branch
+## ends it is simply retired and the scene plays on.
+func _track_ended(track: Variant) -> void:
+	if track.id == LsdeTrack.MAIN_TRACK_ID:
+		_shutdown()
+		return
+	_remove_track(track)
 
 ## Register a track as waiting for specific block UUIDs to be visited.
 ## Park a track - or the main flow - until every listed block has been visited.
 func _register_wait_for_blocks(waiter: Variant, block_ids: Array) -> void:
 	_pending_waits[waiter] = block_ids
 
-
-## Called once every block this flow was waiting on has been visited.
-func notify_wait_satisfied() -> void:
-	if not _running or _cancelled or not _pending_advance.is_valid():
-		return
-	var advance: Callable = _pending_advance
-	_pending_advance = Callable()
-	advance.call()
 
 ## Check if a block UUID has been visited in this scene.
 ## Run on_validate_next_block for a block, and on_invalidate_block when it refuses.
@@ -279,9 +282,16 @@ func _is_visited(uuid: String) -> bool:
 	return _visited_set.has(uuid)
 
 func _remove_track(track: Variant) -> void:
-	var idx: int = _async_tracks.find(track)
+	var idx: int = _tracks.find(track)
 	if idx >= 0:
-		_async_tracks.remove_at(idx)
+		_tracks.remove_at(idx)
+
+func _parallel_tracks() -> Array:
+	var result: Array = []
+	for track in _tracks:
+		if track.id != LsdeTrack.MAIN_TRACK_ID and track.is_running():
+			result.append(track)
+	return result
 
 ## Create the appropriate context for a block.
 func _create_block_context(block: Dictionary) -> Variant:
@@ -296,185 +306,6 @@ func _record_choice(block_id: String, option_id: String) -> void:
 ## Evaluate a condition with choice history support.
 func _evaluate_condition_for_block(condition: Dictionary, fallback_evaluator: Callable) -> bool:
 	return _evaluate_condition_with_history(condition, fallback_evaluator)
-
-# ─── Traversal ────────────────────────────────────────────────────────────
-
-func _process_block(starting_block: Dictionary) -> void:
-	if not _running or _cancelled:
-		return
-
-	# Skip NOTE
-	var skipped: Variant = LsdeSceneHandle._skip_notes(starting_block, _scene_graph)
-	if skipped == null:
-		_end_scene()
-		return
-	var block: Dictionary = skipped
-
-	# Validate
-	if not _run_validation(block, _previous_block, _previous_character):
-		return
-
-	if _cancelled:
-		return
-
-	_current_block = block
-	_add_visited(block.get("id", ""))
-
-	# onBeforeBlock
-	if _global_registry.before_block_handler.is_valid():
-		# GUARDED like next(): a delay timer that fires twice would otherwise dispatch
-		# the same block twice. The flag lives in an Array because a lambda captures by
-		# value, and an Array is the one capture GDScript lets us mutate from inside.
-		var resolved_once: Array = [false]
-		var resolve_fn: Callable = func() -> void:
-			if resolved_once[0]:
-				return
-			resolved_once[0] = true
-			_execute_block_handler(block)
-		_global_registry.before_block_handler.call({
-			"block": block, "scene": self,
-			"context": {"nativeProperties": LsdeUtils.get_native_properties(block)},
-			"resolve": resolve_fn
-		})
-	else:
-		_execute_block_handler(block)
-
-func _execute_block_handler(block: Dictionary) -> void:
-	# `_running` and not just `_cancelled`: a resolve() kept in a closure and fired after
-	# the scene ended on its own would otherwise restart traversal on a dead scene.
-	if not _running or _cancelled:
-		return
-
-	var resolved: Dictionary = LsdeHandlerRegistry.resolve_handler(
-		block.get("type", ""), block.get("id", ""), _scene_registry, _global_registry)
-
-	var context: Variant = _create_context(block)
-	if context == null:
-		_advance_to_next_block(block, null)
-		return
-
-	var scene_handler: Callable = resolved["scene_handler"]
-	var global_handler: Callable = resolved["global_handler"]
-
-	# No handler → advance silently (handlers are validated at start())
-	if not scene_handler.is_valid() and not global_handler.is_valid():
-		_advance_to_next_block(block, context)
-		return
-
-	var state: Array = [false, true]  # [next_called, sync_phase]
-	var scene_cleanup: Variant
-	var global_cleanup: Variant
-
-	var next_fn: Callable = func() -> void:
-		if state[0]:  # next_called
-			return
-		state[0] = true
-
-		# waitForBlocks: park until every listed block has been visited. The main flow honours it
-		# exactly like a parallel track - this is the join half of the fork isAsync opens.
-		var wait_blocks: Array = LsdeUtils.get_native_properties(block).get("waitForBlocks", [])
-		if wait_blocks.size() > 0:
-			var all_visited: bool = true
-			for wait_id in wait_blocks:
-				if not _is_visited(wait_id):
-					all_visited = false
-					break
-			if not all_visited:
-				_pending_advance = func() -> void: _advance_to_next_block(block, context)
-				_register_wait_for_blocks(self, wait_blocks)
-				return
-
-		if state[1]:  # sync_phase
-			return
-		_advance_to_next_block(block, context)
-
-	var args: Dictionary = {"scene": self, "block": block, "context": context, "next": next_fn}
-
-	# NOT an error boundary, unlike the other three runtimes: GDScript has no exceptions, so there
-	# is nothing here to catch and nothing that can escape. A script error pushes to the Godot log
-	# and the call returns null.
-	if scene_handler.is_valid():
-		scene_cleanup = scene_handler.call(args)
-		if not context.global_prevented and global_handler.is_valid():
-			global_cleanup = global_handler.call(args)
-	elif global_handler.is_valid():
-		global_cleanup = global_handler.call(args)
-
-	_previous_cleanup = _combine_cleanups(scene_cleanup, global_cleanup)
-
-	# Unless the block is parked on waitForBlocks: releasing it is notify_wait_satisfied's job.
-	state[1] = false  # sync_phase = false
-	if state[0] and not _pending_advance.is_valid():  # next_called
-		_advance_to_next_block(block, context)
-
-func _advance_to_next_block(block: Dictionary, context: Variant) -> void:
-	if _cancelled:
-		return
-
-	_previous_block = block
-	_previous_character = context.character if context != null else null
-
-	var links: Array = _scene_graph.get_outgoing_links(block.get("id", ""))
-
-	var input: Dictionary = {"block": block, "links": links}
-	if context is LsdeBlockContext.ChoiceContext:
-		input["selectedOptionId"] = context.selected_option_id
-	if context is LsdeBlockContext.ConditionContext:
-		input["conditionPort"] = context.condition_port
-	if context is LsdeBlockContext.ActionContext:
-		input["actionRejected"] = context.action_rejected
-	if context is LsdeBlockContext.DialogContext:
-		input["actorPort"] = context.actor_port
-
-	var resolved_links: Array = LsdePortResolver.resolve_port(input)
-
-	# Separate: first non-async = main, rest = async
-	var main_link: Variant = null
-	var async_links: Array = []
-
-	for link in resolved_links:
-		var target_block: Variant = _scene_graph.get_block(link.get("to", ""))
-		if target_block == null:
-			continue
-		if main_link == null and not _is_async_block(target_block):
-			main_link = link
-		else:
-			async_links.append(link)
-
-
-	# Spawn async tracks
-	for link in async_links:
-		var target_block: Variant = _scene_graph.get_block(link.get("to", ""))
-		if target_block != null:
-			_spawn_async_track(target_block, -1)
-
-	# Continue main track
-	if main_link != null:
-		var next_block: Variant = _scene_graph.get_block(main_link.get("to", ""))
-		if next_block != null:
-			var cleanup_to_run: Callable = _previous_cleanup
-			_previous_cleanup = Callable()
-			if cleanup_to_run.is_valid():
-				cleanup_to_run.call()
-			_process_block(next_block)
-			return
-
-	_end_scene()
-
-func _end_scene() -> void:
-	_pending_waits.clear()
-	_pending_advance = Callable()
-	for track in _async_tracks:
-		track.cancel()
-	_async_tracks.clear()
-	if _previous_cleanup.is_valid():
-		_previous_cleanup.call()
-		_previous_cleanup = Callable()
-	_running = false
-	_current_block = null
-	_fire_scene_exit()
-	if _callbacks.has("on_scene_ended"):
-		_callbacks["on_scene_ended"].call(self)
 
 # ─── Choice history condition evaluation ──────────────────────────────────
 
@@ -548,6 +379,24 @@ func _fire_scene_enter() -> void:
 		handler.call({"scene": self, "context": {}})
 	scene_entered.emit(self)
 
+## Close the scene down: cancel every track, fire on_scene_exit, tell the engine.
+##
+## Reached from a dead end, from a note loop, from cancel() and from a scene with no entry block.
+func _shutdown() -> void:
+	_pending_waits.clear()
+
+	# A copy: cancelling a track cascades to its children, and every track is cancelled. Leaving
+	# live tracks behind on a closed scene is how a dialogue kept running after it ended.
+	for track in _tracks.duplicate():
+		track.cancel()
+	_tracks.clear()
+
+	_running = false
+	_fire_scene_exit()
+	if _callbacks.has("on_scene_ended"):
+		_callbacks["on_scene_ended"].call(self)
+
+
 func _fire_scene_exit() -> void:
 	var handler: Callable = _scene_registry.exit_handler if _scene_registry.exit_handler.is_valid() else _global_registry.scene_exit_handler
 	if handler.is_valid():
@@ -614,284 +463,3 @@ func _create_context(block: Dictionary) -> Variant:
 			return LsdeBlockContext.ActionContext.new(block, cards)
 
 	return null
-
-## Walk past NOTE blocks to the first block the engine actually dispatches.
-##
-## NOTE blocks are designer-only: they carry no handler and are never executed, so the
-## traversal steps over them and follows their first outgoing link.
-##
-## Returns null when the walk runs out of links — and also when it comes back to a
-## NOTE it already stepped over. A designer can wire a NOTE into a loop, and following it
-## recursively overflowed the stack instead of ending the flow.
-static func _skip_notes(block: Dictionary, scene_graph: LsdeGraph.SceneGraph) -> Variant:
-	var current: Variant = block
-	var seen: Dictionary = {}
-
-	while current != null and current.get("type", "") == LsdeTypes.BLOCK_NOTE:
-		var id: String = current.get("id", "")
-		if seen.has(id):
-			return null
-		seen[id] = true
-
-		var links: Array = scene_graph.get_outgoing_links(id)
-		current = scene_graph.get_block(links[0].get("to", "")) if links.size() > 0 else null
-
-	return current
-
-## Is this block marked to run on a parallel track?
-##
-## The natives live in `props` alongside the writer's own properties. Ids cannot collide — LSDE
-## refuses a project property that takes a native name — so this is a lookup, not a guess.
-static func _is_async_block(block: Dictionary) -> bool:
-	var props: Variant = block.get("props")
-	return props is Dictionary and props.get("isAsync") == true
-
-static func _safe_cleanup(v: Variant) -> Callable:
-	return v if v is Callable and v.is_valid() else Callable()
-
-static func _combine_cleanups(a: Variant, b: Variant) -> Callable:
-	var ca: Callable = _safe_cleanup(a)
-	var cb: Callable = _safe_cleanup(b)
-	if ca.is_valid() and cb.is_valid():
-		return func() -> void: ca.call(); cb.call()
-	if ca.is_valid():
-		return ca
-	if cb.is_valid():
-		return cb
-	return Callable()
-
-# ─── AsyncTrack ───────────────────────────────────────────────────────────
-
-## Parallel execution branch spawned from async connections.
-## Supports sub-track spawning, waitForBlocks synchronization, and cancel cascade.
-class AsyncTrack extends RefCounted:
-	var _running: bool = true
-	var _current_block: Variant = null
-	## The block this track came from, for on_validate_next_block. Its own, not the main flow's.
-	var _previous_block: Variant = null
-	var _previous_character: Variant = null
-	var _previous_cleanup: Callable
-	var _pending_advance: Callable
-	var _child_track_ids: Array = []
-
-	## Unique auto-incremented identifier for this track within the scene.
-	var id: int
-	## ID of the parent track (-1 = spawned by main).
-	var parent_track_id: int
-	## UUID of the block that started this track.
-	var start_block_id: String
-
-	var _start_block: Dictionary
-	var _scene_graph: LsdeGraph.SceneGraph
-	var _parent: LsdeSceneHandle
-
-	func _init(scene_graph: LsdeGraph.SceneGraph, parent: LsdeSceneHandle, start_block: Dictionary, track_id: int, parent_id: int) -> void:
-		_scene_graph = scene_graph
-		_parent = parent
-		_start_block = start_block
-		id = track_id
-		parent_track_id = parent_id
-		start_block_id = start_block.get("id", "")
-
-	## Begin track execution. Must be called after the track is added to the pool.
-	func start() -> void:
-		var natives: Dictionary = LsdeUtils.get_native_properties(_start_block)
-		if true:
-			var wait_blocks: Array = natives.get("waitForBlocks", [])
-			if wait_blocks.size() > 0:
-				var all_visited: bool = true
-				for uuid in wait_blocks:
-					if not _parent._is_visited(uuid):
-						all_visited = false
-						break
-				if not all_visited:
-					_pending_advance = func() -> void: _process_block(_start_block)
-					_parent._register_wait_for_blocks(self, wait_blocks)
-					return
-		_process_block(_start_block)
-
-	func cancel() -> void:
-		if not _running:
-			return
-		_running = false
-		if _previous_cleanup.is_valid():
-			_previous_cleanup.call()
-			_previous_cleanup = Callable()
-		_current_block = null
-		_pending_advance = Callable()
-		for child_id in _child_track_ids:
-			_parent._cancel_track(child_id)
-		_child_track_ids.clear()
-
-	func is_running() -> bool:
-		return _running
-
-	## Called by the parent handle when all waitForBlocks UUIDs have been visited.
-	func notify_wait_satisfied() -> void:
-		if not _running or not _pending_advance.is_valid():
-			return
-		var advance: Callable = _pending_advance
-		_pending_advance = Callable()
-		advance.call()
-
-	## Build a read-only snapshot of this track's state for the public API.
-	func get_track_info() -> Dictionary:
-		return {
-			"id": id,
-			"parentTrackId": parent_track_id,
-			"startBlockUuid": start_block_id,
-			"currentBlockUuid": _current_block.get("id", "") if _current_block != null else "",
-			"running": _running
-		}
-
-	func _process_block(starting_block: Dictionary) -> void:
-		if not _running:
-			return
-		var skipped: Variant = LsdeSceneHandle._skip_notes(starting_block, _scene_graph)
-		if skipped == null:
-			_end_track()
-			return
-		var block: Dictionary = skipped
-
-		# The same gate the main flow goes through. A parallel track is still the game's dialogue.
-		if not _parent._run_validation(block, _previous_block, _previous_character):
-			return
-
-		_current_block = block
-		_parent._add_visited(block.get("id", ""))
-
-		# Fire onBeforeBlock — same gate pattern as SceneHandleImpl._process_block
-		var registry: LsdeHandlerRegistry = _parent._get_global_registry()
-		if registry.before_block_handler.is_valid():
-			var resolved_once: Array = [false]
-			var resolve_fn: Callable = func() -> void:
-				if resolved_once[0]:
-					return
-				resolved_once[0] = true
-				_execute_block_handler(block)
-			registry.before_block_handler.call({
-				"block": block, "scene": _parent,
-				"context": {"nativeProperties": LsdeUtils.get_native_properties(block)},
-				"resolve": resolve_fn
-			})
-		else:
-			_execute_block_handler(block)
-
-	func _execute_block_handler(block: Dictionary) -> void:
-		if not _running:
-			return
-		var resolved: Dictionary = LsdeHandlerRegistry.resolve_handler(
-			block.get("type", ""), block.get("id", ""), _parent._get_scene_registry(), _parent._get_global_registry())
-		var context: Variant = _parent._create_block_context(block)
-		if context == null:
-			_advance_to_next_block(block, null)
-			return
-
-		var scene_handler: Callable = resolved["scene_handler"]
-		var global_handler: Callable = resolved["global_handler"]
-
-		if not scene_handler.is_valid() and not global_handler.is_valid():
-			_advance_to_next_block(block, context)
-			return
-
-		var state: Array = [false, true, false]  # [next_called, sync_phase, has_pending]
-		var scene_cleanup: Variant
-		var global_cleanup: Variant
-
-		var next_fn: Callable = func() -> void:
-			if state[0]:
-				return
-			state[0] = true
-
-			# waitForBlocks: defer advance until all required blocks are visited
-			var natives: Dictionary = LsdeUtils.get_native_properties(block)
-			if true:
-				var wait_blocks: Array = natives.get("waitForBlocks", [])
-				if wait_blocks.size() > 0:
-					var all_visited: bool = true
-					for uuid in wait_blocks:
-						if not _parent._is_visited(uuid):
-							all_visited = false
-							break
-					if not all_visited:
-						_pending_advance = func() -> void: _advance_to_next_block(block, context)
-						_parent._register_wait_for_blocks(self, wait_blocks)
-						state[2] = true  # has_pending
-						return
-
-			if state[1]:
-				return
-			_advance_to_next_block(block, context)
-
-		var args: Dictionary = {"scene": _parent, "block": block, "context": context, "next": next_fn}
-
-		if scene_handler.is_valid():
-			scene_cleanup = scene_handler.call(args)
-			if not context.global_prevented and global_handler.is_valid():
-				global_cleanup = global_handler.call(args)
-		elif global_handler.is_valid():
-			global_cleanup = global_handler.call(args)
-
-		_previous_cleanup = LsdeSceneHandle._combine_cleanups(scene_cleanup, global_cleanup)
-
-		state[1] = false
-		if state[0] and not state[2]:  # next_called and not has_pending
-			_advance_to_next_block(block, context)
-
-	func _advance_to_next_block(block: Dictionary, context: Variant) -> void:
-		if not _running:
-			return
-
-		_previous_block = block
-		_previous_character = context.character if context != null else null
-		var links: Array = _scene_graph.get_outgoing_links(block.get("id", ""))
-		var input: Dictionary = {"block": block, "links": links}
-		if context is LsdeBlockContext.ChoiceContext:
-			input["selectedOptionId"] = context.selected_option_id
-		if context is LsdeBlockContext.ConditionContext:
-			input["conditionPort"] = context.condition_port
-		if context is LsdeBlockContext.ActionContext:
-			input["actionRejected"] = context.action_rejected
-		if context is LsdeBlockContext.DialogContext:
-			input["actorPort"] = context.actor_port
-		var resolved_links: Array = LsdePortResolver.resolve_port(input)
-
-		# Separate main (first non-async) from async connections
-		var main_link: Variant = null
-		var async_links: Array = []
-
-		for link in resolved_links:
-			var target_block: Variant = _scene_graph.get_block(link.get("to", ""))
-			if target_block == null:
-				continue
-			if main_link == null and not LsdeSceneHandle._is_async_block(target_block):
-				main_link = link
-			else:
-				async_links.append(link)
-
-		# Spawn sub-tracks
-		for link in async_links:
-			var target_block: Variant = _scene_graph.get_block(link.get("to", ""))
-			if target_block != null:
-				var track_id: int = _parent._spawn_async_track(target_block, self.id)
-				_child_track_ids.append(track_id)
-
-		if main_link != null:
-			var next_block: Variant = _scene_graph.get_block(main_link.get("to", ""))
-			if next_block != null:
-				var cleanup_to_run: Callable = _previous_cleanup
-				_previous_cleanup = Callable()
-				if cleanup_to_run.is_valid():
-					cleanup_to_run.call()
-				_process_block(next_block)
-				return
-		_end_track()
-
-	func _end_track() -> void:
-		if _previous_cleanup.is_valid():
-			_previous_cleanup.call()
-			_previous_cleanup = Callable()
-		# Child tracks survive — only explicit cancel() cascades
-		_running = false
-		_current_block = null
-		_parent._remove_track(self)

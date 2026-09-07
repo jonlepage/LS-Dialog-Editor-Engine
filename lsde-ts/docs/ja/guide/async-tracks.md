@@ -18,17 +18,23 @@ port 解決中に複数の送出 connection が存在する場合：
 - トラックが自然に終了した場合（connection がなくなった）、サブトラックは**独立して存続**します
 - トラックが明示的にキャンセルされた場合（`cancel()`）、キャンセルはすべての子トラックに**カスケード**します
 
-## waitForBlocks — トラック同期
+## waitForBlocks — 他のトラックを待つ
 
-`props.waitForBlocks` を使用して並列トラックを同期します。block が進行する前に訪問済みでなければならない block UUID の配列を受け入れます：
+`props.waitForBlocks` は、指定された block が訪問されるまでその block を保留します。`isAsync` が開く分岐の「合流」側です：ブランチが並列で走り、下流の block はそれがどこかに到達するまで待ってから再生されます。
 
-- **開始 block の場合**：トラック全体が実行開始前に待機します。必要な block がすべて訪問されるまで `onBeforeBlock` は呼び出されません。
-- **その他の block の場合**：handler が `next()` を呼び出すと、条件が満たされるまで進行が延期されます。
+**block は dispatch される前に保留されます。** handler は呼び出されないため、待機が解除されるまでゲーム側は block の存在すら知りません — その内容が早すぎるタイミングで画面に出ることはありません。これは描画の選択ではなくエンジンの決定です：`waitForBlocks` は **native** プロパティであり、デザイナーが LSDE でチェックした以上、エンジンがその動作を保証します。
 
-`delay` と `waitForBlocks` を使用した完全な実行シーケンス：
+このルールはプレイヤーが見ているトラックを含め、**すべて**のトラックで同じです。
+
+- id は**このシーンの** block を指します。ワイヤーがシーンをまたいだことは一度もありません。
+- 1 つではなく、**すべて**が訪問済みである必要があります。
+- block を訪問すると、それを待っていたものが連鎖的に解放されます。
+- 決して訪問されない block はトラックを永久に停留させます。id がシーンの block でない場合、`init()` は `UNKNOWN_WAIT_BLOCK` を報告します。
+
+`waitForBlocks` と `delay` の両方を持つ block のシーケンス：
 
 ```
-spawn → waitForBlocks ゲート → onBeforeBlock (delay) → handler → next()
+waitForBlocks ゲート → onBeforeBlock (delay) → handler → next()
 ```
 
 ## waitInput — プレイヤー入力フラグ
