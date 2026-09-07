@@ -1,53 +1,97 @@
 // LSDE Dialog Engine — Init validation + diagnostic report
+//
+// The first thing this file does is refuse a payload it cannot read.
+//
+// It did not, before. The engine opened whatever it was handed and went straight to work, so a
+// file written by a different exporter version produced no error at all — it produced a scene that
+// stopped in the middle, silently, at the point where the flow needed a field that was not there.
+// That is the worst failure a loader can have: the game ships, and the dialogue just ends early.
+//
+// So `format` and `version` are read before anything else, and a mismatch is fatal and named.
 
 import type {
 	InitOptions, DiagnosticReport, DiagnosticEntry, DiagnosticStats,
-	BlueprintExport, BlueprintScene,
+	Blueprints, Scene, Block,
 } from './types.js';
 
+/** The only payload this engine reads. A file that says anything else is refused outright. */
+const SUPPORTED_FORMAT = 'lsde-blueprints';
+
+/** The format version this engine reads. Bumps only when the payload contract itself changes. */
+const SUPPORTED_VERSION = 1;
+
 /**
- * Validate blueprint data integrity and optionally cross-validate against game capabilities.
+ * Validate a blueprint payload, and optionally cross-check it against what the game declares.
  *
- * Checks: scene/block UUID uniqueness, connection integrity, single start block per scene,
- * entryBlockId validity, and fork rules (max 1 non-async target per port).
- * If `check` is provided, also warns about unknown signatures, dictionaries, and characters.
+ * Structural checks: the format header, scene paths, block id uniqueness **within a scene**,
+ * the entry block, link targets, and the fork rule (at most one non-async target per port).
+ * With `check`, also warns about functions, dictionaries and cards the game does not know.
  *
- * @returns DiagnosticReport with errors, warnings, and stats.
+ * @returns a {@link DiagnosticReport}. Errors mean the payload will not play correctly;
+ *          warnings mean it will, but something looks wrong.
  */
 export function validateBlueprint( options: InitOptions ): DiagnosticReport {
 	const errors: DiagnosticEntry[] = [];
 	const warnings: DiagnosticEntry[] = [];
 	const { data, check } = options;
 
-	// ─── Structural validation ───────────────────────────────────────────
+	const empty: DiagnosticStats = { sceneCount: 0, blockCount: 0, connectionCount: 0 };
+
+	// ─── The header, before anything else ────────────────────────────────
 
 	if ( !data ) {
 		errors.push( { code: 'MISSING_DATA', message: 'Blueprint data is required.' } );
-		return { errors, warnings, stats: { sceneCount: 0, blockCount: 0, connectionCount: 0 } };
+		return { errors, warnings, stats: empty };
 	}
 
-	if ( !data.version ) {
-		errors.push( { code: 'MISSING_VERSION', message: 'Blueprint version is required.' } );
+	if ( data.format !== SUPPORTED_FORMAT ) {
+		errors.push( {
+			code: 'INVALID_FORMAT',
+			message: `Not an LSDE blueprint: expected format "${ SUPPORTED_FORMAT }", got ${ describe( data.format ) }.`,
+		} );
+		return { errors, warnings, stats: empty };
 	}
+
+	if ( data.version !== SUPPORTED_VERSION ) {
+		errors.push( {
+			code: 'UNSUPPORTED_FORMAT_VERSION',
+			message: `This engine reads blueprint format version ${ SUPPORTED_VERSION }, `
+				+ `the file is version ${ describe( data.version ) }. `
+				+ `Re-export from LSDE, or install the engine version that matches it.`,
+		} );
+		return { errors, warnings, stats: empty };
+	}
+
+	// ─── Scenes ──────────────────────────────────────────────────────────
 
 	if ( !data.scenes || data.scenes.length === 0 ) {
 		errors.push( { code: 'NO_SCENES', message: 'Blueprint must contain at least one scene.' } );
-		return { errors, warnings, stats: { sceneCount: 0, blockCount: 0, connectionCount: 0 } };
+		return { errors, warnings, stats: empty };
 	}
 
-	// ─── Per-scene validation ────────────────────────────────────────────
-
-	const globalBlockUuids = new Set<string>();
+	const scenePaths = new Set<string>();
 	let totalBlocks = 0;
 	let totalConnections = 0;
 
 	for ( const scene of data.scenes ) {
-		validateScene( scene, globalBlockUuids, errors, warnings );
+		if ( scenePaths.has( scene.scene ) ) {
+			errors.push( {
+				code: 'DUPLICATE_SCENE',
+				message: `Scene "${ scene.scene }" appears more than once. `
+					+ `When loading a per-scene export, pass each file exactly once.`,
+				sceneId: scene.scene,
+			} );
+		}
+		scenePaths.add( scene.scene );
+
+		validateScene( scene, errors, warnings );
 		totalBlocks += scene.blocks.length;
-		totalConnections += scene.connections.length;
+		for ( const block of scene.blocks ) {
+			totalConnections += block.next?.length ?? 0;
+		}
 	}
 
-	// ─── Cross-validation (optional) ────────────────────────────────────
+	// ─── Cross-validation (optional) ─────────────────────────────────────
 
 	if ( check ) {
 		crossValidate( data, check, warnings );
@@ -63,130 +107,114 @@ export function validateBlueprint( options: InitOptions ): DiagnosticReport {
 }
 
 function validateScene(
-	scene: BlueprintScene,
-	globalBlockUuids: Set<string>,
+	scene: Scene,
 	errors: DiagnosticEntry[],
 	warnings: DiagnosticEntry[],
 ): void {
-	if ( !scene.uuid ) {
-		errors.push( { code: 'MISSING_SCENE_UUID', message: 'Scene is missing a UUID.' } );
-	}
-	if ( !scene.label ) {
-		errors.push( { code: 'MISSING_SCENE_LABEL', message: 'Scene is missing a label.', sceneId: scene.uuid } );
+	if ( !scene.scene ) {
+		errors.push( { code: 'MISSING_SCENE_PATH', message: 'Scene is missing its path.' } );
 	}
 
-	const sceneBlockUuids = new Set<string>();
-	let startBlockCount = 0;
+	// A block id is unique inside its scene and nowhere else: the counter restarts at 1 in every
+	// scene, so DIALOG-001 in two scenes is not a collision, it is the normal case.
+	const blockIds = new Set<string>();
 
 	for ( const block of scene.blocks ) {
-		// Duplicate UUID within scene
-		if ( sceneBlockUuids.has( block.uuid ) ) {
+		if ( blockIds.has( block.id ) ) {
 			errors.push( {
-				code: 'DUPLICATE_BLOCK_UUID',
-				message: `Duplicate block UUID "${ block.uuid }" within scene "${ scene.label }".`,
-				sceneId: scene.uuid,
-				blockId: block.uuid,
+				code: 'DUPLICATE_BLOCK_ID',
+				message: `Duplicate block id "${ block.id }" within scene "${ scene.scene }".`,
+				sceneId: scene.scene,
+				blockId: block.id,
 			} );
 		}
-		sceneBlockUuids.add( block.uuid );
-
-		// Duplicate UUID across scenes
-		if ( globalBlockUuids.has( block.uuid ) ) {
-			errors.push( {
-				code: 'DUPLICATE_BLOCK_UUID_GLOBAL',
-				message: `Block UUID "${ block.uuid }" exists in multiple scenes.`,
-				sceneId: scene.uuid,
-				blockId: block.uuid,
-			} );
-		}
-		globalBlockUuids.add( block.uuid );
-
-		if ( block.isStartBlock ) {
-			startBlockCount++;
-		}
+		blockIds.add( block.id );
 	}
 
-	// Multiple start blocks
-	if ( startBlockCount > 1 ) {
+	// The scene names its own entry, so there is no such thing as two start blocks.
+	if ( !scene.start ) {
+		warnings.push( {
+			code: 'NO_START_BLOCK',
+			message: `Scene "${ scene.scene }" has no start block and cannot play.`,
+			sceneId: scene.scene,
+		} );
+	} else if ( !blockIds.has( scene.start ) ) {
 		errors.push( {
-			code: 'MULTIPLE_START_BLOCKS',
-			message: `Scene "${ scene.label }" has ${ startBlockCount } start blocks (expected at most 1).`,
-			sceneId: scene.uuid,
+			code: 'INVALID_START_BLOCK',
+			message: `Scene "${ scene.scene }" starts on "${ scene.start }", which is not a block of this scene.`,
+			sceneId: scene.scene,
+			blockId: scene.start,
 		} );
 	}
 
-	// entryBlockId references a valid block
-	if ( scene.entryBlockId && !sceneBlockUuids.has( scene.entryBlockId ) ) {
-		errors.push( {
-			code: 'INVALID_ENTRY_BLOCK',
-			message: `Scene "${ scene.label }" entryBlockId "${ scene.entryBlockId }" does not reference an existing block.`,
-			sceneId: scene.uuid,
-			blockId: scene.entryBlockId,
-		} );
+	for ( const block of scene.blocks ) {
+		validateLinks( scene, block, blockIds, errors, warnings );
 	}
+}
 
-	// Connection integrity
-	for ( const conn of scene.connections ) {
-		if ( !sceneBlockUuids.has( conn.fromId ) ) {
+function validateLinks(
+	scene: Scene,
+	block: Block,
+	blockIds: Set<string>,
+	errors: DiagnosticEntry[],
+	warnings: DiagnosticEntry[],
+): void {
+	if ( !block.next || block.next.length === 0 ) return;
+
+	// A link's target is relative to the same scene — a wire has never crossed one.
+	const byPort = new Map<string, string[]>();
+
+	for ( const link of block.next ) {
+		if ( !blockIds.has( link.to ) ) {
 			errors.push( {
-				code: 'BROKEN_CONNECTION_FROM',
-				message: `Connection "${ conn.id }" fromId "${ conn.fromId }" references a non-existent block.`,
-				sceneId: scene.uuid,
+				code: 'BROKEN_LINK',
+				message: `${ describeBlock( block ) } links from port "${ link.port }" to "${ link.to }", `
+					+ `which is not a block of scene "${ scene.scene }".`,
+				sceneId: scene.scene,
+				blockId: block.id,
 			} );
 		}
-		if ( !sceneBlockUuids.has( conn.toId ) ) {
-			errors.push( {
-				code: 'BROKEN_CONNECTION_TO',
-				message: `Connection "${ conn.id }" toId "${ conn.toId }" references a non-existent block.`,
-				sceneId: scene.uuid,
-			} );
-		}
+		const group = byPort.get( link.port );
+		if ( group ) { group.push( link.to ); }
+		else { byPort.set( link.port, [link.to] ); }
 	}
 
-	// Fork validation: max 1 non-async target per output port group
-	const blockMap = new Map( scene.blocks.map( b => [b.uuid, b] ) );
-	const portGroups = new Map<string, string[]>(); // "blockId:portKey" → toId[]
-	for ( const conn of scene.connections ) {
-		const key = conn.fromPortIndex !== undefined
-			? `${ conn.fromId }:idx:${ conn.fromPortIndex }`
-			: `${ conn.fromId }:port:${ conn.fromPort }`;
-		const group = portGroups.get( key );
-		if ( group ) { group.push( conn.toId ); }
-		else { portGroups.set( key, [conn.toId] ); }
-	}
-	for ( const [, targets] of portGroups ) {
+	// One port, several wires: the first non-async target becomes the main flow and the rest run
+	// as parallel tracks. Two non-async targets on one port means the second silently never
+	// becomes the main track — almost always a wiring mistake rather than an intent.
+	const blockById = new Map( scene.blocks.map( b => [b.id, b] ) );
+	for ( const [port, targets] of byPort ) {
 		if ( targets.length <= 1 ) continue;
 		let nonAsyncCount = 0;
-		for ( const toId of targets ) {
-			const target = blockMap.get( toId );
-			if ( target && !target.nativeProperties?.isAsync ) {
-				nonAsyncCount++;
-			}
+		for ( const to of targets ) {
+			if ( blockById.get( to )?.props?.isAsync !== true ) nonAsyncCount++;
 		}
 		if ( nonAsyncCount > 1 ) {
 			warnings.push( {
 				code: 'MULTIPLE_NON_ASYNC_FORK',
-				message: `A port has ${ targets.length } outgoing connections with ${ nonAsyncCount } non-async targets. Mark secondary targets as isAsync.`,
-				sceneId: scene.uuid,
+				message: `${ describeBlock( block ) } port "${ port }" has ${ targets.length } outgoing links `
+					+ `with ${ nonAsyncCount } non-async targets. Mark the secondary ones isAsync.`,
+				sceneId: scene.scene,
+				blockId: block.id,
 			} );
 		}
 	}
 }
 
 function crossValidate(
-	data: BlueprintExport,
+	data: Blueprints,
 	check: NonNullable<InitOptions['check']>,
 	warnings: DiagnosticEntry[],
 ): void {
 
-	// Signatures
-	if ( check.signatures && data.signatures ) {
-		const gameSignatures = new Set( check.signatures );
-		for ( const sig of data.signatures ) {
-			if ( !gameSignatures.has( sig.id ) ) {
+	// Functions
+	if ( check.functions && data.functions ) {
+		const known = new Set( check.functions );
+		for ( const fn of data.functions ) {
+			if ( !known.has( fn.id ) ) {
 				warnings.push( {
-					code: 'UNKNOWN_SIGNATURE',
-					message: `Blueprint uses signature "${ sig.id }" which is not declared in the game.`,
+					code: 'UNKNOWN_FUNCTION',
+					message: `Blueprint declares function "${ fn.id }" which the game does not implement.`,
 				} );
 			}
 		}
@@ -195,47 +223,59 @@ function crossValidate(
 	// Dictionaries
 	if ( check.dictionaries && data.dictionaries ) {
 		for ( const dict of data.dictionaries ) {
-			const id = dict.id;
-			const gameKeys = check.dictionaries[id];
-			if ( !gameKeys ) {
+			const knownEntries = check.dictionaries[dict.id];
+			if ( !knownEntries ) {
 				warnings.push( {
-					code: 'UNKNOWN_DICTIONARY_GROUP',
-					message: `Blueprint uses dictionary group "${ id }" which is not declared in the game.`,
+					code: 'UNKNOWN_DICTIONARY',
+					message: `Blueprint uses dictionary "${ dict.id }" which the game does not declare.`,
 				} );
 				continue;
 			}
-			const gameKeySet = new Set( gameKeys );
-			for ( const row of dict.rows ) {
-				if ( !gameKeySet.has( row.key ) ) {
+			const knownSet = new Set( knownEntries );
+			for ( const entry of dict.entries ) {
+				if ( !knownSet.has( entry ) ) {
 					warnings.push( {
-						code: 'UNKNOWN_DICTIONARY_KEY',
-						message: `Dictionary group "${ id }" uses key "${ row.key }" not declared in the game.`,
+						code: 'UNKNOWN_DICTIONARY_ENTRY',
+						message: `Dictionary "${ dict.id }" declares entry "${ entry }" which the game does not know.`,
 					} );
 				}
 			}
 		}
 	}
 
-	// Characters
-	if ( check.characters ) {
-		const gameCharacters = new Set( check.characters );
-		const blueprintCharacters = new Set<string>();
-		for ( const scene of data.scenes ) {
-			for ( const block of scene.blocks ) {
-				if ( block.metadata?.characters ) {
-					for ( const char of block.metadata.characters ) {
-						blueprintCharacters.add( char.name );
-					}
-				}
-			}
-		}
-		for ( const name of blueprintCharacters ) {
-			if ( !gameCharacters.has( name ) ) {
+	// Cards — matched on the NAME the game gives them, not on the editor id.
+	if ( check.cards && data.cards ) {
+		const known = new Set( check.cards );
+		for ( const card of data.cards ) {
+			if ( !known.has( card.name ) ) {
 				warnings.push( {
-					code: 'UNKNOWN_CHARACTER',
-					message: `Blueprint uses character "${ name }" which is not declared in the game.`,
+					code: 'UNKNOWN_CARD',
+					message: `Blueprint declares card "${ card.name }" (${ card.role }) which the game does not know.`,
 				} );
 			}
 		}
 	}
+}
+
+// ─── Naming a block in a message ─────────────────────────────────────────────
+
+/**
+ * How a block is named in a diagnostic.
+ *
+ * `DIALOG-007` is already readable on its own — that is what replaced the v1 uuid, and it is why
+ * blocks carry no mandatory name. When the designer left a note, it says far more than any label
+ * would have, so it is appended. A `label` wins over both when an export happens to carry one.
+ */
+function describeBlock( block: Block ): string {
+	if ( block.label ) return `Block ${ block.id } ("${ block.label }")`;
+	if ( block.note ) return `Block ${ block.id } ("${ truncate( block.note, 60 ) }")`;
+	return `Block ${ block.id }`;
+}
+
+function truncate( text: string, max: number ): string {
+	return text.length <= max ? text : `${ text.slice( 0, max - 1 ) }…`;
+}
+
+function describe( value: unknown ): string {
+	return value === undefined ? 'nothing' : JSON.stringify( value );
 }

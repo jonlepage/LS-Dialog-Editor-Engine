@@ -20,6 +20,8 @@ D:\Users\jonle\Documents\DEV\projets\LEPASOFT\LS-Dialog-Editor-Engine\mock\multi
 
 ## 1. Le moteur refuse d'ouvrir un fichier v2
 
+**LIVRÉ le 2026-09-07** — `lsde-ts` seulement. Voir *Ce qui a été livré* plus bas.
+
 **Tranché — à faire en premier.**
 
 Deux causes, et la seconde est pire que la première.
@@ -48,6 +50,40 @@ pas lire ne provoque donc pas d'erreur : il produit une scène qui s'arrête en 
 
 Quatre ids partagés dans l'export de référence : `ACTION-001`, `DIALOG-001`, `DIALOG-002`,
 `CHOICE-001`.
+
+### Ce qui a été livré (2026-09-07)
+
+Critère de fin atteint et prouvé : `lsde-ts/src/blueprint-loading.test.ts`, **43 tests au vert**,
+sur les trois fichiers que LSDE a réellement écrits — aucune charge fabriquée à la main.
+
+Les quatre points du plan, plus trois que le code a imposés :
+
+1. `format` et `version` lus **avant tout le reste**, refus net et nommé. Le refus s'arrête là :
+   une seule cause, pas vingt conséquences.
+2. Blocs indexés par (scène, id). Il n'y a plus **aucun** index global de blocs dans `graph.ts`.
+3. `DUPLICATE_BLOCK_UUID_GLOBAL` retiré, `DUPLICATE_BLOCK_ID` le remplace (dans la scène).
+4. `MULTIPLE_START_BLOCKS` et `MISSING_SCENE_LABEL` retirés — inexprimables en v2.
+5. **Les fils viennent des blocs.** Plus de table `connections` : `getOutgoingLinks()` est une
+   lecture de champ. `getSceneConnections()` aplatit les `next` en y remettant le bloc de départ
+   (problème 15, fait ici parce que `graph.ts` ne compilait pas autrement).
+6. **`getSceneGraph()` accepte le chemin ou le `sceneId`** — le problème 7, quatre lignes, au même
+   endroit. Ne pas le faire aurait voulu dire choisir une clé arbitraire et y revenir.
+7. **Diagnostics : `id` d'abord, puis la `note`** (problème 17). `label` passe devant si un export
+   en porte un.
+
+Nouveaux codes : `INVALID_FORMAT`, `UNSUPPORTED_FORMAT_VERSION`, `DUPLICATE_SCENE`,
+`DUPLICATE_BLOCK_ID`, `MISSING_SCENE_PATH`, `INVALID_START_BLOCK`, `NO_START_BLOCK` (warning —
+une scène sans entrée se charge, elle ne joue pas), `BROKEN_LINK`, `UNKNOWN_FUNCTION`,
+`UNKNOWN_DICTIONARY`, `UNKNOWN_DICTIONARY_ENTRY`, `UNKNOWN_CARD`.
+
+`CheckOptions` suit : `signatures` → `functions`, `characters` → `cards` (sur le **nom** de la
+fiche, jamais sur `var1`).
+
+**`validator.test.ts` et `graph.test.ts` sont supprimés.** Ils décrivaient le format v1 sur des
+charges écrites à la main. Leur couverture est reprise dans `blueprint-loading.test.ts`, contre
+les vrais fichiers — sauf trois cas qui n'existent plus : deux `isStartBlock`, le repli
+`entryBlockId`, et un `fromId` cassé (un fil part forcément d'un bloc qui existe, puisque c'est
+lui qui le porte).
 
 ---
 
@@ -256,6 +292,25 @@ et complet — six énumérations en double forme, onze interfaces, `TextByLocal
 `PropertyBag`, alias racine. **Consommable tel quel.**
 
 C'est le seul changement du chantier qui rende la *prochaine* migration bon marché.
+
+### LIVRÉ le 2026-09-07 — `lsde-ts` seulement
+
+`lsde-ts/src/blueprint-types.ts` est la **copie verbatim** du fichier généré. Deux retouches, et
+seulement deux : l'en-tête dit d'où il vient et comment le rafraîchir, et l'alias de fin nommé
+d'après le projet (`EngineConformanceSceneBlueprints`) est retiré. Le corps n'est pas touché.
+
+Il fallait le faire **avec** le problème 1 et non après : on ne valide pas un format sans ses
+types. `types.ts` passe de 1060 à 630 lignes — toute la moitié « charge utile » a disparu, elle
+est maintenant générée.
+
+`types.ts` garde par-dessus ce que le générateur ne peut pas connaître : les noms de l'API du
+moteur (`BlueprintExport` = `Blueprints`, `BlueprintScene` = `Scene`, `BlueprintBlock` = `Block`),
+les raffinements par type de bloc dont les handlers sont génériques, `BlueprintConnection` (un
+`Link` + son bloc de départ, une forme qui n'existe qu'en mémoire), et `NativeProperties` +
+`NATIVE_PROPERTY_IDS` — la liste des neuf natives, seul moyen de trier le sac `props`.
+
+**Ce qui reste au 8 :** le C#, le C++ et le GDScript ont chacun leur fichier généré dans
+`mock/blueprints/`, à brancher au moment du portage.
 
 ---
 
@@ -610,26 +665,26 @@ Deux points de confort, petits, sans urgence :
 
 # L'ordre de traitement
 
-| # | Problème | Dépend de |
-|---|---|---|
-| 1 | Charger et valider | — |
-| 8 | Brancher les types générés | — |
-| 2 | Le routage | 1 |
-| 3 | Les conditions | 1 |
-| 4 | Retirer le dispatcher | 3 |
-| 5 | La distribution | 1 |
-| 6 | Le sac `props` | 1 |
-| 7 | Le `sceneId` | 1 |
-| 12 | Les specs partagées | 2, 3 |
-| — | **Porter C#, C++, GDScript** | tout ce qui précède |
-| 13 | La documentation | tout |
-| 9, 10 | Convention de nommage, multi-fichiers | 1 |
-| 11 | Faire remonter les erreurs | — |
-| 16 | L'émotion sur le bloc | 1 |
-| 18 | Utilitaire de table de langue + retirer `getLocale` | — *confort, pas bloquant* |
-| 15 | Reconstruire `getSceneConnections` | 1 |
-| 17 | — *refermé, rien à faire* | — |
-| 14 | Monter le CI | **tout** — c'est la dernière étape |
+| # | Problème | Dépend de | État |
+|---|---|---|---|
+| 1 | Charger et valider | — | **fait (ts)** |
+| 8 | Brancher les types générés | — | **fait (ts)** |
+| 2 | Le routage | 1 | **suivant** |
+| 3 | Les conditions | 1 | |
+| 4 | Retirer le dispatcher | 3 | |
+| 5 | La distribution | 1 | |
+| 6 | Le sac `props` | 1 | |
+| 7 | Le `sceneId` | 1 | *moitié faite avec le 1* |
+| 12 | Les specs partagées | 2, 3 | |
+| — | **Porter C#, C++, GDScript** | tout ce qui précède | |
+| 13 | La documentation | tout | |
+| 9, 10 | Convention de nommage, multi-fichiers | 1 | |
+| 11 | Faire remonter les erreurs | — | |
+| 16 | L'émotion sur le bloc | 1 | |
+| 18 | Utilitaire de table de langue + retirer `getLocale` | — *confort* | |
+| 15 | Reconstruire `getSceneConnections` | 1 | **fait avec le 1** |
+| 17 | — *refermé, rien à faire* | — | **fait avec le 1** |
+| 14 | Monter le CI | **tout** — c'est la dernière étape | |
 
 ---
 
@@ -851,3 +906,29 @@ Le README annonçait 216 / 42 / **40-sur-42** / 42. Les quatre étaient faux.
 - **Un callback `onResolveText` écarté** : le moteur n'a jamais besoin d'un texte, donc il n'a rien à
   demander. Un utilitaire suffit.
 - **Les 18 problèmes sont tranchés. Plus aucune question en attente de LSDE2.** On peut coder.
+
+### Les travaux commencent — problèmes 1 et 8 livrés en TypeScript
+
+- **Le 1 et le 8 sont indissociables** et ont été faits ensemble. On ne valide pas un format sans
+  ses types : dès que `types.ts` décrit la v2, il n'y a plus de v1 nulle part. Les faire l'un
+  après l'autre aurait voulu dire écrire des types v2 à la main pour les jeter le lendemain.
+- **Ce qui prouve le 1 :** `blueprint-loading.test.ts`, 43 tests, sur les trois fichiers que LSDE
+  a écrits. Zéro erreur, **et zéro warning** — un warning sur l'export de référence voudrait dire
+  que la règle qui l'a levé est fausse, pas le fichier.
+- **Trois problèmes voisins sont tombés avec :** le 15 (`getSceneConnections` reconstruit sur les
+  `next`), le 17 (les diagnostics citent l'id puis la note), et la moitié du 7
+  (`getSceneGraph()` répond au chemin comme au `sceneId`). Aucun n'est du débordement : `graph.ts`
+  ne compilait pas sans le 15, et le 7 aurait voulu dire choisir une clé de scène arbitraire pour
+  y revenir plus tard.
+- **Le dépôt TypeScript ne compile plus, et c'est attendu.** 135 erreurs de type dans huit modules,
+  161 tests rouges sur sept fichiers : `port-resolver`, `condition-evaluator`, `block-context`,
+  `scene-handle`, `engine`, `handler-registry`, `index`, `lsde-utils`. Ce sont exactement les
+  problèmes 2, 3, 5, 6, 12 — l'ordre du plan les enchaîne juste après. Les quatre fichiers du
+  périmètre (`blueprint-types`, `types`, `graph`, `validator`) sont propres au `tsc`.
+- **Le C#, le C++ et le GDScript n'ont pas été touchés** et restent verts sur la v1.
+  `blueprints/blueprint.json` (v1) n'a pas bougé : leurs playgrounds et leurs tests le lisent, et
+  le remplacer maintenant les casserait tous les trois pour rien. Il part avec le portage.
+- **Question ouverte pour Jonathan : le numéro de version du paquet.** Le plan a tranché
+  **1.0.0** (« moteur 1.x lit format 1 »), et l'export confirme le raisonnement — le fichier porte
+  bien `"version": 1`. Jonathan a demandé « le JSON en version 2.0 ». Rien n'est bumpé tant que ce
+  n'est pas dit : le paquet est en 0.3.0, les trois `.csproj` et `CMakeLists.txt` aussi.
