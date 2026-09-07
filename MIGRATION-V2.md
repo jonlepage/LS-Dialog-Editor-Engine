@@ -537,74 +537,74 @@ dans un export, il passe devant — le champ est optionnel dans les types, on le
 
 ---
 
-## 18. Le texte est-il toujours dans le blueprint ?
+## 18. Les textes séparés du blueprint
 
-**Une question à LSDE2, pas un chantier. Sa réponse décide s'il y a du travail ou zéro.**
+**Tranché — le mode séparé fonctionne déjà. Le moteur ne lit jamais un texte, donc il n'y a rien
+à brancher. Reste deux petites choses de confort.**
 
-### Comment le moteur trouve un texte aujourd'hui
+### Le réglage existe, et il est explicite
 
-Il le lit **sur le bloc**, et nulle part ailleurs :
+Écran d'export de LSDE2, section **Scènes → Contenu** :
 
-```json
-{ "id": "DIALOG-001", "text": { "fr": "Pas de son.", "en": "No sound." } }
-```
+- ☑ **Texte des répliques** — son propre tooltip dit :
+  *« Décoché, l'export ne porte que la structure du graphe — le jeu va chercher les textes dans les
+  fichiers de langue. »*
+- ☐ **Écrire les textes à part**
 
-[getLocalizedText](lsde-ts/src/playground.ts#L57) prend la langue active dans ce petit objet et rend
-la chaîne. C'est tout le mécanisme. Le moteur n'ouvre aucun fichier, ne connaît aucune table.
+Ce n'est donc ni un doute ni un oubli : c'est un réglage documenté dans l'interface. J'avais posé la
+question alors que la réponse était à l'écran.
 
-### Ce qui m'a fait ouvrir le problème
+### Pourquoi le mode séparé est la BONNE pratique
 
-Dans les types générés, le champ est optionnel, avec ce commentaire :
+Ce n'est pas un cas marginal, c'est ce que la plupart des intégrations voudront :
 
-```ts
-/** The line by locale, dialogs only, when texts are exported. */
-text?: TextByLocale;
-```
+- Un `text: { en, fr, es, de, ja, ... }` par bloc force le jeu à charger **toutes** les langues pour
+  en jouer une seule. À 20 langues et quelques milliers de scènes, c'est absurde.
+- Un jeu charge la langue **que le joueur a choisie**, et seulement celle-là. C'est exactement ce que
+  le découpage `localization/<locale>/` permet.
+- La logique et la traduction ne bougent pas au même rythme, ni par les mêmes personnes. Les tenir
+  dans deux fichiers, c'est deux cycles de travail qui ne se marchent pas dessus.
 
-**« when texts are exported »** — la phrase sous-entend qu'un export peut ne PAS contenir les textes.
-Si c'est le cas, les blocs arrivent sans une ligne de dialogue, et le moteur n'a plus rien à rendre :
-`getLocalizedText()` retourne `undefined` sur tous les blocs de la scène.
+Le mode en ligne est un confort de développement (c'est celui des exports du dépôt), pas la cible.
 
-### Où seraient les textes dans ce cas
+### Et le moteur le supporte DÉJÀ — relevé dans le code
 
-Dans le dossier `localization/` livré à côté. Le fichier `__blueprints__.json` de chaque langue
-contient exactement les mêmes textes, indexés autrement :
+`dialogueText` n'apparaît **nulle part** dans le moteur : ni [engine.ts](lsde-ts/src/engine.ts), ni
+[scene-handle.ts](lsde-ts/src/scene-handle.ts), ni [block-context.ts](lsde-ts/src/block-context.ts).
+Uniquement dans les types, dans l'utilitaire, et dans le playground.
 
-```json
-{ "reactor_breach": {
-    "DIALOG-001": "Pas de son. Évidemment qu'il n'y a pas de son.",
-    "CHOICE-001": { "C1": "Qu'est-ce que tu as vu au pont trois ?", "C2": "..." } } }
-```
+[getLocalizedText](lsde-ts/src/lsde-utils.ts#L42) est une **méthode statique de `LsdeUtils`**, pas un
+hook : elle prend un objet que le développeur lui passe. Le moteur, lui, remet le bloc entier au
+handler et ne regarde jamais dedans.
 
-`scène → bloc` pour un dialogue, `scène → bloc → option` pour un choix.
+**Conséquence : un export sans textes traverse déjà le moteur sans une ligne à changer.** Le
+développeur reçoit le bloc avec son `id` et sa `key`, et va chercher sa réplique où il veut. C'est la
+conséquence directe de *Ce que le moteur ne fait jamais* — la même règle qui explique `{{@a1}}`.
 
-### Ce que le relevé dit
+### Faut-il un callback `onResolveText` ? Non.
 
-Les **trois** exports du dépôt (`mock/all`, `mock/multi`, `mock/blueprints`) contiennent leurs textes
-**deux fois** : en ligne sur les blocs, ET dans `localization/`. 28 blocs parlants, 28 avec leur
-`text`. **Le cas « sans texte » n'a jamais été produit par LSDE2.**
+L'idée se défend — tout le reste du moteur marche par callbacks — mais ici elle n'achète rien :
 
-Donc soit l'option existe et personne ne l'a cochée, soit le `?` du type est une simple prudence
-d'écriture et le champ est toujours là.
+- Un callback existe pour que le moteur puisse **demander** ce dont il a besoin. Le moteur n'a jamais
+  besoin d'un texte : il ne l'affiche pas, ne le mesure pas, ne le valide pas.
+- Le développeur a déjà le bloc dans son `onDialog`. Il appelle sa fonction. Un hook lui ferait faire
+  le même travail, avec un aller-retour de plus.
+- Un hook imposé sur un texte, c'est la porte ouverte à ce que le moteur commence à lire ce qu'il y
+  a dedans.
 
-### La question à LSDE2
+**Le texte n'est pas un service du moteur, c'est une donnée du jeu.**
 
-**Existe-t-il un réglage d'export qui retire `text` des blocs ?**
+### Ce qui reste vraiment à faire
 
-- **Non** → rien à faire. On note que `text` est toujours présent, et le moteur ne change pas.
-- **Oui** → le moteur doit accepter une table externe :
-  1. une entrée où le développeur dépose la table de sa langue — c'est lui qui charge le fichier,
-     le moteur ne fait pas d'IO ;
-  2. la résolution en deux temps : le `text` du bloc d'abord, la table ensuite ;
-  3. aucun plantage quand ni l'un ni l'autre ne répond — un bloc sans texte reste un bloc valide
-     qu'on traverse.
+Deux points de confort, petits, sans urgence :
 
-### À ne pas confondre
-
-`localization/<locale>/ui.json` et `main.json` sont les dictionnaires **du jeu**, pas des blueprints.
-`DIALOG-010` écrit `Ferme le {{#ui.hud.airlock_label}}` et c'est `ui.json` qui contient `"Sas 4"` —
-mais **le moteur ne les ouvre pas et ne remplace rien**. Il rend la chaîne avec ses marqueurs intacts.
-Voir *Ce que le moteur ne fait jamais*.
+1. **`getLocalizedText()` ne sait lire que le mode en ligne.** Dans le mode séparé, l'utilitaire ne
+   sert plus. Il faudrait un pendant qui navigue une table de langue : `scène → bloc`, et
+   `scène → bloc → option` pour un choix — la forme de `localization/<locale>/__blueprints__.json`.
+   Une utilité statique, pas un hook. Le développeur charge le fichier, le moteur ne fait pas d'IO.
+2. **`getLocale` est du code mort.** Déclaré dans l'interface interne du scene handle
+   ([scene-handle.ts](lsde-ts/src/scene-handle.ts#L27)), jamais appelé dans son corps. `setLocale()`
+   garde son utilité (il valide le code contre `locales`), mais ce passe-plat part.
 
 ---
 
@@ -626,7 +626,7 @@ Voir *Ce que le moteur ne fait jamais*.
 | 9, 10 | Convention de nommage, multi-fichiers | 1 |
 | 11 | Faire remonter les erreurs | — |
 | 16 | L'émotion sur le bloc | 1 |
-| 18 | Le texte hors du blueprint | **réponse de LSDE2** — peut-être rien à faire |
+| 18 | Utilitaire de table de langue + retirer `getLocale` | — *confort, pas bloquant* |
 | 15 | Reconstruire `getSceneConnections` | 1 |
 | 17 | — *refermé, rien à faire* | — |
 | 14 | Monter le CI | **tout** — c'est la dernière étape |
@@ -748,7 +748,8 @@ Aucune action côté moteur. Consigné pour que personne ne le redécouvre comme
 
 ## Ce que la v2 ajoute et qu'il faudra savoir lire
 
-- **`text` déclaré optionnel** — devenu le **problème 18**. Jamais observé absent.
+- **`text` déclaré optionnel** — devenu le **problème 18**. Réglage assumé de l'export, et le
+  moteur le supporte déjà : il ne lit jamais un texte.
 - **`cards`** — la table qui donne un `name` aux ids `var1`, `var2` (problème 5).
 - **`Block.body`** pour le corps d'une note. Non utilisé dans l'export : les deux notes portent leur
   texte dans `note`. À signaler à LSDE2, sans importance pour le moteur — il ignore les notes.
@@ -842,6 +843,11 @@ Le README annonçait 216 / 42 / **40-sur-42** / 42. Les quatre étaient faux.
   `getSceneConnections` rend les fils **de** la scène, et le seul blueprint v1 du dépôt n'a qu'une
   scène. Le 16 et le 17 sont des décisions de LSDE2 que la vérification confirme : un bloc a un ton,
   et `DIALOG-007` + sa `note` valent mieux qu'un nom qu'il faut maintenir.
-- **Problème 18 ouvert** : le type dit `text?` « when texts are exported », mais les trois exports
-  du dépôt portent leurs 28 textes en ligne. Une question à LSDE2 : ce réglage existe-t-il ? Si non,
-  zéro travail. C'est le seul point encore ouvert de toute la passe de couverture.
+- **Problème 18 ouvert puis tranché le même jour.** J'avais demandé à LSDE2 si un réglage pouvait
+  retirer les textes des blocs — question inutile, la case et son tooltip sont à l'écran d'export, et
+  Jonathan me l'avait déjà montré. Pire : `dialogueText` n'apparaît **nulle part** dans le moteur.
+  Le mode séparé passe déjà sans une ligne à changer. Deuxième erreur de la journée à avoir la même
+  cause que celle de `{{@a1}}` : oublier que le moteur ne touche jamais au texte.
+- **Un callback `onResolveText` écarté** : le moteur n'a jamais besoin d'un texte, donc il n'a rien à
+  demander. Un utilitaire suffit.
+- **Les 18 problèmes sont tranchés. Plus aucune question en attente de LSDE2.** On peut coder.
