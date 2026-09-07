@@ -446,6 +446,135 @@ YAML une fois.
 
 ---
 
+## 15. `getSceneConnections()` perd sa table, et sa doc était fausse
+
+**Tranché — aucune fonctionnalité ne se perd. La méthode est reconstruite, la doc corrigée.**
+
+### Ce que j'avais annoncé, et qui était faux
+
+J'ai d'abord écrit que la v1 savait relier deux scènes et que la v2 le perdait. **Non.** Deux relevés
+le démentent :
+
+1. [getSceneConnections](lsde-ts/src/graph.ts#L120) rend `scene.connections` — **tous les fils DE la
+   scène**, pas ceux qui en sortent. Le mot « inter-scènes » n'apparaît nulle part dans le code.
+2. Le seul blueprint v1 réel du dépôt (`blueprints/blueprint.json`) : **1 scène, 11 fils, 0 hors
+   scène**. Aucun export LSDE n'a jamais produit un fil qui traverse une scène.
+
+C'était donc une ligne de documentation sans code derrière, pas une capacité expérimentée puis
+abandonnée. Rien à récupérer, rien à demander à LSDE2.
+
+### Ce qui reste vrai
+
+La méthode est de l'**inspection de graphe** : elle sert à un outil de debug qui veut voir le câblage
+d'une scène sans la jouer. Utile, et facile à garder — en v2 les fils sont sur les blocs, donc on
+aplatit les `next` au lieu de lire une table.
+
+### Ce qu'on fait
+
+- Reconstruire `getSceneConnections()` sur les `next` des blocs, même signature, même rôle.
+- Corriger les **deux lignes fausses** du `CLAUDE.md` (§3.9 et le tableau des décisions §13) qui
+  présentent la méthode comme le moyen de naviguer entre scènes. Elles partent avec le problème 13.
+- Enchainer deux scènes reste entièrement l'affaire du développeur — c'est ce qui était vrai depuis
+  le début, la doc disait seulement le contraire.
+
+---
+
+## 16. L'émotion appartient au bloc, plus au personnage
+
+**Tranché — le changement de LSDE2 est le bon. On s'aligne.**
+
+En v1, `metadata.characters[]` portait un `emotion` et un `emotionIntensity` **par entrée**. En v2,
+`emotion` et `intensity` sont sur le **bloc**, et `actors` n'est plus qu'une liste d'ids.
+
+### Pourquoi c'est mieux
+
+Un bloc est **une réplique**, et une réplique a **un ton**. C'est le bloc qui décide de l'émotion ;
+`actors` dit ensuite qui peut la porter.
+
+`DIALOG-003` de `reactor_breach` le dit lui-même dans sa note : *« Les deux le disent en même temps,
+et aucun des deux ne veut être celui qui a parlé le premier »*. Deux acteurs, une phrase, une peur.
+La v1 aurait exigé qu'on écrive deux fois la même émotion pour dire ça — et aurait autorisé de les
+désynchroniser par accident.
+
+Le pluriel de `actors` garde tout son sens : c'est le casting de la réplique, ce que `portPerCharacter`
+transforme en ports et que [onResolveCharacter](lsde-ts/src/playground.ts#L46) tranche à l'exécution.
+Le casting et le ton sont deux choses différentes ; la v1 les avait collées.
+
+### Ce qu'on fait
+
+[createDialogContext](lsde-ts/src/block-context.ts#L32) se réécrit autour d'un bloc qui porte une
+émotion et une liste d'acteurs. Plus simple qu'avant, moins de champs à tenir cohérents.
+
+---
+
+## 17. Il n'y a pas de nom de bloc, et il n'en faut pas
+
+**Tranché — le problème se referme. Rien à demander à LSDE2.**
+
+J'avais ouvert ça parce que `label` et `parentLabels` sont absents des 22 blocs. La crainte : des
+diagnostics illisibles. **Elle ne tient pas**, pour deux raisons vérifiées.
+
+### 1. L'identité v2 est déjà lisible
+
+En v1, un bloc s'appelait `a3f7c2e1-9b04-...`. En v2, il s'appelle `DIALOG-007`. Un diagnostic v2
+**sans aucun label** est déjà meilleur qu'un diagnostic v1 avec.
+
+### 2. Les 22 blocs portent une `note`, et elle vaut mieux qu'un nom
+
+Pas un nom : une phrase. `DIALOG-007` porte *« Vesk se cache derrière le réservoir. Il ne parle que
+si le joueur l'a déjà croisé »*. Aucun label de trois mots n'aurait dit ça.
+
+### Et l'argument de fond est le bon
+
+Nommer chaque bloc de chaque scène est un travail qui ne finit jamais et qui pourrit dès qu'on
+retravaille la scène. On branche des blocs, jamais des noms. **Un nom obligatoire aurait été une
+dette imposée à l'auteur pour le confort d'un message d'erreur.**
+
+### Ce qu'on fait
+
+Les diagnostics citent `id`, et ajoutent la `note` quand elle est là. Si un `label` arrive un jour
+dans un export, il passe devant — le champ est optionnel dans les types, on le lit sans l'exiger.
+
+---
+
+## 18. Le texte peut vivre hors du blueprint
+
+**À faire pendant la migration. Le moteur n'a aucune notion de table externe aujourd'hui.**
+
+`Block.text` et `Option.text` sont documentés **« when texts are exported »**. Le client peut couper
+l'option : les blocs partent alors sans une ligne de dialogue, et les textes ne vivent plus que dans
+`localization/<locale>/__blueprints__.json`.
+
+### La forme de la table
+
+```json
+{ "reactor_breach": {
+    "DIALOG-001": "Pas de son. Évidemment qu'il n'y a pas de son.",
+    "CHOICE-001": { "C1": "Qu'est-ce que tu as vu au pont trois ?", "C2": "..." } } }
+```
+
+Indexée `scène → bloc`, et `scène → bloc → option` pour un choix. Chaque bloc porte déjà le chemin
+complet dans son champ `key` (`__blueprints__.reactor_breach.DIALOG-001`).
+
+### Ce que ça change pour le moteur
+
+La v1 n'avait **rien** de tel : le texte était toujours dans le blueprint, et
+[getLocalizedText](lsde-ts/src/playground.ts#L57) le lisait sur le bloc. Il faut :
+
+1. Une entrée pour fournir une table par langue — c'est le développeur qui charge le fichier, le
+   moteur ne fait pas d'IO.
+2. La résolution en deux temps : le `text` du bloc d'abord, la table ensuite.
+3. **Ne pas planter** quand aucun des deux ne répond. Un bloc sans texte reste un bloc valide qu'on
+   traverse — c'est au développeur d'afficher ce qu'il veut.
+
+### Ce qui reste hors sujet
+
+`localization/<locale>/main.json` et `ui.json` sont les dictionnaires du **jeu**. Un texte qui cite
+`{{#ui.hud.airlock_label}}` les vise — le moteur passe la chaîne brute, il n'ouvre pas ces fichiers.
+Voir *Ce que le moteur ne fait jamais*.
+
+---
+
 # L'ordre de traitement
 
 | # | Problème | Dépend de |
@@ -463,6 +592,10 @@ YAML une fois.
 | 13 | La documentation | tout |
 | 9, 10 | Convention de nommage, multi-fichiers | 1 |
 | 11 | Faire remonter les erreurs | — |
+| 16 | L'émotion sur le bloc | 1 |
+| 18 | Le texte hors du blueprint | 1 |
+| 15 | Reconstruire `getSceneConnections` | 1 |
+| 17 | — *refermé, rien à faire* | — |
 | 14 | Monter le CI | **tout** — c'est la dernière étape |
 
 ---
@@ -519,14 +652,73 @@ la main : on vérifie ce que le logiciel produit.
 
 ## Ce qui reste à ouvrir
 
-- [ ] Les **ports** réels de chaque type de bloc
+- [x] Les **ports** réels : `out` ×12, `then` ×3, `catch` ×3, `default` ×3, `C1..C4`, `K1..K3`,
+      `var1`/`var2` pour les acteurs. Les six ports fixes et les trois familles nommées sont là.
+- [x] Le sac **`props`** : 15 clés distinctes, dont les **huit natives de la v1**
+      (`delay`, `timeout`, `debug`, `isAsync`, `portPerCharacter`, `skipIfMissingActor`,
+      `waitForBlocks`, `waitInput`) plus la nouvelle `portPerCase`. Rien de perdu de ce côté.
 - [ ] Les **options** d'un choix : `id` = port, `when`, option non branchée
 - [ ] Les **appels d'action** : `args` par nom, `fn: ""` quand aucune fonction n'est choisie
-- [ ] Le sac **`props`** en entier
 - [ ] La **collision de propriété** : une propriété custom nommée « Delay » écrase-t-elle la native ?
 - [ ] Le **bloc NOTE** et le fil qui le vise : le fil disparaît-il vraiment ?
 - [ ] Un **port portant deux fils**
 - [ ] Les interfaces **C# / GDScript / C++** : produisent-elles bien la même chose ?
+
+---
+
+# Ce que le moteur ne fait jamais
+
+**Le moteur lit la structure. Jamais le contenu d'un texte.**
+
+Il traverse des blocs, résout des ports, évalue des conditions et rend la chaîne brute au
+développeur. Ce qu'il y a **dans** cette chaîne ne le regarde pas.
+
+[playground.ts](lsde-ts/src/playground.ts#L57) le montre en deux lignes : `getLocalizedText()` prend
+la bonne langue, et la ligne suivante affiche le résultat tel quel.
+
+Donc `{{@a1}}`, `{:a2}`, `{|}`, `{{#ui.hud.airlock_label}}` dans un texte exporté : ce sont les
+marqueurs **du jeu du client**, dans ses clés à lui, remplis par son propre système. Le moteur ne
+les analyse pas, ne les valide pas, ne se plaint pas s'ils désignent quelque chose qu'il ne connaît
+pas — il ne les voit même pas.
+
+> **Pourquoi c'est écrit ici.** Le 2026-09-07 j'ai signalé `{{@a1}}` comme un défaut de l'export et
+> demandé une correction côté LSDE2. C'était faux, et ça a coûté une correction inutile dans
+> l'éditeur plus une demi-journée à se demander si le plan tenait encore. La règle est évidente
+> quand on la relit ; elle ne l'est pas quand on a le nez dans un JSON depuis trois heures.
+
+---
+
+# La couverture v1 → v2, champ par champ
+
+Relevé fait sur `blueprint.types.ts` (v1) contre `Engine-Conformance-Scene.blueprints.types.ts` (v2)
+et l'export réel. **Rien de ce que le moteur exécute n'a disparu.** Les manques sont ailleurs.
+
+## Ce qui manque et que le moteur lisait
+
+Trois cas ouverts, **trois cas refermés après vérification.** Aucun n'est une perte :
+
+- **Les fils inter-scènes** (15) — n'ont jamais existé. Une ligne de doc sans code derrière.
+- **L'émotion par acteur** (16) — retirée volontairement, et c'est un gain. Un bloc, un ton.
+- **Les noms de bloc** (17) — pas nécessaires : `DIALOG-007` bat un uuid, et la `note` bat un nom.
+
+## Ce qui manque et que le moteur n'a jamais lu
+
+Aucune action côté moteur. Consigné pour que personne ne le redécouvre comme un bug.
+
+| Parti de la v2 | Le moteur s'en servait ? | Conséquence |
+|---|---|---|
+| `metadata.color`, `.tags`, `.screenShots`, `.others` | non — il ne lisait que `.characters` | perte côté client. `tags` est le seul qui pouvait porter de la logique de son côté |
+| `SignatureParam.type: 'enum'` + `enumOptions` | non | `ValueType` n'a que 4 valeurs en v2. À vérifier : l'éditeur propose-t-il encore des paramètres enum ? |
+| `Scene.note`, `Scene.date` | non | sans effet |
+| `ExportCondition.uuid`, `ExportAction.uuid`, `signatureUuid` | non | l'id de fonction suffit |
+| `operator` en chaîne libre → 6 valeurs fermées | non | le moteur ne compare jamais lui-même, il délègue à `onResolveCondition`. Le jeu d'opérateurs est l'affaire de l'éditeur |
+
+## Ce que la v2 ajoute et qu'il faudra savoir lire
+
+- **`text` peut être absent** — devenu le **problème 18**.
+- **`cards`** — la table qui donne un `name` aux ids `var1`, `var2` (problème 5).
+- **`Block.body`** pour le corps d'une note. Non utilisé dans l'export : les deux notes portent leur
+  texte dans `note`. À signaler à LSDE2, sans importance pour le moteur — il ignore les notes.
 
 ---
 
@@ -603,3 +795,19 @@ Le README annonçait 216 / 42 / **40-sur-42** / 42. Les quatre étaient faux.
   runtimes divergeaient sans que personne le sache.
 - Problème 14 tranché : CI monté après la migration, pas pendant.
 - **Les 14 problèmes sont tranchés.** Reste à ouvrir les blocs de l'export, puis à coder.
+- **Fausse alerte corrigée** : j'avais signalé `{{@a1}}` dans les textes comme un défaut de l'export.
+  C'était faux. C'est un placeholder du jeu du client, dans sa clé à lui. **Le moteur lit la
+  structure, jamais le contenu d'un texte** — il passe la chaîne brute au développeur, qui la
+  remplit. [playground.ts](lsde-ts/src/playground.ts#L57) le montre en deux lignes. Aucun des
+  problèmes du plan ne portait sur le contenu d'un texte : l'erreur était isolée, rien à refaire.
+- **Règle consignée** après la fausse alerte : *Ce que le moteur ne fait jamais*.
+- **Passe de couverture v1 → v2 avant les travaux.** Champ par champ, contre l'export réel.
+  Les huit propriétés natives de la v1 sont toutes présentes, les six ports fixes aussi : rien de ce
+  que le moteur exécute n'a disparu.
+- **Trois manques ouverts (15, 16, 17), les trois refermés le jour même.** Le 15 était une erreur de
+  ma part : j'ai lu le `CLAUDE.md` au lieu du code. Les fils inter-scènes n'ont jamais existé —
+  `getSceneConnections` rend les fils **de** la scène, et le seul blueprint v1 du dépôt n'a qu'une
+  scène. Le 16 et le 17 sont des décisions de LSDE2 que la vérification confirme : un bloc a un ton,
+  et `DIALOG-007` + sa `note` valent mieux qu'un nom qu'il faut maintenir.
+- **Problème 18 ouvert** : le texte peut vivre hors du blueprint. C'est le seul vrai manque du
+  moteur trouvé par cette passe.
