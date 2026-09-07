@@ -16,9 +16,9 @@ LSDE exports dialogue graphs (scenes, blocks, connections, dictionaries, signatu
 
 | Runtime                         | Language   | Target                   | Tests   |
 | ------------------------------- | ---------- | ------------------------ | ------- |
-| [lsde-ts](lsde-ts/)             | TypeScript | Reference implementation | 216/216 |
-| [lsde-csharp](lsde-csharp/)     | C#         | Unity, .NET              | 42/42   |
-| [lsde-cpp](lsde-cpp/)           | C++        | Unreal, custom engines   | 40/42   |
+| [lsde-ts](lsde-ts/)             | TypeScript | Reference implementation | 306/306 |
+| [lsde-csharp](lsde-csharp/)     | C#         | Unity, .NET              | 107/107 |
+| [lsde-cpp](lsde-cpp/)           | C++        | Unreal, custom engines   | 89/89   |
 | [lsde-gdscript](lsde-gdscript/) | GDScript   | Godot 4                  | 42/42   |
 | [lsde-rust](lsde-rust/)         | Rust       | Native                   | planned |
 | [lsde-lua](lsde-lua/)           | Lua        | Defold, LOVE             | planned |

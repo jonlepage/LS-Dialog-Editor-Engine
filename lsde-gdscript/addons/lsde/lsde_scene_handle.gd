@@ -252,20 +252,16 @@ func _evaluate_condition_for_block(condition: Dictionary, fallback_evaluator: Ca
 
 # ─── Traversal ────────────────────────────────────────────────────────────
 
-func _process_block(block: Dictionary) -> void:
-	if _cancelled:
+func _process_block(starting_block: Dictionary) -> void:
+	if not _running or _cancelled:
 		return
 
 	# Skip NOTE
-	if block.get("type", "") == "NOTE":
-		var connections: Array = _scene_graph.get_outgoing_connections(block.get("uuid", ""))
-		if connections.size() > 0:
-			var next_block: Variant = _scene_graph.get_block(connections[0].get("toId", ""))
-			if next_block != null:
-				_process_block(next_block)
-				return
+	var skipped: Variant = LsdeSceneHandle._skip_notes(starting_block, _scene_graph)
+	if skipped == null:
 		_end_scene()
 		return
+	var block: Dictionary = skipped
 
 	# Validate
 	if _global_registry.validate_next_block_handler.is_valid():
@@ -297,16 +293,27 @@ func _process_block(block: Dictionary) -> void:
 
 	# onBeforeBlock
 	if _global_registry.before_block_handler.is_valid():
+		# GUARDED like next(): a delay timer that fires twice would otherwise dispatch
+		# the same block twice. The flag lives in an Array because a lambda captures by
+		# value, and an Array is the one capture GDScript lets us mutate from inside.
+		var resolved_once: Array = [false]
+		var resolve_fn: Callable = func() -> void:
+			if resolved_once[0]:
+				return
+			resolved_once[0] = true
+			_execute_block_handler(block)
 		_global_registry.before_block_handler.call({
 			"block": block, "scene": self,
 			"context": {"nativeProperties": block.get("nativeProperties")},
-			"resolve": Callable(self, "_execute_block_handler").bind(block)
+			"resolve": resolve_fn
 		})
 	else:
 		_execute_block_handler(block)
 
 func _execute_block_handler(block: Dictionary) -> void:
-	if _cancelled:
+	# `_running` and not just `_cancelled`: a resolve() kept in a closure and fired after
+	# the scene ended on its own would otherwise restart traversal on a dead scene.
+	if not _running or _cancelled:
 		return
 
 	var resolved: Dictionary = LsdeHandlerRegistry.resolve_handler(
@@ -543,6 +550,29 @@ func _create_context(block: Dictionary) -> Variant:
 			return LsdeBlockContext.create_action_context(resolved_character)
 	return null
 
+## Walk past NOTE blocks to the first block the engine actually dispatches.
+##
+## NOTE blocks are designer-only: they carry no handler and are never executed, so the
+## traversal steps over them and follows their first outgoing connection.
+##
+## Returns null when the walk runs out of connections — and also when it comes back to a
+## NOTE it already stepped over. A designer can wire a NOTE into a loop, and following it
+## recursively overflowed the stack instead of ending the flow.
+static func _skip_notes(block: Dictionary, scene_graph: LsdeGraph.SceneGraph) -> Variant:
+	var current: Variant = block
+	var seen: Dictionary = {}
+
+	while current != null and current.get("type", "") == "NOTE":
+		var uuid: String = current.get("uuid", "")
+		if seen.has(uuid):
+			return null
+		seen[uuid] = true
+
+		var connections: Array = scene_graph.get_outgoing_connections(uuid)
+		current = scene_graph.get_block(connections[0].get("toId", "")) if connections.size() > 0 else null
+
+	return current
+
 static func _safe_cleanup(v: Variant) -> Callable:
 	return v if v is Callable and v.is_valid() else Callable()
 
@@ -638,28 +668,30 @@ class AsyncTrack extends RefCounted:
 			"running": _running
 		}
 
-	func _process_block(block: Dictionary) -> void:
+	func _process_block(starting_block: Dictionary) -> void:
 		if not _running:
 			return
-		if block.get("type", "") == "NOTE":
-			var connections: Array = _scene_graph.get_outgoing_connections(block.get("uuid", ""))
-			if connections.size() > 0:
-				var next_block: Variant = _scene_graph.get_block(connections[0].get("toId", ""))
-				if next_block != null:
-					_process_block(next_block)
-					return
+		var skipped: Variant = LsdeSceneHandle._skip_notes(starting_block, _scene_graph)
+		if skipped == null:
 			_end_track()
 			return
+		var block: Dictionary = skipped
 		_current_block = block
 		_parent._add_visited(block.get("uuid", ""))
 
 		# Fire onBeforeBlock — same gate pattern as SceneHandleImpl._process_block
 		var registry: LsdeHandlerRegistry = _parent._get_global_registry()
 		if registry.before_block_handler.is_valid():
+			var resolved_once: Array = [false]
+			var resolve_fn: Callable = func() -> void:
+				if resolved_once[0]:
+					return
+				resolved_once[0] = true
+				_execute_block_handler(block)
 			registry.before_block_handler.call({
 				"block": block, "scene": _parent,
 				"context": {"nativeProperties": block.get("nativeProperties")},
-				"resolve": func() -> void: _execute_block_handler(block)
+				"resolve": resolve_fn
 			})
 		else:
 			_execute_block_handler(block)

@@ -27,6 +27,33 @@ export interface SceneHandleCallbacks {
 	getLocale: () => string;
 }
 
+/**
+ * Walk past NOTE blocks to the first block the engine actually dispatches.
+ *
+ * NOTE blocks are designer-only: they carry no handler and are never executed, so the
+ * traversal steps over them and follows their first outgoing connection.
+ *
+ * Returns `null` when the walk runs out of connections — and also when it comes back to a
+ * NOTE it already stepped over. A designer can wire a NOTE into a loop, and following it
+ * recursively overflowed the stack: the scene died on a `RangeError` instead of ending.
+ * Ending the flow is what a dead end does everywhere else in the engine.
+ */
+function skipNotes( block: BlueprintBlock, sceneGraph: SceneGraph ): BlueprintBlock | null {
+	let current: BlueprintBlock | undefined = block;
+	let seen: Set<string> | null = null;
+
+	while ( current && current.type === 'NOTE' ) {
+		seen ??= new Set<string>();
+		if ( seen.has( current.uuid ) ) return null;
+		seen.add( current.uuid );
+
+		const connections = sceneGraph.getOutgoingConnections( current.uuid );
+		current = connections.length > 0 ? sceneGraph.getBlock( connections[0]!.toId ) : undefined;
+	}
+
+	return current ?? null;
+}
+
 // ─── AsyncTrack — parallel execution branch ──────────────────────────────────
 
 class AsyncTrack {
@@ -113,18 +140,11 @@ class AsyncTrack {
 
 	// ─── Traversal (mirrors SceneHandleImpl logic) ───────────────────
 
-	private processBlock( block: BlueprintBlock ): void {
+	private processBlock( startingBlock: BlueprintBlock ): void {
 		if ( !this.running ) return;
 
-		if ( block.type === 'NOTE' ) {
-			const connections = this.sceneGraph.getOutgoingConnections( block.uuid );
-			if ( connections.length > 0 ) {
-				const nextBlock = this.sceneGraph.getBlock( connections[0]!.toId );
-				if ( nextBlock ) {
-					this.processBlock( nextBlock );
-					return;
-				}
-			}
+		const block = skipNotes( startingBlock, this.sceneGraph );
+		if ( !block ) {
 			this.endTrack();
 			return;
 		}
@@ -132,14 +152,20 @@ class AsyncTrack {
 		this.currentBlock = block;
 		this.parentHandle.addVisited( block.uuid );
 
-		// Fire onBeforeBlock — same gate pattern as SceneHandleImpl.processBlock
+		// Fire onBeforeBlock — same gate pattern as SceneHandleImpl.processBlock,
+		// including the single-resolve guard.
 		const registry = this.parentHandle.getGlobalRegistry();
 		if ( registry.beforeBlockHandler ) {
+			let resolved = false;
 			registry.beforeBlockHandler( {
 				block,
 				scene: this.parentHandle as SceneHandle,
 				context: { nativeProperties: block.nativeProperties },
-				resolve: () => this.executeBlockHandler( block ),
+				resolve: () => {
+					if ( resolved ) return;
+					resolved = true;
+					this.executeBlockHandler( block );
+				},
 			} );
 		} else {
 			this.executeBlockHandler( block );
@@ -201,7 +227,8 @@ class AsyncTrack {
 			} else if ( globalHandler ) {
 				globalCleanup = globalHandler( handlerArgs );
 			}
-		} catch ( _err ) {
+		} catch {
+			// Same documented rule as the main track: the track ends, the error stays silent.
 			this.endTrack();
 			return;
 		}
@@ -539,19 +566,12 @@ export class SceneHandleImpl implements SceneHandle {
 
 	// ─── Traversal loop ─────────────────────────────────────────────────
 
-	private processBlock( block: BlueprintBlock ): void {
-		if ( this.cancelled ) return;
+	private processBlock( startingBlock: BlueprintBlock ): void {
+		if ( !this.running || this.cancelled ) return;
 
 		// Step 1: Skip NOTE blocks
-		if ( block.type === 'NOTE' ) {
-			const connections = this.sceneGraph.getOutgoingConnections( block.uuid );
-			if ( connections.length > 0 ) {
-				const nextBlock = this.sceneGraph.getBlock( connections[0]!.toId );
-				if ( nextBlock ) {
-					this.processBlock( nextBlock );
-					return;
-				}
-			}
+		const block = skipNotes( startingBlock, this.sceneGraph );
+		if ( !block ) {
 			this.endScene();
 			return;
 		}
@@ -586,11 +606,19 @@ export class SceneHandleImpl implements SceneHandle {
 
 		// Step 3b: onBeforeBlock
 		if ( this.globalRegistry.beforeBlockHandler ) {
+			// GUARDED like next(): a delay timer that fires twice would otherwise dispatch
+			// the same block twice — the handler runs again, cleanups pile up, and the scene
+			// advances from a block it already left.
+			let resolved = false;
 			this.globalRegistry.beforeBlockHandler( {
 				block,
 				scene: this,
 				context: { nativeProperties: block.nativeProperties },
-				resolve: () => this.executeBlockHandler( block ),
+				resolve: () => {
+					if ( resolved ) return;
+					resolved = true;
+					this.executeBlockHandler( block );
+				},
 			} );
 		} else {
 			this.executeBlockHandler( block );
@@ -598,7 +626,10 @@ export class SceneHandleImpl implements SceneHandle {
 	}
 
 	private executeBlockHandler( block: BlueprintBlock ): void {
-		if ( this.cancelled ) return;
+		// `running` and not just `cancelled`: a resolve() kept in a closure and fired after
+		// the scene ended on its own would otherwise restart traversal on a dead scene,
+		// re-dispatching blocks and firing onSceneExit a second time.
+		if ( !this.running || this.cancelled ) return;
 
 		// Step 4: Resolve handler
 		const { sceneHandler, globalHandler } = resolveHandler(
@@ -641,7 +672,11 @@ export class SceneHandleImpl implements SceneHandle {
 			} else if ( globalHandler ) {
 				globalCleanup = globalHandler( handlerArgs );
 			}
-		} catch ( err ) {
+		} catch {
+			// SWALLOWED ON PURPOSE, and documented as such (docs/guide/lifecycle.md): a handler
+			// that throws ends the scene without propagating. Note the asymmetry with a cleanup
+			// function, whose exception DOES reach the caller (engine-critical.test.ts) — the
+			// same kind of fault in the same game code behaves in two opposite ways.
 			this.endScene();
 			return;
 		}

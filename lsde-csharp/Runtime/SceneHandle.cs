@@ -14,6 +14,36 @@ namespace LsdeDialogEngine
         internal Func<string>? GetLocale;
     }
 
+    internal static class NoteWalk
+    {
+        /// <summary>
+        /// Walk past NOTE blocks to the first block the engine actually dispatches.
+        ///
+        /// NOTE blocks are designer-only: they carry no handler and are never executed, so the
+        /// traversal steps over them and follows their first outgoing connection.
+        ///
+        /// Returns <c>null</c> when the walk runs out of connections — and also when it comes
+        /// back to a NOTE it already stepped over. A designer can wire a NOTE into a loop, and
+        /// following it recursively overflowed the stack instead of ending the flow.
+        /// </summary>
+        internal static BlueprintBlock? SkipNotes(BlueprintBlock block, SceneGraph sceneGraph)
+        {
+            var current = block;
+            HashSet<string>? seen = null;
+
+            while (current != null && current.Type == BlockType.NOTE)
+            {
+                seen ??= new HashSet<string>();
+                if (!seen.Add(current.Uuid)) return null;
+
+                var connections = sceneGraph.GetOutgoingConnections(current.Uuid);
+                current = connections.Count > 0 ? sceneGraph.GetBlock(connections[0].ToId) : null;
+            }
+
+            return current;
+        }
+    }
+
     // ─── AsyncTrack — parallel execution branch ──────────────────────────────────
 
     internal class AsyncTrack
@@ -107,22 +137,13 @@ namespace LsdeDialogEngine
 
         // ─── Traversal ──────────────────────────────────────────────────
 
-        private void ProcessBlock(BlueprintBlock block)
+        private void ProcessBlock(BlueprintBlock startingBlock)
         {
             if (!_running) return;
 
-            if (block.Type == BlockType.NOTE)
+            var block = NoteWalk.SkipNotes(startingBlock, _sceneGraph);
+            if (block == null)
             {
-                var connections = _sceneGraph.GetOutgoingConnections(block.Uuid);
-                if (connections.Count > 0)
-                {
-                    var nextBlock = _sceneGraph.GetBlock(connections[0].ToId);
-                    if (nextBlock != null)
-                    {
-                        ProcessBlock(nextBlock);
-                        return;
-                    }
-                }
                 EndTrack();
                 return;
             }
@@ -134,12 +155,18 @@ namespace LsdeDialogEngine
             var registry = _parentHandle.GetGlobalRegistry();
             if (registry.BeforeBlockHandler != null)
             {
+                var resolvedOnce = false;
                 registry.BeforeBlockHandler(new BeforeBlockArgs
                 {
                     Block = block,
                     Scene = _parentHandle,
                     Context = new BeforeBlockContext { NativeProperties = block.NativeProperties },
-                    Resolve = () => ExecuteBlockHandler(block)
+                    Resolve = () =>
+                    {
+                        if (resolvedOnce) return;
+                        resolvedOnce = true;
+                        ExecuteBlockHandler(block);
+                    }
                 });
             }
             else
@@ -671,23 +698,14 @@ namespace LsdeDialogEngine
 
         // ─── Traversal loop ────────────────────────────────────────────────
 
-        private void ProcessBlock(BlueprintBlock block)
+        private void ProcessBlock(BlueprintBlock startingBlock)
         {
-            if (_cancelled) return;
+            if (!_running || _cancelled) return;
 
             // Step 1: Skip NOTE blocks
-            if (block.Type == BlockType.NOTE)
+            var block = NoteWalk.SkipNotes(startingBlock, _sceneGraph);
+            if (block == null)
             {
-                var connections = _sceneGraph.GetOutgoingConnections(block.Uuid);
-                if (connections.Count > 0)
-                {
-                    var nextBlock = _sceneGraph.GetBlock(connections[0].ToId);
-                    if (nextBlock != null)
-                    {
-                        ProcessBlock(nextBlock);
-                        return;
-                    }
-                }
                 EndScene();
                 return;
             }
@@ -726,12 +744,20 @@ namespace LsdeDialogEngine
             // Step 3b: onBeforeBlock
             if (_globalRegistry.BeforeBlockHandler != null)
             {
+                // GUARDED like Next(): a delay timer that fires twice would otherwise
+                // dispatch the same block twice.
+                var resolvedOnce = false;
                 _globalRegistry.BeforeBlockHandler(new BeforeBlockArgs
                 {
                     Block = block,
                     Scene = this,
                     Context = new BeforeBlockContext { NativeProperties = block.NativeProperties },
-                    Resolve = () => ExecuteBlockHandler(block)
+                    Resolve = () =>
+                    {
+                        if (resolvedOnce) return;
+                        resolvedOnce = true;
+                        ExecuteBlockHandler(block);
+                    }
                 });
             }
             else
@@ -742,7 +768,10 @@ namespace LsdeDialogEngine
 
         private void ExecuteBlockHandler(BlueprintBlock block)
         {
-            if (_cancelled) return;
+            // `_running` and not just `_cancelled`: a Resolve() kept in a closure and fired
+            // after the scene ended on its own would otherwise restart traversal on a dead
+            // scene, re-dispatching blocks and firing OnSceneExit a second time.
+            if (!_running || _cancelled) return;
 
             // Step 4: Resolve handler
             var resolved = HandlerResolver.ResolveHandler(

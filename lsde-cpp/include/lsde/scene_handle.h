@@ -57,7 +57,7 @@ public:
     const std::string startBlockUuid;
 
 private:
-    void processBlock(const BlueprintBlock& block);
+    void processBlock(const BlueprintBlock& startingBlock);
     void executeBlockHandler(const BlueprintBlock& block);
     void advanceToNextBlock(const BlueprintBlock& block, IBaseBlockContext* context);
     void endTrack();
@@ -137,7 +137,7 @@ public:
         const std::function<bool(const ExportCondition&)>& fallbackEvaluator);
 
 private:
-    void processBlock(const BlueprintBlock& block);
+    void processBlock(const BlueprintBlock& startingBlock);
     void executeBlockHandler(const BlueprintBlock& block);
     void advanceToNextBlock(const BlueprintBlock& block, IBaseBlockContext* context);
     void endScene();

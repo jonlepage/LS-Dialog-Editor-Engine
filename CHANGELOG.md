@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+- A NOTE block wired into a loop no longer overflows the stack — the traversal walks past
+  NOTE blocks iteratively and ends the flow when it comes back to one it already stepped
+  over (TS, C#, C++, GDScript)
+- `onBeforeBlock`'s `resolve()` is now single-shot, like `next()` — a delay timer that fires
+  twice no longer dispatches the same block twice (TS, C#, C++, GDScript)
+- A `resolve()` kept in a closure and fired after the scene ended no longer restarts
+  traversal on a dead scene, re-dispatching blocks and firing `onSceneExit` a second time
+  (TS, C#, C++, GDScript)
+
+### Other
+- Add robustness test suites covering the three cases above (TS, C#)
+- Pin the documented asymmetry between a throwing handler (swallowed) and a throwing
+  cleanup function (propagates) with a test, so changing either is deliberate
+- README test counts were stale on all four runtimes
+
 ## v0.3.0 (2026-04-01)
 
 ### Features

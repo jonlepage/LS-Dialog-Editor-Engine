@@ -6,10 +6,34 @@
 #include <lsde/utils.h>
 #include <algorithm>
 #include <stdexcept>
+#include <string>
+#include <unordered_set>
 
 namespace lsde {
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
+
+// Walk past NOTE blocks to the first block the engine actually dispatches.
+//
+// NOTE blocks are designer-only: they carry no handler and are never executed, so the
+// traversal steps over them and follows their first outgoing connection.
+//
+// Returns nullptr when the walk runs out of connections — and also when it comes back to a
+// NOTE it already stepped over. A designer can wire a NOTE into a loop, and following it
+// recursively overflowed the stack instead of ending the flow.
+static const BlueprintBlock* skipNotes(const BlueprintBlock& block, const SceneGraph& sceneGraph) {
+    const BlueprintBlock* current = &block;
+    std::unordered_set<std::string> seen;
+
+    while (current && current->type == BlockType::Note) {
+        if (!seen.insert(current->uuid).second) return nullptr;
+
+        auto conns = sceneGraph.getOutgoingConnections(current->uuid);
+        current = conns.empty() ? nullptr : sceneGraph.getBlock(conns[0]->toId);
+    }
+
+    return current;
+}
 
 static bool getGlobalPreventedImpl(IBaseBlockContext* ctx) {
     if (auto* dc = dynamic_cast<InternalDialogContext*>(ctx)) return dc->globalPrevented;
@@ -83,18 +107,15 @@ TrackInfo AsyncTrack::getTrackInfo() const {
     return info;
 }
 
-void AsyncTrack::processBlock(const BlueprintBlock& block) {
+void AsyncTrack::processBlock(const BlueprintBlock& startingBlock) {
     if (!_running) return;
 
-    if (block.type == BlockType::Note) {
-        auto conns = _sceneGraph.getOutgoingConnections(block.uuid);
-        if (!conns.empty()) {
-            auto* next = _sceneGraph.getBlock(conns[0]->toId);
-            if (next) { processBlock(*next); return; }
-        }
+    const BlueprintBlock* resolvedBlock = skipNotes(startingBlock, _sceneGraph);
+    if (!resolvedBlock) {
         endTrack();
         return;
     }
+    const BlueprintBlock& block = *resolvedBlock;
 
     _currentBlock = &block;
     _parent.addVisited(block.uuid);
@@ -106,7 +127,12 @@ void AsyncTrack::processBlock(const BlueprintBlock& block) {
         args.block = &block;
         args.scene = &_parent;
         args.context.nativeProperties = block.nativeProperties ? &*block.nativeProperties : nullptr;
-        args.resolve = [this, &block]() { executeBlockHandler(block); };
+        auto resolvedOnce = std::make_shared<bool>(false);
+        args.resolve = [this, &block, resolvedOnce]() {
+            if (*resolvedOnce) return;
+            *resolvedOnce = true;
+            executeBlockHandler(block);
+        };
         registry.beforeBlockHandler(args);
     } else {
         executeBlockHandler(block);
@@ -419,19 +445,16 @@ void SceneHandleImpl::onResolveCharacter(std::function<const BlockCharacter*(con
 
 // ─── Traversal ───────────────────────────────────────────────────────────────
 
-void SceneHandleImpl::processBlock(const BlueprintBlock& block) {
-    if (_cancelled) return;
+void SceneHandleImpl::processBlock(const BlueprintBlock& startingBlock) {
+    if (!_running || _cancelled) return;
 
     // Skip NOTE
-    if (block.type == BlockType::Note) {
-        auto conns = _sceneGraph.getOutgoingConnections(block.uuid);
-        if (!conns.empty()) {
-            auto* next = _sceneGraph.getBlock(conns[0]->toId);
-            if (next) { processBlock(*next); return; }
-        }
+    const BlueprintBlock* resolvedBlock = skipNotes(startingBlock, _sceneGraph);
+    if (!resolvedBlock) {
         endScene();
         return;
     }
+    const BlueprintBlock& block = *resolvedBlock;
 
     // Validate
     if (_globalRegistry.validateNextBlockHandler) {
@@ -470,7 +493,14 @@ void SceneHandleImpl::processBlock(const BlueprintBlock& block) {
         args.block = &block;
         args.scene = this;
         args.context.nativeProperties = block.nativeProperties ? &*block.nativeProperties : nullptr;
-        args.resolve = [this, &block]() { executeBlockHandler(block); };
+        // GUARDED like next(): a delay timer that fires twice would otherwise dispatch
+        // the same block twice.
+        auto resolvedOnce = std::make_shared<bool>(false);
+        args.resolve = [this, &block, resolvedOnce]() {
+            if (*resolvedOnce) return;
+            *resolvedOnce = true;
+            executeBlockHandler(block);
+        };
         _globalRegistry.beforeBlockHandler(args);
     } else {
         executeBlockHandler(block);
@@ -478,7 +508,9 @@ void SceneHandleImpl::processBlock(const BlueprintBlock& block) {
 }
 
 void SceneHandleImpl::executeBlockHandler(const BlueprintBlock& block) {
-    if (_cancelled) return;
+    // `_running` and not just `_cancelled`: a resolve() kept in a closure and fired after
+    // the scene ended on its own would otherwise restart traversal on a dead scene.
+    if (!_running || _cancelled) return;
 
     auto resolved = resolveHandler(block.type, block.uuid, &_sceneRegistry, _globalRegistry);
 
