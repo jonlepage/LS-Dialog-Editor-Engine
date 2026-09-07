@@ -5,38 +5,38 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { DialogueEngine } from './engine.js';
-import type { BlueprintExport, BlueprintScene } from './types.js';
+import type { Blueprints, Scene, Block } from './types.js';
+import { blueprint, dialog as buildDialog, choice, option, link } from './test-builders.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function dialog( uuid: string, opts: { start?: boolean; text?: string } = {} ) {
-	return {
-		uuid, type: 'DIALOG' as const, properties: [],
-		isStartBlock: opts.start,
-		dialogueText: opts.text ? { en: opts.text } : undefined,
-	};
+function dialog( id: string, opts: { text?: string } = {} ): Block {
+	return buildDialog( id, opts.text ? { text: { en: opts.text } } : {} );
 }
 
-function scene( uuid: string, overrides: Partial<BlueprintScene> = {} ): BlueprintScene {
+/** A scene named by its PATH. Block ids repeat between scenes in v2, and that is normal. */
+function scene( path: string, overrides: Partial<Scene> = {} ): Scene {
+	const blocks = overrides.blocks ?? [dialog( `${ path }-b1` )];
 	return {
-		uuid, label: uuid, date: '2025-01-01',
-		blocks: [dialog( `${ uuid }-b1`, { start: true } )],
-		connections: [],
+		scene: path,
+		id: `sc_${ path }`,
+		start: blocks[0]?.id,
 		...overrides,
+		blocks,
 	};
 }
 
-function makeExport( scenes: BlueprintScene[] ): BlueprintExport {
-	return { version: '1.0.0', exportDate: '2025-01-01', locales: ['en'], scenes };
+function makeExport( scenes: Scene[] ): Blueprints {
+	return blueprint( scenes );
 }
 
 function registerAllHandlers( engine: DialogueEngine ) {
 	engine.onDialog( ( { next } ) => { next(); } );
 	engine.onChoice( ( { context, next } ) => {
-		if ( context.choices.length > 0 ) context.selectChoice( context.choices[0]!.uuid );
+		if ( context.options.length > 0 ) context.selectChoice( context.options[0]!.id );
 		next();
 	} );
-	engine.onCondition( ( { context, next } ) => { context.resolve( true ); next(); } );
+	engine.onCondition( ( { next } ) => { next(); } );
 	engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
 }
 
@@ -114,7 +114,7 @@ describe( 'engine — double start', () => {
 		engine.init( { data: makeExport( [scene( 's1' )] ) } );
 		registerAllHandlers( engine );
 		engine.onDialog( ( { block } ) => {
-			calls.push( block.uuid );
+			calls.push( block.id );
 			// Don't call next — stay active
 		} );
 
@@ -168,7 +168,11 @@ describe( 'engine — cancel edge cases', () => {
 
 describe( 'engine — handler that throws', () => {
 
-	it( 'exception in onDialog ends scene gracefully', () => {
+	it( 'exception in onDialog closes the scene AND reaches the caller', () => {
+		// v1 swallowed this one, silently, while an exception from the cleanup that same handler
+		// returned reached the caller. Same fault, two opposite behaviours. Now both surface —
+		// and the scene is closed down first, so the game gets the error with the dialogue
+		// already stopped properly.
 		const engine = new DialogueEngine();
 		engine.init( { data: makeExport( [scene( 's1' )] ) } );
 		registerAllHandlers( engine );
@@ -177,17 +181,15 @@ describe( 'engine — handler that throws', () => {
 		} );
 
 		const handle = engine.scene( 's1' );
-		handle.start();
-		// Handler exception is caught — scene ends without propagating
+
+		expect( () => handle.start() ).toThrow( 'handler crashed' );
 		expect( handle.isRunning() ).toBe( false );
 	} );
 
 	it( 'exception in cleanup propagates', () => {
-		const s: BlueprintScene = {
-			uuid: 's1', label: 's1', date: '2025-01-01',
-			blocks: [dialog( 'b1', { start: true } ), dialog( 'b2' )],
-			connections: [{ id: 'c1', fromId: 'b1', toId: 'b2', fromPort: 'out', toPort: 'in' }],
-		};
+		const b1 = dialog( 'b1' );
+		b1.next = [link( 'b2' )];
+		const s = scene( 's1', { blocks: [b1, dialog( 'b2' )] } );
 		const engine = new DialogueEngine();
 		engine.init( { data: makeExport( [s] ) } );
 		registerAllHandlers( engine );
@@ -212,30 +214,27 @@ describe( 'engine — zero visible choices', () => {
 
 	it( 'handler receives empty choices array when all conditions fail', () => {
 		let receivedChoices: unknown[] = [];
-		const s: BlueprintScene = {
-			uuid: 's1', label: 's1', date: '2025-01-01',
+		const gate = [{ dict: 'switches', entry: 'x', op: 'equals', value: true }] as never;
+		const b1 = dialog( 'b1' );
+		b1.next = [link( 'choice1' )];
+		const s = scene( 's1', {
 			blocks: [
-				dialog( 'b1', { start: true } ),
-				{
-					uuid: 'choice1', type: 'CHOICE' as const, properties: [],
-					choices: [
-						{ uuid: 'c1', structureKey: 'c1', dialogueText: { en: 'A' },
-							visibilityConditions: [{ uuid: 'v1', key: 'x', operator: '=', value: 'y' }] },
-						{ uuid: 'c2', structureKey: 'c2', dialogueText: { en: 'B' },
-							visibilityConditions: [{ uuid: 'v2', key: 'x', operator: '=', value: 'y' }] },
-					],
-				},
+				b1,
+				choice( 'choice1', [
+					option( 'C1', { text: 'A' } ),
+					option( 'C2', { text: 'B' } ),
+				] ),
 			],
-			connections: [{ id: 'c1', fromId: 'b1', toId: 'choice1', fromPort: 'out', toPort: 'in' }],
-		};
+		} );
+		( s.blocks[1]!.options ?? [] ).forEach( o => { o.when = gate; } );
 
 		const engine = new DialogueEngine();
 		engine.init( { data: makeExport( [s] ) } );
 		registerAllHandlers( engine );
-		engine.setChoiceFilter( () => false );
+		engine.onResolveCondition( () => false );
 		engine.onDialog( ( { next } ) => next() );
 		engine.onChoice( ( { context, next } ) => {
-			receivedChoices = [...context.choices.filter( c => c.visible )];
+			receivedChoices = [...context.options.filter( c => c.visible )];
 			next(); // advance with no selection — dead end
 		} );
 
@@ -251,22 +250,14 @@ describe( 'engine — two simultaneous scenes', () => {
 
 	it( 'two scenes run in parallel with independent state', () => {
 		const calls: string[] = [];
-		const s1: BlueprintScene = {
-			uuid: 'tavern', label: 'Tavern', date: '2025-01-01',
-			blocks: [dialog( 'tavern-greet', { start: true, text: 'Welcome to tavern' } )],
-			connections: [],
-		};
-		const s2: BlueprintScene = {
-			uuid: 'forest', label: 'Forest', date: '2025-01-01',
-			blocks: [dialog( 'forest-enter', { start: true, text: 'You enter the forest' } )],
-			connections: [],
-		};
+		const s1 = scene( 'tavern', { blocks: [dialog( 'tavern-greet', { text: 'Welcome to tavern' } )] } );
+		const s2 = scene( 'forest', { blocks: [dialog( 'forest-enter', { text: 'You enter the forest' } )] } );
 
 		const engine = new DialogueEngine();
 		engine.init( { data: makeExport( [s1, s2] ) } );
 		registerAllHandlers( engine );
 		engine.onDialog( ( { block } ) => {
-			calls.push( block.uuid );
+			calls.push( block.id );
 			// Don't call next — keep both alive
 		} );
 
@@ -318,7 +309,7 @@ describe( 'engine — scene after stop', () => {
 		engine.init( { data: makeExport( [scene( 's1' )] ) } );
 		registerAllHandlers( engine );
 		engine.onDialog( ( { block, next } ) => {
-			visited.push( block.uuid );
+			visited.push( block.id );
 			next();
 		} );
 

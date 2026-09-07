@@ -13,6 +13,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../Runtime/LsdeDialogEngine.csproj" />
+    <ProjectReference Include="../../src~/LsdeDialogEngine.SystemTextJson/LsdeDialogEngine.SystemTextJson.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Include="../../../tests/*.json" Link="TestData/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

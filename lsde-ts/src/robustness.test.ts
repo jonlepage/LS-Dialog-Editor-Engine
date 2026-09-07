@@ -1,55 +1,40 @@
 /**
- * Robustness tests — engine behaviour when the developer's callbacks misbehave.
+ * Robustness tests — what the engine does when the game's callbacks misbehave.
  *
- * Every case here is something a game integration does by accident: a timer that fires
- * twice, a `resolve()` kept in a closure and called after the scene ended, a NOTE block
- * wired back on itself by a designer, a handler that throws.
+ * Every case here is something an integration does by accident: a timer that fires twice, a
+ * `resolve()` kept in a closure and called after the scene ended, a NOTE block a designer wired
+ * back on itself, a handler that throws.
  *
- * The engine cannot prevent any of these; it can only refuse to make them worse than
- * they are. Nothing in this file tests the port resolution algorithm — see
- * port-resolver.test.ts for that.
+ * The engine cannot prevent any of these. It can only refuse to make them worse — and, since the
+ * v2 work, refuse to hide them: an exception now reaches the game instead of vanishing.
+ *
+ * Nothing here tests port resolution; that is port-resolver.test.ts.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { SceneHandleImpl, type SceneHandleCallbacks } from './scene-handle.js';
 import { SceneGraph } from './graph.js';
 import { HandlerRegistry } from './handler-registry.js';
-import type { BlueprintScene, BlueprintBlock } from './types.js';
+import { scene as makeScene, dialog, note, link } from './test-builders.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function dialog( uuid: string, opts: { start?: boolean } = {} ): BlueprintBlock {
-	return { uuid, type: 'DIALOG', properties: [], isStartBlock: opts.start } as BlueprintBlock;
-}
-
-function note( uuid: string, opts: { start?: boolean } = {} ): BlueprintBlock {
-	return { uuid, type: 'NOTE', properties: [], isStartBlock: opts.start } as BlueprintBlock;
-}
-
-function conn( fromId: string, toId: string, fromPort = 'out' ) {
-	return { id: `${ fromId }-${ toId }`, fromId, toId, fromPort, toPort: 'in' };
-}
-
-function makeScene( overrides: Partial<BlueprintScene> = {} ): BlueprintScene {
-	return { uuid: 's1', label: 'S1', date: '2025-01-01', blocks: [], connections: [], ...overrides };
-}
 
 function makeCallbacks(): SceneHandleCallbacks {
 	return {
 		onSceneStarted: vi.fn(),
 		onSceneEnded: vi.fn(),
-		getResolveCharacter: () => ( chars ) => chars[0],
+		getResolveCharacter: () => ( actors ) => actors[0],
 		getConditionResolver: () => null,
-		getLocale: () => 'en',
+		getCard: () => undefined,
 	};
 }
 
 function fillRequiredHandlers( reg: HandlerRegistry ): void {
 	reg.dialogHandler ??= ( { next } ) => { next(); };
 	reg.choiceHandler ??= ( { context, next } ) => {
-		if ( context.choices.length > 0 ) context.selectChoice( context.choices[0]!.uuid );
+		if ( context.options.length > 0 ) context.selectChoice( context.options[0]!.id );
 		next();
 	};
-	reg.conditionHandler ??= ( { context, next } ) => { context.resolve( true ); next(); };
+	reg.conditionHandler ??= ( { next } ) => { next(); };
 	reg.actionHandler ??= ( { context, next } ) => { context.resolve(); next(); };
 }
 
@@ -59,17 +44,14 @@ describe( 'robustness — onBeforeBlock resolve() called twice', () => {
 
 	it( 'second resolve() does not run the block handler a second time', () => {
 		const dispatched: string[] = [];
-		const scene = makeScene( {
-			blocks: [dialog( 'b1', { start: true } ), dialog( 'b2' )],
-			connections: [conn( 'b1', 'b2' )],
-		} );
+		const scene = makeScene( [dialog( 'b1', { next: [link( 'b2' )] } ), dialog( 'b2' )] );
 		const global = new HandlerRegistry();
 		global.beforeBlockHandler = ( { resolve } ) => {
 			resolve();
 			resolve(); // a double-fired timer, or a retry — must be ignored
 		};
 		global.dialogHandler = ( { block, next } ) => {
-			dispatched.push( block.uuid );
+			dispatched.push( block.id );
 			next();
 		};
 		fillRequiredHandlers( global );
@@ -88,17 +70,14 @@ describe( 'robustness — callback held past the end of the scene', () => {
 	it( 'a resolve() called after the scene ended does not revive it', () => {
 		const dispatched: string[] = [];
 		const staleResolvers: Array<() => void> = [];
-		const scene = makeScene( {
-			blocks: [dialog( 'b1', { start: true } )],
-			connections: [],
-		} );
+		const scene = makeScene( [dialog( 'b1' )] );
 		const global = new HandlerRegistry();
 		global.beforeBlockHandler = ( { resolve } ) => {
 			staleResolvers.push( resolve );
 			resolve();
 		};
 		global.dialogHandler = ( { block, next } ) => {
-			dispatched.push( block.uuid );
+			dispatched.push( block.id );
 			next();
 		};
 		fillRequiredHandlers( global );
@@ -120,16 +99,13 @@ describe( 'robustness — callback held past the end of the scene', () => {
 	it( 'a resolve() called after cancel() does not dispatch', () => {
 		const dispatched: string[] = [];
 		const staleResolvers: Array<() => void> = [];
-		const scene = makeScene( {
-			blocks: [dialog( 'b1', { start: true } ), dialog( 'b2' )],
-			connections: [conn( 'b1', 'b2' )],
-		} );
+		const scene = makeScene( [dialog( 'b1', { next: [link( 'b2' )] } ), dialog( 'b2' )] );
 		const global = new HandlerRegistry();
 		global.beforeBlockHandler = ( { resolve } ) => {
 			staleResolvers.push( resolve );
 		};
 		global.dialogHandler = ( { block, next } ) => {
-			dispatched.push( block.uuid );
+			dispatched.push( block.id );
 			next();
 		};
 		fillRequiredHandlers( global );
@@ -149,11 +125,12 @@ describe( 'robustness — callback held past the end of the scene', () => {
 
 describe( 'robustness — NOTE blocks forming a cycle', () => {
 
+	// Before the walk kept a `seen` set, following a self-wired NOTE recursed until the stack
+	// gave out. In C# that is a StackOverflowException, which .NET cannot catch: a designer's
+	// stray wire did not fail a scene, it killed the whole Unity process.
+
 	it( 'a NOTE wired to itself ends the scene instead of overflowing the stack', () => {
-		const scene = makeScene( {
-			blocks: [note( 'n1', { start: true } )],
-			connections: [conn( 'n1', 'n1' )],
-		} );
+		const scene = makeScene( [note( 'n1', { next: [link( 'n1' )] } )] );
 		const global = new HandlerRegistry();
 		fillRequiredHandlers( global );
 
@@ -166,10 +143,10 @@ describe( 'robustness — NOTE blocks forming a cycle', () => {
 	} );
 
 	it( 'two NOTEs wired in a loop end the scene', () => {
-		const scene = makeScene( {
-			blocks: [note( 'n1', { start: true } ), note( 'n2' )],
-			connections: [conn( 'n1', 'n2' ), conn( 'n2', 'n1' )],
-		} );
+		const scene = makeScene( [
+			note( 'n1', { next: [link( 'n2' )] } ),
+			note( 'n2', { next: [link( 'n1' )] } ),
+		] );
 		const global = new HandlerRegistry();
 		fillRequiredHandlers( global );
 
@@ -179,15 +156,16 @@ describe( 'robustness — NOTE blocks forming a cycle', () => {
 		expect( handle.isRunning() ).toBe( false );
 	} );
 
-	it( 'a NOTE loop that eventually reaches a real block still reaches it', () => {
+	it( 'a NOTE chain that eventually reaches a real block still reaches it', () => {
 		const dispatched: string[] = [];
-		const scene = makeScene( {
-			blocks: [note( 'n1', { start: true } ), note( 'n2' ), dialog( 'b1' )],
-			connections: [conn( 'n1', 'n2' ), conn( 'n2', 'b1' )],
-		} );
+		const scene = makeScene( [
+			note( 'n1', { next: [link( 'n2' )] } ),
+			note( 'n2', { next: [link( 'b1' )] } ),
+			dialog( 'b1' ),
+		] );
 		const global = new HandlerRegistry();
 		global.dialogHandler = ( { block, next } ) => {
-			dispatched.push( block.uuid );
+			dispatched.push( block.id );
 			next();
 		};
 		fillRequiredHandlers( global );
@@ -201,48 +179,69 @@ describe( 'robustness — NOTE blocks forming a cycle', () => {
 
 // ─── A handler that throws ───────────────────────────────────────────────────
 
-/**
- * The two halves of this describe encode a documented ASYMMETRY, not an intention:
- * an exception thrown by a handler is swallowed, while an exception thrown by the cleanup
- * function that same handler returned reaches the caller. Both are the same kind of fault
- * in the same game code. Pinned here so that changing either one is a deliberate act.
- */
-describe( 'robustness — a handler that throws', () => {
+describe( 'robustness — an exception in game code', () => {
 
-	it( 'a handler exception is swallowed and the scene ends (documented)', () => {
-		const scene = makeScene( {
-			blocks: [dialog( 'b1', { start: true } )],
-			connections: [],
-		} );
+	// v1 swallowed an exception thrown by a handler — silently, not even logged — while an
+	// exception from the cleanup that same handler returned reached the caller. One fault, two
+	// opposite behaviours. Now everything reaches the game.
+
+	it( 'an exception in a handler reaches the caller', () => {
+		const scene = makeScene( [dialog( 'b1' )] );
 		const global = new HandlerRegistry();
-		global.dialogHandler = () => {
-			throw new Error( 'handler exploded' );
-		};
+		global.dialogHandler = () => { throw new Error( 'game blew up' ); };
+		fillRequiredHandlers( global );
+
+		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+
+		expect( () => handle.start() ).toThrow( 'game blew up' );
+	} );
+
+	it( 'closes the scene down BEFORE the error surfaces', () => {
+		// The order is what makes it usable: by the time the game sees the error, the cleanups
+		// have run and onSceneExit has fired. The dialogue stopped properly.
+		const events: string[] = [];
+		const scene = makeScene( [dialog( 'b1' )] );
+		const global = new HandlerRegistry();
+		global.sceneExitHandler = () => events.push( 'exit' );
+		global.dialogHandler = () => { throw new Error( 'game blew up' ); };
 		fillRequiredHandlers( global );
 
 		const callbacks = makeCallbacks();
 		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, callbacks );
 
-		expect( () => handle.start() ).not.toThrow();
+		expect( () => handle.start() ).toThrow();
+		expect( events ).toEqual( ['exit'] );
 		expect( handle.isRunning() ).toBe( false );
 		expect( callbacks.onSceneEnded ).toHaveBeenCalledTimes( 1 );
 	} );
 
-	it( 'a cleanup exception is NOT swallowed — the asymmetry', () => {
-		const scene = makeScene( {
-			blocks: [dialog( 'b1', { start: true } )],
-			connections: [],
-		} );
+	it( 'an exception in a cleanup reaches the caller too', () => {
+		const scene = makeScene( [dialog( 'b1' )] );
 		const global = new HandlerRegistry();
 		global.dialogHandler = ( { next } ) => {
 			next();
-			return () => { throw new Error( 'cleanup exploded' ); };
+			return () => { throw new Error( 'cleanup blew up' ); };
 		};
 		fillRequiredHandlers( global );
 
 		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
 
-		expect( () => handle.start() ).toThrow( 'cleanup exploded' );
+		expect( () => handle.start() ).toThrow( 'cleanup blew up' );
+	} );
+
+	it( 'does not leave the scene running after an exception', () => {
+		const scene = makeScene( [dialog( 'b1', { next: [link( 'b2' )] } ), dialog( 'b2' )] );
+		const global = new HandlerRegistry();
+		global.dialogHandler = ( { block, next } ) => {
+			if ( block.id === 'b2' ) throw new Error( 'boom' );
+			next();
+		};
+		fillRequiredHandlers( global );
+
+		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+
+		expect( () => handle.start() ).toThrow( 'boom' );
+		expect( handle.isRunning() ).toBe( false );
 	} );
 
 } );

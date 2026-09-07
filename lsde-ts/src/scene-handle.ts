@@ -5,8 +5,9 @@ import type {
 	BlockHandler, BaseBlockContext,
 	DialogHandler, ChoiceHandler, ConditionHandler, ActionHandler,
 	SceneLifecycleHandler, CleanupFn,
-	ExportCondition, BlockCharacter, ChoiceItem, RuntimeChoiceItem,
+	ConditionTest, Card, NativeProperties, RuntimeConditionCase,
 } from './types.js';
+import { BlockType, ConditionOperator, Ports } from './types.js';
 import { SceneGraph } from './graph.js';
 import { HandlerRegistry, SceneHandlerRegistry, resolveHandler } from './handler-registry.js';
 import { resolvePort } from './port-resolver.js';
@@ -15,23 +16,40 @@ import {
 	type InternalDialogContext, type InternalChoiceContext, type InternalConditionContext, type InternalActionContext,
 } from './block-context.js';
 import { isDialogBlock, isChoiceBlock, isConditionBlock, isActionBlock } from './utils.js';
-import { evaluateConditionChain } from './condition-evaluator.js';
+import {
+	pickPortFromResults, tagOptionVisibility,
+	evaluateConditionChain as evaluateConditionChainOf,
+} from './condition-evaluator.js';
+import { resolveCards, type ResolvedCards } from './block-context.js';
 
 type InternalContext = InternalDialogContext | InternalChoiceContext | InternalConditionContext | InternalActionContext;
 
 export interface SceneHandleCallbacks {
 	onSceneStarted: ( handle: SceneHandleImpl ) => void;
 	onSceneEnded: ( handle: SceneHandleImpl ) => void;
-	getResolveCharacter: () => ( characters: BlockCharacter[] ) => BlockCharacter | undefined;
-	getConditionResolver: () => ( ( condition: ExportCondition ) => boolean ) | null;
-	getLocale: () => string;
+	getResolveCharacter: () => ( actors: Card[] ) => Card | undefined;
+	getConditionResolver: () => ( ( test: ConditionTest ) => boolean ) | null;
+	/** Look a card id (`var1`) up in the export's `cards` table. */
+	getCard: ( cardId: string ) => Card | undefined;
+}
+
+/**
+ * The engine-facing properties of a block, read straight out of `props`.
+ *
+ * v2 has one bag: natives and the designer's own properties share `props`, keyed by bare id.
+ * Ids cannot collide — LSDE refuses a project property that takes a native name — so reading a
+ * native is a plain lookup. Only two of them mean anything to the traversal: `isAsync` spawns a
+ * parallel track, `waitForBlocks` parks one. The rest are passed through untouched.
+ */
+function natives( block: BlueprintBlock ): NativeProperties {
+	return ( block.props ?? {} ) as NativeProperties;
 }
 
 /**
  * Walk past NOTE blocks to the first block the engine actually dispatches.
  *
  * NOTE blocks are designer-only: they carry no handler and are never executed, so the
- * traversal steps over them and follows their first outgoing connection.
+ * traversal steps over them and follows their first outgoing link.
  *
  * Returns `null` when the walk runs out of connections — and also when it comes back to a
  * NOTE it already stepped over. A designer can wire a NOTE into a loop, and following it
@@ -42,24 +60,90 @@ function skipNotes( block: BlueprintBlock, sceneGraph: SceneGraph ): BlueprintBl
 	let current: BlueprintBlock | undefined = block;
 	let seen: Set<string> | null = null;
 
-	while ( current && current.type === 'NOTE' ) {
+	while ( current && current.type === BlockType.Note ) {
 		seen ??= new Set<string>();
-		if ( seen.has( current.uuid ) ) return null;
-		seen.add( current.uuid );
+		if ( seen.has( current.id ) ) return null;
+		seen.add( current.id );
 
-		const connections = sceneGraph.getOutgoingConnections( current.uuid );
-		current = connections.length > 0 ? sceneGraph.getBlock( connections[0]!.toId ) : undefined;
+		const links = sceneGraph.getOutgoingLinks( current.id );
+		current = links.length > 0 ? sceneGraph.getBlock( links[0]!.to ) : undefined;
 	}
 
 	return current ?? null;
 }
 
+/**
+ * Anything the traversal can park until a set of blocks has been visited.
+ *
+ * `waitForBlocks` is a property of the BLOCK — "the block waits for these before it advances", in
+ * the format's own words. It is not a property of a parallel track, and it used to behave as if it
+ * were: only `AsyncTrack` read it, so a designer who set it on a block of the main flow got
+ * nothing at all, silently, with the checkbox ticked in the editor.
+ *
+ * The main flow parks through this same interface now. Both are a track; one of them happens to
+ * be the one the player is watching.
+ */
+interface Waiter {
+	notifyWaitSatisfied(): void;
+}
+
+/**
+ * What a cleanup threw, or `null` when it returned normally.
+ *
+ * A fault has to be CARRIED rather than propagated on the spot. A cleanup runs while the engine is
+ * tearing something down — leaving a block, ending a track, closing a scene — and an exception
+ * escaping mid-teardown stopped the teardown: the scene stayed `running`, `onSceneExit` never
+ * fired, the remaining tracks were never cancelled, and the handle sat in the engine's registry
+ * forever. The game got its exception and an engine it could no longer use.
+ *
+ * So: the shutdown always finishes, and the fault is re-thrown once there is nothing left to
+ * unwind. Same contract as a handler that throws — one fault, one behaviour.
+ */
+type CleanupFault = { value: unknown } | null;
+
+/** Run a cleanup and hand back what it threw instead of letting it escape. */
+function runCleanup( cleanup: CleanupFn | null | undefined ): CleanupFault {
+	if ( !cleanup ) return null;
+	try {
+		cleanup();
+		return null;
+	} catch ( value ) {
+		// `{ value }` rather than the bare value: `throw undefined` is legal, and a bare
+		// `undefined` would read as "nothing went wrong".
+		return { value };
+	}
+}
+
+/**
+ * Combine a scene cleanup and a global one into the single cleanup the traversal keeps.
+ *
+ * BOTH always run. They release unrelated things — a scene handler's panel and a global
+ * handler's audio voice — so letting the first one's failure skip the second leaked whatever the
+ * second owned. The first fault is re-thrown once both have had their turn.
+ */
+function combineCleanups( a: CleanupFn | void, b: CleanupFn | void ): CleanupFn | null {
+	if ( a && b ) {
+		return () => {
+			const first = runCleanup( a );
+			const second = runCleanup( b );
+			const fault = first ?? second;
+			if ( fault ) throw fault.value;
+		};
+	}
+	if ( a ) return a;
+	if ( b ) return b;
+	return null;
+}
+
 // ─── AsyncTrack — parallel execution branch ──────────────────────────────────
 
-class AsyncTrack {
+class AsyncTrack implements Waiter {
 
 	private running = true;
 	private currentBlock: BlueprintBlock | null = null;
+	/** The block this track came from, for `onValidateNextBlock`. Its own, not the main flow's. */
+	private previousBlock: BlueprintBlock | null = null;
+	private previousCharacter: Card | undefined = undefined;
 	private previousCleanup: CleanupFn | null = null;
 	private pendingAdvance: ( () => void ) | null = null;
 
@@ -67,7 +151,7 @@ class AsyncTrack {
 	public readonly id: number;
 	/** ID of the parent track that spawned this one, or `null` if spawned by the main track. */
 	public readonly parentTrackId: number | null;
-	/** UUID of the block that started this track's execution. */
+	/** Id of the block that started this track's execution, within its scene. */
 	public readonly startBlockUuid: string;
 	/** IDs of child tracks spawned by this track, used for recursive cancel cascade. */
 	private readonly childTrackIds: number[] = [];
@@ -83,7 +167,7 @@ class AsyncTrack {
 	) {
 		this.id = id;
 		this.parentTrackId = parentTrackId;
-		this.startBlockUuid = startBlock.uuid;
+		this.startBlockUuid = startBlock.id;
 		this.startBlock = startBlock;
 	}
 
@@ -91,8 +175,8 @@ class AsyncTrack {
 	start(): void {
 		// If the start block has waitForBlocks, defer the entire track until satisfied.
 		// Sequence: spawn → wait → processBlock → onBeforeBlock (delay) → handler
-		const waitBlocks = this.startBlock.nativeProperties?.waitForBlocks;
-		if ( waitBlocks?.length && !waitBlocks.every( uuid => this.parentHandle.isVisited( uuid ) ) ) {
+		const waitBlocks = natives( this.startBlock ).waitForBlocks;
+		if ( waitBlocks?.length && !waitBlocks.every( id => this.parentHandle.isVisited( id ) ) ) {
 			this.pendingAdvance = () => this.processBlock( this.startBlock );
 			this.parentHandle.registerWaitForBlocks( this, waitBlocks );
 			return;
@@ -100,19 +184,27 @@ class AsyncTrack {
 		this.processBlock( this.startBlock );
 	}
 
-	cancel(): void {
-		if ( !this.running ) return;
+	/**
+	 * Stop this track and every track it spawned.
+	 *
+	 * Returns a fault instead of throwing one: `endScene()` cancels the whole pool in a loop, and
+	 * one badly-behaved cleanup must not leave the tracks after it running.
+	 */
+	cancel(): CleanupFault {
+		if ( !this.running ) return null;
 		this.running = false;
-		if ( this.previousCleanup ) {
-			this.previousCleanup();
-			this.previousCleanup = null;
-		}
+
+		const cleanup = this.previousCleanup;
+		this.previousCleanup = null;
+		let fault = runCleanup( cleanup );
+
 		this.currentBlock = null;
 		this.pendingAdvance = null;
 		for ( const childId of this.childTrackIds ) {
-			this.parentHandle.cancelTrack( childId );
+			fault = fault ?? this.parentHandle.cancelTrack( childId );
 		}
 		this.childTrackIds.length = 0;
+		return fault;
 	}
 
 	isRunning(): boolean {
@@ -133,7 +225,7 @@ class AsyncTrack {
 			id: this.id,
 			parentTrackId: this.parentTrackId,
 			startBlockUuid: this.startBlockUuid,
-			currentBlockUuid: this.currentBlock?.uuid ?? null,
+			currentBlockUuid: this.currentBlock?.id ?? null,
 			running: this.running,
 		};
 	}
@@ -145,12 +237,18 @@ class AsyncTrack {
 
 		const block = skipNotes( startingBlock, this.sceneGraph );
 		if ( !block ) {
-			this.endTrack();
+			const fault = this.endTrack();
+			if ( fault ) throw fault.value;
+			return;
+		}
+
+		// The same gate the main flow goes through. A parallel track is still the game's dialogue.
+		if ( !this.parentHandle.runValidation( block, this.previousBlock, this.previousCharacter ) ) {
 			return;
 		}
 
 		this.currentBlock = block;
-		this.parentHandle.addVisited( block.uuid );
+		this.parentHandle.addVisited( block.id );
 
 		// Fire onBeforeBlock — same gate pattern as SceneHandleImpl.processBlock,
 		// including the single-resolve guard.
@@ -160,7 +258,7 @@ class AsyncTrack {
 			registry.beforeBlockHandler( {
 				block,
 				scene: this.parentHandle as SceneHandle,
-				context: { nativeProperties: block.nativeProperties },
+				context: { nativeProperties: natives( block ) },
 				resolve: () => {
 					if ( resolved ) return;
 					resolved = true;
@@ -176,7 +274,7 @@ class AsyncTrack {
 		if ( !this.running ) return;
 
 		const { sceneHandler, globalHandler } = resolveHandler(
-			block.type, block.uuid,
+			block.type, block.id,
 			this.parentHandle.getSceneRegistry(),
 			this.parentHandle.getGlobalRegistry(),
 		);
@@ -203,9 +301,9 @@ class AsyncTrack {
 			nextCalled = true;
 
 			// waitForBlocks: defer advance until all required blocks are visited
-			const waitBlocks = block.nativeProperties?.waitForBlocks;
+			const waitBlocks = natives( block ).waitForBlocks;
 			if ( waitBlocks?.length ) {
-				if ( !waitBlocks.every( uuid => this.parentHandle.isVisited( uuid ) ) ) {
+				if ( !waitBlocks.every( id => this.parentHandle.isVisited( id ) ) ) {
 					this.pendingAdvance = () => this.advanceToNextBlock( block, context );
 					this.parentHandle.registerWaitForBlocks( this, waitBlocks );
 					return;
@@ -227,13 +325,17 @@ class AsyncTrack {
 			} else if ( globalHandler ) {
 				globalCleanup = globalHandler( handlerArgs );
 			}
-		} catch {
-			// Same documented rule as the main track: the track ends, the error stays silent.
+		} catch ( err ) {
+			// The track is closed down first, THEN the error is re-thrown. By the time it reaches
+			// the game, the cleanups have run and the track is gone - it stops properly, and the
+			// game decides what to do about it. Swallowing it here was the v1 behaviour, and it
+			// made the same fault behave in two opposite ways depending on whether it happened in
+			// a handler or in the cleanup that handler returned.
 			this.endTrack();
-			return;
+			throw err;
 		}
 
-		this.previousCleanup = this.combineCleanups( sceneCleanup, globalCleanup );
+		this.previousCleanup = combineCleanups( sceneCleanup, globalCleanup );
 
 		syncPhase = false;
 		if ( nextCalled && !this.pendingAdvance ) {
@@ -244,80 +346,82 @@ class AsyncTrack {
 	private advanceToNextBlock( block: BlueprintBlock, context: InternalContext | null ): void {
 		if ( !this.running ) return;
 
-		const connections = this.sceneGraph.getOutgoingConnections( block.uuid );
+		this.previousBlock = block;
+		this.previousCharacter = context?.character;
+
 		const resolution = resolvePort( {
 			block,
-			connections,
-			selectedChoiceUuid: context && '_selectedChoiceUuid' in context ? context._selectedChoiceUuid : undefined,
-			conditionResult: context && '_conditionResult' in context ? context._conditionResult : undefined,
+			links: this.sceneGraph.getOutgoingLinks( block.id ),
+			selectedOptionId: context && '_selectedOptionId' in context ? context._selectedOptionId : undefined,
+			conditionPort: context && '_conditionPort' in context ? context._conditionPort : undefined,
 			actionRejected: context && '_actionRejected' in context ? context._actionRejected : undefined,
-			characterPortIndex: context && '_characterPortIndex' in context ? context._characterPortIndex : undefined,
+			actorPort: context && '_actorPort' in context ? context._actorPort : undefined,
 		} );
 
-		// Separate main (first non-async) from async connections — same logic as SceneHandleImpl
-		const allConnections = resolution.connections;
-		let mainConnection: typeof allConnections[number] | null = null;
-		const asyncConnections: typeof allConnections = [];
+		// Separate main (first non-async) from async links, same logic as SceneHandleImpl.
+		const allLinks = resolution.links;
+		let mainLink: typeof allLinks[number] | null = null;
+		const asyncLinks: typeof allLinks = [];
 
-		for ( const conn of allConnections ) {
-			const targetBlock = this.sceneGraph.getBlock( conn.toId );
+		for ( const link of allLinks ) {
+			const targetBlock = this.sceneGraph.getBlock( link.to );
 			if ( !targetBlock ) continue;
 
-			if ( !mainConnection && !targetBlock.nativeProperties?.isAsync ) {
-				mainConnection = conn;
+			if ( !mainLink && !natives( targetBlock ).isAsync ) {
+				mainLink = link;
 			} else {
-				asyncConnections.push( conn );
+				asyncLinks.push( link );
 			}
 		}
 
-		// Spawn sub-tracks for async connections
-		for ( const conn of asyncConnections ) {
-			const targetBlock = this.sceneGraph.getBlock( conn.toId );
+		// Spawn sub-tracks for async links
+		for ( const link of asyncLinks ) {
+			const targetBlock = this.sceneGraph.getBlock( link.to );
 			if ( targetBlock ) {
 				const trackId = this.parentHandle.spawnAsyncTrack( targetBlock, this.id );
 				this.childTrackIds.push( trackId );
 			}
 		}
 
-		// Follow main connection or end track
-		if ( mainConnection ) {
-			const nextBlock = this.sceneGraph.getBlock( mainConnection.toId );
+		// Follow the main link or end the track
+		if ( mainLink ) {
+			const nextBlock = this.sceneGraph.getBlock( mainLink.to );
 			if ( nextBlock ) {
 				const cleanupToRun = this.previousCleanup;
 				this.previousCleanup = null;
-				if ( cleanupToRun ) cleanupToRun();
+				const fault = runCleanup( cleanupToRun );
+				if ( fault ) {
+					this.endTrack();
+					throw fault.value;
+				}
 				this.processBlock( nextBlock );
 				return;
 			}
 		}
 
-		this.endTrack();
+		const fault = this.endTrack();
+		if ( fault ) throw fault.value;
 	}
 
-	private endTrack(): void {
-		if ( this.previousCleanup ) {
-			this.previousCleanup();
-			this.previousCleanup = null;
-		}
+	/** Close this track down. Returns what its cleanup threw, having finished regardless. */
+	private endTrack(): CleanupFault {
+		const cleanup = this.previousCleanup;
+		this.previousCleanup = null;
+		const fault = runCleanup( cleanup );
+
 		// Child tracks survive — they live independently in the flat pool.
 		// Only explicit cancel() cascades to children.
 		this.running = false;
 		this.currentBlock = null;
 		this.parentHandle.removeTrack( this );
-	}
-
-	private combineCleanups( a: CleanupFn | void, b: CleanupFn | void ): CleanupFn | null {
-		if ( a && b ) return () => { a(); b(); };
-		if ( a ) return a;
-		if ( b ) return b;
-		return null;
+		return fault;
 	}
 }
 
 // ─── SceneHandleImpl ─────────────────────────────────────────────────────────
 
 /** Concrete implementation of SceneHandle. */
-export class SceneHandleImpl implements SceneHandle {
+export class SceneHandleImpl implements SceneHandle, Waiter {
 
 	private readonly sceneGraph: SceneGraph;
 	private readonly globalRegistry: HandlerRegistry;
@@ -328,7 +432,7 @@ export class SceneHandleImpl implements SceneHandle {
 	private cancelled = false;
 	private currentBlock: BlueprintBlock | null = null;
 	private previousBlock: BlueprintBlock | null = null;
-	private previousCharacter: BlockCharacter | undefined = undefined;
+	private previousCharacter: Card | undefined = undefined;
 	private readonly visited = new Set<string>();
 	private readonly choiceHistory = new Map<string, string[]>();
 	private previousCleanup: CleanupFn | null = null;
@@ -336,8 +440,10 @@ export class SceneHandleImpl implements SceneHandle {
 	/** Auto-incremented counter for track IDs. 0 is reserved for the implicit main track. */
 	private nextTrackId = 1;
 	/** Tracks waiting for specific blocks to be visited before they can advance. */
-	private readonly pendingWaits = new Map<AsyncTrack, string[]>();
-	private _resolveCharacter: ( ( characters: BlockCharacter[] ) => BlockCharacter | undefined ) | null = null;
+	private readonly pendingWaits = new Map<Waiter, string[]>();
+	/** The main flow's own parked advance, when its block carries `waitForBlocks`. */
+	private pendingAdvance: ( () => void ) | null = null;
+	private _resolveCharacter: ( ( actors: Card[] ) => Card | undefined ) | null = null;
 
 	constructor(
 		sceneGraph: SceneGraph,
@@ -357,8 +463,8 @@ export class SceneHandleImpl implements SceneHandle {
 		const missing: string[] = [];
 		if ( !this.sceneRegistry.dialogHandler && !this.globalRegistry.dialogHandler ) missing.push( 'onDialog' );
 		if ( !this.sceneRegistry.choiceHandler && !this.globalRegistry.choiceHandler ) missing.push( 'onChoice' );
-		// onCondition is optional when onResolveCondition is installed — the engine auto-routes
-		// from pre-evaluated conditionGroups. The handler becomes a logging/override hook.
+		// onCondition is optional when onResolveCondition is installed: the engine already knows
+		// which port the cases picked, so the handler is only a logging or override hook.
 		if ( !this.sceneRegistry.conditionHandler && !this.globalRegistry.conditionHandler
 			&& !this.callbacks.getConditionResolver() ) missing.push( 'onCondition' );
 		if ( !this.sceneRegistry.actionHandler && !this.globalRegistry.actionHandler ) missing.push( 'onAction' );
@@ -381,26 +487,16 @@ export class SceneHandleImpl implements SceneHandle {
 		if ( startBlock ) {
 			this.processBlock( startBlock );
 		} else {
-			this.endScene();
+			const fault = this.endScene();
+			if ( fault ) throw fault.value;
 		}
 	}
 
 	cancel(): void {
 		if ( !this.running ) return;
 		this.cancelled = true;
-		this.pendingWaits.clear();
-		for ( const track of this.asyncTracks ) {
-			track.cancel();
-		}
-		this.asyncTracks.length = 0;
-		if ( this.previousCleanup ) {
-			this.previousCleanup();
-			this.previousCleanup = null;
-		}
-		this.running = false;
-		this.currentBlock = null;
-		this.fireSceneExit();
-		this.callbacks.onSceneEnded( this );
+		const fault = this.shutdown();
+		if ( fault ) throw fault.value;
 	}
 
 	onEnter( handler: SceneLifecycleHandler ): void {
@@ -411,24 +507,24 @@ export class SceneHandleImpl implements SceneHandle {
 		this.sceneRegistry.exitHandler = handler;
 	}
 
-	onBlock( blockUuid: string, handler: BlockHandler<BlueprintBlock, BaseBlockContext> ): void {
-		this.sceneRegistry.setBlockHandler( blockUuid, handler );
+	onBlock( blockId: string, handler: BlockHandler<BlueprintBlock, BaseBlockContext> ): void {
+		this.sceneRegistry.setBlockHandler( blockId, handler );
 	}
 
-	onDialogId( blockUuid: string, handler: DialogHandler ): void {
-		this.sceneRegistry.setBlockHandler( blockUuid, handler as BlockHandler<BlueprintBlock, BaseBlockContext> );
+	onDialogId( blockId: string, handler: DialogHandler ): void {
+		this.sceneRegistry.setBlockHandler( blockId, handler as BlockHandler<BlueprintBlock, BaseBlockContext> );
 	}
 
-	onChoiceId( blockUuid: string, handler: ChoiceHandler ): void {
-		this.sceneRegistry.setBlockHandler( blockUuid, handler as BlockHandler<BlueprintBlock, BaseBlockContext> );
+	onChoiceId( blockId: string, handler: ChoiceHandler ): void {
+		this.sceneRegistry.setBlockHandler( blockId, handler as BlockHandler<BlueprintBlock, BaseBlockContext> );
 	}
 
-	onConditionId( blockUuid: string, handler: ConditionHandler ): void {
-		this.sceneRegistry.setBlockHandler( blockUuid, handler as BlockHandler<BlueprintBlock, BaseBlockContext> );
+	onConditionId( blockId: string, handler: ConditionHandler ): void {
+		this.sceneRegistry.setBlockHandler( blockId, handler as BlockHandler<BlueprintBlock, BaseBlockContext> );
 	}
 
-	onActionId( blockUuid: string, handler: ActionHandler ): void {
-		this.sceneRegistry.setBlockHandler( blockUuid, handler as BlockHandler<BlueprintBlock, BaseBlockContext> );
+	onActionId( blockId: string, handler: ActionHandler ): void {
+		this.sceneRegistry.setBlockHandler( blockId, handler as BlockHandler<BlueprintBlock, BaseBlockContext> );
 	}
 
 	onDialog( handler: DialogHandler ): void {
@@ -477,37 +573,45 @@ export class SceneHandleImpl implements SceneHandle {
 		return this.choiceHistory;
 	}
 
-	getChoice( blockUuid: string ): readonly string[] | undefined {
-		return this.choiceHistory.get( blockUuid );
+	getChoice( blockId: string ): readonly string[] | undefined {
+		return this.choiceHistory.get( blockId );
 	}
 
-	// Uses the unified resolver as fallback for non-choice conditions.
-	// Without a resolver, non-choice conditions default to false.
-	evaluateCondition( condition: ExportCondition ): boolean {
+	// A `choice` test is answered from this scene's own history; anything else goes to the game's
+	// resolver. Without a resolver, a game-state test is false.
+	evaluateCondition( test: ConditionTest ): boolean {
 		const resolver = this.callbacks.getConditionResolver();
-		return this.evaluateConditionWithHistory( condition, resolver ?? ( () => false ) );
+		return this.evaluateConditionWithHistory( test, resolver ?? ( () => false ) );
 	}
 
-	onResolveCharacter( fn: ( characters: BlockCharacter[] ) => BlockCharacter | undefined ): void {
+	onResolveCharacter( fn: ( actors: Card[] ) => Card | undefined ): void {
 		this._resolveCharacter = fn;
+	}
+
+	/** @internal — Called once every block this flow was waiting on has been visited. */
+	notifyWaitSatisfied(): void {
+		if ( !this.running || this.cancelled || !this.pendingAdvance ) return;
+		const advance = this.pendingAdvance;
+		this.pendingAdvance = null;
+		advance();
 	}
 
 	// ─── Internal API (used by AsyncTrack) ───────────────────────────────
 
 	/** @internal */ getSceneRegistry(): SceneHandlerRegistry { return this.sceneRegistry; }
 	/** @internal */ getGlobalRegistry(): HandlerRegistry { return this.globalRegistry; }
-	/** @internal */ addVisited( uuid: string ): void {
-		this.visited.add( uuid );
+	/** @internal */ addVisited( blockId: string ): void {
+		this.visited.add( blockId );
 		if ( this.pendingWaits.size > 0 ) {
-			const satisfied: AsyncTrack[] = [];
-			for ( const [track, required] of this.pendingWaits ) {
-				if ( required.every( u => this.visited.has( u ) ) ) {
-					satisfied.push( track );
+			const satisfied: Waiter[] = [];
+			for ( const [waiter, required] of this.pendingWaits ) {
+				if ( required.every( id => this.visited.has( id ) ) ) {
+					satisfied.push( waiter );
 				}
 			}
-			for ( const track of satisfied ) {
-				this.pendingWaits.delete( track );
-				track.notifyWaitSatisfied();
+			for ( const waiter of satisfied ) {
+				this.pendingWaits.delete( waiter );
+				waiter.notifyWaitSatisfied();
 			}
 		}
 	}
@@ -522,35 +626,72 @@ export class SceneHandleImpl implements SceneHandle {
 	}
 
 	/** @internal — Cancel a specific track by ID (used for parent→child cascade). */
-	cancelTrack( trackId: number ): void {
+	cancelTrack( trackId: number ): CleanupFault {
 		const track = this.asyncTracks.find( t => t.id === trackId );
-		if ( track ) track.cancel();
+		return track ? track.cancel() : null;
 	}
 
-	/** @internal — Register a track as waiting for specific block UUIDs to be visited. */
-	registerWaitForBlocks( track: AsyncTrack, blockUuids: string[] ): void {
-		this.pendingWaits.set( track, blockUuids );
+	/** @internal — Park a track (or the main flow) until every listed block has been visited. */
+	registerWaitForBlocks( waiter: Waiter, blockIds: string[] ): void {
+		this.pendingWaits.set( waiter, blockIds );
 	}
 
-	/** @internal — Check if a block UUID has been visited in this scene. */
-	isVisited( uuid: string ): boolean {
-		return this.visited.has( uuid );
+	/** @internal — Has a block of this scene been visited? */
+	isVisited( blockId: string ): boolean {
+		return this.visited.has( blockId );
 	}
 
-	/** @internal */ recordChoice( blockUuid: string, choiceUuid: string ): void {
-		const existing = this.choiceHistory.get( blockUuid );
+	/**
+	 * @internal — Run `onValidateNextBlock` for a block, and `onInvalidateBlock` when it refuses.
+	 *
+	 * Called by BOTH the main flow and every parallel track. It used to live inline in the main
+	 * flow's `processBlock` only, so a game using this hook as a gate — "do not enter this block
+	 * unless the player has the keycard" — was bypassed entirely the moment a branch was marked
+	 * `isAsync`. Nothing in the hook's contract said it only applied to the flow the player was
+	 * watching, and nothing on screen would have told anyone.
+	 *
+	 * @returns `false` when the caller must stop rather than dispatch the block.
+	 */
+	runValidation(
+		block: BlueprintBlock,
+		fromBlock: BlueprintBlock | null,
+		fromCharacter: Card | undefined,
+	): boolean {
+		const handler = this.globalRegistry.validateNextBlockHandler;
+		if ( !handler ) return true;
+
+		const result = handler( {
+			nextBlock: block,
+			fromBlock,
+			nextContext: { character: this.resolveCardsFor( block ).character },
+			fromContext: fromBlock ? { character: fromCharacter } : null,
+			port: null,
+		} );
+		if ( result.valid ) return true;
+
+		if ( this.globalRegistry.invalidateBlockHandler ) {
+			this.globalRegistry.invalidateBlockHandler( {
+				scene: this,
+				reason: result.reason ?? 'validation_failed',
+			} );
+		}
+		return false;
+	}
+
+	/** @internal */ recordChoice( blockId: string, optionId: string ): void {
+		const existing = this.choiceHistory.get( blockId );
 		if ( existing ) {
-			existing.push( choiceUuid );
+			existing.push( optionId );
 		} else {
-			this.choiceHistory.set( blockUuid, [choiceUuid] );
+			this.choiceHistory.set( blockId, [optionId] );
 		}
 	}
 
 	/** @internal */ evaluateConditionForBlock(
-		condition: ExportCondition,
-		fallbackEvaluator: ( condition: ExportCondition ) => boolean,
+		test: ConditionTest,
+		fallbackEvaluator: ( test: ConditionTest ) => boolean,
 	): boolean {
-		return this.evaluateConditionWithHistory( condition, fallbackEvaluator );
+		return this.evaluateConditionWithHistory( test, fallbackEvaluator );
 	}
 
 	/** @internal — Safe to call during addVisited→notifyWaitSatisfied chains
@@ -572,37 +713,19 @@ export class SceneHandleImpl implements SceneHandle {
 		// Step 1: Skip NOTE blocks
 		const block = skipNotes( startingBlock, this.sceneGraph );
 		if ( !block ) {
-			this.endScene();
+			const fault = this.endScene();
+			if ( fault ) throw fault.value;
 			return;
 		}
 
 		// Step 2: Validate
-		if ( this.globalRegistry.validateNextBlockHandler ) {
-			const nextCharacters = block.metadata?.characters ?? [];
-			const nextCharacter = this.getResolveCharacterFn()( nextCharacters );
-			const result = this.globalRegistry.validateNextBlockHandler( {
-				nextBlock: block,
-				fromBlock: this.previousBlock,
-				nextContext: { character: nextCharacter },
-				fromContext: this.previousBlock ? { character: this.previousCharacter } : null,
-				port: null,
-			} );
-			if ( !result.valid ) {
-				if ( this.globalRegistry.invalidateBlockHandler ) {
-					this.globalRegistry.invalidateBlockHandler( {
-						scene: this,
-						reason: result.reason ?? 'validation_failed',
-					} );
-				}
-				return;
-			}
-		}
+		if ( !this.runValidation( block, this.previousBlock, this.previousCharacter ) ) return;
 
 		if ( this.cancelled ) return;
 
 		// Step 3: Mark as current and visited
 		this.currentBlock = block;
-		this.addVisited( block.uuid );
+		this.addVisited( block.id );
 
 		// Step 3b: onBeforeBlock
 		if ( this.globalRegistry.beforeBlockHandler ) {
@@ -613,7 +736,7 @@ export class SceneHandleImpl implements SceneHandle {
 			this.globalRegistry.beforeBlockHandler( {
 				block,
 				scene: this,
-				context: { nativeProperties: block.nativeProperties },
+				context: { nativeProperties: natives( block ) },
 				resolve: () => {
 					if ( resolved ) return;
 					resolved = true;
@@ -633,7 +756,7 @@ export class SceneHandleImpl implements SceneHandle {
 
 		// Step 4: Resolve handler
 		const { sceneHandler, globalHandler } = resolveHandler(
-			block.type, block.uuid, this.sceneRegistry, this.globalRegistry,
+			block.type, block.id, this.sceneRegistry, this.globalRegistry,
 		);
 
 		// Create context
@@ -657,6 +780,16 @@ export class SceneHandleImpl implements SceneHandle {
 		const next = () => {
 			if ( nextCalled ) return;
 			nextCalled = true;
+
+			// waitForBlocks: park until every listed block has been visited. The main flow honours
+			// it exactly like a parallel track — this is the join half of the fork `isAsync` opens.
+			const waitBlocks = natives( block ).waitForBlocks;
+			if ( waitBlocks?.length && !waitBlocks.every( id => this.isVisited( id ) ) ) {
+				this.pendingAdvance = () => this.advanceToNextBlock( block, context );
+				this.registerWaitForBlocks( this, waitBlocks );
+				return;
+			}
+
 			if ( syncPhase ) return;
 			this.advanceToNextBlock( block, context );
 		};
@@ -672,21 +805,26 @@ export class SceneHandleImpl implements SceneHandle {
 			} else if ( globalHandler ) {
 				globalCleanup = globalHandler( handlerArgs );
 			}
-		} catch {
-			// SWALLOWED ON PURPOSE, and documented as such (docs/guide/lifecycle.md): a handler
-			// that throws ends the scene without propagating. Note the asymmetry with a cleanup
-			// function, whose exception DOES reach the caller (engine-critical.test.ts) — the
-			// same kind of fault in the same game code behaves in two opposite ways.
+		} catch ( err ) {
+			// The scene is closed down first, THEN the error is re-thrown. The order is what makes
+			// this usable: by the time the game sees the error, the cleanups have run, the async
+			// tracks are cancelled and `onSceneExit` has fired. The dialogue stopped PROPERLY, and
+			// the error surfaces where the game called `start()` or `next()`.
+			//
+			// v1 swallowed it — silently, not even logged — while an exception from the cleanup
+			// function that same handler returned reached the caller. One fault, two opposite
+			// behaviours, and the quiet one hid real bugs for as long as a project ran.
 			this.endScene();
-			return;
+			throw err;
 		}
 
 		// Store combined cleanup BEFORE any advance runs
-		this.previousCleanup = this.combineCleanups( sceneCleanup, globalCleanup );
+		this.previousCleanup = combineCleanups( sceneCleanup, globalCleanup );
 
-		// End sync phase — if next() was already called, advance now
+		// End sync phase — if next() was already called, advance now. Unless the block is parked
+		// on waitForBlocks: releasing it is `notifyWaitSatisfied`'s job, not ours.
 		syncPhase = false;
-		if ( nextCalled ) {
+		if ( nextCalled && !this.pendingAdvance ) {
 			this.advanceToNextBlock( block, context );
 		}
 	}
@@ -697,67 +835,95 @@ export class SceneHandleImpl implements SceneHandle {
 		this.previousBlock = block;
 		this.previousCharacter = context?.character;
 
-		const connections = this.sceneGraph.getOutgoingConnections( block.uuid );
 		const resolution = resolvePort( {
 			block,
-			connections,
-			selectedChoiceUuid: context && '_selectedChoiceUuid' in context ? context._selectedChoiceUuid : undefined,
-			conditionResult: context && '_conditionResult' in context ? context._conditionResult : undefined,
+			links: this.sceneGraph.getOutgoingLinks( block.id ),
+			selectedOptionId: context && '_selectedOptionId' in context ? context._selectedOptionId : undefined,
+			conditionPort: context && '_conditionPort' in context ? context._conditionPort : undefined,
 			actionRejected: context && '_actionRejected' in context ? context._actionRejected : undefined,
-			characterPortIndex: context && '_characterPortIndex' in context ? context._characterPortIndex : undefined,
+			actorPort: context && '_actorPort' in context ? context._actorPort : undefined,
 		} );
 
-		const allConnections = resolution.connections;
+		const allLinks = resolution.links;
 
-		let mainConnection = null as typeof allConnections[number] | null;
-		const asyncConnections: typeof allConnections = [];
+		// The FIRST non-async target becomes the main flow; every other resolved link spawns a
+		// parallel track. A port with several non-async targets is a MULTIPLE_NON_ASYNC_FORK
+		// warning at init, and here the second one simply never becomes the main track.
+		let mainLink = null as typeof allLinks[number] | null;
+		const asyncLinks: typeof allLinks = [];
 
-		for ( const conn of allConnections ) {
-			const targetBlock = this.sceneGraph.getBlock( conn.toId );
+		for ( const link of allLinks ) {
+			const targetBlock = this.sceneGraph.getBlock( link.to );
 			if ( !targetBlock ) continue;
 
-			if ( !mainConnection && !targetBlock.nativeProperties?.isAsync ) {
-				mainConnection = conn;
+			if ( !mainLink && !natives( targetBlock ).isAsync ) {
+				mainLink = link;
 			} else {
-				asyncConnections.push( conn );
+				asyncLinks.push( link );
 			}
 		}
 
-		for ( const conn of asyncConnections ) {
-			const targetBlock = this.sceneGraph.getBlock( conn.toId );
+		for ( const link of asyncLinks ) {
+			const targetBlock = this.sceneGraph.getBlock( link.to );
 			if ( targetBlock ) {
 				this.spawnAsyncTrack( targetBlock, null );
 			}
 		}
 
-		if ( mainConnection ) {
-			const nextBlock = this.sceneGraph.getBlock( mainConnection.toId );
+		if ( mainLink ) {
+			const nextBlock = this.sceneGraph.getBlock( mainLink.to );
 			if ( nextBlock ) {
 				const cleanupToRun = this.previousCleanup;
 				this.previousCleanup = null;
-				if ( cleanupToRun ) cleanupToRun();
+				const fault = runCleanup( cleanupToRun );
+				if ( fault ) {
+					// Same order as a handler that throws: the scene is closed down first, and the
+					// error reaches the game with the dialogue already stopped properly.
+					this.endScene();
+					throw fault.value;
+				}
 				this.processBlock( nextBlock );
 				return;
 			}
 		}
 
-		this.endScene();
+		const fault = this.endScene();
+		if ( fault ) throw fault.value;
 	}
 
-	private endScene(): void {
+	/**
+	 * Close the scene down: cancel every track, run the pending cleanup, fire `onSceneExit`.
+	 *
+	 * Returns what a cleanup threw rather than throwing it, so the teardown always runs to the
+	 * end. Callers re-throw once there is nothing left to unwind — `endScene` is reached from a
+	 * dead end, from a note loop, from `cancel()` and from a handler that already failed, and only
+	 * the caller knows which error the game should see.
+	 */
+	private endScene(): CleanupFault {
+		return this.shutdown();
+	}
+
+	private shutdown(): CleanupFault {
 		this.pendingWaits.clear();
+		this.pendingAdvance = null;
+
+		let fault: CleanupFault = null;
 		for ( const track of this.asyncTracks ) {
-			track.cancel();
+			// Every track is cancelled even if an earlier one's cleanup threw: leaving live tracks
+			// behind on a closed scene is how a dialogue kept running after it ended.
+			fault = fault ?? track.cancel();
 		}
 		this.asyncTracks.length = 0;
-		if ( this.previousCleanup ) {
-			this.previousCleanup();
-			this.previousCleanup = null;
-		}
+
+		const cleanup = this.previousCleanup;
+		this.previousCleanup = null;
+		fault = fault ?? runCleanup( cleanup );
+
 		this.running = false;
 		this.currentBlock = null;
 		this.fireSceneExit();
 		this.callbacks.onSceneEnded( this );
+		return fault;
 	}
 
 	// ─── Scene lifecycle ─────────────────────────────────────────────────
@@ -778,98 +944,116 @@ export class SceneHandleImpl implements SceneHandle {
 
 	// ─── Internal helpers ────────────────────────────────────────────────
 
-	private getResolveCharacterFn(): ( characters: BlockCharacter[] ) => BlockCharacter | undefined {
+	private getResolveCharacterFn(): ( actors: Card[] ) => Card | undefined {
 		return this._resolveCharacter ?? this.callbacks.getResolveCharacter();
 	}
 
+	/**
+	 * Answer a test, taking the reserved `choice` dictionary on ourselves.
+	 *
+	 * `{ dict: "choice", entry: "CHOICE-001", value: "C1" }` asks whether the player picked C1 at
+	 * CHOICE-001 earlier IN THIS SCENE. The engine kept that history, so the question never
+	 * reaches the game: it would otherwise have to mirror a record the engine already holds, and
+	 * the two would drift. The memory starts and ends with the scene.
+	 *
+	 * A block that was never reached answers `false` for `equals`, and `true` for `notEquals`.
+	 */
 	private evaluateConditionWithHistory(
-		condition: ExportCondition,
-		fallbackEvaluator: ( condition: ExportCondition ) => boolean,
+		test: ConditionTest,
+		fallbackEvaluator: ( test: ConditionTest ) => boolean,
 	): boolean {
-		if ( condition.key.startsWith( 'choice:' ) ) {
-			const blockUuid = condition.key.slice( 7 );
-			const history = this.choiceHistory.get( blockUuid );
-			if ( !history ) return condition.operator === '!=';
-			const includes = history.includes( condition.value );
-			return condition.operator === '!=' ? !includes : includes;
+		if ( test.dict !== Ports.Choice ) return fallbackEvaluator( test );
+
+		const history = this.choiceHistory.get( test.entry );
+		const negated = test.op === ConditionOperator.NotEquals;
+		if ( !history ) return negated;
+
+		const picked = history.includes( String( test.value ) );
+		return negated ? !picked : picked;
+	}
+
+	/**
+	 * The evaluator that ROUTES a condition block. Always present.
+	 *
+	 * With no game resolver installed it still answers `choice` tests on its own, and says false
+	 * to anything about game state — a scene that only asks about its own past answers therefore
+	 * plays without a single line of game code, and one that asks about the world takes its
+	 * `default` branch rather than stalling.
+	 */
+	private routingEvaluator(): ( test: ConditionTest ) => boolean {
+		const resolver = this.callbacks.getConditionResolver();
+		if ( !resolver ) {
+			return ( test ) => test.dict === Ports.Choice
+				&& this.evaluateConditionWithHistory( test, () => false );
 		}
-		return fallbackEvaluator( condition );
+		return ( test ) => this.evaluateConditionWithHistory( test, resolver );
 	}
 
-	private tagChoiceVisibility(
-		choices: ChoiceItem[],
-		resolver: ( ( condition: ExportCondition ) => boolean ) | null,
-	): RuntimeChoiceItem[] {
-		if ( !resolver ) return choices;
-		return choices.map( choice => ( {
-			...choice,
-			visible: !choice.visibilityConditions?.length
-				? true
-				: evaluateConditionChain( choice.visibilityConditions, ( cond ) => {
-					if ( cond.key.startsWith( 'choice:' ) ) {
-						return this.evaluateConditionWithHistory( cond, () => false );
-					}
-					return resolver( cond );
-				} ),
-		} ) );
+	/**
+	 * The evaluator that TAGS option visibility, or `undefined` when there is no game resolver.
+	 *
+	 * Routing and tagging cannot share one answer here. Routing has to pick a branch, so an
+	 * unanswerable test has to become false. An option has no such obligation: saying `false`
+	 * about a question nobody could answer would HIDE an answer from the player. `undefined` says
+	 * unknown, and a game reading `visible !== false` still offers it.
+	 */
+	private visibilityEvaluator(): ( ( test: ConditionTest ) => boolean ) | undefined {
+		const resolver = this.callbacks.getConditionResolver();
+		if ( !resolver ) return undefined;
+		return ( test ) => this.evaluateConditionWithHistory( test, resolver );
 	}
 
-	// Character is resolved fresh every time — no caching. This method is called by both
-	// the main track and async tracks (via createBlockContext). Caching would leak the main
-	// track's resolved character into async tracks triggered by waitForBlocks/notifyWaitSatisfied.
+	/** Look up the cards a block cites, and let the game pick which actor is speaking. */
+	private resolveCardsFor( block: BlueprintBlock ): ResolvedCards {
+		return resolveCards( block, this.callbacks.getCard, this.getResolveCharacterFn() );
+	}
+
+	// Cards are resolved fresh every time, never cached. This runs for the main track AND for
+	// async tracks (through createBlockContext), and a cache would leak the main track's actor
+	// into a track released later by waitForBlocks.
 	private createContext( block: BlueprintBlock ): InternalContext | null {
-		const characters = block.metadata?.characters ?? [];
-		const resolvedCharacter = this.getResolveCharacterFn()( characters );
+		const cards = this.resolveCardsFor( block );
 
 		if ( isDialogBlock( block ) ) {
-			return createDialogContext( block, resolvedCharacter );
+			return createDialogContext( block, cards );
 		}
+
 		if ( isChoiceBlock( block ) ) {
-			const resolver = this.callbacks.getConditionResolver();
-			const taggedChoices = this.tagChoiceVisibility( block.choices ?? [], resolver );
-			return createChoiceContext( block, taggedChoices, ( blockUuid, choiceUuid ) => {
-				this.recordChoice( blockUuid, choiceUuid );
-			}, resolvedCharacter );
+			const options = tagOptionVisibility( block.options, this.visibilityEvaluator() );
+			return createChoiceContext( block, cards, options, ( blockId, optionId ) => {
+				this.recordChoice( blockId, optionId );
+			} );
 		}
+
 		if ( isConditionBlock( block ) ) {
-			const resolver = this.callbacks.getConditionResolver();
-			if ( resolver ) {
-				const rawGroups = block.conditions ?? [];
-				// Unified evaluator: choice: conditions resolved internally via choice history,
-				// game-state conditions delegated to the onResolveCondition callback.
-				// Same evaluator pattern as tagChoiceVisibility for CHOICE blocks.
-				const evaluate = ( cond: ExportCondition ): boolean =>
-					cond.key.startsWith( 'choice:' )
-						? this.evaluateConditionWithHistory( cond, () => false )
-						: resolver( cond );
-				const conditionGroups = rawGroups.map( ( conditions, i ) => ( {
-					conditions,
-					portIndex: i,
-					result: evaluateConditionChain( conditions, evaluate ),
-				} ) );
-				const ctx = createConditionContext( resolvedCharacter, conditionGroups );
-				// Auto-resolve from pre-evaluated groups — the handler can override with resolve().
-				// If the handler only calls next() without resolve(), the engine routes automatically.
-				const matched = conditionGroups.filter( g => g.result ).map( g => g.portIndex );
-				ctx._conditionResult = block.nativeProperties?.enableDispatcher
-					? matched
-					: ( matched[0] ?? -1 );
-				return ctx;
-			}
-			// No resolver installed — raw groups without pre-evaluation
-			const conditionGroups = ( block.conditions ?? [] ).map( ( conditions, i ) => ( { conditions, portIndex: i } ) );
-			return createConditionContext( resolvedCharacter, conditionGroups );
+			const evaluate = this.routingEvaluator();
+			const portPerCase = natives( block ).portPerCase === true;
+
+			// Every case is evaluated up front, so the handler is handed results rather than
+			// questions. With a resolver installed the engine already knows where to go, which is
+			// what makes onCondition optional: the handler becomes a place to log or to override.
+			//
+			// ONCE. The port is then read off these same results rather than re-asking the game:
+			// each test reaches `onResolveCondition` exactly one time, whatever the mode and
+			// whichever case matches.
+			const cases: RuntimeConditionCase[] = ( block.cases ?? [] ).map( c => ( {
+				port: c.port,
+				when: c.when,
+				result: evaluateConditionChainOf( c.when, evaluate ),
+			} ) );
+
+			const ctx = createConditionContext( block, cards, cases );
+			ctx._conditionPort = pickPortFromResults(
+				block.cases, portPerCase, cases.map( c => c.result === true ),
+			);
+			return ctx;
 		}
+
 		if ( isActionBlock( block ) ) {
-			return createActionContext( resolvedCharacter );
+			return createActionContext( block, cards );
 		}
+
 		return null;
 	}
 
-	private combineCleanups( a: CleanupFn | void, b: CleanupFn | void ): CleanupFn | null {
-		if ( a && b ) return () => { a(); b(); };
-		if ( a ) return a;
-		if ( b ) return b;
-		return null;
-	}
 }

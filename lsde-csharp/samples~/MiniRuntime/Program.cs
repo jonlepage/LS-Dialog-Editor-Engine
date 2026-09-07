@@ -1,355 +1,214 @@
 // LSDE Dialog Engine — Playground (C# port of playground.ts)
-// Loads a blueprint JSON, registers the new handler-based API, runs the first scene.
-// Mirrors the TS playground exactly for cross-language validation.
+//
+// Loads a real LSDE v2 export and plays a scene. Read it as the shortest complete integration:
+// init, a locale, the two resolvers, the four handlers. Everything the engine asks of a game is in
+// here, and nothing else is needed.
 
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using LsdeDialogEngine;
+using LsdeDialogEngine.Json;
 
-// ─── JSON Options ────────────────────────────────────────────────────────────
-
-var jsonOptions = new JsonSerializerOptions
-{
-    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    Converters =
-    {
-        new JsonStringEnumConverter(),
-        new BlueprintBlockConverter(),
-        new BlockPropertyValueConverter(),
-    },
-};
-
-// ─── Load Blueprint ──────────────────────────────────────────────────────────
+// ─── Load the payload ────────────────────────────────────────────────────────
 
 string? blueprintPath = args.Length > 0 ? args[0] : null;
 
 if (blueprintPath == null)
 {
     var dir = AppContext.BaseDirectory;
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < 10; i++)
     {
-        var candidate = Path.Combine(dir, "blueprints", "blueprint.json");
+        var candidate = Path.Combine(
+            dir, "mock", "blueprints", "Engine-Conformance-Scene.blueprints.json");
         if (File.Exists(candidate))
         {
             blueprintPath = candidate;
             break;
         }
         var parent = Directory.GetParent(dir);
-        if (parent == null)
-            break;
+        if (parent == null) break;
         dir = parent.FullName;
     }
 }
 
 if (blueprintPath == null || !File.Exists(blueprintPath))
 {
-    Console.WriteLine("Usage: MiniRuntime <blueprint.json>");
+    Console.WriteLine("Usage: MiniRuntime <blueprints.json>");
     return;
 }
 
-var raw = File.ReadAllText(blueprintPath);
-var blueprint = JsonSerializer.Deserialize<BlueprintExport>(raw, jsonOptions);
-if (blueprint == null)
+var blueprint = LsdeJson.Parse(File.ReadAllText(blueprintPath));
+
+// ─── The game's state ────────────────────────────────────────────────────────
+//
+// A real game reads its own save here. What matters is the SHAPE of the answer: the engine hands
+// over a test and expects true or false. It never reads a dictionary itself, never implements an
+// operator, never knows what "credits" holds.
+
+var gameState = new Dictionary<string, Dictionary<string, object>>
 {
-    Console.WriteLine("ERROR: Failed to deserialize blueprint.");
-    return;
+    ["switches"] = new Dictionary<string, object>
+    {
+        ["door_unlocked"] = true, ["oracle_awake"] = false, ["reactor_stable"] = false,
+        ["met_vesk"] = true, ["alarm_armed"] = true,
+    },
+    ["variables"] = new Dictionary<string, object>
+    {
+        ["chapter"] = 3d, ["credits"] = 80d, ["trust_kael"] = 2d, ["alarm_level"] = 3d,
+    },
+    ["items"] = new Dictionary<string, object>
+    {
+        ["plasma_cell"] = 1d, ["keycard"] = 0d, ["ration"] = 2d,
+    },
+    ["flags"] = new Dictionary<string, object>
+    {
+        ["faction"] = "salvage", ["last_port"] = "reactor_deck", ["player_callsign"] = "Vane",
+    },
+};
+
+bool ResolveCondition(ConditionTest test)
+{
+    if (!gameState.TryGetValue(test.Dict, out var entries)) return false;
+    if (!entries.TryGetValue(test.Entry, out var actual)) return false;
+
+    var expected = test.Value;
+
+    switch (test.Op)
+    {
+        case ConditionOperator.Equals: return Equals(actual?.ToString(), expected?.ToString());
+        case ConditionOperator.NotEquals: return !Equals(actual?.ToString(), expected?.ToString());
+        case ConditionOperator.LessThan: return AsNumber(actual) < AsNumber(expected);
+        case ConditionOperator.LessOrEqual: return AsNumber(actual) <= AsNumber(expected);
+        case ConditionOperator.GreaterThan: return AsNumber(actual) > AsNumber(expected);
+        case ConditionOperator.GreaterOrEqual: return AsNumber(actual) >= AsNumber(expected);
+        default: return false;
+    }
 }
 
-// ─── Init ───────────────────────────────────────────────────────────────────
+static double AsNumber(object? value)
+{
+    try { return value == null ? 0 : Convert.ToDouble(value); }
+    catch { return 0; }
+}
+
+// ─── Init ────────────────────────────────────────────────────────────────────
 
 var engine = new DialogueEngine();
 var report = engine.Init(new InitOptions { Data = blueprint });
-var stats = report.Stats;
 
 Console.WriteLine($"\n🔧 Init — {report.Errors.Count} errors, {report.Warnings.Count} warnings");
-foreach (var w in report.Warnings)
-    Console.WriteLine($"   ⚠️  {w.Code}: {w.Message}");
-Console.WriteLine(
-    $"📊 sceneCount={stats.SceneCount}, blockCount={stats.BlockCount}, connectionCount={stats.ConnectionCount}"
-);
+foreach (var e in report.Errors) Console.WriteLine($"   ⛔ {e.Code}: {e.Message}");
+foreach (var w in report.Warnings) Console.WriteLine($"   ⚠️  {w.Code}: {w.Message}");
+Console.WriteLine($"📊 scenes={report.Stats.SceneCount} blocks={report.Stats.BlockCount} "
+                  + $"wires={report.Stats.ConnectionCount}");
 
-if (report.Errors.Count > 0)
-{
-    foreach (var e in report.Errors)
-        Console.WriteLine($"   ❌ {e.Code}: {e.Message}");
-    return;
-}
+if (report.Errors.Count > 0) return;
 
-// on peut changer les locales on the fly
 engine.SetLocale("fr");
 
-// on ajoute l'algorithme de résolution de personnage
-engine.OnResolveCharacter(characters => characters.Count > 0 ? characters[0] : null);
+// Which actor of the block is the one speaking. Actors is a CAST, and LSDE deliberately refuses to
+// say whether its order means "who speaks" or "who is present" — so the game decides. Returning
+// null is legitimate: it means nobody available can carry this line.
+engine.OnResolveCharacter(actors => actors.Count > 0 ? actors[0] : null);
 
-// Unified condition resolver — evaluates game-state conditions for both choice visibility and condition blocks.
-// choice: conditions are handled internally by the engine via choice history.
-engine.OnResolveCondition(cond =>
-{
-    Console.WriteLine($"◽onResolveCondition: {cond.Key} {cond.Operator} {cond.Value}");
-    var parts = cond.Key.Split('.');
-    if (parts.Length == 2 && parts[0] == "VariableGlobal")
-    {
-        return parts[1] switch
-        {
-            "key1" => true,
-            "key2" => false,
-            _ => true,
-        };
-    }
-    return true;
-});
+// The single game-state evaluator. It answers option visibility AND condition cases. Tests on the
+// reserved "choice" dictionary never reach it — the engine answers those from its own history.
+engine.OnResolveCondition(ResolveCondition);
 
-// ─── 4 Required Handlers ────────────────────────────────────────────────────
+// ─── The four handlers ───────────────────────────────────────────────────────
 
 engine.OnDialog(args =>
 {
-    var block = (DialogBlock)args.Block;
-    var ctx = args.Context;
-    var character = ctx.Character;
-    var text = LsdeUtils.GetLocalizedText(block.DialogueText);
+    // The engine hands the RAW string over and never looks inside it. {{@a1}} and the like are the
+    // game's own markers, in the game's own keys, filled by the game's own system.
+    var line = LsdeUtils.GetLocalizedText(args.Block.Text);
+    var who = args.Context.Actors.Count > 0
+        ? string.Join(" + ", args.Context.Actors.Select(a => a.Name))
+        : "—";
+    var tone = args.Context.Emotion != null
+        ? $" ({args.Context.Emotion.Name} {args.Context.Intensity})"
+        : "";
 
-    Console.WriteLine($"\n💬 DIALOG  {block.Label}");
-    Console.WriteLine($"   🎭 {character?.Name} {character?.Id} [{character?.Emotion ?? ""}]");
-    Console.WriteLine($"   📝 \"{text ?? "—"}\"");
+    Console.WriteLine($"\n💬 {args.Block.Id}  [{who}]{tone}");
+    Console.WriteLine($"   {line ?? "«no text in this export»"}");
 
-    if (block.NativeProperties?.PortPerCharacter == true && character != null)
-    {
-        Console.WriteLine($"   🔀 resolveCharacterPort: {character.Uuid}");
-        ctx.ResolveCharacterPort(character.Uuid);
-    }
     args.Next();
-
-    return () => Console.WriteLine($"   🧹 cleanup: {block.Label}");
 });
 
 engine.OnChoice(args =>
 {
-    var block = args.Block;
-    var ctx = args.Context;
-    var choices = ctx.Choices;
+    Console.WriteLine($"\n❓ {args.Block.Id}");
 
-    // choices are tagged with .Visible by the engine (SetChoiceFilter installed above)
-    var visible = choices.Where(c => c.Visible != false).ToList();
-    var timeout = block.NativeProperties?.Timeout;
-    // le moteur de jeux decidera quel visible choix est actif par default
-    var active = visible.Count > 0 ? visible[0] : null;
-
-    Console.WriteLine(
-        $"\n❓ CHOICE  {block.Label} — {visible.Count}/{choices.Count} choices visible"
-    );
-    foreach (var choice in visible)
+    // Every option comes tagged. Filtering is the game's call — greying a locked answer out is a
+    // perfectly good use of the ones that are not visible.
+    foreach (var option in args.Context.Options)
     {
-        var text = LsdeUtils.GetLocalizedText(choice.DialogueText);
-        var isActive = choice == active;
-        var label = choice.Label ?? choice.Uuid[..Math.Min(8, choice.Uuid.Length)];
-        Console.WriteLine($"   👉 {label}: \"{text ?? "—"}\"{(isActive ? " (active)" : "")}");
+        var text = LsdeUtils.GetLocalizedText(option.Text);
+        Console.WriteLine($"   {(option.Visible == false ? "🔒" : "▸")} {option.Id}  {text}");
     }
 
-    if (timeout.HasValue)
+    var picked = args.Context.Options.FirstOrDefault(o => o.Visible != false);
+    if (picked == null)
     {
-        Console.WriteLine($"💌timeout: {timeout.Value}");
-        // In a real game, we'd use a timer. For playground, just auto-select after logging.
-        if (active != null)
-        {
-            var lbl = active.Label ?? active.Uuid[..Math.Min(8, active.Uuid.Length)];
-            Console.WriteLine($"   ✅ selecting: {lbl}");
-            ctx.SelectChoice(active.Uuid);
-        }
+        Console.WriteLine("   (nothing to pick — the flow stops here)");
         args.Next();
-    }
-    else
-    {
-        // si pas de timeout, on va utiliser un waitinput dans le game engine
-        if (active != null)
-        {
-            var lbl = active.Label ?? active.Uuid[..Math.Min(8, active.Uuid.Length)];
-            Console.WriteLine($"   ✅ selecting: {lbl}");
-            ctx.SelectChoice(active.Uuid);
-        }
-        args.Next();
+        return;
     }
 
-    return () => Console.WriteLine($"   🧹 cleanup: {block.Label}");
+    Console.WriteLine($"   → picking {picked.Id}");
+    args.Context.SelectChoice(picked.Id);
+    args.Next();
 });
 
 engine.OnCondition(args =>
 {
-    var block = (ConditionBlock)args.Block;
-    var conditionGroups = args.Context.ConditionGroups!;
-    var isDispatcher = block.NativeProperties?.EnableDispatcher == true;
+    // Optional: with a resolver installed the engine already picked the port. This is where a game
+    // logs what matched, or overrides it with Context.Resolve("K2").
+    var cases = string.Join(" ", args.Context.Cases.Select(c => $"{c.Port}={c.Result}"));
+    var matched = args.Context.Cases.Where(c => c.Result == true).Select(c => c.Port).ToList();
 
-    foreach (var (g, i) in conditionGroups.Select((g, i) => (g, i)))
-    foreach (var cond in g.Conditions)
-        Console.WriteLine(
-            $"   [case {i}] {g.PortIndex} key:{cond.Key} {cond.Operator} {cond.Value} → {g.Result}"
-        );
+    Console.WriteLine($"\n🔀 {args.Block.Id}  cases: {cases}");
+    Console.WriteLine($"   matched: {(matched.Count > 0 ? string.Join(", ", matched) : "none → default")}");
 
-    // Derive result from pre-evaluated groups
-    var matched = conditionGroups.Where(c => c.Result == true).Select(c => c.PortIndex).ToList();
-    object result = isDispatcher ? (object)matched : (object)(matched.Count > 0 ? matched[0] : -1);
-
-    Console.WriteLine(
-        $"\n🔀 CONDITION  {block.Label} — {conditionGroups.Count} groups{(isDispatcher ? " [DISPATCHER]" : "")} → {FormatResult(result)}"
-    );
-    args.Context.Resolve(result);
     args.Next();
-    return null;
 });
 
 engine.OnAction(args =>
 {
-    var block = (ActionBlock)args.Block;
-    var actions = block.Actions ?? new List<ExportAction>();
-    Console.WriteLine($"\n⚡ ACTION  {block.Label} — {actions.Count} actions");
-    foreach (var a in actions)
-        Console.WriteLine($"   🎯 {a.ActionId}({string.Join(", ", a.Params)})");
+    Console.WriteLine($"\n⚙️  {args.Block.Id}");
+    foreach (var call in args.Context.Calls)
+    {
+        // Fn is empty when the writer has not picked a function yet. That is a draft, not an error.
+        var argList = string.Join(", ", call.Args.Select(kv => $"{kv.Key}={kv.Value}"));
+        Console.WriteLine($"   {(string.IsNullOrEmpty(call.Fn) ? "«no function picked»" : call.Fn)}({argList})");
+    }
+
     args.Context.Resolve();
     args.Next();
-
-    return () => Console.WriteLine($"   🧹 cleanup: {block.Label}");
 });
 
-// ─── Optional Handlers ──────────────────────────────────────────────────────
+// ─── Lifecycle ───────────────────────────────────────────────────────────────
 
-engine.OnBeforeBlock(args =>
+engine.OnSceneEnter(_ => Console.WriteLine("\n▶️  scene entered"));
+engine.OnSceneExit(_ => Console.WriteLine("\n⏹️  scene exited"));
+
+// ─── Play ────────────────────────────────────────────────────────────────────
+//
+// A scene opens by its path OR by the id that survives a rename. Store the id anywhere outside the
+// payload — a Unity asset, a save file — because the path changes the day someone renames it.
+
+var scenePath = blueprint.Scenes.Count > 0 ? blueprint.Scenes[0].Scene : null;
+if (scenePath == null)
 {
-    var delay = args.Block.NativeProperties?.Delay;
-    if (delay.HasValue)
-        Console.WriteLine($"   ⏳ before: {args.Block.Label} delay={delay}s");
-    args.Resolve();
-});
+    Console.WriteLine("This export has no scene.");
+    return;
+}
 
-engine.OnSceneEnter(args =>
-    Console.WriteLine($"\n🟢 ━━━ Scene Enter ━━━  running={args.Scene.IsRunning()}")
-);
-
-engine.OnSceneExit(_ => Console.WriteLine("🔴 ━━━ Scene Exit ━━━\n"));
-
-engine.OnValidateNextBlock(args =>
-{
-    if (args.FromBlock != null)
-        Console.WriteLine(
-            $"   ✔️  validate: {args.FromBlock.Label} → {args.NextBlock.Label} (char: {args.NextContext?.Character?.Name ?? "none"})"
-        );
-    return ValidationResult.Ok();
-});
-
-engine.OnInvalidateBlock(args =>
-{
-    Console.WriteLine($"   ❌ INVALIDATED: {args.Reason}");
-    args.Scene.Cancel();
-});
-
-// ─── Run ────────────────────────────────────────────────────────────────────
-
-var sceneId = blueprint.Scenes.Count > 0 ? blueprint.Scenes[0].Uuid : "";
-var sceneName = blueprint.Scenes.Count > 0 ? blueprint.Scenes[0].Label : sceneId;
-Console.WriteLine($"\n🚀 Launching scene: {sceneName}");
-
-var handle = engine.Scene(sceneId);
+var handle = engine.Scene(scenePath);
 handle.Start();
 
-// ─── Summary ────────────────────────────────────────────────────────────────
-
-var visitedLabels = new List<string>();
-foreach (var uuid in handle.GetVisitedBlocks())
-{
-    string? found = null;
-    foreach (var scene in blueprint.Scenes)
-    {
-        var b = scene.Blocks.FirstOrDefault(bl => bl.Uuid == uuid);
-        if (b != null)
-        {
-            found = b.Label ?? uuid[..Math.Min(8, uuid.Length)];
-            break;
-        }
-    }
-    visitedLabels.Add(found ?? uuid[..Math.Min(8, uuid.Length)]);
-}
-Console.WriteLine($"\n📋 Visited: {string.Join(", ", visitedLabels)}");
-
-// Choice history
-var historyEntries = new List<string>();
-foreach (var kvp in handle.GetChoiceHistory())
-    historyEntries.Add($"{kvp.Key}: [{string.Join(", ", kvp.Value)}]");
-Console.WriteLine($"📊 Choice History: {{{string.Join(", ", historyEntries)}}}");
-Console.WriteLine($"🏁 Engine running: {engine.IsRunning()}");
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-static string FormatResult(object result)
-{
-    if (result is List<int> list)
-        return $"[{string.Join(",", list)}]";
-    return result?.ToString() ?? "null";
-}
-
-// ─── JSON Converters ────────────────────────────────────────────────────────
-
-class BlueprintBlockConverter : JsonConverter<BlueprintBlock>
-{
-    public override bool CanConvert(Type typeToConvert) => typeToConvert == typeof(BlueprintBlock);
-
-    public override BlueprintBlock Read(
-        ref Utf8JsonReader reader,
-        Type typeToConvert,
-        JsonSerializerOptions options
-    )
-    {
-        using var doc = JsonDocument.ParseValue(ref reader);
-        var root = doc.RootElement;
-        if (!root.TryGetProperty("type", out var typeProp))
-            throw new JsonException("BlueprintBlock missing 'type' field");
-        var typeStr = typeProp.GetString();
-        var json = root.GetRawText();
-        return typeStr switch
-        {
-            "DIALOG" => JsonSerializer.Deserialize<DialogBlock>(json, options)!,
-            "CHOICE" => JsonSerializer.Deserialize<ChoiceBlock>(json, options)!,
-            "CONDITION" => JsonSerializer.Deserialize<ConditionBlock>(json, options)!,
-            "ACTION" => JsonSerializer.Deserialize<ActionBlock>(json, options)!,
-            "NOTE" => JsonSerializer.Deserialize<NoteBlock>(json, options)!,
-            _ => throw new JsonException($"Unknown block type: {typeStr}"),
-        };
-    }
-
-    public override void Write(
-        Utf8JsonWriter writer,
-        BlueprintBlock value,
-        JsonSerializerOptions options
-    ) => JsonSerializer.Serialize(writer, value, value.GetType(), options);
-}
-
-class BlockPropertyValueConverter : JsonConverter<object>
-{
-    public override bool CanConvert(Type typeToConvert) => typeToConvert == typeof(object);
-
-    public override object? Read(
-        ref Utf8JsonReader reader,
-        Type typeToConvert,
-        JsonSerializerOptions options
-    )
-    {
-        return reader.TokenType switch
-        {
-            JsonTokenType.String => reader.GetString(),
-            JsonTokenType.Number => reader.TryGetInt64(out var l)
-                ? (object)(double)l
-                : reader.GetDouble(),
-            JsonTokenType.True => true,
-            JsonTokenType.False => false,
-            JsonTokenType.Null => null,
-            _ => throw new JsonException($"Unexpected token {reader.TokenType}"),
-        };
-    }
-
-    public override void Write(
-        Utf8JsonWriter writer,
-        object value,
-        JsonSerializerOptions options
-    ) => JsonSerializer.Serialize(writer, value, options);
-}
+Console.WriteLine($"\n📜 choice history: {handle.GetChoiceHistory().Count} block(s)");
+Console.WriteLine($"🧭 visited {handle.GetVisitedBlocks().Count} blocks");
+Console.WriteLine($"🔗 wires in the scene: {engine.GetSceneConnections(scenePath).Count}");

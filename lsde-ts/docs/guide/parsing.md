@@ -49,7 +49,7 @@ CSV exports a flat table of dialogue text by locale. It does **not** contain con
 
 | `type` | Subtype | Specific fields |
 |--------|---------|----------------|
-| `DIALOG` | `DialogBlock` | `dialogueText`, `content`, `structureKey` |
+| `DIALOG` | `DialogBlock` | `text`, `content`, `structureKey` |
 | `CHOICE` | `ChoiceBlock` | `choices` |
 | `CONDITION` | `ConditionBlock` | `conditions` |
 | `ACTION` | `ActionBlock` | `actions` |
@@ -57,7 +57,7 @@ CSV exports a flat table of dialogue text by locale. It does **not** contain con
 
 **Dynamically-typed languages** (TypeScript, GDScript) handle this automatically — parsed objects already contain all fields.
 
-**Statically-typed languages** (C#, C++) need a custom converter that reads the `type` field and constructs the correct subtype. Without it, subtype-specific fields like `dialogueText` or `choices` are silently lost.
+**Statically-typed languages** (C#, C++) need a custom converter that reads the `type` field and constructs the correct subtype. Without it, subtype-specific fields like `text` or `choices` are silently lost.
 
 ::: info Companion packages
 If you use `LsdeDialogEngine.Newtonsoft` or `LsdeDialogEngine.SystemTextJson`, these converters are already included — just call `LsdeJson.Parse(json)`. The code below is for manual integration only.

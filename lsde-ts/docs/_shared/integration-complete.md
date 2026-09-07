@@ -21,9 +21,9 @@ export class DialogueUI extends Phaser.Scene {
 
     // ── DIALOG ────────────────────────────────────────────────
     params.engine.onDialog(({ block, context, next }) => {
-      const { dialogueText, nativeProperties } = block;
+      const { text, props } = block;
       const { character, resolveCharacterPort } = context;
-      const text = LsdeUtils.getLocalizedText(dialogueText);
+      const text = LsdeUtils.getLocalizedText(text);
 
       character && resolveCharacterPort(character.uuid);
 
@@ -32,8 +32,8 @@ export class DialogueUI extends Phaser.Scene {
 
       // auto-advance after a delay (cinematics, tutorials)
       let timer: Phaser.Time.TimerEvent | null = null;
-      if (nativeProperties?.timeout) {
-        timer = this.time.delayedCall(nativeProperties.timeout * 1000, () => this.advance());
+      if (props?.timeout) {
+        timer = this.time.delayedCall(props.timeout * 1000, () => this.advance());
       }
 
       return () => { dialog.hide(); this.pendingNext = null; timer?.destroy(); };
@@ -41,9 +41,9 @@ export class DialogueUI extends Phaser.Scene {
 
     // ── CHOICE ────────────────────────────────────────────────
     params.engine.onChoice(({ block, context, next }) => {
-      const { nativeProperties } = block;
+      const { props } = block;
       const { choices: items, selectChoice } = context;
-      const visible = items.filter(c => c.visible !== false);
+      const offered = items.filter(c => c.visible !== false);
 
       const buttons = choices.show(visible, (uuid) => {
         selectChoice(uuid);
@@ -51,8 +51,8 @@ export class DialogueUI extends Phaser.Scene {
       });
 
       let timer: Phaser.Time.TimerEvent | null = null;
-      if (nativeProperties?.timeout) {
-        timer = this.time.delayedCall(nativeProperties.timeout * 1000, () => next());
+      if (props?.timeout) {
+        timer = this.time.delayedCall(props.timeout * 1000, () => next());
       }
 
       return () => { choices.hide(buttons); timer?.destroy(); };
@@ -113,11 +113,11 @@ export class DialogueUI extends Phaser.Scene {
   private createChoicePanel() {
     return {
       show: (
-        visible: { uuid: string; dialogueText?: Record<string, string>; label?: string }[],
+        visible: { uuid: string; text?: Record<string, string>; label?: string }[],
         onSelect: (uuid: string) => void,
       ) => {
         return visible.map((choice, i) => {
-          const text = LsdeUtils.getLocalizedText(choice.dialogueText) ?? choice.label ?? '';
+          const text = LsdeUtils.getLocalizedText(choice.text) ?? choice.label ?? '';
           return this.add
             .text(80, 440 + i * 40, text, { fontSize: '15px', color: '#ffffff' })
             .setScrollFactor(0)
@@ -168,7 +168,7 @@ public class DialogueUI : MonoBehaviour
         // ── DIALOG ────────────────────────────────────────────
         engine.OnDialog(args => {
             var (_, block, context, next) = args;
-            var text = LsdeUtils.GetLocalizedText(block.DialogueText);
+            var text = LsdeUtils.GetLocalizedText(block.Text);
             var ch = context.Character;
 
             if (ch != null) context.ResolveCharacterPort(ch.Uuid);
@@ -185,14 +185,14 @@ public class DialogueUI : MonoBehaviour
         // ── CHOICE ────────────────────────────────────────────
         engine.OnChoice(args => {
             var (_, block, context, next) = args;
-            var visible = context.Choices
+            var visible = context.Options
                 .Where(c => c.Visible != false).ToList();
 
             foreach (var choice in visible)
             {
                 var btn = Instantiate(choiceButtonPrefab, choiceContainer);
                 btn.GetComponentInChildren<TMP_Text>().text =
-                    LsdeUtils.GetLocalizedText(choice.DialogueText) ?? choice.Label ?? "";
+                    LsdeUtils.GetLocalizedText(choice.Text) ?? choice.Label ?? "";
 
                 var uuid = choice.Uuid;
                 btn.GetComponent<Button>().onClick.AddListener(() => {
@@ -259,7 +259,7 @@ void UDialogueSubsystem::RegisterHandlers()
 {
     // ── DIALOG ────────────────────────────────────────────────
     Engine.onDialog([this](auto* scene, const auto* block, auto* ctx, auto next) -> lsde::CleanupFn {
-        auto localized = lsde::LsdeUtils::GetLocalizedText(block->dialogueText);
+        auto localized = lsde::LsdeUtils::GetLocalizedText(block->text);
         auto* ch = ctx->character();
 
         if (ch) ctx->resolveCharacterPort(ch->uuid);
@@ -281,11 +281,11 @@ void UDialogueSubsystem::RegisterHandlers()
     // PendingChoiceCtx is valid only during the current block — the engine
     // invalidates it once the cleanup runs or the scene advances.
     Engine.onChoice([this](auto* scene, const auto* block, auto* ctx, auto next) -> lsde::CleanupFn {
-        const auto& choices = ctx->choices();
+        const auto& choices = ctx->options();
 
         for (const auto& c : choices) {
             if (!c.visible.has_value() || c.visible.value()) {
-                auto text = lsde::LsdeUtils::GetLocalizedText(c.dialogueText);
+                auto text = lsde::LsdeUtils::GetLocalizedText(c.text);
                 ChoiceWidget->AddOption(
                     FString(UTF8_TO_TCHAR(c.uuid.c_str())),
                     FString(UTF8_TO_TCHAR(text.value_or("").c_str())));
@@ -358,7 +358,7 @@ var _pending_next: Callable
 
 func _ready() -> void:
     var json = JSON.parse_string(
-        FileAccess.open("res://data/blueprint.json", FileAccess.READ).get_as_text())
+        FileAccess.open("res://data/blueprints.json", FileAccess.READ).get_as_text())
     _engine = LsdeDialogueEngine.new()
     _engine.init({"data": json})
     _engine.set_locale("en")
@@ -373,7 +373,7 @@ func _register_handlers() -> void:
         var ctx = args["context"]
         var next_fn = args["next"]
         var ch = ctx.character
-        var text = LsdeUtils.get_localized_text(block.get("dialogueText"))
+        var text = LsdeUtils.get_localized_text(block.get("text"))
 
         if ch:
             ctx.resolve_character_port(ch.get("uuid", ""))
@@ -393,7 +393,7 @@ func _register_handlers() -> void:
     _engine.on_choice(func(args):
         var ctx = args["context"]
         var next_fn = args["next"]
-        var choices = ctx.choices
+        var choices = ctx.options
 
         var visible: Array = []
         for c in choices:
@@ -402,7 +402,7 @@ func _register_handlers() -> void:
 
         for c in visible:
             var btn = Button.new()
-            var label = LsdeUtils.get_localized_text(c.get("dialogueText"))
+            var label = LsdeUtils.get_localized_text(c.get("text"))
             btn.text = label if label else c.get("label", "")
             btn.pressed.connect(func():
                 ctx.select_choice(c["uuid"])

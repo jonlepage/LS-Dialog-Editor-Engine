@@ -1,231 +1,265 @@
-// JSON loader implementation for LSDE blueprints using nlohmann/json.
-// Optional — only compiled when LSDE_JSON_LOADER is enabled.
+// LSDE Dialog Engine — Optional JSON loader (nlohmann/json)
+//
+// The core library is stdlib-only; this file is the one place nlohmann/json appears, and a game
+// that already has a parser fills the structs itself and never links it.
 
-#include <lsde/json_loader.h>
+#include "lsde/json_loader.h"
+
 #include <fstream>
-#include <memory>
+#include <sstream>
 
 namespace lsde {
 
-// ─── Internal helpers ───────────────────────────────────────────────────────
+namespace {
 
-static PropertyValue parsePropertyValue(const nlohmann::json& j) {
+/// Read an optional string field, treating an explicit null as absent.
+std::optional<std::string> optString(const nlohmann::json& j, const char* key) {
+    auto it = j.find(key);
+    if (it == j.end() || it->is_null()) return std::nullopt;
+    return it->get<std::string>();
+}
+
+std::optional<double> optNumber(const nlohmann::json& j, const char* key) {
+    auto it = j.find(key);
+    if (it == j.end() || it->is_null()) return std::nullopt;
+    return it->get<double>();
+}
+
+std::string str(const nlohmann::json& j, const char* key, const std::string& fallback = "") {
+    auto it = j.find(key);
+    if (it == j.end() || it->is_null()) return fallback;
+    return it->get<std::string>();
+}
+
+TextByLocale readText(const nlohmann::json& j, const char* key) {
+    TextByLocale text;
+    auto it = j.find(key);
+    if (it == j.end() || !it->is_object()) return text;
+    for (auto entry = it->begin(); entry != it->end(); ++entry) {
+        if (entry.value().is_string()) text[entry.key()] = entry.value().get<std::string>();
+    }
+    return text;
+}
+
+PropertyBag readBag(const nlohmann::json& j, const char* key) {
+    PropertyBag bag;
+    auto it = j.find(key);
+    if (it == j.end() || !it->is_object()) return bag;
+    for (auto entry = it->begin(); entry != it->end(); ++entry) {
+        bag[entry.key()] = parsePropertyValue(entry.value());
+    }
+    return bag;
+}
+
+template <typename T>
+std::vector<T> readList(const nlohmann::json& j, const char* key) {
+    std::vector<T> list;
+    auto it = j.find(key);
+    if (it == j.end() || !it->is_array()) return list;
+    for (const auto& item : *it) list.push_back(item.get<T>());
+    return list;
+}
+
+} // namespace
+
+PropertyValue parsePropertyValue(const nlohmann::json& j) {
     if (j.is_boolean()) return j.get<bool>();
     if (j.is_number()) return j.get<double>();
+    if (j.is_array()) {
+        // waitForBlocks is the one native holding a LIST rather than a scalar.
+        std::vector<std::string> items;
+        for (const auto& item : j) {
+            if (item.is_string()) items.push_back(item.get<std::string>());
+        }
+        return items;
+    }
     if (j.is_string()) return j.get<std::string>();
     return std::string{};
 }
 
-static BlockType parseBlockType(const std::string& s) {
-    if (s == "DIALOG") return BlockType::Dialog;
-    if (s == "CHOICE") return BlockType::Choice;
-    if (s == "CONDITION") return BlockType::Condition;
-    if (s == "ACTION") return BlockType::Action;
-    return BlockType::Note;
+// ─── Header tables ───────────────────────────────────────────────────────────
+
+void from_json(const nlohmann::json& j, Generator& v) {
+    v.app = str(j, "app");
+    v.version = str(j, "version");
 }
 
-static void parseBaseFields(const nlohmann::json& j, BlueprintBlock& v) {
-    j.at("uuid").get_to(v.uuid);
-    v.type = parseBlockType(j.at("type").get<std::string>());
-    if (j.contains("label") && !j["label"].is_null()) v.label = j["label"].get<std::string>();
-    if (j.contains("parentLabels")) v.parentLabels = j["parentLabels"].get<std::vector<std::string>>();
-    if (j.contains("properties")) v.properties = j["properties"].get<std::vector<BlockProperty>>();
-    if (j.contains("nativeProperties") && !j["nativeProperties"].is_null())
-        v.nativeProperties = j["nativeProperties"].get<NativeProperties>();
-    if (j.contains("metadata") && !j["metadata"].is_null())
-        v.metadata = j["metadata"].get<BlockMetadata>();
-    if (j.contains("isStartBlock") && !j["isStartBlock"].is_null())
-        v.isStartBlock = j["isStartBlock"].get<bool>();
+void from_json(const nlohmann::json& j, DictionaryDefinition& v) {
+    v.id = str(j, "id");
+    v.valueType = str(j, "valueType");
+    v.entries = readList<std::string>(j, "entries");
 }
 
-static std::shared_ptr<BlueprintBlock> parseBlock(const nlohmann::json& j) {
-    auto typeStr = j.at("type").get<std::string>();
-    auto blockType = parseBlockType(typeStr);
+void from_json(const nlohmann::json& j, FunctionParameter& v) {
+    v.name = str(j, "name");
+    v.type = str(j, "type");
+    v.dictionary = optString(j, "dictionary");
+}
 
-    switch (blockType) {
-        case BlockType::Dialog: {
-            auto b = std::make_shared<DialogBlock>();
-            parseBaseFields(j, *b);
-            if (j.contains("structureKey") && !j["structureKey"].is_null()) b->structureKey = j["structureKey"].get<std::string>();
-            if (j.contains("content") && !j["content"].is_null()) b->content = j["content"].get<std::string>();
-            if (j.contains("dialogueText") && j["dialogueText"].is_object()) {
-                for (auto& [k, val] : j["dialogueText"].items()) b->dialogueText[k] = val.get<std::string>();
-            }
-            return b;
-        }
-        case BlockType::Choice: {
-            auto b = std::make_shared<ChoiceBlock>();
-            parseBaseFields(j, *b);
-            if (j.contains("choices")) b->choices = j["choices"].get<std::vector<ChoiceItem>>();
-            if (j.contains("note") && !j["note"].is_null()) b->note = j["note"].get<std::string>();
-            return b;
-        }
-        case BlockType::Condition: {
-            auto b = std::make_shared<ConditionBlock>();
-            parseBaseFields(j, *b);
-            if (j.contains("conditions") && j["conditions"].is_array()) {
-                for (const auto& group : j["conditions"]) {
-                    b->conditions.push_back(group.get<std::vector<ExportCondition>>());
-                }
-            }
-            if (j.contains("note") && !j["note"].is_null()) b->note = j["note"].get<std::string>();
-            return b;
-        }
-        case BlockType::Action: {
-            auto b = std::make_shared<ActionBlock>();
-            parseBaseFields(j, *b);
-            if (j.contains("actions")) b->actions = j["actions"].get<std::vector<ExportAction>>();
-            if (j.contains("note") && !j["note"].is_null()) b->note = j["note"].get<std::string>();
-            return b;
-        }
-        default: {
-            auto b = std::make_shared<NoteBlock>();
-            parseBaseFields(j, *b);
-            return b;
-        }
+void from_json(const nlohmann::json& j, FunctionDefinition& v) {
+    v.id = str(j, "id");
+    auto params = j.find("params");
+    if (params != j.end() && params->is_array()) {
+        for (const auto& item : *params) v.params.push_back(item.get<FunctionParameter>());
     }
 }
 
-// ─── from_json implementations ──────────────────────────────────────────────
-
-void from_json(const nlohmann::json& j, BlueprintConnection& v) {
-    j.at("id").get_to(v.id);
-    j.at("fromId").get_to(v.fromId);
-    j.at("toId").get_to(v.toId);
-    j.at("fromPort").get_to(v.fromPort);
-    j.at("toPort").get_to(v.toPort);
-    if (j.contains("fromPortIndex") && !j["fromPortIndex"].is_null())
-        v.fromPortIndex = j["fromPortIndex"].get<int>();
+void from_json(const nlohmann::json& j, Card& v) {
+    v.id = str(j, "id");
+    v.name = str(j, "name");
+    v.role = str(j, "role");
 }
 
-void from_json(const nlohmann::json& j, BlockProperty& v) {
-    j.at("key").get_to(v.key);
-    v.value = parsePropertyValue(j.at("value"));
+// ─── Block parts ─────────────────────────────────────────────────────────────
+
+void from_json(const nlohmann::json& j, Link& v) {
+    v.port = str(j, "port");
+    v.to = str(j, "to");
+    v.toPort = str(j, "toPort", "in");
 }
 
-void from_json(const nlohmann::json& j, ExportCondition& v) {
-    j.at("uuid").get_to(v.uuid);
-    j.at("key").get_to(v.key);
-    if (j.contains("chain") && !j["chain"].is_null()) v.chain = j["chain"].get<std::string>();
-    if (j.contains("operator")) j.at("operator").get_to(v.op);
-    if (j.contains("value")) j.at("value").get_to(v.value);
+void from_json(const nlohmann::json& j, ActionCall& v) {
+    v.fn = str(j, "fn");
+    v.args = readBag(j, "args");
 }
 
-void from_json(const nlohmann::json& j, ExportAction& v) {
-    j.at("uuid").get_to(v.uuid);
-    if (j.contains("signatureUuid") && !j["signatureUuid"].is_null()) v.signatureUuid = j["signatureUuid"].get<std::string>();
-    j.at("actionId").get_to(v.actionId);
-    if (j.contains("params") && j["params"].is_array()) {
-        for (const auto& p : j["params"]) v.params.push_back(parsePropertyValue(p));
+void from_json(const nlohmann::json& j, ConditionTest& v) {
+    v.dict = str(j, "dict");
+    v.entry = str(j, "entry");
+    v.op = str(j, "op");
+    auto value = j.find("value");
+    if (value != j.end()) v.value = parsePropertyValue(*value);
+    v.join = optString(j, "join");
+}
+
+void from_json(const nlohmann::json& j, ConditionCase& v) {
+    v.port = str(j, "port");
+    // Absent `when` means always true — that is how "always" is written in v2, never by an empty
+    // list, so the difference between absent and empty is kept here.
+    auto when = j.find("when");
+    if (when != j.end() && when->is_array()) {
+        std::vector<ConditionTest> tests;
+        for (const auto& item : *when) tests.push_back(item.get<ConditionTest>());
+        v.when = std::move(tests);
     }
 }
 
-void from_json(const nlohmann::json& j, ChoiceItem& v) {
-    j.at("uuid").get_to(v.uuid);
-    if (j.contains("structureKey")) j.at("structureKey").get_to(v.structureKey);
-    if (j.contains("label") && !j["label"].is_null()) v.label = j["label"].get<std::string>();
-    if (j.contains("dialogueText") && j["dialogueText"].is_object()) {
-        for (auto& [k, val] : j["dialogueText"].items()) v.dialogueText[k] = val.get<std::string>();
+void from_json(const nlohmann::json& j, Option& v) {
+    v.id = str(j, "id");
+    v.key = str(j, "key");
+    v.text = readText(j, "text");
+    auto when = j.find("when");
+    if (when != j.end() && when->is_array()) {
+        std::vector<ConditionTest> tests;
+        for (const auto& item : *when) tests.push_back(item.get<ConditionTest>());
+        v.when = std::move(tests);
     }
-    if (j.contains("visibilityConditions") && j["visibilityConditions"].is_array()) {
-        v.visibilityConditions = j["visibilityConditions"].get<std::vector<ExportCondition>>();
+}
+
+void from_json(const nlohmann::json& j, BlueprintBlock& v) {
+    v.id = str(j, "id");
+    v.key = str(j, "key");
+    v.label = optString(j, "label");
+    v.parentLabels = readList<std::string>(j, "parentLabels");
+    v.type = str(j, "type");
+    v.actors = readList<std::string>(j, "actors");
+    v.emotion = optString(j, "emotion");
+    v.intensity = optNumber(j, "intensity");
+    v.text = readText(j, "text");
+    v.body = optString(j, "body");
+    v.note = optString(j, "note");
+    v.props = readBag(j, "props");
+
+    auto calls = j.find("calls");
+    if (calls != j.end() && calls->is_array()) {
+        for (const auto& item : *calls) v.calls.push_back(item.get<ActionCall>());
+    }
+
+    auto cases = j.find("cases");
+    if (cases != j.end() && cases->is_array()) {
+        for (const auto& item : *cases) v.cases.push_back(item.get<ConditionCase>());
+    }
+
+    auto options = j.find("options");
+    if (options != j.end() && options->is_array()) {
+        for (const auto& item : *options) v.options.push_back(item.get<Option>());
+    }
+
+    auto next = j.find("next");
+    if (next != j.end() && next->is_array()) {
+        for (const auto& item : *next) v.next.push_back(item.get<Link>());
     }
 }
 
-void from_json(const nlohmann::json& j, NativeProperties& v) {
-    if (j.contains("isAsync") && !j["isAsync"].is_null()) v.isAsync = j["isAsync"].get<bool>();
-    if (j.contains("delay") && !j["delay"].is_null()) v.delay = j["delay"].get<double>();
-    if (j.contains("timeout") && !j["timeout"].is_null()) v.timeout = j["timeout"].get<double>();
-    if (j.contains("debug") && !j["debug"].is_null()) v.debug = j["debug"].get<bool>();
-    if (j.contains("portPerCharacter") && !j["portPerCharacter"].is_null()) v.portPerCharacter = j["portPerCharacter"].get<bool>();
-    if (j.contains("skipIfMissingActor") && !j["skipIfMissingActor"].is_null()) v.skipIfMissingActor = j["skipIfMissingActor"].get<bool>();
-    if (j.contains("waitForBlocks") && !j["waitForBlocks"].is_null()) v.waitForBlocks = j["waitForBlocks"].get<std::vector<std::string>>();
-    if (j.contains("waitInput") && !j["waitInput"].is_null()) v.waitInput = j["waitInput"].get<bool>();
-    if (j.contains("enableDispatcher") && !j["enableDispatcher"].is_null()) v.enableDispatcher = j["enableDispatcher"].get<bool>();
-}
-
-void from_json(const nlohmann::json& j, BlockCharacter& v) {
-    if (j.contains("uuid") && !j["uuid"].is_null()) j["uuid"].get_to(v.uuid);
-    if (j.contains("id") && !j["id"].is_null()) j["id"].get_to(v.id);
-    if (j.contains("name") && !j["name"].is_null()) j["name"].get_to(v.name);
-    if (j.contains("emotion") && !j["emotion"].is_null()) v.emotion = j["emotion"].get<std::string>();
-    if (j.contains("emotionIntensity") && !j["emotionIntensity"].is_null()) v.emotionIntensity = j["emotionIntensity"].get<double>();
-}
-
-void from_json(const nlohmann::json& j, BlockScreenshot& v) {
-    j.at("src").get_to(v.src);
-    if (j.contains("note") && !j["note"].is_null()) v.note = j["note"].get<std::string>();
-}
-
-void from_json(const nlohmann::json& j, BlockMetadata& v) {
-    if (j.contains("color") && !j["color"].is_null()) v.color = j["color"].get<std::string>();
-    if (j.contains("comments") && !j["comments"].is_null()) v.comments = j["comments"].get<std::string>();
-    if (j.contains("tags")) v.tags = j["tags"].get<std::vector<std::string>>();
-    if (j.contains("screenShots")) v.screenShots = j["screenShots"].get<std::vector<BlockScreenshot>>();
-    if (j.contains("characters")) v.characters = j["characters"].get<std::vector<BlockCharacter>>();
-}
+// ─── Scene and export ────────────────────────────────────────────────────────
 
 void from_json(const nlohmann::json& j, BlueprintScene& v) {
-    j.at("uuid").get_to(v.uuid);
-    j.at("label").get_to(v.label);
-    if (j.contains("note") && !j["note"].is_null()) v.note = j["note"].get<std::string>();
-    if (j.contains("entryBlockId") && !j["entryBlockId"].is_null()) v.entryBlockId = j["entryBlockId"].get<std::string>();
-    if (j.contains("date")) j.at("date").get_to(v.date);
-    for (const auto& blockJson : j.at("blocks")) {
-        v.blocks.push_back(parseBlock(blockJson));
+    v.scene = str(j, "scene");
+    v.id = str(j, "id");
+    v.label = optString(j, "label");
+    v.start = optString(j, "start");
+
+    auto blocks = j.find("blocks");
+    if (blocks != j.end() && blocks->is_array()) {
+        for (const auto& item : *blocks) v.blocks.push_back(item.get<BlueprintBlock>());
     }
-    v.connections = j.at("connections").get<std::vector<BlueprintConnection>>();
-}
-
-void from_json(const nlohmann::json& j, DictionaryRow& v) {
-    j.at("key").get_to(v.key);
-}
-
-void from_json(const nlohmann::json& j, LsdeDictionary& v) {
-    j.at("uuid").get_to(v.uuid);
-    j.at("id").get_to(v.id);
-    if (j.contains("rows")) v.rows = j["rows"].get<std::vector<DictionaryRow>>();
-}
-
-void from_json(const nlohmann::json& j, EnumOption& v) {
-    j.at("id").get_to(v.id);
-    if (j.contains("label") && !j["label"].is_null()) v.label = j["label"].get<std::string>();
-}
-
-void from_json(const nlohmann::json& j, SignatureParam& v) {
-    if (j.contains("label") && !j["label"].is_null()) v.label = j["label"].get<std::string>();
-    if (j.contains("type")) j.at("type").get_to(v.type);
-    if (j.contains("dictionaryGroupUuid") && !j["dictionaryGroupUuid"].is_null())
-        v.dictionaryGroupUuid = j["dictionaryGroupUuid"].get<std::string>();
-    if (j.contains("enumOptions")) v.enumOptions = j["enumOptions"].get<std::vector<EnumOption>>();
-}
-
-void from_json(const nlohmann::json& j, ActionSignature& v) {
-    j.at("uuid").get_to(v.uuid);
-    j.at("id").get_to(v.id);
-    if (j.contains("params")) v.params = j["params"].get<std::vector<SignatureParam>>();
 }
 
 void from_json(const nlohmann::json& j, BlueprintExport& v) {
-    if (j.contains("version")) j.at("version").get_to(v.version);
-    if (j.contains("exportDate")) j.at("exportDate").get_to(v.exportDate);
-    if (j.contains("projectName") && !j["projectName"].is_null()) v.projectName = j["projectName"].get<std::string>();
-    if (j.contains("primaryLanguage") && !j["primaryLanguage"].is_null()) v.primaryLanguage = j["primaryLanguage"].get<std::string>();
-    if (j.contains("locales")) v.locales = j["locales"].get<std::vector<std::string>>();
-    if (j.contains("dictionaries")) v.dictionaries = j["dictionaries"].get<std::vector<LsdeDictionary>>();
-    if (j.contains("signatures")) v.signatures = j["signatures"].get<std::vector<ActionSignature>>();
-    v.scenes = j.at("scenes").get<std::vector<BlueprintScene>>();
+    v.format = str(j, "format");
+
+    // A v1 payload wrote "version": "1.0.0", a string. Reading it as 0 rather than throwing keeps
+    // the parse alive long enough for the validator to refuse the file BY NAME — refusing a
+    // payload is the loader's job, not the parser's.
+    auto version = j.find("version");
+    if (version != j.end()) {
+        if (version->is_number()) v.version = version->get<int>();
+        else v.version = 0;
+    }
+
+    auto generator = j.find("generator");
+    if (generator != j.end() && generator->is_object()) v.generator = generator->get<Generator>();
+
+    v.exportedAt = str(j, "exportedAt");
+    v.project = str(j, "project");
+    v.locales = readList<std::string>(j, "locales");
+    v.referenceLocale = str(j, "referenceLocale");
+
+    auto dictionaries = j.find("dictionaries");
+    if (dictionaries != j.end() && dictionaries->is_array()) {
+        for (const auto& item : *dictionaries) v.dictionaries.push_back(item.get<DictionaryDefinition>());
+    }
+
+    auto functions = j.find("functions");
+    if (functions != j.end() && functions->is_array()) {
+        for (const auto& item : *functions) v.functions.push_back(item.get<FunctionDefinition>());
+    }
+
+    auto cards = j.find("cards");
+    if (cards != j.end() && cards->is_array()) {
+        for (const auto& item : *cards) v.cards.push_back(item.get<Card>());
+    }
+
+    auto scenes = j.find("scenes");
+    if (scenes != j.end() && scenes->is_array()) {
+        for (const auto& item : *scenes) v.scenes.push_back(item.get<BlueprintScene>());
+    }
 }
 
-// ─── LsdeJson public API ────────────────────────────────────────────────────
+// ─── LsdeJson ────────────────────────────────────────────────────────────────
 
 BlueprintExport LsdeJson::parse(const std::string& json) {
     return nlohmann::json::parse(json).get<BlueprintExport>();
 }
 
 BlueprintExport LsdeJson::parseFile(const std::string& path) {
-    std::ifstream f(path);
-    return nlohmann::json::parse(f).get<BlueprintExport>();
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        throw std::runtime_error("Cannot open blueprint file: " + path);
+    }
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    return parse(buffer.str());
 }
 
 } // namespace lsde

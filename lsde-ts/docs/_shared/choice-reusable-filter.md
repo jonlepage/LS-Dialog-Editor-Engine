@@ -1,79 +1,65 @@
 ::: code-group
 ```ts [TypeScript]
-// One callback handles both choice visibility AND condition block pre-evaluation.
-// choice: conditions are resolved internally — you only evaluate game-state conditions.
-engine.onResolveCondition((cond) =>
-  gameState.check(cond.key, cond.operator, cond.value)
-);
+// ONE evaluator answers everything about game state: option visibility AND condition cases.
+// A test on the reserved `choice` dictionary never reaches it — the engine answers those from the
+// history it kept during the scene.
+engine.onResolveCondition((test) => game.evaluate(test.dict, test.entry, test.op, test.value));
 
-// onCondition receives pre-evaluated conditionGroups — just route the result.
-// onCondition is optional when onResolveCondition is installed.
+// onCondition is now optional: the engine already knows which port to take.
+// Keep it to log what matched, or to override with a PORT NAME.
 engine.onCondition(({ block, context, next }) => {
-  const { conditionGroups } = context;
-  const isDispatcher = !!block.nativeProperties?.enableDispatcher;
-
-  const matched = conditionGroups
-    .filter((g) => g.result)
-    .map((g) => g.portIndex);
-
-  const result = isDispatcher ? matched : (matched[0] ?? -1);
-  context.resolve(result);
+  const matched = context.cases.filter((c) => c.result).map((c) => c.port);
+  game.log(`${block.id} → ${matched[0] ?? 'default'}`);
   next();
 });
 ```
-```csharp [C# — Unity]
-// One callback handles both choice visibility AND condition block pre-evaluation.
-engine.OnResolveCondition(cond =>
-    GameState.Instance.Evaluate(cond.Key, cond.Operator, cond.Value));
+```csharp [C#]
+engine.OnResolveCondition(test => Game.Evaluate(test.Dict, test.Entry, test.Op, test.Value));
 
-// onCondition receives pre-evaluated ConditionGroups — just route the result.
 engine.OnCondition(args => {
-    var groups = args.Context.ConditionGroups!;
-    var isDispatcher = args.Block.NativeProperties?.EnableDispatcher == true;
-
-    var matched = groups.Where(g => g.Result == true).Select(g => g.PortIndex).ToList();
-    object result = isDispatcher ? (object)matched : (object)(matched.Count > 0 ? matched[0] : -1);
-    args.Context.Resolve(result);
+    var matched = args.Context.Cases
+        .Where(c => c.Result == true)
+        .Select(c => c.Port)
+        .FirstOrDefault() ?? Ports.Default;
+    Game.Log($"{args.Block.Id} → {matched}");
     args.Next();
     return null;
 });
 ```
-```cpp [C++ — Unreal]
-// One callback handles both choice visibility AND condition block pre-evaluation.
-engine.onResolveCondition([this](const ExportCondition& cond) {
-    return GetGameState()->Evaluate(cond.key, cond.op, cond.value);
+```cpp [C++]
+engine.onResolveCondition([&game](const lsde::ConditionTest& test) {
+    return game.evaluate(test.dict, test.entry, test.op, test.value);
 });
 
-// onCondition receives auto-resolved result — just call next().
-// The engine pre-evaluates and routes automatically.
-engine.onCondition([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
-    // Result is already pre-resolved by the engine.
+engine.onCondition([&game](auto*, auto* block, auto* ctx, auto next) -> lsde::CleanupFn {
+    for (const auto& c : ctx->cases()) {
+        if (c.result.value_or(false)) { game.log(block->id + " -> " + c.port); break; }
+    }
     next();
     return {};
 });
 ```
-```gdscript [GDScript — Godot]
-# One callback handles both choice visibility AND condition block pre-evaluation.
-engine.on_resolve_condition(func(cond):
-    return GameState.evaluate(cond.get("key"), cond.get("operator"), cond.get("value"))
-)
+```gdscript [GDScript]
+engine.on_resolve_condition(func(test: Dictionary) -> bool:
+    return game.evaluate(test["dict"], test["entry"], test["op"], test["value"]))
 
-# on_condition receives pre-evaluated condition_groups — just route the result.
 engine.on_condition(func(args):
-    var ctx = args["context"]
-    var groups = ctx.condition_groups
-    var np = args["block"].get("nativeProperties")
-    var is_dispatcher = np is Dictionary and np.get("enableDispatcher", false)
-
-    var matched = []
-    for g in groups:
-        if g.get("result", false):
-            matched.append(g.get("port_index", 0))
-
-    var result = matched if is_dispatcher else (matched[0] if matched.size() > 0 else -1)
-    ctx.resolve(result)
+    for c in args["context"].cases:
+        if c["result"]:
+            game.log("%s -> %s" % [args["block"]["id"], c["port"]])
+            break
     args["next"].call()
     return Callable()
 )
 ```
+:::
+
+::: warning One resolver, two jobs — but not one answer
+The same callback feeds option visibility and condition routing, so you write your game-state
+lookup once.
+
+Inside, the engine keeps them apart on purpose. Routing has to pick a branch, so a question it
+cannot answer becomes `false` and the flow takes `default`. An option has no such obligation:
+saying `false` about a question nobody could answer would **hide an answer from the player**, so
+`visible` stays `undefined` instead.
 :::

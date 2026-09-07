@@ -11,7 +11,7 @@ signal scene_exited(handle)
 var _scene_graph: LsdeGraph.SceneGraph
 var _global_registry: LsdeHandlerRegistry
 var _scene_registry: LsdeHandlerRegistry.SceneRegistry
-var _callbacks: Dictionary  # {on_scene_started, on_scene_ended, get_resolve_character, get_condition_resolver, get_locale}
+var _callbacks: Dictionary  # {on_scene_started, on_scene_ended, get_resolve_character, get_condition_resolver, get_card}
 
 var _running: bool = false
 var _cancelled: bool = false
@@ -20,11 +20,18 @@ var _previous_block: Variant = null
 var _previous_character: Variant = null
 var _visited: Array = []  # ordered list of visited UUIDs
 var _visited_set: Dictionary = {}  # fast lookup
-var _choice_history: Dictionary = {}  # {block_uuid: [choice_uuid, ...]}
+var _choice_history: Dictionary = {}  # {block_id: [option_id, ...]}
 var _previous_cleanup: Callable
 var _async_tracks: Array = []
 var _next_track_id: int = 1
-var _pending_waits: Dictionary = {}  # {AsyncTrack: [block_uuids]}
+## Tracks - and the main flow - parked until a set of blocks has been visited.
+##
+## waitForBlocks is a property of the BLOCK: "the block waits for these before it advances", in the
+## format's own words. Only AsyncTrack read it, so a designer who set it on a block of the main flow
+## got nothing at all, silently, with the checkbox ticked in the editor.
+var _pending_waits: Dictionary = {}  # {AsyncTrack | LsdeSceneHandle: [block_ids]}
+## The main flow's own parked advance, when its block carries waitForBlocks.
+var _pending_advance: Callable
 ## Scene-level character resolver override.
 var _resolve_character: Callable
 
@@ -94,25 +101,25 @@ func on_enter(handler: Callable) -> void:
 func on_exit(handler: Callable) -> void:
 	_scene_registry.exit_handler = handler
 
-## Override a specific block by UUID. Takes highest priority over type handlers.
-func on_block(block_uuid: String, handler: Callable) -> void:
-	_scene_registry.set_block_handler(block_uuid, handler)
+## Override a specific block by id. Takes highest priority over type handlers.
+func on_block(block_id: String, handler: Callable) -> void:
+	_scene_registry.set_block_handler(block_id, handler)
 
-## Override a specific DIALOG block by UUID (type-safe convenience).
-func on_dialog_id(block_uuid: String, handler: Callable) -> void:
-	_scene_registry.set_block_handler(block_uuid, handler)
+## Override a specific DIALOG block by id (type-safe convenience).
+func on_dialog_id(block_id: String, handler: Callable) -> void:
+	_scene_registry.set_block_handler(block_id, handler)
 
-## Override a specific CHOICE block by UUID (type-safe convenience).
-func on_choice_id(block_uuid: String, handler: Callable) -> void:
-	_scene_registry.set_block_handler(block_uuid, handler)
+## Override a specific CHOICE block by id (type-safe convenience).
+func on_choice_id(block_id: String, handler: Callable) -> void:
+	_scene_registry.set_block_handler(block_id, handler)
 
-## Override a specific CONDITION block by UUID (type-safe convenience).
-func on_condition_id(block_uuid: String, handler: Callable) -> void:
-	_scene_registry.set_block_handler(block_uuid, handler)
+## Override a specific CONDITION block by id (type-safe convenience).
+func on_condition_id(block_id: String, handler: Callable) -> void:
+	_scene_registry.set_block_handler(block_id, handler)
 
-## Override a specific ACTION block by UUID (type-safe convenience).
-func on_action_id(block_uuid: String, handler: Callable) -> void:
-	_scene_registry.set_block_handler(block_uuid, handler)
+## Override a specific ACTION block by id (type-safe convenience).
+func on_action_id(block_id: String, handler: Callable) -> void:
+	_scene_registry.set_block_handler(block_id, handler)
 
 ## Override all DIALOG blocks for this scene (Tier 2).
 func on_dialog(handler: Callable) -> void:
@@ -163,8 +170,8 @@ func get_choice_history() -> Dictionary:
 	return _choice_history
 
 ## Get the choice(s) selected at a specific block. Returns null if block never visited as choice.
-func get_choice(block_uuid: String) -> Variant:
-	return _choice_history.get(block_uuid)
+func get_choice(block_id: String) -> Variant:
+	return _choice_history.get(block_id)
 
 ## Evaluate a condition. Handles choice: conditions via internal choice history.
 ## Returns false for non-choice conditions (the engine cannot evaluate game state).
@@ -194,18 +201,18 @@ func _add_visited(uuid: String) -> void:
 		_visited_set[uuid] = true
 	if _pending_waits.size() > 0:
 		var satisfied: Array = []
-		for track in _pending_waits:
-			var required: Array = _pending_waits[track]
+		for waiter in _pending_waits:
+			var required: Array = _pending_waits[waiter]
 			var all_visited: bool = true
 			for u in required:
 				if not _visited_set.has(u):
 					all_visited = false
 					break
 			if all_visited:
-				satisfied.append(track)
-		for track in satisfied:
-			_pending_waits.erase(track)
-			track.notify_wait_satisfied()
+				satisfied.append(waiter)
+		for waiter in satisfied:
+			_pending_waits.erase(waiter)
+			waiter.notify_wait_satisfied()
 
 ## Spawn a new async track in the flat pool. Returns the assigned track ID.
 func _spawn_async_track(start_block: Dictionary, parent_track_id: int) -> int:
@@ -224,10 +231,50 @@ func _cancel_track(track_id: int) -> void:
 			return
 
 ## Register a track as waiting for specific block UUIDs to be visited.
-func _register_wait_for_blocks(track: Variant, block_uuids: Array) -> void:
-	_pending_waits[track] = block_uuids
+## Park a track - or the main flow - until every listed block has been visited.
+func _register_wait_for_blocks(waiter: Variant, block_ids: Array) -> void:
+	_pending_waits[waiter] = block_ids
+
+
+## Called once every block this flow was waiting on has been visited.
+func notify_wait_satisfied() -> void:
+	if not _running or _cancelled or not _pending_advance.is_valid():
+		return
+	var advance: Callable = _pending_advance
+	_pending_advance = Callable()
+	advance.call()
 
 ## Check if a block UUID has been visited in this scene.
+## Run on_validate_next_block for a block, and on_invalidate_block when it refuses.
+##
+## Called by BOTH the main flow and every parallel track. It used to live inline in the main flow
+## only, so a game using this hook as a gate - "do not enter this block unless the player has the
+## keycard" - was bypassed the moment a branch was marked isAsync. Nothing in the hook's contract
+## said it only applied to the flow the player was watching, and nothing on screen would have told
+## anyone.
+##
+## Returns false when the caller must stop rather than dispatch the block.
+func _run_validation(block: Dictionary, from_block: Variant, from_character: Variant) -> bool:
+	if not _global_registry.validate_next_block_handler.is_valid():
+		return true
+
+	var from_ctx: Variant = {"character": from_character} if from_block != null else null
+	var result: Dictionary = _global_registry.validate_next_block_handler.call({
+		"nextBlock": block, "fromBlock": from_block,
+		"nextContext": {"character": _resolve_cards_for(block).get("character")},
+		"fromContext": from_ctx,
+		"port": null
+	})
+	if result.get("valid", true):
+		return true
+
+	if _global_registry.invalidate_block_handler.is_valid():
+		_global_registry.invalidate_block_handler.call({
+			"scene": self, "reason": result.get("reason", "validation_failed")
+		})
+	return false
+
+
 func _is_visited(uuid: String) -> bool:
 	return _visited_set.has(uuid)
 
@@ -241,10 +288,10 @@ func _create_block_context(block: Dictionary) -> Variant:
 	return _create_context(block)
 
 ## Record a choice selection in the history.
-func _record_choice(block_uuid: String, choice_uuid: String) -> void:
-	if not _choice_history.has(block_uuid):
-		_choice_history[block_uuid] = []
-	_choice_history[block_uuid].append(choice_uuid)
+func _record_choice(block_id: String, option_id: String) -> void:
+	if not _choice_history.has(block_id):
+		_choice_history[block_id] = []
+	_choice_history[block_id].append(option_id)
 
 ## Evaluate a condition with choice history support.
 func _evaluate_condition_for_block(condition: Dictionary, fallback_evaluator: Callable) -> bool:
@@ -264,32 +311,14 @@ func _process_block(starting_block: Dictionary) -> void:
 	var block: Dictionary = skipped
 
 	# Validate
-	if _global_registry.validate_next_block_handler.is_valid():
-		var next_chars: Array = []
-		var _meta: Variant = block.get("metadata")
-		if _meta is Dictionary:
-			next_chars = _meta.get("characters", [])
-		var resolver_fn: Callable = _get_resolve_character_fn()
-		var next_char: Variant = resolver_fn.call(next_chars) if resolver_fn.is_valid() else null
-		var from_ctx: Variant = {"character": _previous_character} if _previous_block != null else null
-		var result: Dictionary = _global_registry.validate_next_block_handler.call({
-			"nextBlock": block, "fromBlock": _previous_block,
-			"nextContext": {"character": next_char},
-			"fromContext": from_ctx,
-			"port": null
-		})
-		if not result.get("valid", true):
-			if _global_registry.invalidate_block_handler.is_valid():
-				_global_registry.invalidate_block_handler.call({
-					"scene": self, "reason": result.get("reason", "validation_failed")
-				})
-			return
+	if not _run_validation(block, _previous_block, _previous_character):
+		return
 
 	if _cancelled:
 		return
 
 	_current_block = block
-	_add_visited(block.get("uuid", ""))
+	_add_visited(block.get("id", ""))
 
 	# onBeforeBlock
 	if _global_registry.before_block_handler.is_valid():
@@ -304,7 +333,7 @@ func _process_block(starting_block: Dictionary) -> void:
 			_execute_block_handler(block)
 		_global_registry.before_block_handler.call({
 			"block": block, "scene": self,
-			"context": {"nativeProperties": block.get("nativeProperties")},
+			"context": {"nativeProperties": LsdeUtils.get_native_properties(block)},
 			"resolve": resolve_fn
 		})
 	else:
@@ -317,7 +346,7 @@ func _execute_block_handler(block: Dictionary) -> void:
 		return
 
 	var resolved: Dictionary = LsdeHandlerRegistry.resolve_handler(
-		block.get("type", ""), block.get("uuid", ""), _scene_registry, _global_registry)
+		block.get("type", ""), block.get("id", ""), _scene_registry, _global_registry)
 
 	var context: Variant = _create_context(block)
 	if context == null:
@@ -340,13 +369,30 @@ func _execute_block_handler(block: Dictionary) -> void:
 		if state[0]:  # next_called
 			return
 		state[0] = true
+
+		# waitForBlocks: park until every listed block has been visited. The main flow honours it
+		# exactly like a parallel track - this is the join half of the fork isAsync opens.
+		var wait_blocks: Array = LsdeUtils.get_native_properties(block).get("waitForBlocks", [])
+		if wait_blocks.size() > 0:
+			var all_visited: bool = true
+			for wait_id in wait_blocks:
+				if not _is_visited(wait_id):
+					all_visited = false
+					break
+			if not all_visited:
+				_pending_advance = func() -> void: _advance_to_next_block(block, context)
+				_register_wait_for_blocks(self, wait_blocks)
+				return
+
 		if state[1]:  # sync_phase
 			return
 		_advance_to_next_block(block, context)
 
 	var args: Dictionary = {"scene": self, "block": block, "context": context, "next": next_fn}
 
-	# Error boundary
+	# NOT an error boundary, unlike the other three runtimes: GDScript has no exceptions, so there
+	# is nothing here to catch and nothing that can escape. A script error pushes to the Godot log
+	# and the call returns null.
 	if scene_handler.is_valid():
 		scene_cleanup = scene_handler.call(args)
 		if not context.global_prevented and global_handler.is_valid():
@@ -356,8 +402,9 @@ func _execute_block_handler(block: Dictionary) -> void:
 
 	_previous_cleanup = _combine_cleanups(scene_cleanup, global_cleanup)
 
+	# Unless the block is parked on waitForBlocks: releasing it is notify_wait_satisfied's job.
 	state[1] = false  # sync_phase = false
-	if state[0]:  # next_called
+	if state[0] and not _pending_advance.is_valid():  # next_called
 		_advance_to_next_block(block, context)
 
 func _advance_to_next_block(block: Dictionary, context: Variant) -> void:
@@ -367,45 +414,43 @@ func _advance_to_next_block(block: Dictionary, context: Variant) -> void:
 	_previous_block = block
 	_previous_character = context.character if context != null else null
 
-	var connections: Array = _scene_graph.get_outgoing_connections(block.get("uuid", ""))
+	var links: Array = _scene_graph.get_outgoing_links(block.get("id", ""))
 
-	var input: Dictionary = {"block": block, "connections": connections}
+	var input: Dictionary = {"block": block, "links": links}
 	if context is LsdeBlockContext.ChoiceContext:
-		input["selectedChoiceUuid"] = context.selected_choice_uuid
+		input["selectedOptionId"] = context.selected_option_id
 	if context is LsdeBlockContext.ConditionContext:
-		input["conditionResult"] = context.condition_result
+		input["conditionPort"] = context.condition_port
 	if context is LsdeBlockContext.ActionContext:
 		input["actionRejected"] = context.action_rejected
 	if context is LsdeBlockContext.DialogContext:
-		input["characterPortIndex"] = context.character_port_index
+		input["actorPort"] = context.actor_port
 
-	var resolved_conns: Array = LsdePortResolver.resolve_port(input)
+	var resolved_links: Array = LsdePortResolver.resolve_port(input)
 
 	# Separate: first non-async = main, rest = async
-	var main_connection: Variant = null
-	var async_connections: Array = []
+	var main_link: Variant = null
+	var async_links: Array = []
 
-	for conn in resolved_conns:
-		var target_block: Variant = _scene_graph.get_block(conn.get("toId", ""))
+	for link in resolved_links:
+		var target_block: Variant = _scene_graph.get_block(link.get("to", ""))
 		if target_block == null:
 			continue
-		var np: Variant = target_block.get("nativeProperties")
-		var is_async: bool = np is Dictionary and np.get("isAsync", false)
-		if main_connection == null and not is_async:
-			main_connection = conn
+		if main_link == null and not _is_async_block(target_block):
+			main_link = link
 		else:
-			async_connections.append(conn)
+			async_links.append(link)
 
 
 	# Spawn async tracks
-	for conn in async_connections:
-		var target_block: Variant = _scene_graph.get_block(conn.get("toId", ""))
+	for link in async_links:
+		var target_block: Variant = _scene_graph.get_block(link.get("to", ""))
 		if target_block != null:
 			_spawn_async_track(target_block, -1)
 
 	# Continue main track
-	if main_connection != null:
-		var next_block: Variant = _scene_graph.get_block(main_connection.get("toId", ""))
+	if main_link != null:
+		var next_block: Variant = _scene_graph.get_block(main_link.get("to", ""))
 		if next_block != null:
 			var cleanup_to_run: Callable = _previous_cleanup
 			_previous_cleanup = Callable()
@@ -418,6 +463,7 @@ func _advance_to_next_block(block: Dictionary, context: Variant) -> void:
 
 func _end_scene() -> void:
 	_pending_waits.clear()
+	_pending_advance = Callable()
 	for track in _async_tracks:
 		track.cancel()
 	_async_tracks.clear()
@@ -432,38 +478,67 @@ func _end_scene() -> void:
 
 # ─── Choice history condition evaluation ──────────────────────────────────
 
-func _evaluate_condition_with_history(condition: Dictionary, fallback_evaluator: Callable) -> bool:
-	var key: String = condition.get("key", "")
-	if key.begins_with("choice:"):
-		var block_uuid: String = key.substr(7)
-		var history: Variant = _choice_history.get(block_uuid)
-		if history == null:
-			return condition.get("operator", "") == "!="
-		var includes: bool = history.has(condition.get("value", ""))
-		return not includes if condition.get("operator", "") == "!=" else includes
-	return fallback_evaluator.call(condition)
+## Answer a test, taking the reserved "choice" dictionary on ourselves.
+##
+## { dict: "choice", entry: "CHOICE-001", value: "C1" } asks whether the player picked C1 at
+## CHOICE-001 earlier IN THIS SCENE. The engine kept that history, so the question never reaches
+## the game: it would otherwise have to mirror a record the engine already holds, and the two
+## would drift. The memory starts and ends with the scene.
+##
+## A block that was never reached answers false for equals, and true for notEquals.
+func _evaluate_condition_with_history(test: Dictionary, fallback_evaluator: Callable) -> bool:
+	if test.get("dict", "") != LsdeTypes.DICT_CHOICE:
+		return fallback_evaluator.call(test)
 
-# ─── Choice visibility tagging ────────────────────────────────────────────
+	var negated: bool = test.get("op", "") == LsdeTypes.OP_NOT_EQUALS
+	var history: Variant = _choice_history.get(test.get("entry", ""))
+	if history == null:
+		return negated
 
-func _tag_choice_visibility(choices: Array, resolver: Callable) -> Array:
-	var result: Array = []
-	for choice in choices:
-		var tagged: Dictionary = choice.duplicate()
-		if not resolver.is_valid():
-			# No resolver → no visible tag (treat as visible by default)
-			result.append(tagged)
-			continue
-		var vis_conds: Array = choice.get("visibilityConditions", [])
-		if vis_conds.size() == 0:
-			tagged["visible"] = true
-		else:
-			tagged["visible"] = LsdeConditionEvaluator.evaluate_condition_chain(vis_conds, func(cond: Dictionary) -> bool:
-				if cond.get("key", "").begins_with("choice:"):
-					return _evaluate_condition_with_history(cond, func(_c: Dictionary) -> bool: return false)
-				return resolver.call(cond)
-			)
-		result.append(tagged)
-	return result
+	var picked: bool = history.has(test.get("value"))
+	return not picked if negated else picked
+
+## The evaluator that ROUTES a condition block. Always present.
+##
+## With no game resolver installed it still answers "choice" tests on its own, and says false to
+## anything about game state — a scene that only asks about its own past answers therefore plays
+## without a single line of game code, and one that asks about the world takes its default branch
+## rather than stalling.
+func _routing_evaluator() -> Callable:
+	var resolver: Callable = Callable()
+	if _callbacks.has("get_condition_resolver"):
+		resolver = _callbacks["get_condition_resolver"].call()
+
+	if not resolver.is_valid():
+		return func(test: Dictionary) -> bool:
+			if test.get("dict", "") != LsdeTypes.DICT_CHOICE:
+				return false
+			return _evaluate_condition_with_history(test, func(_t: Dictionary) -> bool: return false)
+
+	return func(test: Dictionary) -> bool:
+		return _evaluate_condition_with_history(test, resolver)
+
+## The evaluator that TAGS option visibility, or null when there is no game resolver.
+##
+## Routing and tagging cannot share one answer here. Routing has to pick a branch, so an
+## unanswerable test has to become false. An option has no such obligation: saying false about a
+## question nobody could answer would HIDE an answer from the player. Null says unknown, and a game
+## reading `visible != false` still offers it.
+func _visibility_evaluator() -> Variant:
+	var resolver: Callable = Callable()
+	if _callbacks.has("get_condition_resolver"):
+		resolver = _callbacks["get_condition_resolver"].call()
+	if not resolver.is_valid():
+		return null
+	return func(test: Dictionary) -> bool:
+		return _evaluate_condition_with_history(test, resolver)
+
+## Look up the cards a block cites, and let the game pick which actor is speaking.
+func _resolve_cards_for(block: Dictionary) -> Dictionary:
+	var lookup: Callable = func(_id: String) -> Variant: return null
+	if _callbacks.has("get_card"):
+		lookup = _callbacks["get_card"]
+	return LsdeBlockContext.resolve_cards(block, lookup, _get_resolve_character_fn())
 
 # ─── Scene lifecycle ──────────────────────────────────────────────────────
 
@@ -489,89 +564,87 @@ func _get_resolve_character_fn() -> Callable:
 		return _callbacks["get_resolve_character"].call()
 	return func(chars: Array) -> Variant: return chars[0] if chars.size() > 0 else null
 
+# Cards are resolved fresh every time, never cached. This runs for the main track AND for async
+# tracks (through _create_block_context), and a cache would leak the main track's actor into a
+# track released later by waitForBlocks.
 func _create_context(block: Dictionary) -> Variant:
-	# Character resolved fresh every time — no caching.
-	# A pre-resolve cache was removed because async tracks (spawned via waitForBlocks →
-	# notifyWaitSatisfied) consumed the main track's cached character, producing wrong results.
-	var characters: Array = []
-	var metadata: Variant = block.get("metadata")
-	if metadata is Dictionary:
-		characters = metadata.get("characters", [])
-	var resolver_fn: Callable = _get_resolve_character_fn()
-	var resolved_character: Variant = resolver_fn.call(characters) if resolver_fn.is_valid() else null
+	var cards: Dictionary = _resolve_cards_for(block)
 
 	match block.get("type", ""):
-		"DIALOG":
-			return LsdeBlockContext.create_dialog_context(block, resolved_character)
-		"CHOICE":
-			var resolver: Callable = Callable()
-			if _callbacks.has("get_condition_resolver"):
-				resolver = _callbacks["get_condition_resolver"].call()
-			var tagged_choices: Array = _tag_choice_visibility(block.get("choices", []), resolver)
-			var on_choice_selected: Callable = func(block_uuid: String, choice_uuid: String) -> void:
-				_record_choice(block_uuid, choice_uuid)
-			return LsdeBlockContext.create_choice_context(block, tagged_choices, resolved_character, on_choice_selected)
-		"CONDITION":
-			var resolver: Callable = Callable()
-			if _callbacks.has("get_condition_resolver"):
-				resolver = _callbacks["get_condition_resolver"].call()
-			if resolver.is_valid():
-				var raw_groups: Array = block.get("conditions", [])
-				# Unified evaluator: choice: conditions resolved internally via choice history,
-				# game-state conditions delegated to the on_resolve_condition callback.
-				var evaluate: Callable = func(cond: Dictionary) -> bool:
-					if cond.get("key", "").begins_with("choice:"):
-						return _evaluate_condition_with_history(cond, func(_c: Dictionary) -> bool: return false)
-					return resolver.call(cond)
-				var condition_groups: Array = []
-				for i in range(raw_groups.size()):
-					condition_groups.append({
-						"conditions": raw_groups[i],
-						"port_index": i,
-						"result": LsdeConditionEvaluator.evaluate_condition_chain(raw_groups[i], evaluate),
-					})
-				var ctx: LsdeBlockContext.ConditionContext = LsdeBlockContext.create_condition_context(resolved_character, condition_groups)
-				# Auto-resolve from pre-evaluated groups
-				var matched: Array = []
-				for g in condition_groups:
-					if g["result"]:
-						matched.append(g["port_index"])
-				var np: Variant = block.get("nativeProperties")
-				var is_dispatcher: bool = np is Dictionary and np.get("enableDispatcher", false)
-				ctx.condition_result = matched if is_dispatcher else (matched[0] if matched.size() > 0 else -1)
-				return ctx
-			# No resolver installed — raw groups without pre-evaluation
-			var raw_groups: Array = block.get("conditions", [])
-			var condition_groups: Array = []
-			for i in range(raw_groups.size()):
-				condition_groups.append({"conditions": raw_groups[i], "port_index": i})
-			return LsdeBlockContext.create_condition_context(resolved_character, condition_groups)
-		"ACTION":
-			return LsdeBlockContext.create_action_context(resolved_character)
+		LsdeTypes.BLOCK_DIALOG:
+			return LsdeBlockContext.DialogContext.new(block, cards)
+
+		LsdeTypes.BLOCK_CHOICE:
+			var options: Array = LsdeConditionEvaluator.tag_option_visibility(
+				block.get("options", []), _visibility_evaluator())
+			var on_choice_selected: Callable = func(block_id: String, option_id: String) -> void:
+				_record_choice(block_id, option_id)
+			return LsdeBlockContext.ChoiceContext.new(block, cards, options, on_choice_selected)
+
+		LsdeTypes.BLOCK_CONDITION:
+			var evaluate: Callable = _routing_evaluator()
+			var natives: Dictionary = LsdeUtils.get_native_properties(block)
+			var port_per_case: bool = natives.get("portPerCase", false) == true
+			var raw_cases: Array = block.get("cases", [])
+
+			# Every case is evaluated up front, so the handler is handed results rather than
+			# questions. With a resolver installed the engine already knows where to go, which is
+			# what makes on_condition optional: the handler becomes a log or override hook.
+			var cases: Array = []
+			for raw_case in raw_cases:
+				cases.append({
+					"port": raw_case.get("port", ""),
+					"when": raw_case.get("when"),
+					"result": LsdeConditionEvaluator.evaluate_condition_chain(raw_case.get("when"), evaluate),
+				})
+
+			# ONCE. The port is read off these same results rather than re-asking the game: each
+			# test reaches on_resolve_condition exactly one time, whatever the mode and whichever
+			# case matches.
+			var results: Array = []
+			for c in cases:
+				results.append(c["result"] == true)
+
+			var ctx := LsdeBlockContext.ConditionContext.new(block, cards, cases)
+			ctx.condition_port = LsdeConditionEvaluator.pick_port_from_results(
+				raw_cases, port_per_case, results)
+			return ctx
+
+		LsdeTypes.BLOCK_ACTION:
+			return LsdeBlockContext.ActionContext.new(block, cards)
+
 	return null
 
 ## Walk past NOTE blocks to the first block the engine actually dispatches.
 ##
 ## NOTE blocks are designer-only: they carry no handler and are never executed, so the
-## traversal steps over them and follows their first outgoing connection.
+## traversal steps over them and follows their first outgoing link.
 ##
-## Returns null when the walk runs out of connections — and also when it comes back to a
+## Returns null when the walk runs out of links — and also when it comes back to a
 ## NOTE it already stepped over. A designer can wire a NOTE into a loop, and following it
 ## recursively overflowed the stack instead of ending the flow.
 static func _skip_notes(block: Dictionary, scene_graph: LsdeGraph.SceneGraph) -> Variant:
 	var current: Variant = block
 	var seen: Dictionary = {}
 
-	while current != null and current.get("type", "") == "NOTE":
-		var uuid: String = current.get("uuid", "")
-		if seen.has(uuid):
+	while current != null and current.get("type", "") == LsdeTypes.BLOCK_NOTE:
+		var id: String = current.get("id", "")
+		if seen.has(id):
 			return null
-		seen[uuid] = true
+		seen[id] = true
 
-		var connections: Array = scene_graph.get_outgoing_connections(uuid)
-		current = scene_graph.get_block(connections[0].get("toId", "")) if connections.size() > 0 else null
+		var links: Array = scene_graph.get_outgoing_links(id)
+		current = scene_graph.get_block(links[0].get("to", "")) if links.size() > 0 else null
 
 	return current
+
+## Is this block marked to run on a parallel track?
+##
+## The natives live in `props` alongside the writer's own properties. Ids cannot collide — LSDE
+## refuses a project property that takes a native name — so this is a lookup, not a guess.
+static func _is_async_block(block: Dictionary) -> bool:
+	var props: Variant = block.get("props")
+	return props is Dictionary and props.get("isAsync") == true
 
 static func _safe_cleanup(v: Variant) -> Callable:
 	return v if v is Callable and v.is_valid() else Callable()
@@ -594,6 +667,9 @@ static func _combine_cleanups(a: Variant, b: Variant) -> Callable:
 class AsyncTrack extends RefCounted:
 	var _running: bool = true
 	var _current_block: Variant = null
+	## The block this track came from, for on_validate_next_block. Its own, not the main flow's.
+	var _previous_block: Variant = null
+	var _previous_character: Variant = null
 	var _previous_cleanup: Callable
 	var _pending_advance: Callable
 	var _child_track_ids: Array = []
@@ -603,7 +679,7 @@ class AsyncTrack extends RefCounted:
 	## ID of the parent track (-1 = spawned by main).
 	var parent_track_id: int
 	## UUID of the block that started this track.
-	var start_block_uuid: String
+	var start_block_id: String
 
 	var _start_block: Dictionary
 	var _scene_graph: LsdeGraph.SceneGraph
@@ -615,13 +691,13 @@ class AsyncTrack extends RefCounted:
 		_start_block = start_block
 		id = track_id
 		parent_track_id = parent_id
-		start_block_uuid = start_block.get("uuid", "")
+		start_block_id = start_block.get("id", "")
 
 	## Begin track execution. Must be called after the track is added to the pool.
 	func start() -> void:
-		var np: Variant = _start_block.get("nativeProperties")
-		if np is Dictionary:
-			var wait_blocks: Array = np.get("waitForBlocks", [])
+		var natives: Dictionary = LsdeUtils.get_native_properties(_start_block)
+		if true:
+			var wait_blocks: Array = natives.get("waitForBlocks", [])
 			if wait_blocks.size() > 0:
 				var all_visited: bool = true
 				for uuid in wait_blocks:
@@ -663,8 +739,8 @@ class AsyncTrack extends RefCounted:
 		return {
 			"id": id,
 			"parentTrackId": parent_track_id,
-			"startBlockUuid": start_block_uuid,
-			"currentBlockUuid": _current_block.get("uuid", "") if _current_block != null else "",
+			"startBlockUuid": start_block_id,
+			"currentBlockUuid": _current_block.get("id", "") if _current_block != null else "",
 			"running": _running
 		}
 
@@ -676,8 +752,13 @@ class AsyncTrack extends RefCounted:
 			_end_track()
 			return
 		var block: Dictionary = skipped
+
+		# The same gate the main flow goes through. A parallel track is still the game's dialogue.
+		if not _parent._run_validation(block, _previous_block, _previous_character):
+			return
+
 		_current_block = block
-		_parent._add_visited(block.get("uuid", ""))
+		_parent._add_visited(block.get("id", ""))
 
 		# Fire onBeforeBlock — same gate pattern as SceneHandleImpl._process_block
 		var registry: LsdeHandlerRegistry = _parent._get_global_registry()
@@ -690,7 +771,7 @@ class AsyncTrack extends RefCounted:
 				_execute_block_handler(block)
 			registry.before_block_handler.call({
 				"block": block, "scene": _parent,
-				"context": {"nativeProperties": block.get("nativeProperties")},
+				"context": {"nativeProperties": LsdeUtils.get_native_properties(block)},
 				"resolve": resolve_fn
 			})
 		else:
@@ -700,7 +781,7 @@ class AsyncTrack extends RefCounted:
 		if not _running:
 			return
 		var resolved: Dictionary = LsdeHandlerRegistry.resolve_handler(
-			block.get("type", ""), block.get("uuid", ""), _parent._get_scene_registry(), _parent._get_global_registry())
+			block.get("type", ""), block.get("id", ""), _parent._get_scene_registry(), _parent._get_global_registry())
 		var context: Variant = _parent._create_block_context(block)
 		if context == null:
 			_advance_to_next_block(block, null)
@@ -723,9 +804,9 @@ class AsyncTrack extends RefCounted:
 			state[0] = true
 
 			# waitForBlocks: defer advance until all required blocks are visited
-			var np: Variant = block.get("nativeProperties")
-			if np is Dictionary:
-				var wait_blocks: Array = np.get("waitForBlocks", [])
+			var natives: Dictionary = LsdeUtils.get_native_properties(block)
+			if true:
+				var wait_blocks: Array = natives.get("waitForBlocks", [])
 				if wait_blocks.size() > 0:
 					var all_visited: bool = true
 					for uuid in wait_blocks:
@@ -760,42 +841,43 @@ class AsyncTrack extends RefCounted:
 	func _advance_to_next_block(block: Dictionary, context: Variant) -> void:
 		if not _running:
 			return
-		var connections: Array = _scene_graph.get_outgoing_connections(block.get("uuid", ""))
-		var input: Dictionary = {"block": block, "connections": connections}
+
+		_previous_block = block
+		_previous_character = context.character if context != null else null
+		var links: Array = _scene_graph.get_outgoing_links(block.get("id", ""))
+		var input: Dictionary = {"block": block, "links": links}
 		if context is LsdeBlockContext.ChoiceContext:
-			input["selectedChoiceUuid"] = context.selected_choice_uuid
+			input["selectedOptionId"] = context.selected_option_id
 		if context is LsdeBlockContext.ConditionContext:
-			input["conditionResult"] = context.condition_result
+			input["conditionPort"] = context.condition_port
 		if context is LsdeBlockContext.ActionContext:
 			input["actionRejected"] = context.action_rejected
 		if context is LsdeBlockContext.DialogContext:
-			input["characterPortIndex"] = context.character_port_index
-		var resolved_conns: Array = LsdePortResolver.resolve_port(input)
+			input["actorPort"] = context.actor_port
+		var resolved_links: Array = LsdePortResolver.resolve_port(input)
 
 		# Separate main (first non-async) from async connections
-		var main_connection: Variant = null
-		var async_connections: Array = []
+		var main_link: Variant = null
+		var async_links: Array = []
 
-		for conn in resolved_conns:
-			var target_block: Variant = _scene_graph.get_block(conn.get("toId", ""))
+		for link in resolved_links:
+			var target_block: Variant = _scene_graph.get_block(link.get("to", ""))
 			if target_block == null:
 				continue
-			var tnp: Variant = target_block.get("nativeProperties")
-			var is_async: bool = tnp is Dictionary and tnp.get("isAsync", false)
-			if main_connection == null and not is_async:
-				main_connection = conn
+			if main_link == null and not LsdeSceneHandle._is_async_block(target_block):
+				main_link = link
 			else:
-				async_connections.append(conn)
+				async_links.append(link)
 
 		# Spawn sub-tracks
-		for conn in async_connections:
-			var target_block: Variant = _scene_graph.get_block(conn.get("toId", ""))
+		for link in async_links:
+			var target_block: Variant = _scene_graph.get_block(link.get("to", ""))
 			if target_block != null:
 				var track_id: int = _parent._spawn_async_track(target_block, self.id)
 				_child_track_ids.append(track_id)
 
-		if main_connection != null:
-			var next_block: Variant = _scene_graph.get_block(main_connection.get("toId", ""))
+		if main_link != null:
+			var next_block: Variant = _scene_graph.get_block(main_link.get("to", ""))
 			if next_block != null:
 				var cleanup_to_run: Callable = _previous_cleanup
 				_previous_cleanup = Callable()

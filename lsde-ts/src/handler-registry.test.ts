@@ -10,7 +10,7 @@ describe( 'resolveHandler', () => {
 	it( 'returns global handler when no scene registry', () => {
 		const global = new HandlerRegistry();
 		global.dialogHandler = noopDialog;
-		const result = resolveHandler( 'DIALOG', 'b1', null, global );
+		const result = resolveHandler( 'dialog', 'b1', null, global );
 		expect( result.sceneHandler ).toBeNull();
 		expect( result.globalHandler ).toBe( noopDialog );
 	} );
@@ -18,7 +18,7 @@ describe( 'resolveHandler', () => {
 	it( 'returns both null when no handlers registered', () => {
 		const global = new HandlerRegistry();
 		const scene = new SceneHandlerRegistry();
-		const result = resolveHandler( 'DIALOG', 'b1', scene, global );
+		const result = resolveHandler( 'dialog', 'b1', scene, global );
 		expect( result.sceneHandler ).toBeNull();
 		expect( result.globalHandler ).toBeNull();
 	} );
@@ -30,7 +30,7 @@ describe( 'resolveHandler', () => {
 		const sceneDialogHandler: DialogHandler = () => {};
 		scene.dialogHandler = sceneDialogHandler;
 
-		const result = resolveHandler( 'DIALOG', 'b1', scene, global );
+		const result = resolveHandler( 'dialog', 'b1', scene, global );
 		expect( result.sceneHandler ).toBe( sceneDialogHandler );
 		expect( result.globalHandler ).toBe( noopDialog );
 	} );
@@ -43,24 +43,31 @@ describe( 'resolveHandler', () => {
 		const blockHandler: BlockHandler<BlueprintBlock, BaseBlockContext> = () => {};
 		scene.setBlockHandler( 'b1', blockHandler );
 
-		const result = resolveHandler( 'DIALOG', 'b1', scene, global );
+		const result = resolveHandler( 'dialog', 'b1', scene, global );
 		expect( result.sceneHandler ).toBe( blockHandler );
 		expect( result.globalHandler ).toBe( noopDialog );
 	} );
 
-	it( 'onBlock for a different UUID does not match', () => {
+	it( 'onBlock for a different block id does not match', () => {
 		const global = new HandlerRegistry();
 		const scene = new SceneHandlerRegistry();
 		scene.setBlockHandler( 'b2', noop );
 
-		const result = resolveHandler( 'DIALOG', 'b1', scene, global );
+		const result = resolveHandler( 'dialog', 'b1', scene, global );
 		expect( result.sceneHandler ).toBeNull();
+	} );
+
+	it( 'returns null for a block type it does not know', () => {
+		// A v1 payload reaching this far routes to nothing rather than to the wrong handler.
+		const global = new HandlerRegistry();
+		global.dialogHandler = noopDialog;
+		expect( resolveHandler( 'DIALOG' as never, 'b1', null, global ).globalHandler ).toBeNull();
 	} );
 
 	it( 'returns null for NOTE type handlers', () => {
 		const global = new HandlerRegistry();
 		global.dialogHandler = noopDialog;
-		const result = resolveHandler( 'NOTE', 'b1', null, global );
+		const result = resolveHandler( 'note', 'b1', null, global );
 		expect( result.globalHandler ).toBeNull();
 	} );
 
@@ -70,9 +77,9 @@ describe( 'resolveHandler', () => {
 		global.conditionHandler = () => {};
 		global.actionHandler = () => {};
 
-		expect( resolveHandler( 'CHOICE', 'b1', null, global ).globalHandler ).toBe( global.choiceHandler );
-		expect( resolveHandler( 'CONDITION', 'b1', null, global ).globalHandler ).toBe( global.conditionHandler );
-		expect( resolveHandler( 'ACTION', 'b1', null, global ).globalHandler ).toBe( global.actionHandler );
+		expect( resolveHandler( 'choice', 'b1', null, global ).globalHandler ).toBe( global.choiceHandler );
+		expect( resolveHandler( 'condition', 'b1', null, global ).globalHandler ).toBe( global.conditionHandler );
+		expect( resolveHandler( 'action', 'b1', null, global ).globalHandler ).toBe( global.actionHandler );
 	} );
 
 } );

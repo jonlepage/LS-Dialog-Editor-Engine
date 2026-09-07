@@ -24,7 +24,7 @@ The engine exposes the following handlers:
 | [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | Override a specific CONDITION block by UUID (type-safe) |
 | [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | Override a specific ACTION block by UUID (type-safe) |
 | [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) | global | Unified condition resolver (choice visibility + condition pre-evaluation) |
-| ~~[`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter)~~ | global | _Deprecated — use `onResolveCondition` instead_ |
+| ~~[`onResolveCondition`](/api-ref/classes/DialogueEngine#setchoicefilter)~~ | global | _Deprecated — use `onResolveCondition` instead_ |
 
 `onDialog`, `onChoice`, and `onAction` are **required** — the engine validates their presence when `start()` is called and throws a descriptive error if any are missing. `onCondition` is **optional** when `onResolveCondition` is installed — the engine auto-routes from pre-evaluated condition groups.
 
@@ -48,7 +48,7 @@ When both tiers are present, both run in sequence — scene first, then global �
 
 ## Character Resolution
 
-Character resolution is optional. By registering an `onResolveCharacter` callback, the engine invokes it before every block that has characters in its `metadata.characters`. The callback receives the list of characters assigned to the block and returns the one that should be active — or `undefined` if none is available. The resolved character is then accessible via `context.character` in all handlers.
+Character resolution is optional. By registering an `onResolveCharacter` callback, the engine invokes it before every block that has characters in its `actors`. The callback receives the list of characters assigned to the block and returns the one that should be active — or `undefined` if none is available. The resolved character is then accessible via `context.character` in all handlers.
 
 This is the ideal integration point to query your game state: check if a character is present in the scene, alive, in camera range, etc. Returning `undefined` opens the door to several strategies: skip the block via [`skipIfMissingActor`](/api-ref/interfaces/NativeProperties#skipifmissingactor), cancel the scene via `handle.cancel()`, or handle the case directly in the handler.
 

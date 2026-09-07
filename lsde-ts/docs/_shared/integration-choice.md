@@ -6,12 +6,12 @@
 registerChoiceHandler(engine: DialogueEngine) {
   engine.onChoice(({ block, context, next }) => {
     const { choices, selectChoice } = context;
-    const { nativeProperties } = block;
-    const visible = choices.filter(c => c.visible !== false);
+    const { props } = block;
+    const offered = choices.filter(c => c.visible !== false);
 
     // spawn one interactive text per visible choice
     const buttons: Phaser.GameObjects.Text[] = visible.map((choice, i) => {
-      const text = LsdeUtils.getLocalizedText(choice.dialogueText) ?? choice.label ?? '';
+      const text = LsdeUtils.getLocalizedText(choice.text) ?? choice.label ?? '';
       const btn = this.add
         .text(80, 440 + i * 40, text, { fontSize: '15px', color: '#ffffff' })
         .setScrollFactor(0)
@@ -26,8 +26,8 @@ registerChoiceHandler(engine: DialogueEngine) {
 
     // optional: auto-advance after a timeout (skip the choice)
     let timer: Phaser.Time.TimerEvent | null = null;
-    if (nativeProperties?.timeout) {
-      timer = this.time.delayedCall(nativeProperties.timeout * 1000, () => next());
+    if (props?.timeout) {
+      timer = this.time.delayedCall(props.timeout * 1000, () => next());
     }
 
     // cleanup: destroy spawned buttons when the engine moves on
@@ -50,7 +50,7 @@ public void RegisterChoiceHandler(DialogueEngine engine)
 {
     engine.OnChoice(args => {
         var (_, block, context, next) = args;
-        var visible = context.Choices
+        var visible = context.Options
             .Where(c => c.Visible != false).ToList();
 
         // spawn one button per visible choice
@@ -58,7 +58,7 @@ public void RegisterChoiceHandler(DialogueEngine engine)
         {
             var btn = Instantiate(choiceButtonPrefab, choiceContainer);
             btn.GetComponentInChildren<TMP_Text>().text =
-                LsdeUtils.GetLocalizedText(choice.DialogueText) ?? choice.Label ?? "";
+                LsdeUtils.GetLocalizedText(choice.Text) ?? choice.Label ?? "";
 
             var uuid = choice.Uuid;
             btn.onClick.AddListener(() => {
@@ -82,12 +82,12 @@ public void RegisterChoiceHandler(DialogueEngine engine)
 void UDialogueSubsystem::RegisterChoiceHandler()
 {
     Engine.onChoice([this](auto* scene, const auto* block, auto* ctx, auto next) -> lsde::CleanupFn {
-        const auto& choices = ctx->choices();
+        const auto& choices = ctx->options();
 
         // add one option per visible choice to the UMG widget
         for (const auto& c : choices) {
             if (!c.visible.has_value() || c.visible.value()) {
-                auto text = lsde::LsdeUtils::GetLocalizedText(c.dialogueText);
+                auto text = lsde::LsdeUtils::GetLocalizedText(c.text);
                 ChoiceWidget->AddOption(
                     FString(UTF8_TO_TCHAR(c.uuid.c_str())),
                     FString(UTF8_TO_TCHAR(text.value_or("").c_str())));
@@ -122,7 +122,7 @@ func _register_choice_handler() -> void:
     _engine.on_choice(func(args):
         var ctx = args["context"]
         var next_fn = args["next"]
-        var choices = ctx.choices
+        var choices = ctx.options
 
         # filter visible choices
         var visible: Array = []
@@ -133,7 +133,7 @@ func _register_choice_handler() -> void:
         # spawn one button per visible choice
         for c in visible:
             var btn = Button.new()
-            btn.text = LsdeUtils.get_localized_text(c.get("dialogueText")) or c.get("label", "")
+            btn.text = LsdeUtils.get_localized_text(c.get("text")) or c.get("label", "")
             btn.pressed.connect(func():
                 ctx.select_choice(c["uuid"])
                 next_fn.call()

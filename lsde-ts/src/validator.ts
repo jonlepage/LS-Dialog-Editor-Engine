@@ -21,6 +21,56 @@ const SUPPORTED_FORMAT = 'lsde-blueprints';
 const SUPPORTED_VERSION = 1;
 
 /**
+ * Fold the files of a per-scene export into one payload.
+ *
+ * Each file carries the whole header, so the first one supplies it and the rest only add scenes.
+ * `project` and `exportedAt` are checked first: they are identical across the files of one export
+ * and different across two, which is the only way to catch someone passing pieces of two exports.
+ * Merging those would produce a payload whose dictionaries do not match its scenes, and nothing
+ * downstream would notice.
+ *
+ * Returns the merged payload, or a diagnostic when the files do not belong together.
+ */
+export function mergePayloads(
+	payloads: Blueprints[],
+): { data?: Blueprints; error?: DiagnosticEntry } {
+	const first = payloads[0]!;
+
+	for ( let i = 1; i < payloads.length; i++ ) {
+		const next = payloads[i]!;
+		if ( next.project !== first.project || next.exportedAt !== first.exportedAt ) {
+			return {
+				error: {
+					code: 'MISMATCHED_EXPORTS',
+					message: `These files are not from the same export: "${ first.project }" `
+						+ `(${ first.exportedAt }) and "${ next.project }" (${ next.exportedAt }). `
+						+ `Pass the files of one export at a time.`,
+				},
+			};
+		}
+	}
+
+	return { data: { ...first, scenes: payloads.flatMap( p => p.scenes ?? [] ) } };
+}
+
+/**
+ * Did the exporter write this file in another naming convention?
+ *
+ * LSDE can write `camelCase` (its default), `snake_case` or `PascalCase`, and the choice RENAMES
+ * the fields of the JSON. The engine reads camelCase only, so the point of this check is to say
+ * which setting to change instead of leaving the reader with "not an LSDE blueprint" on a file
+ * that plainly is one.
+ *
+ * `format` and `version` are single words and survive every convention, so the tell is a field
+ * that is not: `exportedAt`.
+ */
+function detectNamingConvention( raw: Record<string, unknown> ): string | undefined {
+	if ( 'exported_at' in raw ) return 'snake_case';
+	if ( 'ExportedAt' in raw ) return 'PascalCase';
+	return undefined;
+}
+
+/**
  * Validate a blueprint payload, and optionally cross-check it against what the game declares.
  *
  * Structural checks: the format header, scene paths, block id uniqueness **within a scene**,
@@ -39,24 +89,45 @@ export function validateBlueprint( options: InitOptions ): DiagnosticReport {
 
 	// ─── The header, before anything else ────────────────────────────────
 
-	if ( !data ) {
+	if ( !data || ( Array.isArray( data ) && data.length === 0 ) ) {
 		errors.push( { code: 'MISSING_DATA', message: 'Blueprint data is required.' } );
 		return { errors, warnings, stats: empty };
 	}
 
-	if ( data.format !== SUPPORTED_FORMAT ) {
-		errors.push( {
-			code: 'INVALID_FORMAT',
-			message: `Not an LSDE blueprint: expected format "${ SUPPORTED_FORMAT }", got ${ describe( data.format ) }.`,
-		} );
+	// A per-scene export arrives as several self-contained files. Fold them before validating,
+	// so everything below sees one payload and no rule has to know about split modes.
+	let payload: Blueprints;
+	if ( Array.isArray( data ) ) {
+		const merged = mergePayloads( data );
+		if ( merged.error ) {
+			errors.push( merged.error );
+			return { errors, warnings, stats: empty };
+		}
+		payload = merged.data!;
+	} else {
+		payload = data;
+	}
+
+	if ( payload.format !== SUPPORTED_FORMAT ) {
+		const convention = detectNamingConvention( payload as unknown as Record<string, unknown> );
+		errors.push( convention
+			? {
+				code: 'WRONG_NAMING_CONVENTION',
+				message: `This file is exported in ${ convention }; the engine reads camelCase — `
+					+ `Project settings › Exporters › Naming convention.`,
+			}
+			: {
+				code: 'INVALID_FORMAT',
+				message: `Not an LSDE blueprint: expected format "${ SUPPORTED_FORMAT }", got ${ describe( payload.format ) }.`,
+			} );
 		return { errors, warnings, stats: empty };
 	}
 
-	if ( data.version !== SUPPORTED_VERSION ) {
+	if ( payload.version !== SUPPORTED_VERSION ) {
 		errors.push( {
 			code: 'UNSUPPORTED_FORMAT_VERSION',
 			message: `This engine reads blueprint format version ${ SUPPORTED_VERSION }, `
-				+ `the file is version ${ describe( data.version ) }. `
+				+ `the file is version ${ describe( payload.version ) }. `
 				+ `Re-export from LSDE, or install the engine version that matches it.`,
 		} );
 		return { errors, warnings, stats: empty };
@@ -64,7 +135,7 @@ export function validateBlueprint( options: InitOptions ): DiagnosticReport {
 
 	// ─── Scenes ──────────────────────────────────────────────────────────
 
-	if ( !data.scenes || data.scenes.length === 0 ) {
+	if ( !payload.scenes || payload.scenes.length === 0 ) {
 		errors.push( { code: 'NO_SCENES', message: 'Blueprint must contain at least one scene.' } );
 		return { errors, warnings, stats: empty };
 	}
@@ -73,7 +144,7 @@ export function validateBlueprint( options: InitOptions ): DiagnosticReport {
 	let totalBlocks = 0;
 	let totalConnections = 0;
 
-	for ( const scene of data.scenes ) {
+	for ( const scene of payload.scenes ) {
 		if ( scenePaths.has( scene.scene ) ) {
 			errors.push( {
 				code: 'DUPLICATE_SCENE',
@@ -85,8 +156,10 @@ export function validateBlueprint( options: InitOptions ): DiagnosticReport {
 		scenePaths.add( scene.scene );
 
 		validateScene( scene, errors, warnings );
-		totalBlocks += scene.blocks.length;
-		for ( const block of scene.blocks ) {
+
+		const blocks = blocksOf( scene );
+		totalBlocks += blocks.length;
+		for ( const block of blocks ) {
 			totalConnections += block.next?.length ?? 0;
 		}
 	}
@@ -94,16 +167,21 @@ export function validateBlueprint( options: InitOptions ): DiagnosticReport {
 	// ─── Cross-validation (optional) ─────────────────────────────────────
 
 	if ( check ) {
-		crossValidate( data, check, warnings );
+		crossValidate( payload, check, warnings );
 	}
 
 	const stats: DiagnosticStats = {
-		sceneCount: data.scenes.length,
+		sceneCount: payload.scenes.length,
 		blockCount: totalBlocks,
 		connectionCount: totalConnections,
 	};
 
 	return { errors, warnings, stats };
+}
+
+/** A scene's blocks, or an empty list when the payload does not carry any. */
+function blocksOf( scene: Scene ): Block[] {
+	return Array.isArray( scene.blocks ) ? scene.blocks : [];
 }
 
 function validateScene(
@@ -115,11 +193,21 @@ function validateScene(
 		errors.push( { code: 'MISSING_SCENE_PATH', message: 'Scene is missing its path.' } );
 	}
 
+	// A truncated file, or one written by hand, can carry a scene with no `blocks` at all, and
+	// iterating it threw a TypeError straight out of `init()` — from the one function whose whole
+	// job is to REFUSE a payload the engine cannot read and say why.
+	//
+	// Normalised rather than reported, because "absent" and "empty" cannot be told apart in every
+	// runtime: a C# List has an initializer and a C++ std::vector always exists. A scene with no
+	// blocks already reports NO_START_BLOCK — it cannot play, which is the thing worth saying, and
+	// all four runtimes say it the same way.
+	const blocks = blocksOf( scene );
+
 	// A block id is unique inside its scene and nowhere else: the counter restarts at 1 in every
 	// scene, so DIALOG-001 in two scenes is not a collision, it is the normal case.
 	const blockIds = new Set<string>();
 
-	for ( const block of scene.blocks ) {
+	for ( const block of blocks ) {
 		if ( blockIds.has( block.id ) ) {
 			errors.push( {
 				code: 'DUPLICATE_BLOCK_ID',
@@ -147,8 +235,43 @@ function validateScene(
 		} );
 	}
 
-	for ( const block of scene.blocks ) {
-		validateLinks( scene, block, blockIds, errors, warnings );
+	// Built once for the whole scene: `validateLinks` needs it to tell an async target from a
+	// non-async one, and rebuilding it per block made init O(blocks²).
+	const blockById = new Map( blocks.map( b => [b.id, b] ) );
+
+	for ( const block of blocks ) {
+		validateLinks( scene, block, blockIds, blockById, errors, warnings );
+		validateWaits( scene, block, blockIds, warnings );
+	}
+}
+
+/**
+ * `waitForBlocks` names blocks OF THIS SCENE that must have been visited before this one advances.
+ *
+ * A name that is not in the scene can never be visited, so the block parks for good: on the main
+ * flow that is the whole dialogue stopping with no `onSceneExit`, and on a parallel track it is a
+ * branch that silently never finishes. Neither shows up anywhere at runtime, which is why it is
+ * said here — a warning, not an error: the rest of the scene still plays.
+ */
+function validateWaits(
+	scene: Scene,
+	block: Block,
+	blockIds: Set<string>,
+	warnings: DiagnosticEntry[],
+): void {
+	const waits = block.props?.waitForBlocks;
+	if ( !Array.isArray( waits ) ) return;
+
+	for ( const id of waits ) {
+		if ( typeof id === 'string' && !blockIds.has( id ) ) {
+			warnings.push( {
+				code: 'UNKNOWN_WAIT_BLOCK',
+				message: `${ describeBlock( block ) } waits for "${ id }", which is not a block of `
+					+ `scene "${ scene.scene }". It can never be visited, so this block never advances.`,
+				sceneId: scene.scene,
+				blockId: block.id,
+			} );
+		}
 	}
 }
 
@@ -156,6 +279,7 @@ function validateLinks(
 	scene: Scene,
 	block: Block,
 	blockIds: Set<string>,
+	blockById: Map<string, Block>,
 	errors: DiagnosticEntry[],
 	warnings: DiagnosticEntry[],
 ): void {
@@ -182,7 +306,6 @@ function validateLinks(
 	// One port, several wires: the first non-async target becomes the main flow and the rest run
 	// as parallel tracks. Two non-async targets on one port means the second silently never
 	// becomes the main track — almost always a wiring mistake rather than an intent.
-	const blockById = new Map( scene.blocks.map( b => [b.id, b] ) );
 	for ( const [port, targets] of byPort ) {
 		if ( targets.length <= 1 ) continue;
 		let nonAsyncCount = 0;

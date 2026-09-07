@@ -1,4 +1,8 @@
-// LSDE Dialog Engine — Integration tests for OnResolveCondition (C# port of engine.test.ts §onResolveCondition)
+// LSDE Dialog Engine — the condition resolver, end to end (C# port).
+//
+// OnResolveCondition is the SINGLE game-state evaluator: it answers option visibility and it
+// pre-evaluates the cases of a condition block. Once it is installed the engine already knows
+// which port a condition leaves by, which is what makes OnCondition optional.
 
 using System;
 using System.Collections.Generic;
@@ -9,331 +13,238 @@ namespace LsdeDialogEngine.Tests
 {
     public class OnResolveConditionTests
     {
-        // ─── Helpers ─────────────────────────────────────────────────────────────
+        private static List<ConditionTest> When(string entry)
+            => new() { Build.Test("switches", entry, true) };
 
-        private static BlueprintExport MakeExport(params BlueprintScene[] scenes) =>
-            new() { Version = "1.0.0", ExportDate = "2025-01-01", Locales = new List<string> { "en" }, Scenes = scenes.ToList() };
+        /// <summary>A condition in if mode: out when it holds, default when it does not.</summary>
+        private static BlueprintExport Branching() => Build.OneScene(
+            Build.Condition("k1", Build.Case(Ports.Out, When("flag")))
+                .Wire("yes", Ports.Out)
+                .Wire("no", Ports.Default),
+            Build.Dialog("yes"),
+            Build.Dialog("no"));
 
-        private static void RegisterAllHandlers(DialogueEngine engine)
+        private static DialogueEngine Engine(BlueprintExport data, bool withCondition = true)
         {
+            var engine = new DialogueEngine();
+            Assert.Empty(engine.Init(new InitOptions { Data = data }).Errors);
+
             engine.OnDialog(args => { args.Next(); });
             engine.OnChoice(args =>
             {
-                if (args.Context.Choices.Count > 0) args.Context.SelectChoice(args.Context.Choices[0].Uuid);
+                if (args.Context.Options.Count > 0) args.Context.SelectChoice(args.Context.Options[0].Id);
                 args.Next();
             });
-            engine.OnCondition(args => { args.Context.Resolve(true); args.Next(); });
             engine.OnAction(args => { args.Context.Resolve(); args.Next(); });
+            if (withCondition) engine.OnCondition(args => { args.Next(); });
+
+            return engine;
         }
 
-        // ─── Shared Blueprints ──────────────────────────────────────────────────
-
-        /// <summary>Single-group condition scene: COND → yes (portIndex 0) / no (portIndex 1).</summary>
-        private static BlueprintScene CondScene() => new()
-        {
-            Uuid = "scene-rc", Label = "ResolveCondition", Date = "2025-01-01",
-            Blocks = new List<BlueprintBlock>
-            {
-                new ConditionBlock
-                {
-                    Uuid = "cond1", Type = BlockType.CONDITION, Properties = new List<BlockProperty>(), IsStartBlock = true,
-                    Conditions = new List<List<ExportCondition>>
-                    {
-                        new() { new ExportCondition { Uuid = "c1", Key = "flag", Operator = "=", Value = "true" } }
-                    }
-                },
-                new DialogBlock { Uuid = "yes", Type = BlockType.DIALOG, Properties = new List<BlockProperty>() },
-                new DialogBlock { Uuid = "no", Type = BlockType.DIALOG, Properties = new List<BlockProperty>() },
-            },
-            Connections = new List<BlueprintConnection>
-            {
-                new() { Id = "ct", FromId = "cond1", ToId = "yes", FromPort = "true", ToPort = "in", FromPortIndex = 0 },
-                new() { Id = "cf", FromId = "cond1", ToId = "no", FromPort = "false", ToPort = "in", FromPortIndex = 1 },
-            },
-        };
-
-        /// <summary>Multi-group switch scene: COND(2 groups) → case0 / case1 / default.</summary>
-        private static BlueprintScene SwitchScene(string uuid = "scene-sw") => new()
-        {
-            Uuid = uuid, Label = "Switch", Date = "2025-01-01",
-            Blocks = new List<BlueprintBlock>
-            {
-                new ConditionBlock
-                {
-                    Uuid = "cond", Type = BlockType.CONDITION, Properties = new List<BlockProperty>(), IsStartBlock = true,
-                    Conditions = new List<List<ExportCondition>>
-                    {
-                        new() { new ExportCondition { Uuid = "c1", Key = "x", Operator = "=", Value = "1" } },
-                        new() { new ExportCondition { Uuid = "c2", Key = "y", Operator = "=", Value = "2" } },
-                    }
-                },
-                new DialogBlock { Uuid = "case0", Type = BlockType.DIALOG, Properties = new List<BlockProperty>() },
-                new DialogBlock { Uuid = "case1", Type = BlockType.DIALOG, Properties = new List<BlockProperty>() },
-                new DialogBlock { Uuid = "default", Type = BlockType.DIALOG, Properties = new List<BlockProperty>() },
-            },
-            Connections = new List<BlueprintConnection>
-            {
-                new() { Id = "s0", FromId = "cond", ToId = "case0", FromPort = "case_0", ToPort = "in", FromPortIndex = 0 },
-                new() { Id = "s1", FromId = "cond", ToId = "case1", FromPort = "case_1", ToPort = "in", FromPortIndex = 1 },
-                new() { Id = "sd", FromId = "cond", ToId = "default", FromPort = "default", ToPort = "in", FromPortIndex = 2 },
-            },
-        };
-
-        /// <summary>Dispatcher scene: enableDispatcher=true, targets isAsync=true.</summary>
-        private static BlueprintScene DispatchScene() => new()
-        {
-            Uuid = "scene-disp", Label = "Dispatch", Date = "2025-01-01",
-            Blocks = new List<BlueprintBlock>
-            {
-                new ConditionBlock
-                {
-                    Uuid = "cond", Type = BlockType.CONDITION, Properties = new List<BlockProperty>(), IsStartBlock = true,
-                    NativeProperties = new NativeProperties { EnableDispatcher = true },
-                    Conditions = new List<List<ExportCondition>>
-                    {
-                        new() { new ExportCondition { Uuid = "c1", Key = "a", Operator = "=", Value = "1" } },
-                        new() { new ExportCondition { Uuid = "c2", Key = "b", Operator = "=", Value = "2" } },
-                    }
-                },
-                new DialogBlock { Uuid = "async0", Type = BlockType.DIALOG, Properties = new List<BlockProperty>(), NativeProperties = new NativeProperties { IsAsync = true } },
-                new DialogBlock { Uuid = "async1", Type = BlockType.DIALOG, Properties = new List<BlockProperty>(), NativeProperties = new NativeProperties { IsAsync = true } },
-                new DialogBlock { Uuid = "main", Type = BlockType.DIALOG, Properties = new List<BlockProperty>() },
-            },
-            Connections = new List<BlueprintConnection>
-            {
-                new() { Id = "d0", FromId = "cond", ToId = "async0", FromPort = "case_0", ToPort = "in", FromPortIndex = 0 },
-                new() { Id = "d1", FromId = "cond", ToId = "async1", FromPort = "case_1", ToPort = "in", FromPortIndex = 1 },
-                new() { Id = "dd", FromId = "cond", ToId = "main", FromPort = "default", ToPort = "in", FromPortIndex = 2 },
-            },
-        };
-
-        // ─── P0: onCondition optionnel quand resolver installe ──────────────────
-
-        [Fact]
-        public void Start_DoesNotThrow_WhenOnConditionOmittedButOnResolveConditionInstalled()
-        {
-            var engine = new DialogueEngine();
-            engine.Init(new InitOptions { Data = MakeExport(CondScene()) });
-            engine.OnResolveCondition(_ => true);
-            engine.OnDialog(args => args.Next());
-            engine.OnChoice(args => args.Next());
-            // NO engine.OnCondition()
-            engine.OnAction(args => { args.Context.Resolve(); args.Next(); });
-            var ex = Record.Exception(() => engine.Scene("scene-rc").Start());
-            Assert.Null(ex);
-        }
-
-        [Fact]
-        public void Start_Throws_WhenNeitherOnConditionNorOnResolveConditionInstalled()
-        {
-            var engine = new DialogueEngine();
-            engine.Init(new InitOptions { Data = MakeExport(CondScene()) });
-            engine.OnDialog(args => args.Next());
-            engine.OnChoice(args => args.Next());
-            engine.OnAction(args => { args.Context.Resolve(); args.Next(); });
-            Assert.Throws<InvalidOperationException>(() => engine.Scene("scene-rc").Start());
-        }
-
-        // ─── P0: Auto-resolve sans resolve() ───────────────────────────────────
-
-        [Fact]
-        public void AutoResolves_WhenHandlerDoesNotCallResolve()
+        private static List<string> Play(DialogueEngine engine)
         {
             var visited = new List<string>();
-            var engine = new DialogueEngine();
-            engine.Init(new InitOptions { Data = MakeExport(CondScene()) });
-            engine.OnResolveCondition(_ => true); // flag=true → group matches → portIndex 0 → 'yes'
-            engine.OnCondition(args => args.Next()); // no resolve() call
-            engine.OnDialog(args => { visited.Add(args.Block.Uuid); args.Next(); });
-            engine.OnChoice(args => args.Next());
-            engine.OnAction(args => { args.Context.Resolve(); args.Next(); });
-            engine.Scene("scene-rc").Start();
-            Assert.Equal(new List<string> { "yes" }, visited);
+            engine.OnDialog(args => { visited.Add(args.Block.Id); args.Next(); });
+            engine.Scene("s1").Start();
+            return visited;
         }
 
-        [Fact]
-        public void AutoResolves_ToDefaultWhenNoGroupMatches()
-        {
-            var visited = new List<string>();
-            var engine = new DialogueEngine();
-            engine.Init(new InitOptions { Data = MakeExport(CondScene()) });
-            engine.OnResolveCondition(_ => false); // flag=false → no match → portIndex -1 → 'false' port
-            engine.OnCondition(args => args.Next());
-            engine.OnDialog(args => { visited.Add(args.Block.Uuid); args.Next(); });
-            engine.OnChoice(args => args.Next());
-            engine.OnAction(args => { args.Context.Resolve(); args.Next(); });
-            engine.Scene("scene-rc").Start();
-            Assert.Equal(new List<string> { "no" }, visited);
-        }
+        // ─── OnCondition is optional ─────────────────────────────────────────
 
         [Fact]
-        public void AutoResolves_WithoutOnConditionHandlerAtAll()
+        public void StartDoesNotThrowWhenOnConditionIsOmittedButAResolverIsInstalled()
         {
-            var visited = new List<string>();
-            var engine = new DialogueEngine();
-            engine.Init(new InitOptions { Data = MakeExport(CondScene()) });
-            engine.OnResolveCondition(_ => true);
-            // No OnCondition registered — engine routes automatically
-            engine.OnDialog(args => { visited.Add(args.Block.Uuid); args.Next(); });
-            engine.OnChoice(args => args.Next());
-            engine.OnAction(args => { args.Context.Resolve(); args.Next(); });
-            engine.Scene("scene-rc").Start();
-            Assert.Equal(new List<string> { "yes" }, visited);
-        }
-
-        // ─── P0: pre-evaluated conditionGroups ──────────────────────────────────
-
-        [Fact]
-        public void Handler_ReceivesPreEvaluatedConditionGroups()
-        {
-            var engine = new DialogueEngine();
-            engine.Init(new InitOptions { Data = MakeExport(CondScene()) });
+            var engine = Engine(Branching(), withCondition: false);
             engine.OnResolveCondition(_ => true);
 
-            IReadOnlyList<RuntimeConditionGroup>? receivedGroups = null;
+            var handle = engine.Scene("s1");
+            var error = Record.Exception(() => handle.Start());
+
+            Assert.Null(error);
+        }
+
+        [Fact]
+        public void StartThrowsWhenNeitherIsInstalled()
+        {
+            var engine = Engine(Branching(), withCondition: false);
+            var handle = engine.Scene("s1");
+
+            var error = Assert.Throws<InvalidOperationException>(() => handle.Start());
+            Assert.Contains("onCondition", error.Message, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // ─── Routing ─────────────────────────────────────────────────────────
+
+        [Fact]
+        public void RoutesOnItsOwnWhenTheHandlerOnlyCallsNext()
+        {
+            var engine = Engine(Branching());
+            engine.OnResolveCondition(_ => true);
+
+            Assert.Equal(new List<string> { "yes" }, Play(engine));
+        }
+
+        [Fact]
+        public void RoutesToDefaultWhenTheCaseDoesNotHold()
+        {
+            var engine = Engine(Branching());
+            engine.OnResolveCondition(_ => false);
+
+            Assert.Equal(new List<string> { "no" }, Play(engine));
+        }
+
+        [Fact]
+        public void RoutesWithNoOnConditionHandlerAtAll()
+        {
+            var engine = Engine(Branching(), withCondition: false);
+            engine.OnResolveCondition(_ => true);
+
+            Assert.Equal(new List<string> { "yes" }, Play(engine));
+        }
+
+        [Fact]
+        public void HandsTheHandlerEachCaseWithItsPortAndResult()
+        {
+            var seen = new List<(string, bool?)>();
+            var engine = Engine(Branching());
+            engine.OnResolveCondition(_ => true);
             engine.OnCondition(args =>
             {
-                receivedGroups = args.Context.ConditionGroups;
+                seen = args.Context.Cases.Select(c => (c.Port, c.Result)).ToList();
                 args.Next();
             });
-            engine.OnDialog(args => args.Next());
-            engine.OnChoice(args => args.Next());
-            engine.OnAction(args => { args.Context.Resolve(); args.Next(); });
-            engine.Scene("scene-rc").Start();
 
-            Assert.NotNull(receivedGroups);
-            Assert.Single(receivedGroups!);
-            Assert.Equal(0, receivedGroups![0].PortIndex);
-            Assert.True(receivedGroups![0].Result);
+            Play(engine);
+
+            Assert.Equal(new List<(string, bool?)> { (Ports.Out, true) }, seen);
         }
 
         [Fact]
-        public void Handler_CanOverrideAutoResolveWithExplicitResolve()
+        public void TheHandlerCanOverrideThePortItPicked()
         {
-            var visited = new List<string>();
-            var engine = new DialogueEngine();
-            engine.Init(new InitOptions { Data = MakeExport(CondScene()) });
-            engine.OnResolveCondition(_ => true); // would auto-route to 'yes'
-            engine.OnCondition(args =>
+            var engine = Engine(Branching());
+            engine.OnResolveCondition(_ => true);
+            engine.OnCondition(args => { args.Context.Resolve(Ports.Default); args.Next(); });
+
+            Assert.Equal(new List<string> { "no" }, Play(engine));
+        }
+
+        // ─── portPerCase ─────────────────────────────────────────────────────
+
+        [Fact]
+        public void RoutesToTheCasePortWithPortPerCase()
+        {
+            var data = Build.OneScene(
+                Build.Condition("k1",
+                        Build.Case("K1", When("a")),
+                        Build.Case("K2", When("b")))
+                    .Prop("portPerCase", true)
+                    .Wire("first", "K1")
+                    .Wire("second", "K2")
+                    .Wire("none", Ports.Default),
+                Build.Dialog("first"), Build.Dialog("second"), Build.Dialog("none"));
+
+            var engine = Engine(data);
+            engine.OnResolveCondition(test => test.Entry == "b");
+
+            Assert.Equal(new List<string> { "second" }, Play(engine));
+        }
+
+        [Fact]
+        public void RoutesToDefaultWithPortPerCaseWhenNoCaseHolds()
+        {
+            var data = Build.OneScene(
+                Build.Condition("k1", Build.Case("K1", When("a")))
+                    .Prop("portPerCase", true)
+                    .Wire("first", "K1")
+                    .Wire("none", Ports.Default),
+                Build.Dialog("first"), Build.Dialog("none"));
+
+            var engine = Engine(data);
+            engine.OnResolveCondition(_ => false);
+
+            Assert.Equal(new List<string> { "none" }, Play(engine));
+        }
+
+        // ─── Option visibility comes from the same resolver ──────────────────
+
+        [Fact]
+        public void TagsOptionVisibilityFromTheSameResolver()
+        {
+            var seen = new List<bool?>();
+            var data = Build.OneScene(
+                Build.Choice("c1", Build.Opt("C1"), Build.Opt("C2", When("flag"))));
+
+            var engine = Engine(data);
+            engine.OnResolveCondition(_ => false);
+            engine.OnChoice(args =>
             {
-                args.Context.Resolve(false); // override → route to 'no' instead
+                seen = args.Context.Options.Select(o => o.Visible).ToList();
                 args.Next();
             });
-            engine.OnDialog(args => { visited.Add(args.Block.Uuid); args.Next(); });
-            engine.OnChoice(args => args.Next());
-            engine.OnAction(args => { args.Context.Resolve(); args.Next(); });
-            engine.Scene("scene-rc").Start();
-            Assert.Equal(new List<string> { "no" }, visited);
-        }
 
-        // ─── P1: Switch mode integration ────────────────────────────────────────
+            engine.Scene("s1").Start();
 
-        [Fact]
-        public void SwitchMode_RoutesToMatchingCasePort()
-        {
-            var visited = new List<string>();
-            var engine = new DialogueEngine();
-            engine.Init(new InitOptions { Data = MakeExport(SwitchScene()) });
-            // x != 1 (false), y == 2 (true) → case_1 matches
-            engine.OnResolveCondition(c => c.Key == "y");
-            engine.OnDialog(args => { visited.Add(args.Block.Uuid); args.Next(); });
-            engine.OnChoice(args => args.Next());
-            engine.OnAction(args => { args.Context.Resolve(); args.Next(); });
-            engine.Scene("scene-sw").Start();
-            Assert.Equal(new List<string> { "case1" }, visited);
+            Assert.Equal(new List<bool?> { true, false }, seen);
         }
 
         [Fact]
-        public void SwitchMode_RoutesToDefaultWhenNoCaseMatches()
+        public void LeavesOptionVisibilityUnknownWithNoResolver()
         {
-            var visited = new List<string>();
-            var engine = new DialogueEngine();
-            engine.Init(new InitOptions { Data = MakeExport(SwitchScene("scene-sw2")) });
-            engine.OnResolveCondition(_ => false); // nothing matches
-            engine.OnDialog(args => { visited.Add(args.Block.Uuid); args.Next(); });
-            engine.OnChoice(args => args.Next());
-            engine.OnAction(args => { args.Context.Resolve(); args.Next(); });
-            engine.Scene("scene-sw2").Start();
-            Assert.Equal(new List<string> { "default" }, visited);
-        }
+            // Saying false about a question nobody could answer would HIDE an answer.
+            var seen = new List<bool?>();
+            var data = Build.OneScene(
+                Build.Choice("c1", Build.Opt("C1"), Build.Opt("C2", When("flag"))));
 
-        // ─── P1: Dispatcher mode integration ────────────────────────────────────
-
-        [Fact]
-        public void DispatcherMode_SpawnsAsyncTracksForMatchedCases()
-        {
-            var visited = new List<string>();
-            var engine = new DialogueEngine();
-            engine.Init(new InitOptions { Data = MakeExport(DispatchScene()) });
-            engine.OnResolveCondition(_ => true); // both match
-            engine.OnDialog(args => { visited.Add(args.Block.Uuid); args.Next(); });
-            engine.OnChoice(args => args.Next());
-            engine.OnAction(args => { args.Context.Resolve(); args.Next(); });
-            engine.Scene("scene-disp").Start();
-            // main (default) + async0 + async1 — all 3 should be visited
-            visited.Sort();
-            Assert.Equal(new List<string> { "async0", "async1", "main" }, visited);
-        }
-
-        // ─── P1: evaluateCondition() uses resolver ──────────────────────────────
-
-        [Fact]
-        public void EvaluateCondition_UsesOnResolveConditionForNonChoiceConditions()
-        {
-            var engine = new DialogueEngine();
-            engine.Init(new InitOptions { Data = MakeExport(CondScene()) });
-            engine.OnResolveCondition(c => c.Key == "flag");
-            RegisterAllHandlers(engine);
-
-            var handle = engine.Scene("scene-rc");
-            bool? evalResult = null;
-            handle.OnCondition(args =>
+            var engine = Engine(data);
+            engine.OnChoice(args =>
             {
-                evalResult = args.Scene.EvaluateCondition(new ExportCondition { Uuid = "t", Key = "flag", Operator = "=", Value = "" });
+                seen = args.Context.Options.Select(o => o.Visible).ToList();
                 args.Next();
-                return null;
             });
-            handle.Start();
-            Assert.True(evalResult);
+
+            engine.Scene("s1").Start();
+
+            Assert.Equal(new List<bool?> { null, null }, seen);
+        }
+
+        // ─── The reserved choice dictionary ──────────────────────────────────
+
+        [Fact]
+        public void AChoiceTestIsAnsweredFromTheSceneHistoryNeverByTheGame()
+        {
+            var asked = new List<string>();
+            var data = Build.OneScene(
+                Build.Choice("c1", Build.Opt("C1"), Build.Opt("C2"))
+                    .Wire("k1", "C1").Wire("k1", "C2"),
+                Build.Condition("k1", Build.Case(Ports.Out, new List<ConditionTest> { Build.ChoiceTest("c1", "C1") }))
+                    .Wire("yes", Ports.Out).Wire("no", Ports.Default),
+                Build.Dialog("yes"), Build.Dialog("no"));
+
+            var engine = Engine(data);
+            engine.OnResolveCondition(test => { asked.Add(test.Dict); return false; });
+            engine.OnChoice(args => { args.Context.SelectChoice("C1"); args.Next(); });
+
+            Assert.Equal(new List<string> { "yes" }, Play(engine));
+            Assert.Empty(asked);
         }
 
         [Fact]
-        public void EvaluateCondition_ReturnsFalseWithoutResolver()
+        public void EvaluateConditionAnswersThroughTheSceneHandle()
         {
-            var engine = new DialogueEngine();
-            engine.Init(new InitOptions { Data = MakeExport(CondScene()) });
-            RegisterAllHandlers(engine);
+            var engine = Engine(Branching());
+            engine.OnResolveCondition(test => test.Entry == "flag");
+            var handle = engine.Scene("s1");
 
-            var handle = engine.Scene("scene-rc");
-            bool? evalResult = null;
-            handle.OnCondition(args =>
-            {
-                evalResult = args.Scene.EvaluateCondition(new ExportCondition { Uuid = "t", Key = "flag", Operator = "=", Value = "" });
-                args.Context.Resolve(true);
-                args.Next();
-                return null;
-            });
-            handle.Start();
-            Assert.False(evalResult);
+            Assert.True(handle.EvaluateCondition(Build.Test("switches", "flag", true)));
+            Assert.False(handle.EvaluateCondition(Build.Test("switches", "other", true)));
         }
 
-        // ─── P1: setChoiceFilter backward compat alias ──────────────────────────
-
         [Fact]
-        public void SetChoiceFilter_StillWorksAsAliasForOnResolveCondition()
+        public void EvaluateConditionIsFalseWithNoResolver()
         {
-            var visited = new List<string>();
-            var engine = new DialogueEngine();
-            engine.Init(new InitOptions { Data = MakeExport(CondScene()) });
-#pragma warning disable CS0618 // Obsolete
-            engine.SetChoiceFilter(_ => true); // alias
-#pragma warning restore CS0618
-            engine.OnDialog(args => { visited.Add(args.Block.Uuid); args.Next(); });
-            engine.OnChoice(args => args.Next());
-            // No OnCondition — should auto-resolve via SetChoiceFilter alias
-            engine.OnAction(args => { args.Context.Resolve(); args.Next(); });
-            engine.Scene("scene-rc").Start();
-            Assert.Equal(new List<string> { "yes" }, visited);
+            var engine = Engine(Branching());
+            Assert.False(engine.Scene("s1").EvaluateCondition(Build.Test("switches", "flag", true)));
         }
     }
 }

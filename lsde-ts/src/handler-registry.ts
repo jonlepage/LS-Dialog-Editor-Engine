@@ -1,11 +1,12 @@
 // LSDE Dialog Engine — Handler registration + Tier 1/Tier 2 resolution
 
 import type {
-	BlockType, BlueprintBlock, BlockHandler, BaseBlockContext,
+	BlueprintBlock, BlockHandler, BaseBlockContext,
 	DialogHandler, ChoiceHandler, ConditionHandler, ActionHandler,
 	SceneLifecycleHandler,
 	ValidateNextBlockHandler, InvalidateBlockHandler, BeforeBlockHandler,
 } from './types.js';
+import { BlockType } from './types.js';
 
 // ─── Tier 1 — Global Registry ────────────────────────────────────────────────
 
@@ -26,11 +27,12 @@ export class HandlerRegistry {
 
 	getTypeHandler( type: BlockType ): BlockHandler<BlueprintBlock, BaseBlockContext> | null {
 		switch ( type ) {
-			case 'DIALOG': return this.dialogHandler as BlockHandler<BlueprintBlock, BaseBlockContext> | null;
-			case 'CHOICE': return this.choiceHandler as BlockHandler<BlueprintBlock, BaseBlockContext> | null;
-			case 'CONDITION': return this.conditionHandler as BlockHandler<BlueprintBlock, BaseBlockContext> | null;
-			case 'ACTION': return this.actionHandler as BlockHandler<BlueprintBlock, BaseBlockContext> | null;
-			case 'NOTE': return null;
+			case BlockType.Dialog: return this.dialogHandler as BlockHandler<BlueprintBlock, BaseBlockContext> | null;
+			case BlockType.Choice: return this.choiceHandler as BlockHandler<BlueprintBlock, BaseBlockContext> | null;
+			case BlockType.Condition: return this.conditionHandler as BlockHandler<BlueprintBlock, BaseBlockContext> | null;
+			case BlockType.Action: return this.actionHandler as BlockHandler<BlueprintBlock, BaseBlockContext> | null;
+			// A note is never dispatched, and a type this engine does not know is not either.
+			default: return null;
 		}
 	}
 }
@@ -50,21 +52,22 @@ export class SceneHandlerRegistry {
 	enterHandler: SceneLifecycleHandler | null = null;
 	exitHandler: SceneLifecycleHandler | null = null;
 
-	setBlockHandler( blockUuid: string, handler: BlockHandler<BlueprintBlock, BaseBlockContext> ): void {
-		this.blockHandlers.set( blockUuid, handler );
+	setBlockHandler( blockId: string, handler: BlockHandler<BlueprintBlock, BaseBlockContext> ): void {
+		this.blockHandlers.set( blockId, handler );
 	}
 
-	getBlockHandler( blockUuid: string ): BlockHandler<BlueprintBlock, BaseBlockContext> | null {
-		return this.blockHandlers.get( blockUuid ) ?? null;
+	getBlockHandler( blockId: string ): BlockHandler<BlueprintBlock, BaseBlockContext> | null {
+		return this.blockHandlers.get( blockId ) ?? null;
 	}
 
 	getTypeHandler( type: BlockType ): BlockHandler<BlueprintBlock, BaseBlockContext> | null {
 		switch ( type ) {
-			case 'DIALOG': return this.dialogHandler as BlockHandler<BlueprintBlock, BaseBlockContext> | null;
-			case 'CHOICE': return this.choiceHandler as BlockHandler<BlueprintBlock, BaseBlockContext> | null;
-			case 'CONDITION': return this.conditionHandler as BlockHandler<BlueprintBlock, BaseBlockContext> | null;
-			case 'ACTION': return this.actionHandler as BlockHandler<BlueprintBlock, BaseBlockContext> | null;
-			case 'NOTE': return null;
+			case BlockType.Dialog: return this.dialogHandler as BlockHandler<BlueprintBlock, BaseBlockContext> | null;
+			case BlockType.Choice: return this.choiceHandler as BlockHandler<BlueprintBlock, BaseBlockContext> | null;
+			case BlockType.Condition: return this.conditionHandler as BlockHandler<BlueprintBlock, BaseBlockContext> | null;
+			case BlockType.Action: return this.actionHandler as BlockHandler<BlueprintBlock, BaseBlockContext> | null;
+			// A note is never dispatched, and a type this engine does not know is not either.
+			default: return null;
 		}
 	}
 }
@@ -78,11 +81,11 @@ export interface ResolvedHandlers {
 
 /**
  * Resolve which handlers to call for a given block.
- * Priority: onBlock(uuid) > scene.onType > engine.onType
+ * Priority: onBlock(id) > scene.onType > engine.onType
  */
 export function resolveHandler(
 	blockType: BlockType,
-	blockUuid: string,
+	blockId: string,
 	sceneRegistry: SceneHandlerRegistry | null,
 	globalRegistry: HandlerRegistry,
 ): ResolvedHandlers {
@@ -92,8 +95,8 @@ export function resolveHandler(
 		return { sceneHandler: null, globalHandler };
 	}
 
-	// Most specific: onBlock(uuid)
-	const blockOverride = sceneRegistry.getBlockHandler( blockUuid );
+	// Most specific: onBlock(id)
+	const blockOverride = sceneRegistry.getBlockHandler( blockId );
 	if ( blockOverride ) {
 		return { sceneHandler: blockOverride, globalHandler };
 	}

@@ -9,35 +9,49 @@ import { DialogueEngine } from './engine.js';
 import { SceneHandleImpl, type SceneHandleCallbacks } from './scene-handle.js';
 import { SceneGraph } from './graph.js';
 import { HandlerRegistry } from './handler-registry.js';
-import type { BlueprintExport, BlueprintScene, BlueprintBlock } from './types.js';
+import type { Blueprints, Scene, Block, ConditionTest } from './types.js';
 import { evaluateConditionChain } from './condition-evaluator.js';
-import type { ExportCondition } from './types.js';
+import {
+	blueprint, scene as buildScene, dialog, note, choice, condition, action,
+	link, option, whenCase, test as t,
+} from './test-builders.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function dialog( uuid: string, opts: { start?: boolean } = {} ): BlueprintBlock {
-	return { uuid, type: 'DIALOG', properties: [], isStartBlock: opts.start } as BlueprintBlock;
+interface Wire { fromId: string; toId: string; fromPort: string }
+
+/** One wire, seen from outside. `port` is a NAME: `out`, `then`, `C1`, `K1`, or a card id. */
+function conn( fromId: string, toId: string, fromPort = 'out' ): Wire {
+	return { fromId, toId, fromPort };
 }
 
-function conn( fromId: string, toId: string, fromPort = 'out' ) {
-	return { id: `${ fromId }-${ toId }`, fromId, toId, fromPort, toPort: 'in' };
+/**
+ * A scene written as blocks plus a list of wires.
+ *
+ * A wire is carried by the block it leaves in the payload, which scatters the shape of a graph
+ * across its blocks. Unreadable in a test, so these suites keep the list and this distributes it.
+ */
+function makeScene( spec: { blocks: Block[]; connections?: Wire[]; start?: string } ): Scene {
+	const byId = new Map( spec.blocks.map( b => [b.id, b] ) );
+	for ( const wire of spec.connections ?? [] ) {
+		const from = byId.get( wire.fromId );
+		if ( !from ) continue;
+		from.next = [...( from.next ?? [] ), { port: wire.fromPort, to: wire.toId, toPort: 'in' }];
+	}
+	return buildScene( spec.blocks, spec.start !== undefined ? { start: spec.start } : {} );
 }
 
-function makeScene( overrides: Partial<BlueprintScene> = {} ): BlueprintScene {
-	return { uuid: 's1', label: 'S1', date: '2025-01-01', blocks: [], connections: [], ...overrides };
-}
-
-function makeExport( scenes: BlueprintScene[] ): BlueprintExport {
-	return { version: '1.0.0', exportDate: '2025-01-01', locales: ['en'], scenes };
+function makeExport( scenes: Scene[] ): Blueprints {
+	return blueprint( scenes );
 }
 
 function makeCallbacks(): SceneHandleCallbacks {
 	return {
 		onSceneStarted: vi.fn(),
 		onSceneEnded: vi.fn(),
-		getResolveCharacter: () => ( chars ) => chars[0],
+		getResolveCharacter: () => ( actors ) => actors[0],
 		getConditionResolver: () => null,
-		getLocale: () => 'en',
+		getCard: () => undefined,
 	};
 }
 
@@ -45,10 +59,10 @@ function makeCallbacks(): SceneHandleCallbacks {
 function fillRequiredHandlers( reg: HandlerRegistry ): void {
 	reg.dialogHandler ??= ( { next } ) => { next(); };
 	reg.choiceHandler ??= ( { context, next } ) => {
-		if ( context.choices.length > 0 ) context.selectChoice( context.choices[0]!.uuid );
+		if ( context.options.length > 0 ) context.selectChoice( context.options[0]!.id );
 		next();
 	};
-	reg.conditionHandler ??= ( { context, next } ) => { context.resolve( true ); next(); };
+	reg.conditionHandler ??= ( { next } ) => { next(); };
 	reg.actionHandler ??= ( { context, next } ) => { context.resolve(); next(); };
 }
 
@@ -56,10 +70,10 @@ function fillRequiredHandlers( reg: HandlerRegistry ): void {
 function registerAllHandlers( engine: DialogueEngine ): void {
 	engine.onDialog( ( { next } ) => { next(); } );
 	engine.onChoice( ( { context, next } ) => {
-		if ( context.choices.length > 0 ) context.selectChoice( context.choices[0]!.uuid );
+		if ( context.options.length > 0 ) context.selectChoice( context.options[0]!.id );
 		next();
 	} );
-	engine.onCondition( ( { context, next } ) => { context.resolve( true ); next(); } );
+	engine.onCondition( ( { next } ) => { next(); } );
 	engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
 }
 
@@ -70,12 +84,12 @@ describe( 'edge — next() called twice', () => {
 	it( 'second next() is a no-op, block does not advance twice', () => {
 		const visited: string[] = [];
 		const scene = makeScene( {
-			blocks: [dialog( 'b1', { start: true } ), dialog( 'b2' ), dialog( 'b3' )],
+			blocks: [dialog( 'b1' ), dialog( 'b2' ), dialog( 'b3' )],
 			connections: [conn( 'b1', 'b2' ), conn( 'b2', 'b3' )],
 		} );
 		const global = new HandlerRegistry();
 		global.dialogHandler = ( { block, next } ) => {
-			visited.push( block.uuid );
+			visited.push( block.id );
 			next();
 			next(); // second call — should be ignored
 		};
@@ -94,7 +108,7 @@ describe( 'edge — NOTE-only scene', () => {
 	it( 'scene with only NOTE blocks ends immediately', () => {
 		const scene = makeScene( {
 			blocks: [
-				{ uuid: 'note1', type: 'NOTE', properties: [], isStartBlock: true } as BlueprintBlock,
+				note( 'note1' ),
 			],
 			connections: [],
 		} );
@@ -113,14 +127,14 @@ describe( 'edge — NOTE-only scene', () => {
 		const visited: string[] = [];
 		const scene = makeScene( {
 			blocks: [
-				{ uuid: 'note1', type: 'NOTE', properties: [], isStartBlock: true } as BlueprintBlock,
-				{ uuid: 'note2', type: 'NOTE', properties: [] } as BlueprintBlock,
+				note( 'note1' ),
+				note( 'note2' ),
 				dialog( 'real' ),
 			],
 			connections: [conn( 'note1', 'note2', 'any' ), conn( 'note2', 'real', 'any' )],
 		} );
 		const global = new HandlerRegistry();
-		global.dialogHandler = ( { block, next } ) => { visited.push( block.uuid ); next(); };
+		global.dialogHandler = ( { block, next } ) => { visited.push( block.id ); next(); };
 		fillRequiredHandlers( global );
 
 		new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() ).start();
@@ -135,30 +149,24 @@ describe( 'edge — selectChoice with invalid UUID', () => {
 
 	it( 'selecting a non-existent choice UUID leads to dead end', () => {
 		const visited: string[] = [];
-		const s: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const s = makeScene( {
 			blocks: [
-				dialog( 'b1', { start: true } ),
-				{
-					uuid: 'choice1', type: 'CHOICE' as const, properties: [],
-					choices: [
-						{ uuid: 'opt-a', structureKey: 'a', dialogueText: { en: 'A' } },
-					],
-				},
+				dialog( 'b1' ),
+				choice( 'choice1', [option( 'C1', { text: 'A' } )] ),
 				dialog( 'after' ),
 			],
 			connections: [
 				conn( 'b1', 'choice1' ),
-				{ id: 'c2', fromId: 'choice1', toId: 'after', fromPort: 'opt-a', toPort: 'in' },
+				conn( 'choice1', 'after', 'C1' ),
 			],
-		};
+		} );
 
 		const engine = new DialogueEngine();
 		engine.init( { data: makeExport( [s] ) } );
 		registerAllHandlers( engine );
-		engine.onDialog( ( { block, next } ) => { visited.push( block.uuid ); next(); } );
+		engine.onDialog( ( { block, next } ) => { visited.push( block.id ); next(); } );
 		engine.onChoice( ( { context, next } ) => {
-			context.selectChoice( 'INVALID-UUID' ); // doesn't match any connection
+			context.selectChoice( 'C9' ); // matches no wire on the block
 			next();
 		} );
 
@@ -175,29 +183,27 @@ describe( 'edge — condition resolve() called twice', () => {
 
 	it( 'second resolve() overwrites first — last value wins', () => {
 		const visited: string[] = [];
-		const s: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const s = makeScene( {
 			blocks: [
-				{ uuid: 'cond1', type: 'CONDITION' as const, properties: [], isStartBlock: true,
-					conditions: [[{ uuid: 'c1', key: 'x', operator: '=', value: 'y' }]] },
+				condition( 'cond1', [whenCase( 'out', [t( 'switches', 'x', true )] )] ),
 				dialog( 'yes' ),
 				dialog( 'no' ),
 			],
 			connections: [
-				{ id: 'ct', fromId: 'cond1', toId: 'yes', fromPort: 'true', toPort: 'in', fromPortIndex: 0 },
-				{ id: 'cf', fromId: 'cond1', toId: 'no', fromPort: 'false', toPort: 'in', fromPortIndex: 1 },
+				conn( 'cond1', 'yes', 'out' ),
+				conn( 'cond1', 'no', 'default' ),
 			],
-		};
+		} );
 
 		const engine = new DialogueEngine();
 		engine.init( { data: makeExport( [s] ) } );
 		registerAllHandlers( engine );
 		engine.onCondition( ( { context, next } ) => {
-			context.resolve( true );
-			context.resolve( false ); // override — should follow false branch
+			context.resolve( 'out' );
+			context.resolve( 'default' ); // override — should follow the false branch
 			next();
 		} );
-		engine.onDialog( ( { block, next } ) => { visited.push( block.uuid ); next(); } );
+		engine.onDialog( ( { block, next } ) => { visited.push( block.id ); next(); } );
 
 		engine.scene( 's1' ).start();
 		expect( visited ).toEqual( ['no'] );
@@ -212,7 +218,7 @@ describe( 'edge — onBeforeBlock without resolve', () => {
 	it( 'flow stays blocked, handler never fires', () => {
 		const visited: string[] = [];
 		const scene = makeScene( {
-			blocks: [dialog( 'b1', { start: true } ), dialog( 'b2' )],
+			blocks: [dialog( 'b1' ), dialog( 'b2' )],
 			connections: [conn( 'b1', 'b2' )],
 		} );
 
@@ -222,7 +228,7 @@ describe( 'edge — onBeforeBlock without resolve', () => {
 		engine.onBeforeBlock( ( { } ) => {
 			// Intentionally never call resolve()
 		} );
-		engine.onDialog( ( { block, next } ) => { visited.push( block.uuid ); next(); } );
+		engine.onDialog( ( { block, next } ) => { visited.push( block.id ); next(); } );
 
 		const handle = engine.scene( 's1' );
 		handle.start();
@@ -241,15 +247,15 @@ describe( 'edge — entryBlockId is a NOTE', () => {
 	it( 'NOTE as start block is skipped, follows to next block', () => {
 		const visited: string[] = [];
 		const scene = makeScene( {
-			entryBlockId: 'note1',
+			start: 'note1',
 			blocks: [
-				{ uuid: 'note1', type: 'NOTE', properties: [], isStartBlock: true } as BlueprintBlock,
+				note( 'note1' ),
 				dialog( 'real' ),
 			],
 			connections: [conn( 'note1', 'real', 'any' )],
 		} );
 		const global = new HandlerRegistry();
-		global.dialogHandler = ( { block, next } ) => { visited.push( block.uuid ); next(); };
+		global.dialogHandler = ( { block, next } ) => { visited.push( block.id ); next(); };
 		fillRequiredHandlers( global );
 
 		new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() ).start();
@@ -262,16 +268,16 @@ describe( 'edge — entryBlockId is a NOTE', () => {
 
 describe( 'edge — long condition chains', () => {
 
-	function cond( key: string, chain?: '|' | '&' ): ExportCondition {
-		return { uuid: key, key, operator: '=', value: 'true', chain };
+	function cond( entry: string, join?: 'or' | 'and' ): ConditionTest {
+		return t( 'switches', entry, true, 'equals', join );
 	}
 
-	const eval_ = ( c: ExportCondition ) => c.key.startsWith( 't' );
+	const eval_ = ( c: ConditionTest ) => c.entry.startsWith( 't' );
 
 	it( '4 conditions: t & t & f | t = true', () => {
 		// (((true AND true) AND false) OR true) = true
 		const result = evaluateConditionChain(
-			[cond( 'true1' ), cond( 'true2', '&' ), cond( 'false1', '&' ), cond( 'true3', '|' )],
+			[cond( 'true1' ), cond( 'true2', 'and' ), cond( 'false1', 'and' ), cond( 'true3', 'or' )],
 			eval_,
 		);
 		expect( result ).toBe( true );
@@ -279,7 +285,7 @@ describe( 'edge — long condition chains', () => {
 
 	it( '5 conditions: f | f | f | f | t = true', () => {
 		const result = evaluateConditionChain(
-			[cond( 'f1' ), cond( 'f2', '|' ), cond( 'f3', '|' ), cond( 'f4', '|' ), cond( 'true1', '|' )],
+			[cond( 'f1' ), cond( 'f2', 'or' ), cond( 'f3', 'or' ), cond( 'f4', 'or' ), cond( 'true1', 'or' )],
 			eval_,
 		);
 		expect( result ).toBe( true );
@@ -287,7 +293,7 @@ describe( 'edge — long condition chains', () => {
 
 	it( '5 conditions: t & t & t & t & f = false', () => {
 		const result = evaluateConditionChain(
-			[cond( 'true1' ), cond( 'true2', '&' ), cond( 'true3', '&' ), cond( 'true4', '&' ), cond( 'false1', '&' )],
+			[cond( 'true1' ), cond( 'true2', 'and' ), cond( 'true3', 'and' ), cond( 'true4', 'and' ), cond( 'false1', 'and' )],
 			eval_,
 		);
 		expect( result ).toBe( false );
@@ -303,7 +309,7 @@ describe( 'edge — handler overwrite', () => {
 		const calls: string[] = [];
 		const engine = new DialogueEngine();
 		engine.init( { data: makeExport( [makeScene( {
-			blocks: [dialog( 'b1', { start: true } )],
+			blocks: [dialog( 'b1' )],
 		} )] ) } );
 
 		registerAllHandlers( engine );

@@ -1,4 +1,13 @@
 // LSDE Dialog Engine — Init validation + diagnostic report (C# port of validator.ts)
+//
+// The first thing this file does is refuse a payload it cannot read.
+//
+// It did not, before. The engine opened whatever it was handed and went straight to work, so a
+// file written by a different exporter version produced no error at all — it produced a scene that
+// stopped in the middle, silently, at the point where the flow needed a field that was not there.
+// That is the worst failure a loader can have: the game ships, and the dialogue just ends early.
+//
+// So Format and Version are read before anything else, and a mismatch is fatal and named.
 
 using System.Collections.Generic;
 
@@ -6,220 +15,328 @@ namespace LsdeDialogEngine
 {
     public static class Validator
     {
+        /// <summary>The only payload this engine reads. A file that says anything else is refused.</summary>
+        private const string SupportedFormat = "lsde-blueprints";
+
+        /// <summary>The format version this engine reads. Bumps only when the contract changes.</summary>
+        private const int SupportedVersion = 1;
+
         /// <summary>
-        /// Validate blueprint data integrity and optionally cross-validate against game capabilities.
+        /// Fold the files of a per-scene export into one payload.
+        /// <para>Each file carries the whole header, so the first supplies it and the rest only add
+        /// scenes. Project and ExportedAt are checked first: they are identical across the files of
+        /// one export and different across two, which is the only way to catch someone passing
+        /// pieces of two exports. Merging those would produce a payload whose dictionaries do not
+        /// match its scenes, and nothing downstream would notice.</para>
+        /// <para>Returns null with an error when the files do not belong together.</para>
+        /// </summary>
+        public static BlueprintExport? MergePayloads(List<BlueprintExport> payloads, out DiagnosticEntry? error)
+        {
+            error = null;
+            var first = payloads[0];
+
+            for (int i = 1; i < payloads.Count; i++)
+            {
+                var next = payloads[i];
+                if (next.Project != first.Project || next.ExportedAt != first.ExportedAt)
+                {
+                    error = new DiagnosticEntry
+                    {
+                        Code = "MISMATCHED_EXPORTS",
+                        Message = $"These files are not from the same export: \"{first.Project}\" "
+                                  + $"({first.ExportedAt}) and \"{next.Project}\" ({next.ExportedAt}). "
+                                  + "Pass the files of one export at a time.",
+                    };
+                    return null;
+                }
+            }
+
+            var merged = new BlueprintExport
+            {
+                Format = first.Format,
+                Version = first.Version,
+                Generator = first.Generator,
+                ExportedAt = first.ExportedAt,
+                Project = first.Project,
+                Locales = first.Locales,
+                ReferenceLocale = first.ReferenceLocale,
+                Dictionaries = first.Dictionaries,
+                Functions = first.Functions,
+                Cards = first.Cards,
+                Scenes = new List<BlueprintScene>(),
+            };
+
+            foreach (var payload in payloads)
+            {
+                if (payload.Scenes != null) merged.Scenes.AddRange(payload.Scenes);
+            }
+
+            return merged;
+        }
+
+        /// <summary>
+        /// Validate a blueprint payload, and optionally cross-check it against what the game declares.
+        /// <para>Structural checks: the format header, scene paths, block id uniqueness <b>within a
+        /// scene</b>, the entry block, link targets, and the fork rule (at most one non-async target
+        /// per port). With Check, also warns about functions, dictionaries and cards the game does
+        /// not know.</para>
+        /// <para>Errors mean the payload will not play correctly; warnings mean it will, but
+        /// something looks wrong.</para>
         /// </summary>
         public static DiagnosticReport ValidateBlueprint(InitOptions options)
         {
             var errors = new List<DiagnosticEntry>();
             var warnings = new List<DiagnosticEntry>();
-            var data = options.Data;
-            var check = options.Check;
+            var stats = new DiagnosticStats();
 
-            // ─── Structural validation ───────────────────────────────────────────
+            DiagnosticReport Refuse() => new DiagnosticReport
+            {
+                Errors = errors, Warnings = warnings, Stats = stats,
+            };
 
-            if (data == null)
+            // ─── The header, before anything else ────────────────────────
+
+            var files = options.Files;
+            BlueprintExport? payload;
+
+            if (files != null)
+            {
+                if (files.Count == 0)
+                {
+                    errors.Add(new DiagnosticEntry { Code = "MISSING_DATA", Message = "Blueprint data is required." });
+                    return Refuse();
+                }
+
+                // A per-scene export arrives as several self-contained files. Fold them before
+                // validating, so no rule below has to know about split modes.
+                payload = MergePayloads(files, out var mergeError);
+                if (mergeError != null)
+                {
+                    errors.Add(mergeError);
+                    return Refuse();
+                }
+            }
+            else
+            {
+                payload = options.Data;
+            }
+
+            if (payload == null)
             {
                 errors.Add(new DiagnosticEntry { Code = "MISSING_DATA", Message = "Blueprint data is required." });
-                return new DiagnosticReport
-                {
-                    Errors = errors,
-                    Warnings = warnings,
-                    Stats = new DiagnosticStats()
-                };
+                return Refuse();
             }
 
-            if (string.IsNullOrEmpty(data.Version))
+            if (payload.Format != SupportedFormat)
             {
-                errors.Add(new DiagnosticEntry { Code = "MISSING_VERSION", Message = "Blueprint version is required." });
+                errors.Add(new DiagnosticEntry
+                {
+                    Code = "INVALID_FORMAT",
+                    Message = $"Not an LSDE blueprint: expected format \"{SupportedFormat}\", "
+                              + $"got {Describe(payload.Format)}.",
+                });
+                return Refuse();
             }
 
-            if (data.Scenes == null || data.Scenes.Count == 0)
+            if (payload.Version != SupportedVersion)
+            {
+                errors.Add(new DiagnosticEntry
+                {
+                    Code = "UNSUPPORTED_FORMAT_VERSION",
+                    Message = $"This engine reads blueprint format version {SupportedVersion}, "
+                              + $"the file is version {payload.Version}. "
+                              + "Re-export from LSDE, or install the engine version that matches it.",
+                });
+                return Refuse();
+            }
+
+            // ─── Scenes ──────────────────────────────────────────────────
+
+            if (payload.Scenes == null || payload.Scenes.Count == 0)
             {
                 errors.Add(new DiagnosticEntry { Code = "NO_SCENES", Message = "Blueprint must contain at least one scene." });
-                return new DiagnosticReport
-                {
-                    Errors = errors,
-                    Warnings = warnings,
-                    Stats = new DiagnosticStats()
-                };
+                return Refuse();
             }
 
-            // ─── Per-scene validation ────────────────────────────────────────────
-
-            var globalBlockUuids = new HashSet<string>();
+            var scenePaths = new HashSet<string>();
             int totalBlocks = 0;
             int totalConnections = 0;
 
-            foreach (var scene in data.Scenes)
+            foreach (var scene in payload.Scenes)
             {
-                ValidateScene(scene, globalBlockUuids, errors, warnings);
-                totalBlocks += scene.Blocks.Count;
-                totalConnections += scene.Connections.Count;
-            }
-
-            // ─── Cross-validation (optional) ────────────────────────────────────
-
-            if (check != null)
-            {
-                CrossValidate(data, check, warnings);
-            }
-
-            return new DiagnosticReport
-            {
-                Errors = errors,
-                Warnings = warnings,
-                Stats = new DiagnosticStats
+                if (!scenePaths.Add(scene.Scene))
                 {
-                    SceneCount = data.Scenes.Count,
-                    BlockCount = totalBlocks,
-                    ConnectionCount = totalConnections
+                    errors.Add(new DiagnosticEntry
+                    {
+                        Code = "DUPLICATE_SCENE",
+                        Message = $"Scene \"{scene.Scene}\" appears more than once. "
+                                  + "When loading a per-scene export, pass each file exactly once.",
+                        SceneId = scene.Scene,
+                    });
                 }
-            };
+
+                ValidateScene(scene, errors, warnings);
+                var blocks = scene.Blocks ?? new List<BlueprintBlock>();
+                totalBlocks += blocks.Count;
+                foreach (var block in blocks)
+                {
+                    totalConnections += block.Next?.Count ?? 0;
+                }
+            }
+
+            if (options.Check != null)
+            {
+                CrossValidate(payload, options.Check, warnings);
+            }
+
+            stats.SceneCount = payload.Scenes.Count;
+            stats.BlockCount = totalBlocks;
+            stats.ConnectionCount = totalConnections;
+
+            return new DiagnosticReport { Errors = errors, Warnings = warnings, Stats = stats };
         }
 
         private static void ValidateScene(
             BlueprintScene scene,
-            HashSet<string> globalBlockUuids,
             List<DiagnosticEntry> errors,
             List<DiagnosticEntry> warnings)
         {
-            if (string.IsNullOrEmpty(scene.Uuid))
+            if (string.IsNullOrEmpty(scene.Scene))
             {
-                errors.Add(new DiagnosticEntry { Code = "MISSING_SCENE_UUID", Message = "Scene is missing a UUID." });
+                errors.Add(new DiagnosticEntry { Code = "MISSING_SCENE_PATH", Message = "Scene is missing its path." });
             }
-            if (string.IsNullOrEmpty(scene.Label))
+
+            // A payload can carry a scene with no blocks at all - a truncated file, or a scene the
+            // writer has not filled in yet. Normalised rather than reported: "absent" and "empty"
+            // cannot be told apart here, since Blocks has an initializer, and a scene with no
+            // blocks already reports NO_START_BLOCK. It cannot play, which is the thing worth
+            // saying, and all four runtimes say it the same way.
+            var blocks = scene.Blocks ?? new List<BlueprintBlock>();
+
+            // A block id is unique inside its scene and nowhere else: the counter restarts at 1 in
+            // every scene, so DIALOG-001 in two scenes is not a collision, it is the normal case.
+            var blockIds = new HashSet<string>();
+
+            foreach (var block in blocks)
+            {
+                if (!blockIds.Add(block.Id))
+                {
+                    errors.Add(new DiagnosticEntry
+                    {
+                        Code = "DUPLICATE_BLOCK_ID",
+                        Message = $"Duplicate block id \"{block.Id}\" within scene \"{scene.Scene}\".",
+                        SceneId = scene.Scene,
+                        BlockId = block.Id,
+                    });
+                }
+            }
+
+            // The scene names its own entry, so there is no such thing as two start blocks.
+            if (string.IsNullOrEmpty(scene.Start))
+            {
+                warnings.Add(new DiagnosticEntry
+                {
+                    Code = "NO_START_BLOCK",
+                    Message = $"Scene \"{scene.Scene}\" has no start block and cannot play.",
+                    SceneId = scene.Scene,
+                });
+            }
+            else if (!blockIds.Contains(scene.Start!))
             {
                 errors.Add(new DiagnosticEntry
                 {
-                    Code = "MISSING_SCENE_LABEL",
-                    Message = "Scene is missing a label.",
-                    SceneId = scene.Uuid
+                    Code = "INVALID_START_BLOCK",
+                    Message = $"Scene \"{scene.Scene}\" starts on \"{scene.Start}\", "
+                              + "which is not a block of this scene.",
+                    SceneId = scene.Scene,
+                    BlockId = scene.Start,
                 });
             }
 
-            var sceneBlockUuids = new HashSet<string>();
-            int startBlockCount = 0;
+            var blockById = new Dictionary<string, BlueprintBlock>();
+            foreach (var block in blocks) blockById[block.Id] = block;
 
-            foreach (var block in scene.Blocks)
+            foreach (var block in blocks)
             {
-                // Duplicate UUID within scene
-                if (sceneBlockUuids.Contains(block.Uuid))
-                {
-                    errors.Add(new DiagnosticEntry
-                    {
-                        Code = "DUPLICATE_BLOCK_UUID",
-                        Message = $"Duplicate block UUID \"{block.Uuid}\" within scene \"{scene.Label}\".",
-                        SceneId = scene.Uuid,
-                        BlockId = block.Uuid
-                    });
-                }
-                sceneBlockUuids.Add(block.Uuid);
-
-                // Duplicate UUID across scenes
-                if (globalBlockUuids.Contains(block.Uuid))
-                {
-                    errors.Add(new DiagnosticEntry
-                    {
-                        Code = "DUPLICATE_BLOCK_UUID_GLOBAL",
-                        Message = $"Block UUID \"{block.Uuid}\" exists in multiple scenes.",
-                        SceneId = scene.Uuid,
-                        BlockId = block.Uuid
-                    });
-                }
-                globalBlockUuids.Add(block.Uuid);
-
-                if (block.IsStartBlock == true)
-                {
-                    startBlockCount++;
-                }
+                ValidateLinks(scene, block, blockIds, blockById, errors, warnings);
+                ValidateWaits(scene, block, blockIds, warnings);
             }
+        }
 
-            // Multiple start blocks
-            if (startBlockCount > 1)
+        /// <summary>WaitForBlocks names blocks OF THIS SCENE that must be visited before this one advances.</summary>
+        /// <remarks>A name that is not in the scene can never be visited, so the block parks for
+        /// good: on the main flow that is the whole dialogue stopping with no OnSceneExit, and on a
+        /// parallel track it is a branch that silently never finishes. Neither shows up anywhere at
+        /// runtime, which is why it is said here — a warning, not an error: the rest still plays.</remarks>
+        private static void ValidateWaits(
+            BlueprintScene scene,
+            BlueprintBlock block,
+            HashSet<string> blockIds,
+            List<DiagnosticEntry> warnings)
+        {
+            var waits = LsdeUtils.GetNativeProperties(block).WaitForBlocks;
+            if (waits == null) return;
+
+            foreach (var id in waits)
             {
-                errors.Add(new DiagnosticEntry
+                if (string.IsNullOrEmpty(id) || blockIds.Contains(id)) continue;
+                warnings.Add(new DiagnosticEntry
                 {
-                    Code = "MULTIPLE_START_BLOCKS",
-                    Message = $"Scene \"{scene.Label}\" has {startBlockCount} start blocks (expected at most 1).",
-                    SceneId = scene.Uuid
+                    Code = "UNKNOWN_WAIT_BLOCK",
+                    Message = $"{DescribeBlock(block)} waits for \"{id}\", which is not a block of "
+                              + $"scene \"{scene.Scene}\". It can never be visited, so this block never advances.",
+                    SceneId = scene.Scene,
+                    BlockId = block.Id,
                 });
             }
+        }
 
-            // entryBlockId references a valid block
-            if (scene.EntryBlockId != null && !sceneBlockUuids.Contains(scene.EntryBlockId))
-            {
-                errors.Add(new DiagnosticEntry
-                {
-                    Code = "INVALID_ENTRY_BLOCK",
-                    Message = $"Scene \"{scene.Label}\" entryBlockId \"{scene.EntryBlockId}\" does not reference an existing block.",
-                    SceneId = scene.Uuid,
-                    BlockId = scene.EntryBlockId
-                });
-            }
+        private static void ValidateLinks(
+            BlueprintScene scene,
+            BlueprintBlock block,
+            HashSet<string> blockIds,
+            Dictionary<string, BlueprintBlock> blockById,
+            List<DiagnosticEntry> errors,
+            List<DiagnosticEntry> warnings)
+        {
+            if (block.Next == null || block.Next.Count == 0) return;
 
-            // Connection integrity
-            foreach (var conn in scene.Connections)
+            // A link's target is relative to the same scene — a wire has never crossed one.
+            var byPort = new Dictionary<string, List<string>>();
+
+            foreach (var link in block.Next)
             {
-                if (!sceneBlockUuids.Contains(conn.FromId))
-                {
-                    errors.Add(new DiagnosticEntry
-                    {
-                        Code = "BROKEN_CONNECTION_FROM",
-                        Message = $"Connection \"{conn.Id}\" fromId \"{conn.FromId}\" references a non-existent block.",
-                        SceneId = scene.Uuid
-                    });
-                }
-                if (!sceneBlockUuids.Contains(conn.ToId))
+                if (!blockIds.Contains(link.To))
                 {
                     errors.Add(new DiagnosticEntry
                     {
-                        Code = "BROKEN_CONNECTION_TO",
-                        Message = $"Connection \"{conn.Id}\" toId \"{conn.ToId}\" references a non-existent block.",
-                        SceneId = scene.Uuid
+                        Code = "BROKEN_LINK",
+                        Message = $"{DescribeBlock(block)} links from port \"{link.Port}\" to \"{link.To}\", "
+                                  + $"which is not a block of scene \"{scene.Scene}\".",
+                        SceneId = scene.Scene,
+                        BlockId = block.Id,
                     });
                 }
-            }
 
-            // Fork validation: max 1 non-async target per output port group
-            var blockMap = new Dictionary<string, BlueprintBlock>();
-            foreach (var block in scene.Blocks)
-            {
-                blockMap[block.Uuid] = block;
-            }
-
-            var portGroups = new Dictionary<string, List<string>>(); // "blockId:portKey" → toId[]
-            foreach (var conn in scene.Connections)
-            {
-                string key = conn.FromPortIndex.HasValue
-                    ? $"{conn.FromId}:idx:{conn.FromPortIndex.Value}"
-                    : $"{conn.FromId}:port:{conn.FromPort}";
-
-                if (portGroups.TryGetValue(key, out var group))
+                if (!byPort.TryGetValue(link.Port, out var group))
                 {
-                    group.Add(conn.ToId);
+                    group = new List<string>();
+                    byPort[link.Port] = group;
                 }
-                else
-                {
-                    portGroups[key] = new List<string> { conn.ToId };
-                }
+                group.Add(link.To);
             }
 
-            foreach (var kv in portGroups)
+            // One port, several wires: the first non-async target becomes the main flow and the
+            // rest run as parallel tracks. Two non-async targets on one port means the second
+            // silently never becomes the main track — almost always a wiring mistake.
+            foreach (var pair in byPort)
             {
-                var targets = kv.Value;
-                if (targets.Count <= 1) continue;
+                if (pair.Value.Count <= 1) continue;
 
                 int nonAsyncCount = 0;
-                foreach (var toId in targets)
+                foreach (var to in pair.Value)
                 {
-                    if (blockMap.TryGetValue(toId, out var target))
-                    {
-                        if (target.NativeProperties?.IsAsync != true)
-                        {
-                            nonAsyncCount++;
-                        }
-                    }
+                    if (!blockById.TryGetValue(to, out var target) || !IsAsync(target)) nonAsyncCount++;
                 }
 
                 if (nonAsyncCount > 1)
@@ -227,11 +344,22 @@ namespace LsdeDialogEngine
                     warnings.Add(new DiagnosticEntry
                     {
                         Code = "MULTIPLE_NON_ASYNC_FORK",
-                        Message = $"A port has {targets.Count} outgoing connections with {nonAsyncCount} non-async targets. Mark secondary targets as isAsync.",
-                        SceneId = scene.Uuid
+                        Message = $"{DescribeBlock(block)} port \"{pair.Key}\" has {pair.Value.Count} "
+                                  + $"outgoing links with {nonAsyncCount} non-async targets. "
+                                  + "Mark the secondary ones isAsync.",
+                        SceneId = scene.Scene,
+                        BlockId = block.Id,
                     });
                 }
             }
+        }
+
+        private static bool IsAsync(BlueprintBlock block)
+        {
+            return block.Props != null
+                && block.Props.TryGetValue("isAsync", out var value)
+                && value is bool flag
+                && flag;
         }
 
         private static void CrossValidate(
@@ -239,83 +367,90 @@ namespace LsdeDialogEngine
             CheckOptions check,
             List<DiagnosticEntry> warnings)
         {
-            // Signatures
-            if (check.Signatures != null && data.Signatures != null)
+            if (check.Functions != null && data.Functions != null)
             {
-                var gameSignatures = new HashSet<string>(check.Signatures);
-                foreach (var sig in data.Signatures)
+                var known = new HashSet<string>(check.Functions);
+                foreach (var fn in data.Functions)
                 {
-                    if (!gameSignatures.Contains(sig.Id))
+                    if (!known.Contains(fn.Id))
                     {
                         warnings.Add(new DiagnosticEntry
                         {
-                            Code = "UNKNOWN_SIGNATURE",
-                            Message = $"Blueprint uses signature \"{sig.Id}\" which is not declared in the game."
+                            Code = "UNKNOWN_FUNCTION",
+                            Message = $"Blueprint declares function \"{fn.Id}\" which the game does not implement.",
                         });
                     }
                 }
             }
 
-            // Dictionaries
             if (check.Dictionaries != null && data.Dictionaries != null)
             {
                 foreach (var dict in data.Dictionaries)
                 {
-                    string id = dict.Id;
-                    if (!check.Dictionaries.TryGetValue(id, out var gameKeys))
+                    if (!check.Dictionaries.TryGetValue(dict.Id, out var knownEntries))
                     {
                         warnings.Add(new DiagnosticEntry
                         {
-                            Code = "UNKNOWN_DICTIONARY_GROUP",
-                            Message = $"Blueprint uses dictionary group \"{id}\" which is not declared in the game."
+                            Code = "UNKNOWN_DICTIONARY",
+                            Message = $"Blueprint uses dictionary \"{dict.Id}\" which the game does not declare.",
                         });
                         continue;
                     }
-                    var gameKeySet = new HashSet<string>(gameKeys);
-                    foreach (var row in dict.Rows)
+
+                    var knownSet = new HashSet<string>(knownEntries);
+                    foreach (var entry in dict.Entries)
                     {
-                        if (!gameKeySet.Contains(row.Key))
+                        if (!knownSet.Contains(entry))
                         {
                             warnings.Add(new DiagnosticEntry
                             {
-                                Code = "UNKNOWN_DICTIONARY_KEY",
-                                Message = $"Dictionary group \"{id}\" uses key \"{row.Key}\" not declared in the game."
+                                Code = "UNKNOWN_DICTIONARY_ENTRY",
+                                Message = $"Dictionary \"{dict.Id}\" declares entry \"{entry}\" which the game does not know.",
                             });
                         }
                     }
                 }
             }
 
-            // Characters
-            if (check.Characters != null)
+            // Cards — matched on the NAME the game gives them, not on the editor id.
+            if (check.Cards != null && data.Cards != null)
             {
-                var gameCharacters = new HashSet<string>(check.Characters);
-                var blueprintCharacters = new HashSet<string>();
-                foreach (var scene in data.Scenes)
+                var known = new HashSet<string>(check.Cards);
+                foreach (var card in data.Cards)
                 {
-                    foreach (var block in scene.Blocks)
-                    {
-                        if (block.Metadata?.Characters != null)
-                        {
-                            foreach (var ch in block.Metadata.Characters)
-                            {
-                                blueprintCharacters.Add(ch.Name);
-                            }
-                        }
-                    }
-                }
-                foreach (var name in blueprintCharacters)
-                {
-                    if (!gameCharacters.Contains(name))
+                    if (!known.Contains(card.Name))
                     {
                         warnings.Add(new DiagnosticEntry
                         {
-                            Code = "UNKNOWN_CHARACTER",
-                            Message = $"Blueprint uses character \"{name}\" which is not declared in the game."
+                            Code = "UNKNOWN_CARD",
+                            Message = $"Blueprint declares card \"{card.Name}\" ({card.Role}) which the game does not know.",
                         });
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// How a block is named in a diagnostic.
+        /// <para>DIALOG-007 is already readable on its own — that is what replaced the v1 uuid, and
+        /// it is why blocks carry no mandatory name. When the writer left a note, it says far more
+        /// than any label would, so it is appended. A Label wins over both when an export has one.</para>
+        /// </summary>
+        private static string DescribeBlock(BlueprintBlock block)
+        {
+            if (!string.IsNullOrEmpty(block.Label)) return $"Block {block.Id} (\"{block.Label}\")";
+            if (!string.IsNullOrEmpty(block.Note)) return $"Block {block.Id} (\"{Truncate(block.Note!, 60)}\")";
+            return $"Block {block.Id}";
+        }
+
+        private static string Truncate(string text, int max)
+        {
+            return text.Length <= max ? text : text.Substring(0, max - 1) + "…";
+        }
+
+        private static string Describe(string? value)
+        {
+            return string.IsNullOrEmpty(value) ? "nothing" : $"\"{value}\"";
         }
     }
 }

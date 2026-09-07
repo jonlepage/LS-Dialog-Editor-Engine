@@ -14,11 +14,11 @@ class BlueprintBlockNewtonsoftConverter : JsonConverter<BlueprintBlock>
         var type = obj["type"]?.ToString();
         BlueprintBlock block = type switch
         {
-            "DIALOG"    => new DialogBlock(),
-            "CHOICE"    => new ChoiceBlock(),
-            "CONDITION" => new ConditionBlock(),
-            "ACTION"    => new ActionBlock(),
-            "NOTE"      => new NoteBlock(),
+            "dialog"    => new DialogBlock(),
+            "choice"    => new ChoiceBlock(),
+            "condition" => new ConditionBlock(),
+            "action"    => new ActionBlock(),
+            "note"      => new NoteBlock(),
             _           => throw new JsonException($"Unknown block type: {type}")
         };
         serializer.Populate(obj.CreateReader(), block);
@@ -48,11 +48,11 @@ class BlueprintBlockConverter : JsonConverter<BlueprintBlock>
         var json = root.GetRawText();
         return type switch
         {
-            "DIALOG"    => JsonSerializer.Deserialize<DialogBlock>(json, options)!,
-            "CHOICE"    => JsonSerializer.Deserialize<ChoiceBlock>(json, options)!,
-            "CONDITION" => JsonSerializer.Deserialize<ConditionBlock>(json, options)!,
-            "ACTION"    => JsonSerializer.Deserialize<ActionBlock>(json, options)!,
-            "NOTE"      => JsonSerializer.Deserialize<NoteBlock>(json, options)!,
+            "dialog"    => JsonSerializer.Deserialize<DialogBlock>(json, options)!,
+            "choice"    => JsonSerializer.Deserialize<ChoiceBlock>(json, options)!,
+            "condition" => JsonSerializer.Deserialize<ConditionBlock>(json, options)!,
+            "action"    => JsonSerializer.Deserialize<ActionBlock>(json, options)!,
+            "note"      => JsonSerializer.Deserialize<NoteBlock>(json, options)!,
             _           => throw new JsonException($"Unknown block type: {type}")
         };
     }
@@ -91,11 +91,11 @@ class BlockPropertyValueConverter : JsonConverter<object>
 
 void from_json(const nlohmann::json& j, std::unique_ptr<lsde::BlueprintBlock>& block) {
     auto type = j.at("type").get<std::string>();
-    if      (type == "DIALOG")    block = std::make_unique<lsde::DialogBlock>();
-    else if (type == "CHOICE")    block = std::make_unique<lsde::ChoiceBlock>();
-    else if (type == "CONDITION") block = std::make_unique<lsde::ConditionBlock>();
-    else if (type == "ACTION")    block = std::make_unique<lsde::ActionBlock>();
-    else if (type == "NOTE")      block = std::make_unique<lsde::NoteBlock>();
+    if      (type == "dialog")    block = std::make_unique<lsde::DialogBlock>();
+    else if (type == "choice")    block = std::make_unique<lsde::ChoiceBlock>();
+    else if (type == "condition") block = std::make_unique<lsde::ConditionBlock>();
+    else if (type == "action")    block = std::make_unique<lsde::ActionBlock>();
+    else if (type == "note")      block = std::make_unique<lsde::NoteBlock>();
     else throw std::runtime_error("Unknown block type: " + type);
     j.get_to(*block);
 }

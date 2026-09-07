@@ -1,7 +1,7 @@
 ::: code-group
 ```ts [TypeScript]
 engine.onBeforeBlock(({ block, resolve }) => {
-  const delay = block.nativeProperties?.delay;
+  const delay = LsdeUtils.getNativeProperties(block)?.delay;
   if (delay) {
     setTimeout(resolve, delay * 1000);
   } else {
@@ -25,8 +25,8 @@ engine.OnBeforeBlock(args => {
 ```
 ```cpp [C++]
 engine.onBeforeBlock([](const auto& args) {
-    auto delay = args.block->nativeProperties
-        ? args.block->nativeProperties->delay : std::nullopt;
+    auto delay = args.block->props
+        ? args.block->props->delay : std::nullopt;
     if (delay.has_value()) {
         // use your engine's timer system (FTimerManager, SDL_AddTimer, etc.)
         scheduleDelay(delay.value(), [&args]() { args.resolve(); });
@@ -37,7 +37,7 @@ engine.onBeforeBlock([](const auto& args) {
 ```
 ```gdscript [GDScript]
 engine.on_before_block(func(args):
-    var delay = args["block"].get("nativeProperties", {}).get("delay", 0)
+    var delay = args["block"].get("props", {}).get("delay", 0)
     if delay > 0:
         await get_tree().create_timer(delay).timeout
     args["resolve"].call()

@@ -41,15 +41,11 @@ void DialogueEngine::setLocale(const std::string& locale) {
     LsdeUtils::locale = locale;
 }
 
-void DialogueEngine::onResolveCharacter(std::function<const BlockCharacter*(const std::vector<BlockCharacter>&)> fn) {
+void DialogueEngine::onResolveCharacter(std::function<const Card*(const std::vector<Card>&)> fn) {
     _resolveCharacter = std::move(fn);
 }
 
-void DialogueEngine::onResolveCondition(std::function<bool(const ExportCondition&)> evaluator) {
-    _conditionResolver = std::move(evaluator);
-}
-
-void DialogueEngine::setChoiceFilter(std::function<bool(const ExportCondition&)> evaluator) {
+void DialogueEngine::onResolveCondition(std::function<bool(const ConditionTest&)> evaluator) {
     _conditionResolver = std::move(evaluator);
 }
 
@@ -57,30 +53,37 @@ void DialogueEngine::onValidateNextBlock(ValidateNextBlockHandler h) { _globalRe
 void DialogueEngine::onInvalidateBlock(InvalidateBlockHandler h) { _globalRegistry.invalidateBlockHandler = std::move(h); }
 void DialogueEngine::onBeforeBlock(BeforeBlockHandler h) { _globalRegistry.beforeBlockHandler = std::move(h); }
 
-void DialogueEngine::onDialog(TypedBlockHandler<DialogBlock, IDialogContext> h) { _globalRegistry.dialogHandler = wrapHandler<DialogBlock, IDialogContext>(std::move(h)); }
-void DialogueEngine::onChoice(TypedBlockHandler<ChoiceBlock, IChoiceContext> h) { _globalRegistry.choiceHandler = wrapHandler<ChoiceBlock, IChoiceContext>(std::move(h)); }
-void DialogueEngine::onCondition(TypedBlockHandler<ConditionBlock, IConditionContext> h) { _globalRegistry.conditionHandler = wrapHandler<ConditionBlock, IConditionContext>(std::move(h)); }
-void DialogueEngine::onAction(TypedBlockHandler<ActionBlock, IActionContext> h) { _globalRegistry.actionHandler = wrapHandler<ActionBlock, IActionContext>(std::move(h)); }
+void DialogueEngine::onDialog(TypedBlockHandler<BlueprintBlock, IDialogContext> h) { _globalRegistry.dialogHandler = wrapHandler<BlueprintBlock, IDialogContext>(std::move(h)); }
+void DialogueEngine::onChoice(TypedBlockHandler<BlueprintBlock, IChoiceContext> h) { _globalRegistry.choiceHandler = wrapHandler<BlueprintBlock, IChoiceContext>(std::move(h)); }
+void DialogueEngine::onCondition(TypedBlockHandler<BlueprintBlock, IConditionContext> h) { _globalRegistry.conditionHandler = wrapHandler<BlueprintBlock, IConditionContext>(std::move(h)); }
+void DialogueEngine::onAction(TypedBlockHandler<BlueprintBlock, IActionContext> h) { _globalRegistry.actionHandler = wrapHandler<BlueprintBlock, IActionContext>(std::move(h)); }
 
 void DialogueEngine::onSceneEnter(SceneLifecycleHandler h) { _globalRegistry.sceneEnterHandler = std::move(h); }
 void DialogueEngine::onSceneExit(SceneLifecycleHandler h) { _globalRegistry.sceneExitHandler = std::move(h); }
 
-std::unique_ptr<ISceneHandle> DialogueEngine::scene(const std::string& sceneId) {
+std::unique_ptr<ISceneHandle> DialogueEngine::scene(const std::string& sceneRef) {
     if (!_initialized || !_graph) {
         throw std::runtime_error("Engine not initialized. Call init() first.");
     }
 
-    auto* sg = _graph->getSceneGraph(sceneId);
+    auto* sg = _graph->getSceneGraph(sceneRef);
     if (!sg) {
-        throw std::runtime_error("Scene \"" + sceneId + "\" not found.");
+        throw std::runtime_error("Scene \"" + sceneRef + "\" not found.");
     }
 
     auto handle = std::make_unique<SceneHandleImpl>(*sg, _globalRegistry, SceneHandleCallbacks{
-        [this, sceneId](ISceneHandle* h) { _activeScenes[sceneId] = h; },
-        [this, sceneId](ISceneHandle*) { _activeScenes.erase(sceneId); },
+        [this, sceneRef](ISceneHandle* h) { _activeScenes[sceneRef] = h; },
+        // Only if the entry still points at the handle that is ending. Nothing stops a game from
+        // opening the same scene twice - a hub revisited while a first pass is parked on a handler
+        // - and a blind erase then dropped the LIVE one from the registry: the engine reported
+        // itself idle while a scene was still running, and stop() no longer reached it.
+        [this, sceneRef](ISceneHandle* h) {
+            auto it = _activeScenes.find(sceneRef);
+            if (it != _activeScenes.end() && it->second == h) _activeScenes.erase(it);
+        },
         [this]() { return _resolveCharacter; },
-        [this]() -> std::function<bool(const ExportCondition&)> { return _conditionResolver; },
-        [this]() -> std::string { return _locale; },
+        [this]() -> std::function<bool(const ConditionTest&)> { return _conditionResolver; },
+        [this](const std::string& cardId) { return _graph->getCard(cardId); },
     });
 
     return handle;
@@ -110,9 +113,9 @@ std::vector<const BlueprintBlock*> DialogueEngine::getCurrentBlocks() const {
     return blocks;
 }
 
-std::vector<const BlueprintConnection*> DialogueEngine::getSceneConnections(const std::string& sceneId) const {
+std::vector<BlueprintConnection> DialogueEngine::getSceneConnections(const std::string& sceneRef) const {
     if (!_graph) return {};
-    return _graph->getSceneConnections(sceneId);
+    return _graph->getSceneConnections(sceneRef);
 }
 
 } // namespace lsde

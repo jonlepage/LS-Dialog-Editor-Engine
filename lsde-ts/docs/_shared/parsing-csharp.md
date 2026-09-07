@@ -4,7 +4,7 @@
 using LsdeDialogEngine;
 using LsdeDialogEngine.Json;
 
-var json = File.ReadAllText("blueprint.json");
+var json = File.ReadAllText("blueprints.json");
 var blueprint = LsdeJson.Parse(json);
 engine.Init(new InitOptions { Data = blueprint });
 ```
@@ -14,7 +14,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using LsdeDialogEngine;
 
-var json = File.ReadAllText("blueprint.json");
+var json = File.ReadAllText("blueprints.json");
 var options = new JsonSerializerOptions {
     PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     Converters = {

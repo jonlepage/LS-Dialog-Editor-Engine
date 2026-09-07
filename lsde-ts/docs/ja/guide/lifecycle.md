@@ -97,7 +97,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A["block.metadata.characters\n= [Lia, Bob, Sam]"] --> B["onResolveCharacter\ngame returns: Lia"]
+    A["block.actors\n= [Lia, Bob, Sam]"] --> B["onResolveCharacter\ngame returns: Lia"]
     B --> C["onValidateNextBlock\nnextContext.character = Lia\nfromContext.character = prev"]
     C --> D{valid?}
     D -- "Lia OK" --> E["execute block\ncontext.character = Lia"]

@@ -2,11 +2,11 @@
 ```ts [TypeScript]
 interface BlueprintConnection {
   id: string;
-  fromId: string;
-  toId: string;
-  fromPort: string;
+  from: string;
+  to: string;
+  port: string;
   toPort: string;
-  fromPortIndex?: number;
+  port?: number;
 }
 ```
 ```csharp [C#]
@@ -22,20 +22,20 @@ public class BlueprintConnection {
 ```cpp [C++]
 struct BlueprintConnection {
     std::string id;
-    std::string fromId;
-    std::string toId;
-    std::string fromPort;
+    std::string from;
+    std::string to;
+    std::string port;
     std::string toPort;
-    std::optional<int> fromPortIndex;
+    std::optional<int> port;
 };
 ```
 ```gdscript [GDScript]
 # Dictionary with keys:
 # "id": String
-# "fromId": String
-# "toId": String
-# "fromPort": String
+# "from": String
+# "to": String
+# "port": String
 # "toPort": String
-# "fromPortIndex": int (optional)
+# "port": int (optional)
 ```
 :::

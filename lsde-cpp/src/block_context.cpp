@@ -1,105 +1,113 @@
-// LSDE Dialog Engine — Context factory per block type
+// LSDE Dialog Engine — Context factory per block type (C++ port of block-context.ts)
 
-#include <lsde/block_context.h>
+#include "lsde/block_context.h"
 
 namespace lsde {
 
-// ─── InternalDialogContext ───────────────────────────────────────────────────
+// ─── ResolvedCards ───────────────────────────────────────────────────────────
 
-InternalDialogContext::InternalDialogContext(const DialogBlock& block, const BlockCharacter* resolvedCharacter) {
-    _character = resolvedCharacter;
-    if (block.metadata) {
-        _characters = &block.metadata->characters;
+ResolvedCards ResolvedCards::resolve(
+    const BlueprintBlock& block,
+    const std::function<const Card*(const std::string&)>& lookup,
+    const std::function<const Card*(const std::vector<Card>&)>& pickCharacter) {
+    ResolvedCards cards;
+
+    for (const auto& id : block.actors) {
+        const Card* card = lookup ? lookup(id) : nullptr;
+        if (card != nullptr) cards.actors.push_back(*card);
+    }
+
+    if (block.emotion.has_value() && !block.emotion->empty() && lookup) {
+        const Card* card = lookup(*block.emotion);
+        if (card != nullptr) cards.emotion = *card;
+    }
+
+    if (pickCharacter) {
+        const Card* picked = pickCharacter(cards.actors);
+        if (picked != nullptr) cards.character = *picked;
+    }
+
+    return cards;
+}
+
+// ─── InternalBlockContext ────────────────────────────────────────────────────
+
+InternalBlockContext::InternalBlockContext(const BlueprintBlock& block, ResolvedCards cards)
+    : _cards(std::move(cards)), _intensity(block.intensity) {}
+
+const Card* InternalBlockContext::character() const {
+    return _cards.character.has_value() ? &(*_cards.character) : nullptr;
+}
+
+const std::vector<Card>& InternalBlockContext::actors() const { return _cards.actors; }
+
+const Card* InternalBlockContext::emotion() const {
+    return _cards.emotion.has_value() ? &(*_cards.emotion) : nullptr;
+}
+
+std::optional<double> InternalBlockContext::intensity() const { return _intensity; }
+
+void InternalBlockContext::preventGlobalHandler() { globalPrevented = true; }
+
+// ─── Dialog ──────────────────────────────────────────────────────────────────
+
+InternalDialogContext::InternalDialogContext(const BlueprintBlock& block, ResolvedCards cards)
+    : InternalBlockContext(block, std::move(cards)) {
+    // The port of an actor IS its card id — var1, the same string block.actors lists.
+    for (const auto& id : block.actors) _cited.insert(id);
+}
+
+void InternalDialogContext::resolveCharacterPort(const std::string& cardId) {
+    if (_cited.count(cardId) > 0) {
+        actorPort = cardId;
+    } else {
+        actorPort.reset();
     }
 }
 
-const BlockCharacter* InternalDialogContext::character() const {
-    return _character;
-}
-
-void InternalDialogContext::resolveCharacterPort(const std::string& characterUuid) {
-    if (!_characters) { characterPortIndex = std::nullopt; return; }
-    // Match by uuid first
-    for (size_t i = 0; i < _characters->size(); ++i) {
-        if ((*_characters)[i].uuid == characterUuid) {
-            characterPortIndex = static_cast<int>(i);
-            return;
-        }
-    }
-    // Fallback: match by name
-    for (size_t i = 0; i < _characters->size(); ++i) {
-        if ((*_characters)[i].name == characterUuid) {
-            characterPortIndex = static_cast<int>(i);
-            return;
-        }
-    }
-    characterPortIndex = std::nullopt;
-}
-
-void InternalDialogContext::preventGlobalHandler() { globalPrevented = true; }
-
-// ─── InternalChoiceContext ───────────────────────────────────────────────────
+// ─── Choice ──────────────────────────────────────────────────────────────────
 
 InternalChoiceContext::InternalChoiceContext(
-    std::vector<RuntimeChoiceItem> taggedChoices,
-    const BlockCharacter* resolvedCharacter,
-    std::string blockUuid,
+    const BlueprintBlock& block,
+    ResolvedCards cards,
+    std::vector<RuntimeChoiceItem> taggedOptions,
     std::function<void(const std::string&, const std::string&)> onChoiceSelected)
-    : _character(resolvedCharacter), _choices(std::move(taggedChoices)),
-      _blockUuid(std::move(blockUuid)), _onChoiceSelected(std::move(onChoiceSelected)) {}
+    : InternalBlockContext(block, std::move(cards)),
+      _options(std::move(taggedOptions)),
+      _blockId(block.id),
+      _onChoiceSelected(std::move(onChoiceSelected)) {}
 
-const BlockCharacter* InternalChoiceContext::character() const { return _character; }
-const std::vector<RuntimeChoiceItem>& InternalChoiceContext::choices() const { return _choices; }
+const std::vector<RuntimeChoiceItem>& InternalChoiceContext::options() const { return _options; }
 
-void InternalChoiceContext::selectChoice(const std::string& choiceUuid) {
-    selectedChoiceUuid = choiceUuid;
-    if (_onChoiceSelected) {
-        _onChoiceSelected(_blockUuid, choiceUuid);
-    }
+void InternalChoiceContext::selectChoice(const std::string& optionId) {
+    selectedOptionId = optionId;
+    // Recorded even for an option that does not exist: the history is what the reserved "choice"
+    // dictionary reads back, and silently dropping an answer would make a later condition lie
+    // about what the player did.
+    if (_onChoiceSelected) _onChoiceSelected(_blockId, optionId);
 }
 
-void InternalChoiceContext::preventGlobalHandler() { globalPrevented = true; }
+// ─── Condition ───────────────────────────────────────────────────────────────
 
-// ─── InternalConditionContext ────────────────────────────────────────────────
+InternalConditionContext::InternalConditionContext(
+    const BlueprintBlock& block,
+    ResolvedCards cards,
+    std::vector<RuntimeConditionCase> cases)
+    : InternalBlockContext(block, std::move(cards)), _cases(std::move(cases)) {}
 
-InternalConditionContext::InternalConditionContext(const BlockCharacter* resolvedCharacter)
-    : _character(resolvedCharacter) {}
+const std::vector<RuntimeConditionCase>& InternalConditionContext::cases() const { return _cases; }
 
-const BlockCharacter* InternalConditionContext::character() const { return _character; }
-void InternalConditionContext::resolve(const ConditionResult& result) { conditionResult = result; }
-void InternalConditionContext::preventGlobalHandler() { globalPrevented = true; }
+void InternalConditionContext::resolve(const std::string& port) { conditionPort = port; }
 
-// ─── InternalActionContext ───────────────────────────────────────────────────
+// ─── Action ──────────────────────────────────────────────────────────────────
 
-InternalActionContext::InternalActionContext(const BlockCharacter* resolvedCharacter)
-    : _character(resolvedCharacter) {}
+InternalActionContext::InternalActionContext(const BlueprintBlock& block, ResolvedCards cards)
+    : InternalBlockContext(block, std::move(cards)), _calls(block.calls) {}
 
-const BlockCharacter* InternalActionContext::character() const { return _character; }
+const std::vector<ActionCall>& InternalActionContext::calls() const { return _calls; }
+
 void InternalActionContext::resolve() { actionRejected = false; }
+
 void InternalActionContext::reject(const std::string&) { actionRejected = true; }
-void InternalActionContext::preventGlobalHandler() { globalPrevented = true; }
-
-// ─── Factories ───────────────────────────────────────────────────────────────
-
-std::unique_ptr<InternalDialogContext> createDialogContext(const DialogBlock& block, const BlockCharacter* resolvedCharacter) {
-    return std::make_unique<InternalDialogContext>(block, resolvedCharacter);
-}
-
-std::unique_ptr<InternalChoiceContext> createChoiceContext(
-    const ChoiceBlock& block,
-    std::vector<RuntimeChoiceItem> taggedChoices,
-    const BlockCharacter* resolvedCharacter,
-    std::function<void(const std::string&, const std::string&)> onChoiceSelected)
-{
-    return std::make_unique<InternalChoiceContext>(std::move(taggedChoices), resolvedCharacter, block.uuid, std::move(onChoiceSelected));
-}
-
-std::unique_ptr<InternalConditionContext> createConditionContext(const BlockCharacter* resolvedCharacter) {
-    return std::make_unique<InternalConditionContext>(resolvedCharacter);
-}
-
-std::unique_ptr<InternalActionContext> createActionContext(const BlockCharacter* resolvedCharacter) {
-    return std::make_unique<InternalActionContext>(resolvedCharacter);
-}
 
 } // namespace lsde

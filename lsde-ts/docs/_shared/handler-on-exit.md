@@ -1,7 +1,7 @@
 ::: code-group
 ```ts [TypeScript]
 handle.onExit(({ scene }) => {
-  const history = scene.getChoiceHistory();       // Map of blockUuid → [choiceUuid, ...]
+  const history = scene.getChoiceHistory();       // Map of blockId → [optionId, ...]
   const picks = scene.getChoice('block-uuid-123'); // string[] | undefined
 });
 ```

@@ -28,5 +28,5 @@ Each handler receives the block data and a `next()` callback. The developer proc
 
 - **`next()` is the remote control.** Call it instantly for rapid-fire dialogue, or hold it until an animation finishes. The engine waits — it has no concept of time.
 - **Cleanup functions clean up after you.** Return a function from any handler — the engine calls it when moving to the next block. Perfect for hiding UI, stopping audio, or freeing nodes.
-- **`onBeforeBlock` handles delays.** The engine does not enforce `nativeProperties.delay` — `onBeforeBlock` reads it and calls `resolve()` after a timer. Full control.
+- **`onBeforeBlock` handles delays.** The engine does not enforce `props.delay` — `onBeforeBlock` reads it and calls `resolve()` after a timer. Full control.
 - **Async tracks are parallel flows.** When a cutscene needs dialogue and camera movement at the same time, blocks marked `isAsync` in the editor run on independent tracks.

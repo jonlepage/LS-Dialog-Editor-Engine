@@ -49,7 +49,7 @@ Le CSV exporte un tableau plat de textes par locale. Il ne contient **pas** de c
 
 | `type` | Sous-type | Champs spécifiques |
 |--------|-----------|-------------------|
-| `DIALOG` | `DialogBlock` | `dialogueText`, `content`, `structureKey` |
+| `DIALOG` | `DialogBlock` | `text`, `content`, `structureKey` |
 | `CHOICE` | `ChoiceBlock` | `choices` |
 | `CONDITION` | `ConditionBlock` | `conditions` |
 | `ACTION` | `ActionBlock` | `actions` |
@@ -57,7 +57,7 @@ Le CSV exporte un tableau plat de textes par locale. Il ne contient **pas** de c
 
 Les **langages dynamiques** (TypeScript, GDScript) gèrent ça automatiquement — les objets parsés contiennent déjà tous les champs.
 
-Les **langages typés** (C#, C++) ont besoin d'un converter custom qui lit le champ `type` et construit le bon sous-type. Sans ça, les champs spécifiques comme `dialogueText` ou `choices` sont silencieusement perdus.
+Les **langages typés** (C#, C++) ont besoin d'un converter custom qui lit le champ `type` et construit le bon sous-type. Sans ça, les champs spécifiques comme `text` ou `choices` sont silencieusement perdus.
 
 ::: info Packages compagnons
 Si vous utilisez `LsdeDialogEngine.Newtonsoft` ou `LsdeDialogEngine.SystemTextJson`, ces converters sont déjà inclus — appelez simplement `LsdeJson.Parse(json)`. Le code ci-dessous est pour l'intégration manuelle uniquement.

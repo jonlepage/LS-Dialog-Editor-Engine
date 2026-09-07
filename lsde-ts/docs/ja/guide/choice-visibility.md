@@ -2,7 +2,7 @@
 
 ## 概要
 
-CHOICE block がディスパッチされると、`context.choices` には blueprint で定義された**すべての** choice が常に含まれます — 事前にフィルタリングされるものはありません。engine は配列から choice を削除することはありません。
+CHOICE block がディスパッチされると、`context.options` には blueprint で定義された**すべての** choice が常に含まれます — 事前にフィルタリングされるものはありません。engine は配列から choice を削除することはありません。
 
 表示制御フィルタリングが必要な場合（例：ゲームステートや以前の選択に基づいて choice を非表示にする）、engine は**オプトイン方式のタグ付け**システムを提供します。condition リゾルバーを一度インストールすると、`onChoice` handler が呼ばれる前に、engine が各 choice に `visible: true | false` をタグ付けします。
 
@@ -12,7 +12,7 @@ engine に condition リゾルバーを登録します — scene を開始する
 
 <!--@include: ../../_shared/choice-filter-setup.md-->
 
-インストールされると、engine は `onChoice` を呼び出す**前に**各 choice の `visibilityConditions` を評価します。同じリゾルバーは condition block のグループも事前評価します — 詳細は [Condition blocks](/ja/guide/block-types#condition) を参照してください。
+インストールされると、engine は `onChoice` を呼び出す**前に**各 choice の `when` を評価します。同じリゾルバーは condition block のグループも事前評価します — 詳細は [Condition blocks](/ja/guide/block-types#condition) を参照してください。
 
 - **`choice:` condition**（以前のプレイヤー選択を参照）は、engine の内部 choice 履歴によって自動的に解決されます — 登録された callback には渡されません。
 - **ゲームステート condition**（その他すべて）は、登録された callback に委任されます。
@@ -34,34 +34,34 @@ handler 内で、1行でフィルタリングできます：
 | `false` | リゾルバーインストール済み、choice は非表示 | `false` |
 | `undefined` | リゾルバー未インストール | `true` |
 
-## RuntimeChoiceItem
+## RuntimeOption
 
-リゾルバーがインストールされている場合、`context.choices` 内の各 choice は `RuntimeChoiceItem` です — `visible` タグが追加された `ChoiceItem` の拡張です：
+リゾルバーがインストールされている場合、`context.options` 内の各 choice は `RuntimeOption` です — `visible` タグが追加された `Option` の拡張です：
 
 ::: code-group
 ```ts [TypeScript]
-interface RuntimeChoiceItem extends ChoiceItem {
+interface RuntimeOption extends Option {
   visible?: boolean; // true | false | undefined
 }
 ```
 ```csharp [C#]
-public class RuntimeChoiceItem : ChoiceItem
+public class RuntimeOption : Option
 {
     public bool? Visible { get; set; } // true | false | null
 }
 ```
 ```cpp [C++]
-struct RuntimeChoiceItem : ChoiceItem {
+struct RuntimeOption : Option {
     std::optional<bool> visible; // true | false | nullopt
 };
 ```
 ```gdscript [GDScript]
-# RuntimeChoiceItem is a Dictionary with an extra "visible" key:
-# { "uuid": "...", "dialogueText": {...}, "visible": true/false/absent }
+# RuntimeOption is a Dictionary with an extra "visible" key:
+# { "uuid": "...", "text": {...}, "visible": true/false/absent }
 ```
 :::
 
-リゾルバーなしの場合、choice は `RuntimeChoiceItem` のままですが、`visible` は `undefined`/`null`/`nullopt`/absent のままです。
+リゾルバーなしの場合、choice は `RuntimeOption` のままですが、`visible` は `undefined`/`null`/`nullopt`/absent のままです。
 
 ## 使用例
 
@@ -70,8 +70,8 @@ struct RuntimeChoiceItem : ChoiceItem {
 ::: code-group
 ```ts [TypeScript]
 engine.onChoice(({ context, next }) => {
-  const visible = context.choices.filter(c => c.visible !== false);
-  ui.showChoices(visible, (uuid) => {
+  const offered = context.options.filter(c => c.visible !== false);
+  ui.showOptions(visible, (uuid) => {
     context.selectChoice(uuid);
     next();
   });
@@ -79,7 +79,7 @@ engine.onChoice(({ context, next }) => {
 ```
 ```csharp [C#]
 engine.OnChoice(args => {
-    var visible = args.Context.Choices
+    var visible = args.Context.Options
         .Where(c => c.Visible != false).ToList();
     ShowChoicesUI(visible, uuid => {
         args.Context.SelectChoice(uuid);
@@ -90,11 +90,11 @@ engine.OnChoice(args => {
 ```
 ```cpp [C++]
 engine.onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
-    std::vector<const RuntimeChoiceItem*> visible;
-    for (const auto& c : ctx->choices())
+    std::vector<const RuntimeOption*> visible;
+    for (const auto& c : ctx->options())
         if (!c.visible.has_value() || c.visible.value())
             visible.push_back(&c);
-    showChoicesUI(visible, [ctx, next](const auto& uuid) {
+    showOptionsUI(visible, [ctx, next](const auto& uuid) {
         ctx->selectChoice(uuid);
         next();
     });
@@ -104,10 +104,10 @@ engine.onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
 ```gdscript [GDScript]
 engine.on_choice(func(args):
     var visible = []
-    for c in args["context"].choices:
+    for c in args["context"].options:
         if c.get("visible") != false:
             visible.append(c)
-    show_choices_ui(visible, func(uuid):
+    show_options_ui(visible, func(uuid):
         args["context"].select_choice(uuid)
         args["next"].call()
     )
@@ -121,8 +121,8 @@ engine.on_choice(func(args):
 ::: code-group
 ```ts [TypeScript]
 engine.onChoice(({ block, context, next }) => {
-  const visible = context.choices.filter(c => c.visible !== false);
-  const timeout = block.nativeProperties?.timeout;
+  const offered = context.options.filter(c => c.visible !== false);
+  const timeout = LsdeUtils.getNativeProperties(block)?.timeout;
 
   const resolve = (choice) => {
     context.selectChoice(choice.uuid);
@@ -131,23 +131,23 @@ engine.onChoice(({ block, context, next }) => {
 
   if (timeout) {
     const timer = setTimeout(() => resolve(visible[0]), timeout * 1000);
-    ui.showChoices(visible, (uuid) => {
+    ui.showOptions(visible, (uuid) => {
       clearTimeout(timer);
       resolve(visible.find(c => c.uuid === uuid));
     });
   } else {
-    ui.showChoices(visible, (uuid) => resolve(visible.find(c => c.uuid === uuid)));
+    ui.showOptions(visible, (uuid) => resolve(visible.find(c => c.uuid === uuid)));
   }
 });
 ```
 ```csharp [C#]
 engine.OnChoice(args => {
     var (_, block, context, next) = args;
-    var visible = context.Choices
+    var visible = context.Options
         .Where(c => c.Visible != false).ToList();
     var timeout = block.NativeProperties?.Timeout;
 
-    void Resolve(RuntimeChoiceItem choice) {
+    void Resolve(RuntimeOption choice) {
         context.SelectChoice(choice.Uuid);
         next();
     }
@@ -170,13 +170,13 @@ engine.OnChoice(args => {
 ```
 ```cpp [C++]
 engine.onChoice([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
-    std::vector<const RuntimeChoiceItem*> visible;
-    for (const auto& c : ctx->choices())
+    std::vector<const RuntimeOption*> visible;
+    for (const auto& c : ctx->options())
         if (!c.visible.has_value() || c.visible.value())
             visible.push_back(&c);
 
-    auto timeout = block->nativeProperties
-        ? block->nativeProperties->timeout : std::nullopt;
+    auto timeout = block->props
+        ? block->props->timeout : std::nullopt;
 
     auto resolve = [ctx, next](const std::string& uuid) {
         ctx->selectChoice(uuid);
@@ -186,12 +186,12 @@ engine.onChoice([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
     if (timeout.has_value()) {
         // use your engine's timer — cancel on player selection
         auto timer = scheduleDelay(timeout.value(), [&]() { resolve(visible[0]->uuid); });
-        showChoicesUI(visible, [resolve, timer](const auto& uuid) {
+        showOptionsUI(visible, [resolve, timer](const auto& uuid) {
             timer->cancel();
             resolve(uuid);
         });
     } else {
-        showChoicesUI(visible, resolve);
+        showOptionsUI(visible, resolve);
     }
     return {};
 });
@@ -202,11 +202,11 @@ engine.on_choice(func(args):
     var next_fn = args["next"]
     var block = args["block"]
     var visible = []
-    for c in ctx.choices:
+    for c in ctx.options:
         if c.get("visible") != false:
             visible.append(c)
 
-    var timeout_val = block.get("nativeProperties", {}).get("timeout", 0)
+    var timeout_val = block.get("props", {}).get("timeout", 0)
 
     if timeout_val > 0:
         # use your engine's timer — cancel on player selection
@@ -215,13 +215,13 @@ engine.on_choice(func(args):
             ctx.select_choice(visible[0]["uuid"])
             next_fn.call()
         )
-        show_choices_ui(visible, func(uuid):
+        show_options_ui(visible, func(uuid):
             timer.time_left = 0  # cancel
             ctx.select_choice(uuid)
             next_fn.call()
         )
     else:
-        show_choices_ui(visible, func(uuid):
+        show_options_ui(visible, func(uuid):
             ctx.select_choice(uuid)
             next_fn.call()
         )
@@ -235,7 +235,7 @@ engine.on_choice(func(args):
 ::: code-group
 ```ts [TypeScript]
 engine.onChoice(({ context, next }) => {
-  for (const choice of context.choices) {
+  for (const choice of context.options) {
     if (choice.visible === false) {
       ui.addGreyed(choice);   // show but disabled
     } else {
@@ -247,7 +247,7 @@ engine.onChoice(({ context, next }) => {
 ```
 ```csharp [C#]
 engine.OnChoice(args => {
-    foreach (var choice in args.Context.Choices)
+    foreach (var choice in args.Context.Options)
     {
         if (choice.Visible == false)
             AddGreyed(choice);   // show but disabled
@@ -260,7 +260,7 @@ engine.OnChoice(args => {
 ```
 ```cpp [C++]
 engine.onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
-    for (const auto& choice : ctx->choices()) {
+    for (const auto& choice : ctx->options()) {
         if (choice.visible.has_value() && !choice.visible.value())
             addGreyed(choice);   // show but disabled
         else
@@ -272,7 +272,7 @@ engine.onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
 ```
 ```gdscript [GDScript]
 engine.on_choice(func(args):
-    for choice in args["context"].choices:
+    for choice in args["context"].options:
         if choice.get("visible") == false:
             add_greyed(choice)   # show but disabled
         else:
@@ -289,14 +289,14 @@ engine.on_choice(func(args):
 ```ts [TypeScript]
 tutorial.onChoice(({ context, next }) => {
   // force-select the first choice, no filtering
-  context.selectChoice(context.choices[0].uuid);
+  context.selectChoice(context.options[0].uuid);
   next();
 });
 ```
 ```csharp [C#]
 tutorial.OnChoice(args => {
     // force-select the first choice, no filtering
-    args.Context.SelectChoice(args.Context.Choices[0].Uuid);
+    args.Context.SelectChoice(args.Context.Options[0].Uuid);
     args.Next();
     return null;
 });
@@ -304,7 +304,7 @@ tutorial.OnChoice(args => {
 ```cpp [C++]
 tutorial->onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
     // force-select the first choice, no filtering
-    ctx->selectChoice(ctx->choices()[0].uuid);
+    ctx->selectChoice(ctx->options()[0].uuid);
     next();
     return {};
 });
@@ -312,7 +312,7 @@ tutorial->onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
 ```gdscript [GDScript]
 tutorial.on_choice(func(args):
     # force-select the first choice, no filtering
-    args["context"].select_choice(args["context"].choices[0]["uuid"])
+    args["context"].select_choice(args["context"].options[0]["uuid"])
     args["next"].call()
     return Callable()
 )
@@ -326,7 +326,7 @@ tutorial.on_choice(func(args):
 <!--@include: ../../_shared/choice-reusable-filter.md-->
 
 ::: tip なぜ1つの callback なのか？
-`onResolveCondition` 以前は、同じ `gameState.check(...)` ロジックを `setChoiceFilter` と `onCondition` に別々に登録する必要がありました。統合リゾルバーでは1つの callback で済みます — engine が両方を自動的に処理します。
+`onResolveCondition` 以前は、同じ `gameState.check(...)` ロジックを `onResolveCondition` と `onCondition` に別々に登録する必要がありました。統合リゾルバーでは1つの callback で済みます — engine が両方を自動的に処理します。
 :::
 
 ## 上級: 手動フィルタリング
@@ -337,7 +337,7 @@ tutorial.on_choice(func(args):
 ```ts [TypeScript]
 import { LsdeUtils } from '@lsde/dialog-engine';
 
-const visible = LsdeUtils.filterVisibleChoices(
+const offered = LsdeUtils.tagOptionVisibility(
   block.choices ?? [],
   (cond) => gameState.check(cond.key, cond.operator, cond.value),
   scene, // optional — enables choice: condition resolution via history

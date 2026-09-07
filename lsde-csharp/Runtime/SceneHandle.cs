@@ -9,9 +9,36 @@ namespace LsdeDialogEngine
     {
         internal Action<SceneHandleImpl>? OnSceneStarted;
         internal Action<SceneHandleImpl>? OnSceneEnded;
-        internal Func<Func<List<BlockCharacter>, BlockCharacter?>>? GetResolveCharacter;
-        internal Func<Func<ExportCondition, bool>?>? GetConditionResolver;
-        internal Func<string>? GetLocale;
+        internal Func<Func<List<Card>, Card?>>? GetResolveCharacter;
+        internal Func<Func<ConditionTest, bool>?>? GetConditionResolver;
+
+        /// <summary>Look a card id (var1) up in the export's Cards table.</summary>
+        internal Func<string, Card?>? GetCard;
+    }
+
+    /// <summary>
+    /// The engine-facing properties of a block, read straight out of Props.
+    /// <para>v2 has one bag: natives and the writer's own properties share Props, keyed by bare id.
+    /// Ids cannot collide — LSDE refuses a project property that takes a native name — so reading a
+    /// native is a plain lookup. Only two of them mean anything to the traversal: IsAsync spawns a
+    /// parallel track, WaitForBlocks parks one. The rest are passed through untouched.</para>
+    /// </summary>
+    internal static class Natives
+    {
+        internal static NativeProperties Of(BlueprintBlock block) => LsdeUtils.GetNativeProperties(block);
+
+        internal static bool IsAsync(BlueprintBlock block)
+        {
+            return block.Props != null
+                && block.Props.TryGetValue("isAsync", out var value)
+                && value is bool flag
+                && flag;
+        }
+
+        internal static List<string>? WaitForBlocks(BlueprintBlock block)
+        {
+            return LsdeUtils.GetNativeProperties(block).WaitForBlocks;
+        }
     }
 
     internal static class NoteWalk
@@ -31,13 +58,13 @@ namespace LsdeDialogEngine
             var current = block;
             HashSet<string>? seen = null;
 
-            while (current != null && current.Type == BlockType.NOTE)
+            while (current != null && current.Type == BlockType.Note)
             {
                 seen ??= new HashSet<string>();
-                if (!seen.Add(current.Uuid)) return null;
+                if (!seen.Add(current.Id)) return null;
 
-                var connections = sceneGraph.GetOutgoingConnections(current.Uuid);
-                current = connections.Count > 0 ? sceneGraph.GetBlock(connections[0].ToId) : null;
+                var links = sceneGraph.GetOutgoingLinks(current.Id);
+                current = links.Count > 0 ? sceneGraph.GetBlock(links[0].To) : null;
             }
 
             return current;
@@ -46,10 +73,70 @@ namespace LsdeDialogEngine
 
     // ─── AsyncTrack — parallel execution branch ──────────────────────────────────
 
-    internal class AsyncTrack
+    /// <summary>Anything the traversal can park until a set of blocks has been visited.</summary>
+    /// <remarks>WaitForBlocks is a property of the BLOCK — "the block waits for these before it
+    /// advances", in the format's own words. Only AsyncTrack read it, so a designer who set it on
+    /// a block of the main flow got nothing at all, silently, with the checkbox ticked in the
+    /// editor. The main flow parks through this same interface now.</remarks>
+    internal interface IWaiter
+    {
+        void NotifyWaitSatisfied();
+    }
+
+    /// <summary>Running the cleanups a handler returned, without letting one break a teardown.</summary>
+    /// <remarks>A cleanup runs while the engine is tearing something down — leaving a block,
+    /// ending a track, closing a scene. An exception escaping mid-teardown STOPPED the teardown:
+    /// the scene stayed running, OnSceneExit never fired, the remaining tracks were never
+    /// cancelled, and the handle sat in the engine's registry forever. The game got its exception
+    /// and an engine it could no longer use.
+    /// <para>So the shutdown always finishes and the fault is re-thrown once there is nothing left
+    /// to unwind — the same contract as a handler that throws.</para></remarks>
+    internal static class Cleanups
+    {
+        /// <summary>Run a cleanup and hand back what it threw instead of letting it escape.</summary>
+        internal static Exception? Run(Action? cleanup)
+        {
+            if (cleanup == null) return null;
+            try
+            {
+                cleanup();
+                return null;
+            }
+            catch (Exception err)
+            {
+                return err;
+            }
+        }
+
+        /// <summary>Combine a scene cleanup and a global one. BOTH always run.</summary>
+        /// <remarks>They release unrelated things — a scene handler's panel and a global handler's
+        /// audio voice — so letting the first one's failure skip the second leaked whatever the
+        /// second owned. The first fault is re-thrown once both have had their turn.</remarks>
+        internal static Action? Combine(Action? a, Action? b)
+        {
+            if (a != null && b != null)
+            {
+                return () =>
+                {
+                    var first = Run(a);
+                    var second = Run(b);
+                    var fault = first ?? second;
+                    if (fault != null) throw fault;
+                };
+            }
+            if (a != null) return a;
+            if (b != null) return b;
+            return null;
+        }
+    }
+
+    internal class AsyncTrack : IWaiter
     {
         private bool _running = true;
         private BlueprintBlock? _currentBlock;
+        /// <summary>The block this track came from, for OnValidateNextBlock. Its own, not the main flow's.</summary>
+        private BlueprintBlock? _previousBlock;
+        private Card? _previousCharacter;
         private Action? _previousCleanup;
         private Action? _pendingAdvance;
 
@@ -69,13 +156,13 @@ namespace LsdeDialogEngine
             _startBlock = startBlock;
             Id = id;
             ParentTrackId = parentTrackId;
-            StartBlockUuid = startBlock.Uuid;
+            StartBlockUuid = startBlock.Id;
         }
 
         /// <summary>Begin track execution. Must be called after the track is added to the pool.</summary>
         internal void Start()
         {
-            var waitBlocks = _startBlock.NativeProperties?.WaitForBlocks;
+            var waitBlocks = Natives.WaitForBlocks(_startBlock);
             if (waitBlocks != null && waitBlocks.Count > 0)
             {
                 bool allVisited = true;
@@ -93,28 +180,32 @@ namespace LsdeDialogEngine
             ProcessBlock(_startBlock);
         }
 
-        internal void Cancel()
+        /// <summary>Stop this track and every track it spawned.</summary>
+        /// <remarks>Returns a fault instead of throwing one: EndScene() cancels the whole pool in
+        /// a loop, and one badly-behaved cleanup must not leave the tracks after it running.</remarks>
+        internal Exception? Cancel()
         {
-            if (!_running) return;
+            if (!_running) return null;
             _running = false;
-            if (_previousCleanup != null)
-            {
-                _previousCleanup();
-                _previousCleanup = null;
-            }
+
+            var cleanup = _previousCleanup;
+            _previousCleanup = null;
+            var fault = Cleanups.Run(cleanup);
+
             _currentBlock = null;
             _pendingAdvance = null;
             foreach (var childId in _childTrackIds)
             {
-                _parentHandle.CancelTrack(childId);
+                fault = fault ?? _parentHandle.CancelTrack(childId);
             }
             _childTrackIds.Clear();
+            return fault;
         }
 
         internal bool IsRunning() => _running;
 
         /// <summary>Called by the parent handle when all waitForBlocks UUIDs have been visited.</summary>
-        internal void NotifyWaitSatisfied()
+        public void NotifyWaitSatisfied()
         {
             if (!_running || _pendingAdvance == null) return;
             var advance = _pendingAdvance;
@@ -130,7 +221,7 @@ namespace LsdeDialogEngine
                 Id = this.Id,
                 ParentTrackId = this.ParentTrackId,
                 StartBlockUuid = this.StartBlockUuid,
-                CurrentBlockUuid = _currentBlock?.Uuid,
+                CurrentBlockUuid = _currentBlock?.Id,
                 Running = _running
             };
         }
@@ -144,12 +235,16 @@ namespace LsdeDialogEngine
             var block = NoteWalk.SkipNotes(startingBlock, _sceneGraph);
             if (block == null)
             {
-                EndTrack();
+                var deadEnd = EndTrack();
+                if (deadEnd != null) throw deadEnd;
                 return;
             }
 
+            // The same gate the main flow goes through. A parallel track is still the game's dialogue.
+            if (!_parentHandle.RunValidation(block, _previousBlock, _previousCharacter)) return;
+
             _currentBlock = block;
-            _parentHandle.AddVisited(block.Uuid);
+            _parentHandle.AddVisited(block.Id);
 
             // Fire onBeforeBlock — same gate pattern as SceneHandleImpl.ProcessBlock
             var registry = _parentHandle.GetGlobalRegistry();
@@ -160,7 +255,7 @@ namespace LsdeDialogEngine
                 {
                     Block = block,
                     Scene = _parentHandle,
-                    Context = new BeforeBlockContext { NativeProperties = block.NativeProperties },
+                    Context = new BeforeBlockContext { NativeProperties = Natives.Of(block) },
                     Resolve = () =>
                     {
                         if (resolvedOnce) return;
@@ -180,7 +275,7 @@ namespace LsdeDialogEngine
             if (!_running) return;
 
             var resolved = HandlerResolver.ResolveHandler(
-                block.Type, block.Uuid,
+                block.Type, block.Id,
                 _parentHandle.GetSceneRegistry(),
                 _parentHandle.GetGlobalRegistry());
 
@@ -207,7 +302,7 @@ namespace LsdeDialogEngine
                 if (nextCalled) return;
                 nextCalled = true;
 
-                var waitBlocks = block.NativeProperties?.WaitForBlocks;
+                var waitBlocks = Natives.WaitForBlocks(block);
                 if (waitBlocks != null && waitBlocks.Count > 0)
                 {
                     bool allVisited = true;
@@ -245,11 +340,16 @@ namespace LsdeDialogEngine
             }
             catch
             {
+                // The track is closed down first, THEN the error is re-thrown. By the time it
+                // reaches the game, the cleanups have run and the track is gone — it stops
+                // properly, and the game decides what to do about it. Swallowing it here was the
+                // v1 behaviour, and it made the same fault behave in two opposite ways depending
+                // on whether it happened in a handler or in the cleanup that handler returned.
                 EndTrack();
-                return;
+                throw;
             }
 
-            _previousCleanup = CombineCleanups(sceneCleanup, globalCleanup);
+            _previousCleanup = Cleanups.Combine(sceneCleanup, globalCleanup);
 
             syncPhase = false;
             if (nextCalled && _pendingAdvance == null)
@@ -262,39 +362,41 @@ namespace LsdeDialogEngine
         {
             if (!_running) return;
 
-            var connections = _sceneGraph.GetOutgoingConnections(block.Uuid);
+            _previousBlock = block;
+            _previousCharacter = context?.Character;
+
             var resolution = PortResolver.ResolvePort(new PortResolutionInput
             {
                 Block = block,
-                Connections = connections,
-                SelectedChoiceUuid = (context as InternalChoiceContext)?.SelectedChoiceUuid,
-                ConditionResult = (context as InternalConditionContext)?._conditionResult,
+                Links = _sceneGraph.GetOutgoingLinks(block.Id),
+                SelectedOptionId = (context as InternalChoiceContext)?.SelectedOptionId,
+                ConditionPort = (context as InternalConditionContext)?.ConditionPort,
                 ActionRejected = (context as InternalActionContext)?.ActionRejected,
-                CharacterPortIndex = (context as InternalDialogContext)?.CharacterPortIndex
+                ActorPort = (context as InternalDialogContext)?.ActorPort
             });
 
-            var allConnections = resolution.Connections;
-            BlueprintConnection? mainConnection = null;
-            var asyncConnections = new List<BlueprintConnection>();
+            var allLinks = resolution.Links;
+            Link? mainLink = null;
+            var asyncLinks = new List<Link>();
 
-            foreach (var conn in allConnections)
+            foreach (var link in allLinks)
             {
-                var targetBlock = _sceneGraph.GetBlock(conn.ToId);
+                var targetBlock = _sceneGraph.GetBlock(link.To);
                 if (targetBlock == null) continue;
 
-                if (mainConnection == null && targetBlock.NativeProperties?.IsAsync != true)
+                if (mainLink == null && !Natives.IsAsync(targetBlock))
                 {
-                    mainConnection = conn;
+                    mainLink = link;
                 }
                 else
                 {
-                    asyncConnections.Add(conn);
+                    asyncLinks.Add(link);
                 }
             }
 
-            foreach (var conn in asyncConnections)
+            foreach (var link in asyncLinks)
             {
-                var targetBlock = _sceneGraph.GetBlock(conn.ToId);
+                var targetBlock = _sceneGraph.GetBlock(link.To);
                 if (targetBlock != null)
                 {
                     var trackId = _parentHandle.SpawnAsyncTrack(targetBlock, this.Id);
@@ -302,56 +404,52 @@ namespace LsdeDialogEngine
                 }
             }
 
-            if (mainConnection != null)
+            if (mainLink != null)
             {
-                var nextBlock = _sceneGraph.GetBlock(mainConnection.ToId);
+                var nextBlock = _sceneGraph.GetBlock(mainLink.To);
                 if (nextBlock != null)
                 {
                     var cleanupToRun = _previousCleanup;
                     _previousCleanup = null;
-                    cleanupToRun?.Invoke();
+                    var fault = Cleanups.Run(cleanupToRun);
+                    if (fault != null)
+                    {
+                        EndTrack();
+                        throw fault;
+                    }
                     ProcessBlock(nextBlock);
                     return;
                 }
             }
 
-            EndTrack();
+            var endFault = EndTrack();
+            if (endFault != null) throw endFault;
         }
 
-        private void EndTrack()
+        /// <summary>Close this track down. Returns what its cleanup threw, having finished regardless.</summary>
+        private Exception? EndTrack()
         {
-            if (_previousCleanup != null)
-            {
-                _previousCleanup();
-                _previousCleanup = null;
-            }
+            var cleanup = _previousCleanup;
+            _previousCleanup = null;
+            var fault = Cleanups.Run(cleanup);
+
             // Child tracks survive — only explicit Cancel() cascades
             _running = false;
             _currentBlock = null;
             _parentHandle.RemoveTrack(this);
+            return fault;
         }
 
         private static bool GetGlobalPrevented(IBaseBlockContext context)
         {
-            if (context is InternalDialogContext dc) return dc.GlobalPrevented;
-            if (context is InternalChoiceContext cc) return cc.GlobalPrevented;
-            if (context is InternalConditionContext cndc) return cndc.GlobalPrevented;
-            if (context is InternalActionContext ac) return ac.GlobalPrevented;
-            return false;
+            return context is InternalBlockContext internalContext && internalContext.GlobalPrevented;
         }
 
-        private static Action? CombineCleanups(Action? a, Action? b)
-        {
-            if (a != null && b != null) return () => { a(); b(); };
-            if (a != null) return a;
-            if (b != null) return b;
-            return null;
-        }
     }
 
     // ─── SceneHandleImpl ─────────────────────────────────────────────────────────
 
-    internal class SceneHandleImpl : ISceneHandle
+    internal class SceneHandleImpl : ISceneHandle, IWaiter
     {
         private readonly SceneGraph _sceneGraph;
         private readonly HandlerRegistry _globalRegistry;
@@ -362,14 +460,16 @@ namespace LsdeDialogEngine
         private bool _cancelled;
         private BlueprintBlock? _currentBlock;
         private BlueprintBlock? _previousBlock;
-        private BlockCharacter? _previousCharacter;
+        private Card? _previousCharacter;
         private readonly HashSet<string> _visited = new HashSet<string>();
         private readonly Dictionary<string, List<string>> _choiceHistory = new Dictionary<string, List<string>>();
         private Action? _previousCleanup;
         private readonly List<AsyncTrack> _asyncTracks = new List<AsyncTrack>();
         private int _nextTrackId = 1;
-        private readonly Dictionary<AsyncTrack, List<string>> _pendingWaits = new Dictionary<AsyncTrack, List<string>>();
-        private Func<List<BlockCharacter>, BlockCharacter?>? _resolveCharacter;
+        private readonly Dictionary<IWaiter, List<string>> _pendingWaits = new Dictionary<IWaiter, List<string>>();
+        /// <summary>The main flow's own parked advance, when its block carries WaitForBlocks.</summary>
+        private Action? _pendingAdvance;
+        private Func<List<Card>, Card?>? _resolveCharacter;
 
         internal SceneHandleImpl(
             SceneGraph sceneGraph,
@@ -416,7 +516,8 @@ namespace LsdeDialogEngine
             }
             else
             {
-                EndScene();
+                var fault = EndScene();
+                if (fault != null) throw fault;
             }
         }
 
@@ -424,21 +525,8 @@ namespace LsdeDialogEngine
         {
             if (!_running) return;
             _cancelled = true;
-            _pendingWaits.Clear();
-            foreach (var track in _asyncTracks)
-            {
-                track.Cancel();
-            }
-            _asyncTracks.Clear();
-            if (_previousCleanup != null)
-            {
-                _previousCleanup();
-                _previousCleanup = null;
-            }
-            _running = false;
-            _currentBlock = null;
-            FireSceneExit();
-            _callbacks.OnSceneEnded?.Invoke(this);
+            var fault = Shutdown();
+            if (fault != null) throw fault;
         }
 
         public void OnEnter(SceneLifecycleHandler handler)
@@ -451,92 +539,92 @@ namespace LsdeDialogEngine
             _sceneRegistry.ExitHandler = handler;
         }
 
-        public void OnBlock(string blockUuid, BlockHandler<BlueprintBlock, IBaseBlockContext> handler)
+        public void OnBlock(string blockId, BlockHandler<BlueprintBlock, IBaseBlockContext> handler)
         {
-            _sceneRegistry.SetBlockHandler(blockUuid,
+            _sceneRegistry.SetBlockHandler(blockId,
                 (scene, block, context, next) => handler(new BlockHandlerArgs<BlueprintBlock, IBaseBlockContext>(scene, block, context, next)));
         }
 
-        public void OnDialogId(string blockUuid, BlockHandler<DialogBlock, IDialogContext> handler)
+        public void OnDialogId(string blockId, BlockHandler<BlueprintBlock, IDialogContext> handler)
         {
-            _sceneRegistry.SetBlockHandler(blockUuid,
-                (scene, block, context, next) => handler(new BlockHandlerArgs<DialogBlock, IDialogContext>(scene, (DialogBlock)block, (IDialogContext)context, next)));
+            _sceneRegistry.SetBlockHandler(blockId,
+                (scene, block, context, next) => handler(new BlockHandlerArgs<BlueprintBlock, IDialogContext>(scene, block, (IDialogContext)context, next)));
         }
 
-        public void OnDialogId(string blockUuid, Action<BlockHandlerArgs<DialogBlock, IDialogContext>> handler)
+        public void OnDialogId(string blockId, Action<BlockHandlerArgs<BlueprintBlock, IDialogContext>> handler)
         {
-            OnDialogId(blockUuid, args => { handler(args); return null; });
+            OnDialogId(blockId, args => { handler(args); return null; });
         }
 
-        public void OnChoiceId(string blockUuid, BlockHandler<ChoiceBlock, IChoiceContext> handler)
+        public void OnChoiceId(string blockId, BlockHandler<BlueprintBlock, IChoiceContext> handler)
         {
-            _sceneRegistry.SetBlockHandler(blockUuid,
-                (scene, block, context, next) => handler(new BlockHandlerArgs<ChoiceBlock, IChoiceContext>(scene, (ChoiceBlock)block, (IChoiceContext)context, next)));
+            _sceneRegistry.SetBlockHandler(blockId,
+                (scene, block, context, next) => handler(new BlockHandlerArgs<BlueprintBlock, IChoiceContext>(scene, block, (IChoiceContext)context, next)));
         }
 
-        public void OnChoiceId(string blockUuid, Action<BlockHandlerArgs<ChoiceBlock, IChoiceContext>> handler)
+        public void OnChoiceId(string blockId, Action<BlockHandlerArgs<BlueprintBlock, IChoiceContext>> handler)
         {
-            OnChoiceId(blockUuid, args => { handler(args); return null; });
+            OnChoiceId(blockId, args => { handler(args); return null; });
         }
 
-        public void OnConditionId(string blockUuid, BlockHandler<ConditionBlock, IConditionContext> handler)
+        public void OnConditionId(string blockId, BlockHandler<BlueprintBlock, IConditionContext> handler)
         {
-            _sceneRegistry.SetBlockHandler(blockUuid,
-                (scene, block, context, next) => handler(new BlockHandlerArgs<ConditionBlock, IConditionContext>(scene, (ConditionBlock)block, (IConditionContext)context, next)));
+            _sceneRegistry.SetBlockHandler(blockId,
+                (scene, block, context, next) => handler(new BlockHandlerArgs<BlueprintBlock, IConditionContext>(scene, block, (IConditionContext)context, next)));
         }
 
-        public void OnConditionId(string blockUuid, Action<BlockHandlerArgs<ConditionBlock, IConditionContext>> handler)
+        public void OnConditionId(string blockId, Action<BlockHandlerArgs<BlueprintBlock, IConditionContext>> handler)
         {
-            OnConditionId(blockUuid, args => { handler(args); return null; });
+            OnConditionId(blockId, args => { handler(args); return null; });
         }
 
-        public void OnActionId(string blockUuid, BlockHandler<ActionBlock, IActionContext> handler)
+        public void OnActionId(string blockId, BlockHandler<BlueprintBlock, IActionContext> handler)
         {
-            _sceneRegistry.SetBlockHandler(blockUuid,
-                (scene, block, context, next) => handler(new BlockHandlerArgs<ActionBlock, IActionContext>(scene, (ActionBlock)block, (IActionContext)context, next)));
+            _sceneRegistry.SetBlockHandler(blockId,
+                (scene, block, context, next) => handler(new BlockHandlerArgs<BlueprintBlock, IActionContext>(scene, block, (IActionContext)context, next)));
         }
 
-        public void OnActionId(string blockUuid, Action<BlockHandlerArgs<ActionBlock, IActionContext>> handler)
+        public void OnActionId(string blockId, Action<BlockHandlerArgs<BlueprintBlock, IActionContext>> handler)
         {
-            OnActionId(blockUuid, args => { handler(args); return null; });
+            OnActionId(blockId, args => { handler(args); return null; });
         }
 
-        public void OnDialog(BlockHandler<DialogBlock, IDialogContext> handler)
+        public void OnDialog(BlockHandler<BlueprintBlock, IDialogContext> handler)
         {
             _sceneRegistry.DialogHandler = handler;
         }
 
-        public void OnDialog(Action<BlockHandlerArgs<DialogBlock, IDialogContext>> handler)
+        public void OnDialog(Action<BlockHandlerArgs<BlueprintBlock, IDialogContext>> handler)
         {
             _sceneRegistry.DialogHandler = args => { handler(args); return null; };
         }
 
-        public void OnChoice(BlockHandler<ChoiceBlock, IChoiceContext> handler)
+        public void OnChoice(BlockHandler<BlueprintBlock, IChoiceContext> handler)
         {
             _sceneRegistry.ChoiceHandler = handler;
         }
 
-        public void OnChoice(Action<BlockHandlerArgs<ChoiceBlock, IChoiceContext>> handler)
+        public void OnChoice(Action<BlockHandlerArgs<BlueprintBlock, IChoiceContext>> handler)
         {
             _sceneRegistry.ChoiceHandler = args => { handler(args); return null; };
         }
 
-        public void OnCondition(BlockHandler<ConditionBlock, IConditionContext> handler)
+        public void OnCondition(BlockHandler<BlueprintBlock, IConditionContext> handler)
         {
             _sceneRegistry.ConditionHandler = handler;
         }
 
-        public void OnCondition(Action<BlockHandlerArgs<ConditionBlock, IConditionContext>> handler)
+        public void OnCondition(Action<BlockHandlerArgs<BlueprintBlock, IConditionContext>> handler)
         {
             _sceneRegistry.ConditionHandler = args => { handler(args); return null; };
         }
 
-        public void OnAction(BlockHandler<ActionBlock, IActionContext> handler)
+        public void OnAction(BlockHandler<BlueprintBlock, IActionContext> handler)
         {
             _sceneRegistry.ActionHandler = handler;
         }
 
-        public void OnAction(Action<BlockHandlerArgs<ActionBlock, IActionContext>> handler)
+        public void OnAction(Action<BlockHandlerArgs<BlueprintBlock, IActionContext>> handler)
         {
             _sceneRegistry.ActionHandler = args => { handler(args); return null; };
         }
@@ -577,22 +665,22 @@ namespace LsdeDialogEngine
             return result;
         }
 
-        public IReadOnlyList<string>? GetChoice(string blockUuid)
+        public IReadOnlyList<string>? GetChoice(string blockId)
         {
-            return _choiceHistory.TryGetValue(blockUuid, out var list) ? list.AsReadOnly() : null;
+            return _choiceHistory.TryGetValue(blockId, out var list) ? list.AsReadOnly() : null;
         }
 
         /// <summary>Evaluate a condition against the scene's choice history.
         /// Uses the unified resolver as fallback for non-choice conditions.
         /// Without a resolver, non-choice conditions default to false.</summary>
-        public bool EvaluateCondition(ExportCondition condition)
+        public bool EvaluateCondition(ConditionTest test)
         {
             var resolver = _callbacks.GetConditionResolver?.Invoke();
-            return EvaluateConditionWithHistory(condition, resolver ?? (_ => false));
+            return EvaluateConditionWithHistory(test, resolver ?? (_ => false));
         }
 
         /// <summary>Set a scene-level character resolution override.</summary>
-        public void OnResolveCharacter(Func<List<BlockCharacter>, BlockCharacter?> resolver)
+        public void OnResolveCharacter(Func<List<Card>, Card?> resolver)
         {
             _resolveCharacter = resolver;
         }
@@ -607,7 +695,7 @@ namespace LsdeDialogEngine
             _visited.Add(uuid);
             if (_pendingWaits.Count > 0)
             {
-                var satisfied = new List<AsyncTrack>();
+                var satisfied = new List<IWaiter>();
                 foreach (var kvp in _pendingWaits)
                 {
                     bool allVisited = true;
@@ -617,10 +705,10 @@ namespace LsdeDialogEngine
                     }
                     if (allVisited) satisfied.Add(kvp.Key);
                 }
-                foreach (var track in satisfied)
+                foreach (var waiter in satisfied)
                 {
-                    _pendingWaits.Remove(track);
-                    track.NotifyWaitSatisfied();
+                    _pendingWaits.Remove(waiter);
+                    waiter.NotifyWaitSatisfied();
                 }
             }
         }
@@ -634,20 +722,61 @@ namespace LsdeDialogEngine
             return id;
         }
 
-        internal void CancelTrack(int trackId)
+        internal Exception? CancelTrack(int trackId)
         {
             foreach (var track in _asyncTracks)
             {
-                if (track.Id == trackId) { track.Cancel(); return; }
+                if (track.Id == trackId) return track.Cancel();
             }
+            return null;
         }
 
-        internal void RegisterWaitForBlocks(AsyncTrack track, List<string> blockUuids)
+        /// <summary>Park a track (or the main flow) until every listed block has been visited.</summary>
+        internal void RegisterWaitForBlocks(IWaiter waiter, List<string> blockIds)
         {
-            _pendingWaits[track] = blockUuids;
+            _pendingWaits[waiter] = blockIds;
         }
 
         internal bool IsVisited(string uuid) => _visited.Contains(uuid);
+
+        /// <summary>Called once every block this flow was waiting on has been visited.</summary>
+        public void NotifyWaitSatisfied()
+        {
+            if (!_running || _cancelled || _pendingAdvance == null) return;
+            var advance = _pendingAdvance;
+            _pendingAdvance = null;
+            advance();
+        }
+
+        /// <summary>Run OnValidateNextBlock for a block, and OnInvalidateBlock when it refuses.</summary>
+        /// <remarks>Called by BOTH the main flow and every parallel track. It used to live inline
+        /// in the main flow only, so a game using this hook as a gate — "do not enter this block
+        /// unless the player has the keycard" — was bypassed the moment a branch was marked
+        /// IsAsync. Nothing in the hook's contract said it only applied to the flow the player was
+        /// watching, and nothing on screen would have told anyone.</remarks>
+        /// <returns>false when the caller must stop rather than dispatch the block.</returns>
+        internal bool RunValidation(BlueprintBlock block, BlueprintBlock? fromBlock, Card? fromCharacter)
+        {
+            var handler = _globalRegistry.ValidateNextBlockHandler;
+            if (handler == null) return true;
+
+            var result = handler(new ValidateNextBlockArgs
+            {
+                NextBlock = block,
+                FromBlock = fromBlock,
+                NextContext = new ValidateNextBlockContext { Character = ResolveCardsFor(block).Character },
+                FromContext = fromBlock != null ? new ValidateNextBlockContext { Character = fromCharacter } : null,
+                Port = null
+            });
+            if (result.Valid) return true;
+
+            _globalRegistry.InvalidateBlockHandler?.Invoke(new InvalidateBlockArgs
+            {
+                Scene = this,
+                Reason = result.Reason ?? "validation_failed"
+            });
+            return false;
+        }
 
         internal void RemoveTrack(AsyncTrack track)
         {
@@ -660,40 +789,76 @@ namespace LsdeDialogEngine
             return CreateContext(block);
         }
 
-        private void RecordChoice(string blockUuid, string choiceUuid)
+        private void RecordChoice(string blockId, string choiceUuid)
         {
-            if (_choiceHistory.TryGetValue(blockUuid, out var existing))
+            if (_choiceHistory.TryGetValue(blockId, out var existing))
             {
                 existing.Add(choiceUuid);
             }
             else
             {
-                _choiceHistory[blockUuid] = new List<string> { choiceUuid };
+                _choiceHistory[blockId] = new List<string> { choiceUuid };
             }
         }
 
+        /// <summary>
+        /// Answer a test, taking the reserved "choice" dictionary on ourselves.
+        /// <para>{ dict: "choice", entry: "CHOICE-001", value: "C1" } asks whether the player
+        /// picked C1 at CHOICE-001 earlier IN THIS SCENE. The engine kept that history, so the
+        /// question never reaches the game: it would otherwise have to mirror a record the engine
+        /// already holds, and the two would drift. The memory starts and ends with the scene.</para>
+        /// <para>A block that was never reached answers false for equals, true for notEquals.</para>
+        /// </summary>
         private bool EvaluateConditionWithHistory(
-            ExportCondition condition,
-            Func<ExportCondition, bool> fallbackEvaluator)
+            ConditionTest test,
+            Func<ConditionTest, bool> fallbackEvaluator)
         {
-            if (condition.Key.StartsWith("choice:"))
+            if (test.Dict != Ports.Choice) return fallbackEvaluator(test);
+
+            bool negated = test.Op == ConditionOperator.NotEquals;
+            if (!_choiceHistory.TryGetValue(test.Entry, out var history)) return negated;
+
+            bool picked = history.Contains(test.Value?.ToString() ?? "");
+            return negated ? !picked : picked;
+        }
+
+        /// <summary>
+        /// The evaluator that ROUTES a condition block. Always present.
+        /// <para>With no game resolver installed it still answers "choice" tests on its own, and
+        /// says false to anything about game state — a scene that only asks about its own past
+        /// answers therefore plays without a single line of game code, and one that asks about the
+        /// world takes its default branch rather than stalling.</para>
+        /// </summary>
+        private Func<ConditionTest, bool> RoutingEvaluator()
+        {
+            var resolver = _callbacks.GetConditionResolver?.Invoke();
+            if (resolver == null)
             {
-                var blockUuid = condition.Key.Substring(7);
-                if (!_choiceHistory.TryGetValue(blockUuid, out var history))
-                {
-                    return condition.Operator == "!=";
-                }
-                bool includes = history.Contains(condition.Value);
-                return condition.Operator == "!=" ? !includes : includes;
+                return test => test.Dict == Ports.Choice
+                    && EvaluateConditionWithHistory(test, _ => false);
             }
-            return fallbackEvaluator(condition);
+            return test => EvaluateConditionWithHistory(test, resolver);
+        }
+
+        /// <summary>
+        /// The evaluator that TAGS option visibility, or null when there is no game resolver.
+        /// <para>Routing and tagging cannot share one answer here. Routing has to pick a branch, so
+        /// an unanswerable test has to become false. An option has no such obligation: saying false
+        /// about a question nobody could answer would HIDE an answer from the player. Null says
+        /// unknown, and a game reading Visible != false still offers it.</para>
+        /// </summary>
+        private Func<ConditionTest, bool>? VisibilityEvaluator()
+        {
+            var resolver = _callbacks.GetConditionResolver?.Invoke();
+            if (resolver == null) return null;
+            return test => EvaluateConditionWithHistory(test, resolver);
         }
 
         internal bool EvaluateConditionForBlock(
-            ExportCondition condition,
-            Func<ExportCondition, bool> fallbackEvaluator)
+            ConditionTest test,
+            Func<ConditionTest, bool> fallbackEvaluator)
         {
-            return EvaluateConditionWithHistory(condition, fallbackEvaluator);
+            return EvaluateConditionWithHistory(test, fallbackEvaluator);
         }
 
         // ─── Traversal loop ────────────────────────────────────────────────
@@ -706,40 +871,19 @@ namespace LsdeDialogEngine
             var block = NoteWalk.SkipNotes(startingBlock, _sceneGraph);
             if (block == null)
             {
-                EndScene();
+                var deadEnd = EndScene();
+                if (deadEnd != null) throw deadEnd;
                 return;
             }
 
             // Step 2: Validate
-            if (_globalRegistry.ValidateNextBlockHandler != null)
-            {
-                var nextCharacters = block.Metadata?.Characters ?? new List<BlockCharacter>();
-                var nextCharacter = GetResolveCharacterFn()(nextCharacters);
-
-                var result = _globalRegistry.ValidateNextBlockHandler(new ValidateNextBlockArgs
-                {
-                    NextBlock = block,
-                    FromBlock = _previousBlock,
-                    NextContext = new ValidateNextBlockContext { Character = nextCharacter },
-                    FromContext = _previousBlock != null ? new ValidateNextBlockContext { Character = _previousCharacter } : null,
-                    Port = null
-                });
-                if (!result.Valid)
-                {
-                    _globalRegistry.InvalidateBlockHandler?.Invoke(new InvalidateBlockArgs
-                    {
-                        Scene = this,
-                        Reason = result.Reason ?? "validation_failed"
-                    });
-                    return;
-                }
-            }
+            if (!RunValidation(block, _previousBlock, _previousCharacter)) return;
 
             if (_cancelled) return;
 
             // Step 3: Mark as current and visited
             _currentBlock = block;
-            AddVisited(block.Uuid);
+            AddVisited(block.Id);
 
             // Step 3b: onBeforeBlock
             if (_globalRegistry.BeforeBlockHandler != null)
@@ -751,7 +895,7 @@ namespace LsdeDialogEngine
                 {
                     Block = block,
                     Scene = this,
-                    Context = new BeforeBlockContext { NativeProperties = block.NativeProperties },
+                    Context = new BeforeBlockContext { NativeProperties = Natives.Of(block) },
                     Resolve = () =>
                     {
                         if (resolvedOnce) return;
@@ -775,7 +919,7 @@ namespace LsdeDialogEngine
 
             // Step 4: Resolve handler
             var resolved = HandlerResolver.ResolveHandler(
-                block.Type, block.Uuid, _sceneRegistry, _globalRegistry);
+                block.Type, block.Id, _sceneRegistry, _globalRegistry);
 
             // Create context
             var context = CreateContext(block);
@@ -801,6 +945,26 @@ namespace LsdeDialogEngine
             {
                 if (nextCalled) return;
                 nextCalled = true;
+
+                // WaitForBlocks: park until every listed block has been visited. The main flow
+                // honours it exactly like a parallel track — this is the join half of the fork
+                // IsAsync opens.
+                var waitBlocks = Natives.WaitForBlocks(block);
+                if (waitBlocks != null && waitBlocks.Count > 0)
+                {
+                    bool allVisited = true;
+                    foreach (var id in waitBlocks)
+                    {
+                        if (!IsVisited(id)) { allVisited = false; break; }
+                    }
+                    if (!allVisited)
+                    {
+                        _pendingAdvance = () => AdvanceToNextBlock(block, context);
+                        RegisterWaitForBlocks(this, waitBlocks);
+                        return;
+                    }
+                }
+
                 if (syncPhase) return;
                 AdvanceToNextBlock(block, context);
             }
@@ -823,14 +987,22 @@ namespace LsdeDialogEngine
             }
             catch
             {
+                // The scene is closed down first, THEN the error is re-thrown. The order is what
+                // makes this usable: by the time the game sees the error, the cleanups have run,
+                // the async tracks are cancelled and OnSceneExit has fired. The dialogue stopped
+                // PROPERLY, and the error surfaces where the game called Start() or next().
+                //
+                // v1 swallowed it — silently, not even logged — while an exception from the
+                // cleanup that same handler returned reached the caller.
                 EndScene();
-                return;
+                throw;
             }
 
-            _previousCleanup = CombineCleanups(sceneCleanup, globalCleanup);
+            _previousCleanup = Cleanups.Combine(sceneCleanup, globalCleanup);
 
+            // Unless the block is parked on WaitForBlocks: releasing it is NotifyWaitSatisfied's job.
             syncPhase = false;
-            if (nextCalled)
+            if (nextCalled && _pendingAdvance == null)
             {
                 AdvanceToNextBlock(block, context);
             }
@@ -843,42 +1015,41 @@ namespace LsdeDialogEngine
             _previousBlock = block;
             _previousCharacter = context?.Character;
 
-            var connections = _sceneGraph.GetOutgoingConnections(block.Uuid);
             var resolution = PortResolver.ResolvePort(new PortResolutionInput
             {
                 Block = block,
-                Connections = connections,
-                SelectedChoiceUuid = (context as InternalChoiceContext)?.SelectedChoiceUuid,
-                ConditionResult = (context as InternalConditionContext)?._conditionResult,
+                Links = _sceneGraph.GetOutgoingLinks(block.Id),
+                SelectedOptionId = (context as InternalChoiceContext)?.SelectedOptionId,
+                ConditionPort = (context as InternalConditionContext)?.ConditionPort,
                 ActionRejected = (context as InternalActionContext)?.ActionRejected,
-                CharacterPortIndex = (context as InternalDialogContext)?.CharacterPortIndex
+                ActorPort = (context as InternalDialogContext)?.ActorPort
             });
 
-            var allConnections = resolution.Connections;
+            var allLinks = resolution.Links;
 
             // Separate: first non-async = main track, rest = async
-            BlueprintConnection? mainConnection = null;
-            var asyncConnections = new List<BlueprintConnection>();
+            Link? mainLink = null;
+            var asyncLinks = new List<Link>();
 
-            foreach (var conn in allConnections)
+            foreach (var link in allLinks)
             {
-                var targetBlock = _sceneGraph.GetBlock(conn.ToId);
+                var targetBlock = _sceneGraph.GetBlock(link.To);
                 if (targetBlock == null) continue;
 
-                if (mainConnection == null && targetBlock.NativeProperties?.IsAsync != true)
+                if (mainLink == null && !Natives.IsAsync(targetBlock))
                 {
-                    mainConnection = conn;
+                    mainLink = link;
                 }
                 else
                 {
-                    asyncConnections.Add(conn);
+                    asyncLinks.Add(link);
                 }
             }
 
             // Spawn async tracks
-            foreach (var conn in asyncConnections)
+            foreach (var link in asyncLinks)
             {
-                var targetBlock = _sceneGraph.GetBlock(conn.ToId);
+                var targetBlock = _sceneGraph.GetBlock(link.To);
                 if (targetBlock != null)
                 {
                     SpawnAsyncTrack(targetBlock, null);
@@ -886,40 +1057,62 @@ namespace LsdeDialogEngine
             }
 
             // Continue main track
-            if (mainConnection != null)
+            if (mainLink != null)
             {
-                var nextBlock = _sceneGraph.GetBlock(mainConnection.ToId);
+                var nextBlock = _sceneGraph.GetBlock(mainLink.To);
                 if (nextBlock != null)
                 {
                     var cleanupToRun = _previousCleanup;
                     _previousCleanup = null;
-                    cleanupToRun?.Invoke();
+                    var fault = Cleanups.Run(cleanupToRun);
+                    if (fault != null)
+                    {
+                        // Same order as a handler that throws: the scene is closed down first, and
+                        // the error reaches the game with the dialogue already stopped properly.
+                        EndScene();
+                        throw fault;
+                    }
                     ProcessBlock(nextBlock);
                     return;
                 }
             }
 
             // Dead end — scene complete
-            EndScene();
+            var endFault = EndScene();
+            if (endFault != null) throw endFault;
         }
 
-        private void EndScene()
+        /// <summary>Close the scene down: cancel every track, run the pending cleanup, fire OnSceneExit.</summary>
+        /// <remarks>Returns what a cleanup threw rather than throwing it, so the teardown always
+        /// runs to the end. Callers re-throw once there is nothing left to unwind.</remarks>
+        private Exception? EndScene()
+        {
+            return Shutdown();
+        }
+
+        private Exception? Shutdown()
         {
             _pendingWaits.Clear();
+            _pendingAdvance = null;
+
+            Exception? fault = null;
             foreach (var track in _asyncTracks)
             {
-                track.Cancel();
+                // Every track is cancelled even if an earlier one's cleanup threw: leaving live
+                // tracks behind on a closed scene is how a dialogue kept running after it ended.
+                fault = fault ?? track.Cancel();
             }
             _asyncTracks.Clear();
-            if (_previousCleanup != null)
-            {
-                _previousCleanup();
-                _previousCleanup = null;
-            }
+
+            var cleanup = _previousCleanup;
+            _previousCleanup = null;
+            fault = fault ?? Cleanups.Run(cleanup);
+
             _running = false;
             _currentBlock = null;
             FireSceneExit();
             _callbacks.OnSceneEnded?.Invoke(this);
+            return fault;
         }
 
         // ─── Scene lifecycle ─────────────────────────────────────────────────
@@ -938,129 +1131,72 @@ namespace LsdeDialogEngine
 
         // ─── Internal helpers ────────────────────────────────────────────────
 
-        private Func<List<BlockCharacter>, BlockCharacter?> GetResolveCharacterFn()
+        private Func<List<Card>, Card?> GetResolveCharacterFn()
         {
             return _resolveCharacter
                 ?? _callbacks.GetResolveCharacter?.Invoke()
                 ?? (chars => chars.Count > 0 ? chars[0] : null);
         }
 
-        private RuntimeChoiceItem[] TagChoiceVisibility(
-            List<ChoiceItem> choices,
-            Func<ExportCondition, bool>? filter)
+        /// <summary>Look up the cards a block cites, and let the game pick which actor is speaking.</summary>
+        private ResolvedCards ResolveCardsFor(BlueprintBlock block)
         {
-            if (filter == null)
-            {
-                // No filter installed — return choices as-is (no Visible tag)
-                var items = new RuntimeChoiceItem[choices.Count];
-                for (int i = 0; i < choices.Count; i++)
-                {
-                    var c = choices[i];
-                    items[i] = new RuntimeChoiceItem
-                    {
-                        Uuid = c.Uuid,
-                        StructureKey = c.StructureKey,
-                        Label = c.Label,
-                        DialogueText = c.DialogueText,
-                        VisibilityConditions = c.VisibilityConditions,
-                        Visible = null,
-                    };
-                }
-                return items;
-            }
-
-            var result = new RuntimeChoiceItem[choices.Count];
-            for (int i = 0; i < choices.Count; i++)
-            {
-                var choice = choices[i];
-                bool visible;
-                if (choice.VisibilityConditions == null || choice.VisibilityConditions.Count == 0)
-                {
-                    visible = true;
-                }
-                else
-                {
-                    visible = ConditionEvaluator.EvaluateConditionChain(choice.VisibilityConditions, cond =>
-                    {
-                        if (cond.Key.StartsWith("choice:"))
-                        {
-                            return EvaluateConditionWithHistory(cond, _ => false);
-                        }
-                        return filter(cond);
-                    });
-                }
-                result[i] = new RuntimeChoiceItem
-                {
-                    Uuid = choice.Uuid,
-                    StructureKey = choice.StructureKey,
-                    Label = choice.Label,
-                    DialogueText = choice.DialogueText,
-                    VisibilityConditions = choice.VisibilityConditions,
-                    Visible = visible,
-                };
-            }
-            return result;
+            Func<string, Card?> lookup = _callbacks.GetCard ?? (_ => null);
+            return ResolvedCards.Resolve(block, lookup, GetResolveCharacterFn());
         }
 
+        // Cards are resolved fresh every time, never cached. This runs for the main track AND for
+        // async tracks (through CreateBlockContext), and a cache would leak the main track's actor
+        // into a track released later by WaitForBlocks.
         private IBaseBlockContext? CreateContext(BlueprintBlock block)
         {
-            // Character resolved fresh every time — no caching.
-            // A pre-resolve cache was removed because async tracks (spawned via waitForBlocks →
-            // notifyWaitSatisfied) consumed the main track's cached character, producing wrong results.
-            var characters = block.Metadata?.Characters ?? new List<BlockCharacter>();
-            var resolvedCharacter = GetResolveCharacterFn()(characters);
+            var cards = ResolveCardsFor(block);
 
-            switch (block)
+            switch (block.Type)
             {
-                case DialogBlock db:
-                    return BlockContextFactory.CreateDialogContext(db, resolvedCharacter);
-                case ChoiceBlock cb:
+                case BlockType.Dialog:
+                    return new InternalDialogContext(block, cards);
+
+                case BlockType.Choice:
                 {
-                    var resolver = _callbacks.GetConditionResolver?.Invoke();
-                    var taggedChoices = TagChoiceVisibility(cb.Choices ?? new List<ChoiceItem>(), resolver);
-                    return BlockContextFactory.CreateChoiceContext(cb, taggedChoices, RecordChoice, resolvedCharacter);
+                    var options = ConditionEvaluator.TagOptionVisibility(block.Options, VisibilityEvaluator());
+                    return new InternalChoiceContext(block, cards, options, RecordChoice);
                 }
-                case ConditionBlock condBlock:
+
+                case BlockType.Condition:
                 {
-                    var resolver = _callbacks.GetConditionResolver?.Invoke();
-                    if (resolver != null)
+                    var evaluate = RoutingEvaluator();
+                    bool portPerCase = Natives.Of(block).PortPerCase == true;
+
+                    // Every case is evaluated up front, so the handler is handed results rather
+                    // than questions. With a resolver installed the engine already knows where to
+                    // go, which is what makes OnCondition optional: the handler becomes a place to
+                    // log or to override.
+                    var cases = new List<RuntimeConditionCase>();
+                    foreach (var conditionCase in block.Cases ?? new List<ConditionCase>())
                     {
-                        var rawGroups = condBlock.Conditions ?? new List<List<ExportCondition>>();
-                        // Unified evaluator: choice: conditions resolved internally via choice history,
-                        // game-state conditions delegated to the onResolveCondition callback.
-                        Func<ExportCondition, bool> evaluate = cond =>
-                            cond.Key.StartsWith("choice:")
-                                ? EvaluateConditionWithHistory(cond, _ => false)
-                                : resolver(cond);
-                        var conditionGroups = new List<RuntimeConditionGroup>();
-                        for (int i = 0; i < rawGroups.Count; i++)
+                        cases.Add(new RuntimeConditionCase
                         {
-                            conditionGroups.Add(new RuntimeConditionGroup
-                            {
-                                Conditions = rawGroups[i],
-                                PortIndex = i,
-                                Result = ConditionEvaluator.EvaluateConditionChain(rawGroups[i], evaluate),
-                            });
-                        }
-                        var ctx = BlockContextFactory.CreateConditionContext(resolvedCharacter, conditionGroups);
-                        // Auto-resolve from pre-evaluated groups — the handler can override with Resolve().
-                        var matched = new List<int>();
-                        foreach (var g in conditionGroups)
-                            if (g.Result == true) matched.Add(g.PortIndex);
-                        ctx._conditionResult = condBlock.NativeProperties?.EnableDispatcher == true
-                            ? (object)matched
-                            : (object)(matched.Count > 0 ? matched[0] : -1);
-                        return ctx;
+                            Port = conditionCase.Port,
+                            When = conditionCase.When,
+                            // ONCE. The port is read off these same results rather than re-asking
+                            // the game: each test reaches OnResolveCondition exactly one time,
+                            // whatever the mode and whichever case matches.
+                            Result = ConditionEvaluator.EvaluateConditionChain(conditionCase.When, evaluate),
+                        });
                     }
-                    // No resolver installed — raw groups without pre-evaluation
-                    var groups = new List<RuntimeConditionGroup>();
-                    var conds = condBlock.Conditions ?? new List<List<ExportCondition>>();
-                    for (int i = 0; i < conds.Count; i++)
-                        groups.Add(new RuntimeConditionGroup { Conditions = conds[i], PortIndex = i });
-                    return BlockContextFactory.CreateConditionContext(resolvedCharacter, groups);
+
+                    var ctx = new InternalConditionContext(block, cards, cases);
+                    var caseResults = new List<bool>();
+                    foreach (var c in cases) caseResults.Add(c.Result == true);
+                    ctx.ConditionPort = ConditionEvaluator.PickPortFromResults(
+                        block.Cases, portPerCase, caseResults);
+                    return ctx;
                 }
-                case ActionBlock _:
-                    return BlockContextFactory.CreateActionContext(resolvedCharacter);
+
+                case BlockType.Action:
+                    return new InternalActionContext(block, cards);
+
                 default:
                     return null;
             }
@@ -1068,19 +1204,8 @@ namespace LsdeDialogEngine
 
         private static bool GetGlobalPrevented(IBaseBlockContext context)
         {
-            if (context is InternalDialogContext dc) return dc.GlobalPrevented;
-            if (context is InternalChoiceContext cc) return cc.GlobalPrevented;
-            if (context is InternalConditionContext cndc) return cndc.GlobalPrevented;
-            if (context is InternalActionContext ac) return ac.GlobalPrevented;
-            return false;
+            return context is InternalBlockContext internalContext && internalContext.GlobalPrevented;
         }
 
-        private static Action? CombineCleanups(Action? a, Action? b)
-        {
-            if (a != null && b != null) return () => { a(); b(); };
-            if (a != null) return a;
-            if (b != null) return b;
-            return null;
-        }
     }
 }

@@ -1,25 +1,23 @@
-// LSDE Dialog Engine — Condition chain evaluation
+// LSDE Dialog Engine — Condition evaluation (C++ port of condition-evaluator.ts)
 
-#include <lsde/condition_evaluator.h>
+#include "lsde/condition_evaluator.h"
 
 namespace lsde {
 
 bool evaluateConditionChain(
-    const std::vector<ExportCondition>& conditions,
-    const std::function<bool(const ExportCondition&)>& evaluator)
-{
-    if (conditions.empty()) return true;
+    const std::vector<ConditionTest>& tests,
+    const ConditionEvaluatorFn& evaluator) {
+    if (tests.empty()) return true;
 
-    bool result = evaluator(conditions[0]);
+    bool result = evaluator(tests[0]);
 
-    for (size_t i = 1; i < conditions.size(); ++i) {
-        const auto& cond = conditions[i];
-        bool current = evaluator(cond);
+    for (size_t i = 1; i < tests.size(); ++i) {
+        const ConditionTest& test = tests[i];
+        bool current = evaluator(test);
 
-        if (cond.chain && *cond.chain == "|") {
+        if (test.join.has_value() && *test.join == ConditionJoin::Or) {
             result = result || current;
         } else {
-            // '&' or absent — default to AND
             result = result && current;
         }
     }
@@ -27,45 +25,91 @@ bool evaluateConditionChain(
     return result;
 }
 
-ConditionResult evaluateConditionGroups(
-    const std::vector<std::vector<ExportCondition>>& groups,
-    const std::function<bool(const ExportCondition&)>& evaluator,
-    bool dispatcher)
-{
-    if (dispatcher) {
-        std::vector<int> matched;
-        for (size_t i = 0; i < groups.size(); ++i) {
-            if (evaluateConditionChain(groups[i], evaluator))
-                matched.push_back(static_cast<int>(i));
-        }
-        return matched;
-    }
-    // Switch mode: first match wins
-    for (size_t i = 0; i < groups.size(); ++i) {
-        if (evaluateConditionChain(groups[i], evaluator))
-            return static_cast<int>(i);
-    }
-    return -1;
+bool evaluateConditionChain(
+    const std::optional<std::vector<ConditionTest>>& tests,
+    const ConditionEvaluatorFn& evaluator) {
+    if (!tests.has_value()) return true;
+    return evaluateConditionChain(*tests, evaluator);
 }
 
-std::vector<ChoiceItem> filterVisibleChoices(
-    const std::vector<ChoiceItem>& choices,
-    const std::function<bool(const ExportCondition&)>& evaluator,
-    ISceneHandle* scene)
-{
-    std::vector<ChoiceItem> result;
-    for (const auto& choice : choices) {
-        if (choice.visibilityConditions.empty()
-            || evaluateConditionChain(choice.visibilityConditions, [&evaluator, scene](const ExportCondition& cond) {
-                if (scene && cond.key.size() >= 7 && cond.key.substr(0, 7) == "choice:") {
-                    return scene->evaluateCondition(cond);
-                }
-                return evaluator(cond);
-            })) {
-            result.push_back(choice);
+std::string evaluateConditionCases(
+    const std::vector<ConditionCase>& cases,
+    bool portPerCase,
+    const ConditionEvaluatorFn& evaluator) {
+    if (cases.empty()) return Ports::Out;
+
+    if (portPerCase) {
+        for (const auto& conditionCase : cases) {
+            if (evaluateConditionChain(conditionCase.when, evaluator)) {
+                return conditionCase.port;
+            }
+        }
+        return Ports::Default;
+    }
+
+    // if mode: the cases share one exit, so they all have to hold to take it.
+    for (const auto& conditionCase : cases) {
+        if (!evaluateConditionChain(conditionCase.when, evaluator)) {
+            return Ports::Default;
         }
     }
-    return result;
+    return Ports::Out;
+}
+
+std::string pickPortFromResults(
+    const std::vector<ConditionCase>& cases,
+    bool portPerCase,
+    const std::vector<bool>& results) {
+    if (cases.empty()) return Ports::Out;
+
+    if (portPerCase) {
+        for (size_t i = 0; i < cases.size(); ++i) {
+            if (i < results.size() && results[i]) return cases[i].port;
+        }
+        return Ports::Default;
+    }
+
+    // if mode: the cases share one exit, so they all have to hold to take it.
+    for (size_t i = 0; i < cases.size(); ++i) {
+        if (i >= results.size() || !results[i]) return Ports::Default;
+    }
+    return Ports::Out;
+}
+
+std::vector<bool> evaluateEachCase(
+    const std::vector<ConditionCase>& cases,
+    const ConditionEvaluatorFn& evaluator) {
+    std::vector<bool> results;
+    results.reserve(cases.size());
+    for (const auto& conditionCase : cases) {
+        results.push_back(evaluateConditionChain(conditionCase.when, evaluator));
+    }
+    return results;
+}
+
+std::vector<RuntimeChoiceItem> tagOptionVisibility(
+    const std::vector<Option>& options,
+    const ConditionEvaluatorFn* evaluator) {
+    std::vector<RuntimeChoiceItem> tagged;
+    tagged.reserve(options.size());
+
+    for (const auto& option : options) {
+        RuntimeChoiceItem item;
+        item.id = option.id;
+        item.key = option.key;
+        item.text = option.text;
+        item.when = option.when;
+        if (evaluator != nullptr) {
+            item.visible = evaluateConditionChain(option.when, *evaluator);
+        }
+        tagged.push_back(std::move(item));
+    }
+
+    return tagged;
+}
+
+bool isChoiceTest(const ConditionTest& test) {
+    return test.dict == Ports::Choice;
 }
 
 } // namespace lsde

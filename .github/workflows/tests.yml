@@ -1,0 +1,129 @@
+# Runs the four runtimes against the same shared specs.
+#
+# This did not exist before the v2 migration, and its absence is what let the README announce
+# "40/42" for C++ when 89 were passing and none failing — nobody had run the suite in months. Four
+# jobs, one per runtime, so a divergence shows up as one red square rather than a quiet drift.
+#
+# `tests/*.json` is the contract all four read. A change to port resolution or condition evaluation
+# goes: TypeScript behaviour and its tests first, then `tests/generate-specs.py`, then the ports.
+
+name: Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── TypeScript — the reference implementation ────────────────────────────
+  typescript:
+    name: TypeScript
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lsde-ts
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: lsde-ts/package-lock.json
+
+      - run: npm ci
+
+      # The type-check is not optional here: vitest transpiles without checking types, so a broken
+      # signature passes the suite and fails a consumer's build.
+      - name: Type-check
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  # ── The shared specs are generated, never hand-written ───────────────────
+  specs:
+    name: Shared specs are up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Regenerating must be a no-op. A diff here means someone edited the JSON by hand, and the
+      # four runtimes are about to drift on what a payload looks like.
+      - name: Regenerate and diff
+        run: |
+          python tests/generate-specs.py
+          git diff --exit-code -- tests/
+
+  # ── C# — Unity and .NET ──────────────────────────────────────────────────
+  csharp:
+    name: C#
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lsde-csharp
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - run: dotnet build --nologo
+
+      - run: dotnet test --nologo --no-build
+
+  # ── C++ — Unreal and custom engines ──────────────────────────────────────
+  cpp:
+    name: C++
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lsde-cpp
+    steps:
+      - uses: actions/checkout@v4
+
+      # CMake fetches googletest and nlohmann/json itself; nothing else is needed.
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  # ── GDScript — Godot 4 ───────────────────────────────────────────────────
+  gdscript:
+    name: GDScript
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.5.1
+    defaults:
+      run:
+        working-directory: lsde-gdscript
+    steps:
+      - uses: actions/checkout@v4
+
+      # THE trap, and it costs an afternoon every time someone forgets it: a `class_name` is
+      # resolved through .godot/global_script_class_cache.cfg, which is in .gitignore. On a fresh
+      # checkout that file does not exist, so EVERY script fails to parse — not one test fails,
+      # they all fail to load. The import pass writes it.
+      - name: Build the class cache
+        run: godot --headless --path . --import
+        continue-on-error: true
+
+      - name: Test
+        run: godot --headless --path . --script tests/test_runner.gd --quit

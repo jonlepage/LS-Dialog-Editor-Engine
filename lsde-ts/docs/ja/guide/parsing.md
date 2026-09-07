@@ -49,7 +49,7 @@ CSV はロケールごとのダイアログテキストのフラットテーブ�
 
 | `type` | サブタイプ | 固有フィールド |
 |--------|-----------|--------------|
-| `DIALOG` | `DialogBlock` | `dialogueText`, `content`, `structureKey` |
+| `DIALOG` | `DialogBlock` | `text`, `content`, `structureKey` |
 | `CHOICE` | `ChoiceBlock` | `choices` |
 | `CONDITION` | `ConditionBlock` | `conditions` |
 | `ACTION` | `ActionBlock` | `actions` |
@@ -57,7 +57,7 @@ CSV はロケールごとのダイアログテキストのフラットテーブ�
 
 **動的型付け言語**（TypeScript、GDScript）はこれを自動的に処理します — パースされたオブジェクトにはすべてのフィールドが含まれています。
 
-**静的型付け言語**（C#、C++）は `type` フィールドを読み取り、正しいサブタイプを構築するカスタムコンバーターが必要です。これがないと、`dialogueText` や `choices` などのサブタイプ固有のフィールドが暗黙的に失われます。
+**静的型付け言語**（C#、C++）は `type` フィールドを読み取り、正しいサブタイプを構築するカスタムコンバーターが必要です。これがないと、`text` や `choices` などのサブタイプ固有のフィールドが暗黙的に失われます。
 
 ::: info コンパニオンパッケージ
 `LsdeDialogEngine.Newtonsoft` または `LsdeDialogEngine.SystemTextJson` を使用している場合、これらのコンバーターはすでに含まれています — `LsdeJson.Parse(json)` を呼び出すだけです。以下のコードは手動統合用です。

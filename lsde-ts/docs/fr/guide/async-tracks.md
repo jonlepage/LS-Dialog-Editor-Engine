@@ -1,6 +1,6 @@
 # Async Tracks
 
-Quand un block a `nativeProperties.isAsync = true`, le engine crée un **track parallèle** qui s'exécute indépendamment du flow principal.
+Quand un block a `props.isAsync = true`, le engine crée un **track parallèle** qui s'exécute indépendamment du flow principal.
 
 ## Comment les tracks sont créés
 
@@ -20,7 +20,7 @@ Ceci s'applique au main track **et** aux async tracks — un async track peut cr
 
 ## waitForBlocks — Synchronisation de tracks
 
-Utilisez `nativeProperties.waitForBlocks` pour synchroniser les tracks parallèles. Il accepte un array de block UUIDs qui doivent être visités avant que le block puisse progresser :
+Utilisez `props.waitForBlocks` pour synchroniser les tracks parallèles. Il accepte un array de block UUIDs qui doivent être visités avant que le block puisse progresser :
 
 - **Sur le block de départ** : Le track entier attend avant même de commencer l'exécution. `onBeforeBlock` n'est pas appelé tant que tous les blocks requis ne sont pas visités.
 - **Sur tout autre block** : Quand le handler appelle `next()`, l'avancement est différé jusqu'à ce que la condition soit remplie.
@@ -33,7 +33,7 @@ spawn → waitForBlocks gate → onBeforeBlock (delay) → handler → next()
 
 ## waitInput — Flag d'input joueur
 
-`nativeProperties.waitInput` est un **flag passif** — le engine l'expose mais ne l'interprète pas. Votre handler de jeu le lit pour décider s'il faut attendre un input explicite du joueur.
+`props.waitInput` est un **flag passif** — le engine l'expose mais ne l'interprète pas. Votre handler de jeu le lit pour décider s'il faut attendre un input explicite du joueur.
 
 ## API TrackInfo — Observabilité
 

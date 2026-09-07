@@ -16,7 +16,7 @@ Quand le narrative designer assigne un output dédié par personnage ([`portPerC
 
 ## CHOICE
 
-Un block choice représente un embranchement où le joueur choisit — un menu de réponses, des options de dialogue. Le `context.choices` contient toutes les options disponibles. Quand [`onResolveCondition()`](/fr/guide/choice-visibility) est configuré, chaque option est taggée `visible: true | false` — le handler filtre et affiche celles qu'il veut. Après l'interaction du joueur, `selectChoice(uuid)` indique au engine quel chemin suivre, puis `next()` avance le flow.
+Un block choice représente un embranchement où le joueur choisit — un menu de réponses, des options de dialogue. Le `context.options` contient toutes les options disponibles. Quand [`onResolveCondition()`](/fr/guide/choice-visibility) est configuré, chaque option est taggée `visible: true | false` — le handler filtre et affiche celles qu'il veut. Après l'interaction du joueur, `selectChoice(uuid)` indique au engine quel chemin suivre, puis `next()` avance le flow.
 
 <!--@include: ../../_shared/block-choice.md-->
 
@@ -30,7 +30,7 @@ Le block condition supporte deux modes d'évaluation :
 
 - **Mode switch** (par défaut) : les groupes de conditions sont évalués en séquence. Le premier groupe qui match route le flow vers son port (`true`/`case_N`). Si aucun ne match, le flow suit le port `false`/`default`. C'est un `switch/case` avec break implicite.
 
-- **Mode dispatcher** ([`enableDispatcher`](/api-ref/interfaces/NativeProperties#enabledispatcher) `= true`) : **tous** les groupes qui matchent déclenchent leur port simultanément en tant que tracks async. Le port `false`/`default` devient la track principale de continuation ("Continue") et est **toujours exécuté**, qu'il y ait des matchs ou non. Les blocks connectés aux ports de condition **doivent** être async. C'est un pattern "fire & dispatch" — idéal pour déclencher des réactions parallèles (multi-NPC, événements simultanés) sans bloquer le flow principal.
+- **Mode dispatcher** ([`portPerCase`](/api-ref/interfaces/NativeProperties#enabledispatcher) `= true`) : **tous** les groupes qui matchent déclenchent leur port simultanément en tant que tracks async. Le port `false`/`default` devient la track principale de continuation ("Continue") et est **toujours exécuté**, qu'il y ait des matchs ou non. Les blocks connectés aux ports de condition **doivent** être async. C'est un pattern "fire & dispatch" — idéal pour déclencher des réactions parallèles (multi-NPC, événements simultanés) sans bloquer le flow principal.
 
 <!--@include: ../../_shared/block-condition.md-->
 
@@ -56,9 +56,9 @@ Tous les blocks partagent ces champs de base ([`BlueprintBlockBase`](/api-ref/in
 | [`parentLabels`](/api-ref/interfaces/BlueprintBlockBase#parentlabels) | `string[]?` | Hiérarchie des dossiers parents dans l'éditeur |
 | [`properties`](/api-ref/interfaces/BlueprintBlockBase#properties) | `BlockProperty[]` | Propriétés clé-valeur |
 | [`userProperties`](/api-ref/interfaces/BlueprintBlockBase#userproperties) | `Record?` | Propriétés utilisateur libres |
-| [`nativeProperties`](/api-ref/interfaces/BlueprintBlockBase#nativeproperties) | `NativeProperties?` | Propriétés d'exécution |
+| [`props`](/api-ref/interfaces/BlueprintBlockBase#nativeproperties) | `NativeProperties?` | Propriétés d'exécution |
 | [`metadata`](/api-ref/interfaces/BlueprintBlockBase#metadata) | `BlockMetadata?` | Metadata d'affichage (personnages, tags, couleur) |
-| [`isStartBlock`](/api-ref/interfaces/BlueprintBlockBase#isstartblock) | `boolean?` | Marque le block d'entrée |
+| [`scene.start`](/api-ref/interfaces/BlueprintBlockBase#isstartblock) | `boolean?` | Marque le block d'entrée |
 
 ### NativeProperties
 
@@ -72,4 +72,4 @@ Tous les blocks partagent ces champs de base ([`BlueprintBlockBase`](/api-ref/in
 | [`debug`](/api-ref/interfaces/NativeProperties#debug) | `boolean?` | Flag de debug pour l'éditeur |
 | [`waitForBlocks`](/api-ref/interfaces/NativeProperties#waitforblocks) | `string[]?` | UUIDs de blocks qui doivent être visités avant que ce block puisse progresser |
 | [`waitInput`](/api-ref/interfaces/NativeProperties#waitinput) | `boolean?` | Flag passif pour contrôle d'input joueur explicite |
-| [`enableDispatcher`](/api-ref/interfaces/NativeProperties#enabledispatcher) | `boolean?` | Mode dispatcher : toutes les conditions valides déclenchent leur port async, le port false/default devient la track de continuation |
+| [`portPerCase`](/api-ref/interfaces/NativeProperties#enabledispatcher) | `boolean?` | Mode dispatcher : toutes les conditions valides déclenchent leur port async, le port false/default devient la track de continuation |

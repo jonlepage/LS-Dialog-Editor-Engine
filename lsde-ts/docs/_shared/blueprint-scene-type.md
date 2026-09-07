@@ -4,7 +4,7 @@ interface BlueprintScene {
   uuid: string;
   label: string;
   note?: string;
-  entryBlockId?: string;
+  scene.start?: string;
   date: string;
   blocks: BlueprintBlock[];
   connections: BlueprintConnection[];
@@ -26,7 +26,7 @@ struct BlueprintScene {
     std::string uuid;
     std::string label;
     std::optional<std::string> note;
-    std::optional<std::string> entryBlockId;
+    std::optional<std::string> scene.start;
     std::string date;
     std::vector<BlueprintBlock> blocks;
     std::vector<BlueprintConnection> connections;
@@ -37,7 +37,7 @@ struct BlueprintScene {
 # "uuid": String
 # "label": String
 # "note": String (optional)
-# "entryBlockId": String (optional)
+# "scene.start": String (optional)
 # "date": String
 # "blocks": Array[Dictionary]
 # "connections": Array[Dictionary]

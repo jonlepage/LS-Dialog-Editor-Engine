@@ -1,1173 +1,667 @@
-import { describe, it, expect, vi } from 'vitest';
+// LSDE Dialog Engine — the public facade, end to end
+//
+// Everything a game touches: init, locale, the two resolvers, the four handlers, the three handler
+// tiers, and a scene played from start to finish.
+
+import { describe, it, expect } from 'vitest';
 import { DialogueEngine } from './engine.js';
-import type { BlueprintExport, BlueprintScene, RuntimeChoiceItem } from './types.js';
+import type { Blueprints, Scene, Block, Card } from './types.js';
+import {
+	blueprint, scene as buildScene, dialog, choice, condition, action, note,
+	option, card, dictionary, fn, call, whenCase, test as t,
+} from './test-builders.js';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
-function linearScene(): BlueprintScene {
-	return {
-		uuid: 'scene-1', label: 'Linear', date: '2025-01-01',
+interface Wire { fromId: string; toId: string; fromPort: string }
+
+function conn( fromId: string, toId: string, fromPort = 'out' ): Wire {
+	return { fromId, toId, fromPort };
+}
+
+/** A scene written as blocks plus a wire list, which reads far better than `next` per block. */
+function makeScene( spec: { blocks: Block[]; connections?: Wire[]; path?: string; start?: string } ): Scene {
+	const byId = new Map( spec.blocks.map( b => [b.id, b] ) );
+	for ( const wire of spec.connections ?? [] ) {
+		const from = byId.get( wire.fromId );
+		if ( !from ) continue;
+		from.next = [...( from.next ?? [] ), { port: wire.fromPort, to: wire.toId, toPort: 'in' }];
+	}
+	return buildScene( spec.blocks, {
+		...( spec.path ? { scene: spec.path, id: `sc_${ spec.path }` } : {} ),
+		...( spec.start ? { start: spec.start } : {} ),
+	} );
+}
+
+const CARDS: Card[] = [card( 'var1', 'kael' ), card( 'var2', 'nora' ), card( 'var7', 'afraid', 'emotions' )];
+
+function linearScene(): Scene {
+	return makeScene( {
 		blocks: [
-			{ uuid: 'b1', type: 'DIALOG', properties: [], isStartBlock: true, dialogueText: { en: 'Hello' } },
-			{ uuid: 'b2', type: 'DIALOG', properties: [], dialogueText: { en: 'World' } },
+			dialog( 'b1', { text: { en: 'Hello' } } ),
+			dialog( 'b2', { text: { en: 'World' } } ),
 		],
-		connections: [
-			{ id: 'c1', fromId: 'b1', toId: 'b2', fromPort: 'out', toPort: 'in' },
-		],
-	};
+		connections: [conn( 'b1', 'b2' )],
+	} );
 }
 
-function makeExport( scenes: BlueprintScene[] = [linearScene()] ): BlueprintExport {
-	return {
-		version: '1.0.0', exportDate: '2025-01-01', locales: ['en'],
-		scenes,
-	};
+function makeExport( scenes: Scene[] = [linearScene()] ): Blueprints {
+	return blueprint( scenes, {
+		locales: ['en', 'fr'],
+		cards: CARDS,
+		dictionaries: [dictionary( 'switches', ['flag'] )],
+		functions: [fn( 'do_thing', ['what'] )],
+	} );
 }
 
-/** Registers the 4 mandatory handlers with minimal pass-through behavior. */
 function registerAllHandlers( engine: DialogueEngine ): void {
 	engine.onDialog( ( { next } ) => { next(); } );
 	engine.onChoice( ( { context, next } ) => {
-		if ( context.choices.length > 0 ) context.selectChoice( context.choices[0]!.uuid );
+		if ( context.options.length > 0 ) context.selectChoice( context.options[0]!.id );
 		next();
 	} );
-	engine.onCondition( ( { context, next } ) => { context.resolve( true ); next(); } );
+	engine.onCondition( ( { next } ) => { next(); } );
 	engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
 }
 
-// ─── Tests ───────────────────────────────────────────────────────────────────
+function ready( scenes: Scene[] = [linearScene()] ): DialogueEngine {
+	const engine = new DialogueEngine();
+	engine.init( { data: makeExport( scenes ) } );
+	registerAllHandlers( engine );
+	return engine;
+}
 
-describe( 'DialogueEngine', () => {
+// ─── init ────────────────────────────────────────────────────────────────────
 
-	describe( 'init', () => {
+describe( 'init', () => {
 
-		it( 'returns no errors for valid data', () => {
-			const engine = new DialogueEngine();
-			const report = engine.init( { data: makeExport() } );
-			expect( report.errors ).toHaveLength( 0 );
-			expect( report.stats.sceneCount ).toBe( 1 );
-		} );
+	it( 'accepts a valid payload', () => {
+		const report = new DialogueEngine().init( { data: makeExport() } );
 
-		it( 'returns errors for invalid data', () => {
-			const engine = new DialogueEngine();
-			const report = engine.init( { data: { ...makeExport(), scenes: [] } } );
-			expect( report.errors.length ).toBeGreaterThan( 0 );
-		} );
-
+		expect( report.errors ).toHaveLength( 0 );
+		expect( report.stats.sceneCount ).toBe( 1 );
+		expect( report.stats.blockCount ).toBe( 2 );
 	} );
 
-	describe( 'scene', () => {
-
-		it( 'throws before init', () => {
-			const engine = new DialogueEngine();
-			expect( () => engine.scene( 'scene-1' ) ).toThrow( 'init' );
-		} );
-
-		it( 'throws for unknown scene ID', () => {
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport() } );
-			expect( () => engine.scene( 'nonexistent' ) ).toThrow( 'not found' );
-		} );
-
-		it( 'creates a scene handle without starting it', () => {
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport() } );
-			const handle = engine.scene( 'scene-1' );
-			expect( handle.isRunning() ).toBe( false );
-			expect( engine.isRunning() ).toBe( false );
-		} );
-
+	it( 'reports an empty payload', () => {
+		const report = new DialogueEngine().init( { data: { ...makeExport(), scenes: [] } } );
+		expect( report.errors.length ).toBeGreaterThan( 0 );
 	} );
 
-	describe( 'full lifecycle', () => {
-
-		it( 'traverses a linear scene end-to-end', () => {
-			const visited: string[] = [];
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport() } );
-			engine.setLocale( 'en' );
-			registerAllHandlers( engine );
-
-			// Override the default onDialog to track visited blocks
-			engine.onDialog( ( { block, next } ) => {
-				visited.push( block.uuid );
-				next();
-			} );
-
-			const handle = engine.scene( 'scene-1' );
-			handle.start();
-
-			expect( visited ).toEqual( ['b1', 'b2'] );
-			expect( handle.isRunning() ).toBe( false );
-			expect( engine.isRunning() ).toBe( false );
-		} );
-
-		it( 'tracks active scenes', () => {
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport() } );
-			registerAllHandlers( engine );
-
-			let capturedRunning = false;
-			engine.onDialog( ( { next } ) => {
-				capturedRunning = engine.isRunning();
-				// Don't call next — stay active
-			} );
-
-			const handle = engine.scene( 'scene-1' );
-			handle.start();
-
-			expect( capturedRunning ).toBe( true );
-			expect( engine.isRunning() ).toBe( true );
-			expect( engine.getActiveScenes() ).toHaveLength( 1 );
-			expect( engine.getCurrentBlocks() ).toHaveLength( 1 );
-		} );
-
-		it( 'stop() cancels all active scenes', () => {
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport() } );
-			registerAllHandlers( engine );
-
-			engine.onDialog( () => {
-				// Don't call next — stay active
-			} );
-
-			const handle = engine.scene( 'scene-1' );
-			handle.start();
-			expect( engine.isRunning() ).toBe( true );
-
-			engine.stop();
-			expect( engine.isRunning() ).toBe( false );
-			expect( handle.isRunning() ).toBe( false );
-		} );
-
+	it( 'refuses a payload it cannot read', () => {
+		const report = new DialogueEngine().init( { data: { hello: 'world' } as unknown as Blueprints } );
+		expect( report.errors[0]!.code ).toBe( 'INVALID_FORMAT' );
 	} );
 
-	describe( 'start() validation', () => {
+	it( 'does not initialize on a refused payload', () => {
+		const engine = new DialogueEngine();
+		engine.init( { data: { hello: 'world' } as unknown as Blueprints } );
 
-		it( 'start() throws if required handler is missing', () => {
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport() } );
-			engine.onDialog( ( { next } ) => { next(); } );
-			// Missing onChoice, onCondition, onAction
-			const handle = engine.scene( 'scene-1' );
-			expect( () => handle.start() ).toThrow( /missing required handler/i );
-		} );
-
+		expect( () => engine.scene( 's1' ) ).toThrow( /not initialized/ );
 	} );
 
-	describe( 'handler priority integration', () => {
+	it( 'a second init replaces the data cleanly', () => {
+		const engine = new DialogueEngine();
+		engine.init( { data: makeExport() } );
+		engine.init( { data: makeExport( [makeScene( { blocks: [dialog( 'x1' )], path: 'other' } )] ) } );
 
-		it( 'scene handler + global handler both fire', () => {
-			const calls: string[] = [];
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport() } );
-			registerAllHandlers( engine );
-
-			engine.onDialog( ( { next } ) => {
-				calls.push( 'global' );
-				next();
-			} );
-
-			const handle = engine.scene( 'scene-1' );
-			handle.onDialog( ( { next } ) => {
-				calls.push( 'scene' );
-				next();
-			} );
-			handle.start();
-
-			// Scene fires first, then global. Both call next() but only one advance.
-			expect( calls ).toContain( 'scene' );
-			expect( calls ).toContain( 'global' );
-			expect( calls.indexOf( 'scene' ) ).toBeLessThan( calls.indexOf( 'global' ) );
-		} );
-
-		it( 'onBlock overrides scene type handler', () => {
-			const calls: string[] = [];
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport() } );
-			registerAllHandlers( engine );
-
-			engine.onDialog( ( { next } ) => {
-				calls.push( 'global' );
-				next();
-			} );
-
-			const handle = engine.scene( 'scene-1' );
-			handle.onDialog( ( ) => {
-				calls.push( 'scene-dialog' );
-			} );
-			handle.onBlock( 'b1', ( { context, next } ) => {
-				calls.push( 'block-override' );
-				context.preventGlobalHandler();
-				next();
-			} );
-			handle.start();
-
-			// b1: block override fires, global prevented
-			// b2: scene dialog fires, global fires
-			expect( calls[0] ).toBe( 'block-override' );
-		} );
-
-		it( 'onDialogId provides typed block and context', () => {
-			const calls: string[] = [];
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport() } );
-			registerAllHandlers( engine );
-
-			engine.onDialog( ( { next } ) => {
-				calls.push( 'global' );
-				next();
-			} );
-
-			const handle = engine.scene( 'scene-1' );
-			handle.onDialogId( 'b1', ( { block, context, next } ) => {
-				// block is typed as DialogBlock — dialogueText is directly accessible
-				calls.push( `dialog:${ block.dialogueText?.en ?? '' }` );
-				// context is typed as DialogContext — resolveCharacterPort exists
-				expect( typeof context.resolveCharacterPort ).toBe( 'function' );
-				context.preventGlobalHandler();
-				next();
-			} );
-			handle.start();
-
-			expect( calls[0] ).toBe( 'dialog:Hello' );
-			// global was prevented for b1
-			expect( calls[1] ).toBe( 'global' ); // b2 still fires global
-		} );
-
-		it( 'onActionId provides typed block and context', () => {
-			const calls: string[] = [];
-			const actScene: BlueprintScene = {
-				uuid: 'scene-act-id', label: 'ActId', date: '2025-01-01',
-				blocks: [
-					{ uuid: 'act1', type: 'ACTION', properties: [], isStartBlock: true,
-						actions: [{ uuid: 'a1', actionId: 'give_item', params: ['sword'] }] },
-					{ uuid: 'after', type: 'DIALOG', properties: [] },
-				],
-				connections: [
-					{ id: 'c1', fromId: 'act1', toId: 'after', fromPort: 'then', toPort: 'in' },
-				],
-			};
-
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [actScene] ) } );
-			registerAllHandlers( engine );
-
-			const handle = engine.scene( 'scene-act-id' );
-			handle.onActionId( 'act1', ( { block, context, next } ) => {
-				// block is typed as ActionBlock — actions is directly accessible
-				calls.push( `action:${ block.actions?.[0]?.actionId ?? '' }` );
-				// context is typed as ActionContext — resolve/reject exist
-				expect( typeof context.resolve ).toBe( 'function' );
-				expect( typeof context.reject ).toBe( 'function' );
-				context.resolve();
-				next();
-			} );
-			handle.start();
-
-			expect( calls[0] ).toBe( 'action:give_item' );
-		} );
-
-		it( 'onChoiceId provides typed block and context', () => {
-			const choiceSceneSimple: BlueprintScene = {
-				uuid: 'scene-choice-id', label: 'ChoiceId', date: '2025-01-01',
-				blocks: [
-					{ uuid: 'ch1', type: 'CHOICE', properties: [], isStartBlock: true,
-						choices: [
-							{ uuid: 'opt-a', structureKey: 'a', dialogueText: { en: 'A' } },
-							{ uuid: 'opt-b', structureKey: 'b', dialogueText: { en: 'B' } },
-						] },
-					{ uuid: 'end-a', type: 'DIALOG', properties: [] },
-					{ uuid: 'end-b', type: 'DIALOG', properties: [] },
-				],
-				connections: [
-					{ id: 'c1', fromId: 'ch1', toId: 'end-a', fromPort: 'opt-a', toPort: 'in' },
-					{ id: 'c2', fromId: 'ch1', toId: 'end-b', fromPort: 'opt-b', toPort: 'in' },
-				],
-			};
-
-			const calls: string[] = [];
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [choiceSceneSimple] ) } );
-			registerAllHandlers( engine );
-
-			const handle = engine.scene( 'scene-choice-id' );
-			handle.onChoiceId( 'ch1', ( { block, context, next } ) => {
-				// block is typed as ChoiceBlock — choices is directly accessible
-				calls.push( `choice:${ block.choices?.length ?? 0 }` );
-				// context is typed as ChoiceContext — selectChoice/choices exist
-				expect( typeof context.selectChoice ).toBe( 'function' );
-				expect( Array.isArray( context.choices ) ).toBe( true );
-				context.selectChoice( context.choices[0]!.uuid );
-				next();
-			} );
-			handle.start();
-
-			expect( calls[0] ).toBe( 'choice:2' );
-		} );
-
-		it( 'onConditionId provides typed block and context', () => {
-			const condScene: BlueprintScene = {
-				uuid: 'scene-cond-id', label: 'CondId', date: '2025-01-01',
-				blocks: [
-					{ uuid: 'cond1', type: 'CONDITION', properties: [], isStartBlock: true,
-						conditions: [[{ uuid: 'c1', key: 'quest', operator: '=', value: 'active' }]] },
-					{ uuid: 'yes', type: 'DIALOG', properties: [] },
-					{ uuid: 'no', type: 'DIALOG', properties: [] },
-				],
-				connections: [
-					{ id: 'ct', fromId: 'cond1', toId: 'yes', fromPort: 'true', toPort: 'in', fromPortIndex: 0 },
-					{ id: 'cf', fromId: 'cond1', toId: 'no', fromPort: 'false', toPort: 'in', fromPortIndex: 1 },
-				],
-			};
-
-			const visited: string[] = [];
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [condScene] ) } );
-			registerAllHandlers( engine );
-
-			const handle = engine.scene( 'scene-cond-id' );
-			handle.onConditionId( 'cond1', ( { block, context, next } ) => {
-				// block is typed as ConditionBlock — conditions is directly accessible (2D array of groups)
-				expect( block.conditions?.length ).toBe( 1 );
-				// context is typed as ConditionContext — resolve(boolean) exists
-				expect( typeof context.resolve ).toBe( 'function' );
-				context.resolve( true );
-				next();
-			} );
-			handle.onDialog( ( { block, next } ) => {
-				visited.push( block.uuid );
-				next();
-			} );
-			handle.start();
-
-			expect( visited ).toEqual( ['yes'] );
-		} );
-
+		expect( () => engine.scene( 'other' ) ).not.toThrow();
 	} );
 
-	describe( 'condition handler', () => {
+	it( 'recovers from a failed init', () => {
+		const engine = new DialogueEngine();
+		engine.init( { data: { hello: 'world' } as unknown as Blueprints } );
+		const report = engine.init( { data: makeExport() } );
 
-		it( 'onCondition handler controls branching', () => {
-			const condScene: BlueprintScene = {
-				uuid: 'scene-cond', label: 'Cond', date: '2025-01-01',
-				blocks: [
-					{ uuid: 'cond1', type: 'CONDITION', properties: [], isStartBlock: true,
-						conditions: [[{ uuid: 'c1', key: 'quest', operator: '=', value: 'active' }]] },
-					{ uuid: 'yes', type: 'DIALOG', properties: [] },
-					{ uuid: 'no', type: 'DIALOG', properties: [] },
-				],
-				connections: [
-					{ id: 'ct', fromId: 'cond1', toId: 'yes', fromPort: 'true', toPort: 'in', fromPortIndex: 0 },
-					{ id: 'cf', fromId: 'cond1', toId: 'no', fromPort: 'false', toPort: 'in', fromPortIndex: 1 },
-				],
-			};
+		expect( report.errors ).toHaveLength( 0 );
+		expect( () => engine.scene( 's1' ) ).not.toThrow();
+	} );
+} );
 
-			const visited: string[] = [];
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [condScene] ) } );
+// ─── scene() ─────────────────────────────────────────────────────────────────
 
-			engine.onDialog( ( { block, next } ) => {
-				visited.push( block.uuid );
-				next();
-			} );
-			engine.onChoice( ( { context, next } ) => {
-				if ( context.choices.length > 0 ) context.selectChoice( context.choices[0]!.uuid );
-				next();
-			} );
-			engine.onCondition( ( { context, next } ) => {
-				context.resolve( false ); // → false branch
-				next();
-			} );
-			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
+describe( 'opening a scene', () => {
 
-			engine.scene( 'scene-cond' ).start();
-			expect( visited ).toEqual( ['no'] );
-		} );
-
+	it( 'finds it by path', () => {
+		expect( () => ready().scene( 's1' ) ).not.toThrow();
 	} );
 
-	describe( 'action handler', () => {
-
-		it( 'onAction handler executes actions', () => {
-			const executed: string[] = [];
-			const actScene: BlueprintScene = {
-				uuid: 'scene-act', label: 'Act', date: '2025-01-01',
-				blocks: [
-					{ uuid: 'act1', type: 'ACTION', properties: [], isStartBlock: true,
-						actions: [{ uuid: 'a1', actionId: 'give_item', params: ['sword'] }] },
-					{ uuid: 'after', type: 'DIALOG', properties: [] },
-				],
-				connections: [
-					{ id: 'c1', fromId: 'act1', toId: 'after', fromPort: 'then', toPort: 'in' },
-				],
-			};
-
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [actScene] ) } );
-
-			engine.onDialog( ( { next } ) => next() );
-			engine.onChoice( ( { context, next } ) => {
-				if ( context.choices.length > 0 ) context.selectChoice( context.choices[0]!.uuid );
-				next();
-			} );
-			engine.onCondition( ( { context, next } ) => { context.resolve( true ); next(); } );
-			engine.onAction( ( { block, context, next } ) => {
-				for ( const action of block.actions ?? [] ) {
-					executed.push( action.actionId );
-				}
-				context.resolve();
-				next();
-			} );
-
-			engine.scene( 'scene-act' ).start();
-			expect( executed ).toEqual( ['give_item'] );
-		} );
-
+	it( 'finds it by the id that survives a rename', () => {
+		// This is the one to store in an asset, a save file or a database row: the path changes
+		// the day someone renames the scene, and a serialized path then resolves to nothing.
+		expect( () => ready().scene( 'sc_test0001' ) ).not.toThrow();
 	} );
 
-	// ─── Realistic dev scenarios ─────────────────────────────────────────────
+	it( 'throws for a scene that is not there, and names it', () => {
+		expect( () => ready().scene( 'nope' ) ).toThrow( /"nope" not found/ );
+	} );
 
-	describe( 'choice flow with selectChoice', () => {
+	it( 'throws before init', () => {
+		expect( () => new DialogueEngine().scene( 's1' ) ).toThrow( /not initialized/ );
+	} );
+} );
 
-		const choiceScene: BlueprintScene = {
-			uuid: 'scene-choice', label: 'Choice', date: '2025-01-01',
+// ─── setLocale ───────────────────────────────────────────────────────────────
+
+describe( 'setLocale', () => {
+
+	it( 'accepts a locale the project declares', () => {
+		expect( () => ready().setLocale( 'fr' ) ).not.toThrow();
+	} );
+
+	it( 'refuses one it does not, and lists the real ones', () => {
+		expect( () => ready().setLocale( 'de' ) ).toThrow( /en, fr/ );
+	} );
+} );
+
+// ─── Handlers ────────────────────────────────────────────────────────────────
+
+describe( 'handlers', () => {
+
+	it( 'throws when a mandatory handler is missing', () => {
+		const engine = new DialogueEngine();
+		engine.init( { data: makeExport() } );
+		engine.onDialog( ( { next } ) => next() );
+
+		expect( () => engine.scene( 's1' ).start() ).toThrow( /onChoice/ );
+	} );
+
+	it( 'the last registration wins', () => {
+		const calls: string[] = [];
+		const engine = ready();
+		engine.onDialog( ( { next } ) => { calls.push( 'first' ); next(); } );
+		engine.onDialog( ( { next } ) => { calls.push( 'second' ); next(); } );
+
+		engine.scene( 's1' ).start();
+
+		expect( calls ).toEqual( ['second', 'second'] );
+	} );
+
+	it( 'runs the scene handler then the global one', () => {
+		const calls: string[] = [];
+		const engine = ready();
+		engine.onDialog( ( { next } ) => { calls.push( 'global' ); next(); } );
+
+		const handle = engine.scene( 's1' );
+		handle.onDialog( ( { next } ) => { calls.push( 'scene' ); next(); } );
+		handle.start();
+
+		expect( calls.slice( 0, 2 ) ).toEqual( ['scene', 'global'] );
+	} );
+
+	it( 'onBlock beats the scene type handler', () => {
+		const calls: string[] = [];
+		const engine = ready();
+		const handle = engine.scene( 's1' );
+		handle.onDialog( ( { next } ) => { calls.push( 'type' ); next(); } );
+		handle.onBlock( 'b1', ( { context, next } ) => {
+			context.preventGlobalHandler();
+			calls.push( 'block' );
+			next();
+		} );
+		handle.start();
+
+		expect( calls[0] ).toBe( 'block' );
+	} );
+
+	it( 'onDialogId hands over a typed block and context', () => {
+		let seen: { id: string; hasPort: boolean } | null = null;
+		const engine = ready();
+		const handle = engine.scene( 's1' );
+		handle.onDialogId( 'b2', ( { block, context, next } ) => {
+			seen = { id: block.id, hasPort: 'resolveCharacterPort' in context };
+			next();
+		} );
+		handle.start();
+
+		expect( seen ).toEqual( { id: 'b2', hasPort: true } );
+	} );
+
+	it( 'onActionId hands over the calls', () => {
+		let seen: string[] = [];
+		const scene = makeScene( {
+			blocks: [action( 'a1', [call( 'do_thing', { what: 'x' } )] )],
+		} );
+		const engine = ready( [scene] );
+		const handle = engine.scene( 's1' );
+		handle.onActionId( 'a1', ( { context, next } ) => {
+			seen = context.calls.map( c => c.fn );
+			context.resolve();
+			next();
+		} );
+		handle.start();
+
+		expect( seen ).toEqual( ['do_thing'] );
+	} );
+
+	it( 'onChoiceId hands over the options', () => {
+		let seen: string[] = [];
+		const scene = makeScene( { blocks: [choice( 'c1', [option( 'C1' ), option( 'C2' )] )] } );
+		const engine = ready( [scene] );
+		const handle = engine.scene( 's1' );
+		handle.onChoiceId( 'c1', ( { context, next } ) => {
+			seen = context.options.map( o => o.id );
+			next();
+		} );
+		handle.start();
+
+		expect( seen ).toEqual( ['C1', 'C2'] );
+	} );
+
+	it( 'onConditionId hands over the cases', () => {
+		let seen: string[] = [];
+		const scene = makeScene( { blocks: [condition( 'k1', [whenCase( 'K1' ), whenCase( 'K2' )] )] } );
+		const engine = ready( [scene] );
+		const handle = engine.scene( 's1' );
+		handle.onConditionId( 'k1', ( { context, next } ) => {
+			seen = context.cases.map( c => c.port );
+			next();
+		} );
+		handle.start();
+
+		expect( seen ).toEqual( ['K1', 'K2'] );
+	} );
+} );
+
+// ─── Playing a scene ─────────────────────────────────────────────────────────
+
+describe( 'playing', () => {
+
+	it( 'walks a linear scene in order', () => {
+		const visited: string[] = [];
+		const engine = ready();
+		engine.onDialog( ( { block, next } ) => { visited.push( block.id ); next(); } );
+
+		engine.scene( 's1' ).start();
+
+		expect( visited ).toEqual( ['b1', 'b2'] );
+	} );
+
+	it( 'follows the option the player picked', () => {
+		const visited: string[] = [];
+		const scene = makeScene( {
 			blocks: [
-				{ uuid: 'greeting', type: 'DIALOG', properties: [], isStartBlock: true,
-					dialogueText: { en: 'Welcome!' } },
-				{ uuid: 'choice1', type: 'CHOICE', properties: [],
-					choices: [
-						{ uuid: 'opt-buy', structureKey: 'buy', dialogueText: { en: 'Buy' } },
-						{ uuid: 'opt-leave', structureKey: 'leave', dialogueText: { en: 'Leave' },
-							visibilityConditions: [{ uuid: 'vc1', key: 'can_leave', operator: '=', value: 'true' }] },
-					] },
-				{ uuid: 'shop', type: 'DIALOG', properties: [], dialogueText: { en: 'Here are my wares.' } },
-				{ uuid: 'bye', type: 'DIALOG', properties: [], dialogueText: { en: 'Safe travels.' } },
+				choice( 'c1', [option( 'C1', { text: 'yes' } ), option( 'C2', { text: 'no' } )] ),
+				dialog( 'said-yes' ),
+				dialog( 'said-no' ),
+			],
+			connections: [conn( 'c1', 'said-yes', 'C1' ), conn( 'c1', 'said-no', 'C2' )],
+		} );
+		const engine = ready( [scene] );
+		engine.onChoice( ( { context, next } ) => { context.selectChoice( 'C2' ); next(); } );
+		engine.onDialog( ( { block, next } ) => { visited.push( block.id ); next(); } );
+
+		engine.scene( 's1' ).start();
+
+		expect( visited ).toEqual( ['said-no'] );
+	} );
+
+	it( 'follows the port named after the actor, and falls back to out', () => {
+		const visited: string[] = [];
+		const scene = makeScene( {
+			blocks: [
+				dialog( 'd1', { actors: ['var1', 'var2'], props: { portPerCharacter: true } } ),
+				dialog( 'kael-said' ),
+				dialog( 'anyone' ),
+			],
+			connections: [conn( 'd1', 'kael-said', 'var1' ), conn( 'd1', 'anyone', 'out' )],
+		} );
+
+		const engine = ready( [scene] );
+		engine.onDialog( ( { block, context, next } ) => {
+			visited.push( block.id );
+			if ( block.id === 'd1' ) context.resolveCharacterPort( 'var1' );
+			next();
+		} );
+		engine.scene( 's1' ).start();
+		expect( visited ).toEqual( ['d1', 'kael-said'] );
+
+		visited.length = 0;
+		const engine2 = ready( [scene] );
+		engine2.onDialog( ( { block, context, next } ) => {
+			visited.push( block.id );
+			if ( block.id === 'd1' ) context.resolveCharacterPort( 'var9' );
+			next();
+		} );
+		engine2.scene( 's1' ).start();
+		expect( visited ).toEqual( ['d1', 'anyone'] );
+	} );
+
+	it( 'lets the game pick which actor is speaking', () => {
+		let seen: string | undefined;
+		const scene = makeScene( { blocks: [dialog( 'd1', { actors: ['var1', 'var2'] } )] } );
+		const engine = ready( [scene] );
+		engine.onResolveCharacter( ( actors ) => actors[actors.length - 1] );
+		engine.onDialog( ( { context, next } ) => { seen = context.character?.name; next(); } );
+
+		engine.scene( 's1' ).start();
+
+		expect( seen ).toBe( 'nora' );
+	} );
+
+	it( 'follows then on success and catch on failure', () => {
+		const scene = makeScene( {
+			blocks: [action( 'a1', [call( 'do_thing' )] ), dialog( 'ok' ), dialog( 'failed' )],
+			connections: [conn( 'a1', 'ok', 'then' ), conn( 'a1', 'failed', 'catch' )],
+		} );
+
+		const okVisited: string[] = [];
+		const okEngine = ready( [scene] );
+		okEngine.onDialog( ( { block, next } ) => { okVisited.push( block.id ); next(); } );
+		okEngine.scene( 's1' ).start();
+		expect( okVisited ).toEqual( ['ok'] );
+
+		const failVisited: string[] = [];
+		const failEngine = ready( [scene] );
+		failEngine.onAction( ( { context, next } ) => { context.reject( new Error( 'x' ) ); next(); } );
+		failEngine.onDialog( ( { block, next } ) => { failVisited.push( block.id ); next(); } );
+		failEngine.scene( 's1' ).start();
+		expect( failVisited ).toEqual( ['failed'] );
+	} );
+
+	it( 'loops once, then leaves', () => {
+		const visited: string[] = [];
+		let pass = 0;
+		const scene = makeScene( {
+			blocks: [
+				dialog( 'b1' ),
+				choice( 'c1', [option( 'C1' ), option( 'C2' )] ),
+				dialog( 'out' ),
 			],
 			connections: [
-				{ id: 'c1', fromId: 'greeting', toId: 'choice1', fromPort: 'out', toPort: 'in' },
-				{ id: 'c2', fromId: 'choice1', toId: 'shop', fromPort: 'opt-buy', toPort: 'in' },
-				{ id: 'c3', fromId: 'choice1', toId: 'bye', fromPort: 'opt-leave', toPort: 'in' },
+				conn( 'b1', 'c1' ),
+				conn( 'c1', 'b1', 'C1' ),
+				conn( 'c1', 'out', 'C2' ),
 			],
-		};
-
-		it( 'dev selects a choice and follows the branch', () => {
-			const visited: string[] = [];
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [choiceScene] ) } );
-
-			engine.onDialog( ( { block, next } ) => {
-				visited.push( block.uuid );
-				next();
-			} );
-			engine.onChoice( ( { context, next } ) => {
-				// Dev picks the first visible choice
-				context.selectChoice( context.choices[0]!.uuid );
-				next();
-			} );
-			engine.onCondition( ( { context, next } ) => { context.resolve( true ); next(); } );
-			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
-
-			engine.scene( 'scene-choice' ).start();
-			expect( visited ).toEqual( ['greeting', 'shop'] );
+		} );
+		const engine = ready( [scene] );
+		engine.onDialog( ( { block, next } ) => { visited.push( block.id ); next(); } );
+		engine.onChoice( ( { context, next } ) => {
+			pass++;
+			context.selectChoice( pass === 1 ? 'C1' : 'C2' );
+			next();
 		} );
 
-		it( 'setChoiceFilter tags choices with visible', () => {
-			let receivedChoices: RuntimeChoiceItem[] = [];
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [choiceScene] ) } );
+		engine.scene( 's1' ).start();
 
-			// Install a choice filter that makes can_leave = false
-			engine.setChoiceFilter( () => false );
-
-			engine.onDialog( ( { next } ) => next() );
-			engine.onChoice( ( { context, next } ) => {
-				receivedChoices = context.choices as RuntimeChoiceItem[];
-				// Select the first choice regardless of visibility
-				context.selectChoice( context.choices[0]!.uuid );
-				next();
-			} );
-			engine.onCondition( ( { context, next } ) => { context.resolve( true ); next(); } );
-			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
-
-			engine.scene( 'scene-choice' ).start();
-
-			// opt-buy has no visibilityConditions → visible: true
-			// opt-leave has visibilityConditions and filter returns false → visible: false
-			expect( receivedChoices ).toHaveLength( 2 );
-			const buyChoice = receivedChoices.find( c => c.uuid === 'opt-buy' );
-			const leaveChoice = receivedChoices.find( c => c.uuid === 'opt-leave' );
-			expect( buyChoice?.visible ).toBe( true );
-			expect( leaveChoice?.visible ).toBe( false );
-		} );
-
+		expect( visited ).toEqual( ['b1', 'b1', 'out'] );
 	} );
 
-	describe( 'portPerCharacter flow', () => {
-
-		const charScene: BlueprintScene = {
-			uuid: 'scene-char', label: 'Characters', date: '2025-01-01',
+	it( 'walks every block type in one scene', () => {
+		const seen: string[] = [];
+		const scene = makeScene( {
 			blocks: [
-				{ uuid: 'multi', type: 'DIALOG', properties: [], isStartBlock: true,
-					nativeProperties: { portPerCharacter: true },
-					dialogueText: { en: 'Who speaks?' },
-					metadata: { characters: [
-						{ uuid: 'hero-uuid', id: 'hero', name: 'Hero', emotion: 'neutral' },
-						{ uuid: 'boss-uuid', id: 'boss', name: 'Boss', emotion: 'angry' },
-					] } },
-				{ uuid: 'hero-path', type: 'DIALOG', properties: [], dialogueText: { en: 'Hero speaks.' } },
-				{ uuid: 'boss-path', type: 'DIALOG', properties: [], dialogueText: { en: 'Boss roars.' } },
-				{ uuid: 'fallback', type: 'DIALOG', properties: [], dialogueText: { en: 'Default.' } },
+				dialog( 'd1' ),
+				choice( 'c1', [option( 'C1' )] ),
+				condition( 'k1', [whenCase( 'out', [t( 'switches', 'flag', true )] )] ),
+				action( 'a1', [call( 'do_thing' )] ),
+				note( 'n1' ),
+				dialog( 'd2' ),
 			],
 			connections: [
-				{ id: 'c-hero', fromId: 'multi', toId: 'hero-path', fromPort: 'hero-var-uuid', toPort: 'in', fromPortIndex: 0 },
-				{ id: 'c-boss', fromId: 'multi', toId: 'boss-path', fromPort: 'boss-var-uuid', toPort: 'in', fromPortIndex: 1 },
-				{ id: 'c-else', fromId: 'multi', toId: 'fallback', fromPort: 'out', toPort: 'in' },
+				conn( 'd1', 'c1' ), conn( 'c1', 'k1', 'C1' ),
+				conn( 'k1', 'a1', 'out' ), conn( 'a1', 'n1', 'then' ), conn( 'n1', 'd2' ),
 			],
-		};
-
-		it( 'dev resolves character port and follows the correct branch', () => {
-			const visited: string[] = [];
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [charScene] ) } );
-			registerAllHandlers( engine );
-
-			engine.onDialog( ( { block, context, next } ) => {
-				visited.push( block.uuid );
-				if ( block.uuid === 'multi' && 'resolveCharacterPort' in context ) {
-					context.resolveCharacterPort( 'boss-uuid' );
-				}
-				next();
-			} );
-
-			engine.scene( 'scene-char' ).start();
-			expect( visited ).toEqual( ['multi', 'boss-path'] );
 		} );
+		const engine = ready( [scene] );
+		engine.onResolveCondition( () => true );
+		engine.onDialog( ( { block, next } ) => { seen.push( block.id ); next(); } );
+		engine.onChoice( ( { context, next } ) => { seen.push( 'c1' ); context.selectChoice( 'C1' ); next(); } );
+		engine.onCondition( ( { next } ) => { seen.push( 'k1' ); next(); } );
+		engine.onAction( ( { context, next } ) => { seen.push( 'a1' ); context.resolve(); next(); } );
 
-		it( 'falls back to "out" port for unknown character', () => {
-			const visited: string[] = [];
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [charScene] ) } );
-			registerAllHandlers( engine );
+		engine.scene( 's1' ).start();
 
-			engine.onDialog( ( { block, context, next } ) => {
-				visited.push( block.uuid );
-				if ( block.uuid === 'multi' && 'resolveCharacterPort' in context ) {
-					context.resolveCharacterPort( 'Ghost' ); // not in metadata
-				}
-				next();
-			} );
+		// The note is stepped over, never dispatched.
+		expect( seen ).toEqual( ['d1', 'c1', 'k1', 'a1', 'd2'] );
+	} );
+} );
 
-			engine.scene( 'scene-char' ).start();
-			expect( visited ).toEqual( ['multi', 'fallback'] );
-		} );
+// ─── Conditions ──────────────────────────────────────────────────────────────
 
-		it( 'onResolveCharacter replaces default character resolution', () => {
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [charScene] ) } );
-			registerAllHandlers( engine );
+describe( 'conditions', () => {
 
-			let resolvedCharName: string | undefined;
-			engine.onResolveCharacter( ( characters ) => {
-				// Pick the second character instead of the default first
-				return characters[1];
-			} );
-
-			engine.onDialog( ( { block, context, next } ) => {
-				if ( block.uuid === 'multi' && 'character' in context ) {
-					const char = context.character as { uuid: string; name: string } | undefined;
-					resolvedCharName = char?.name;
-					if ( 'resolveCharacterPort' in context && char ) {
-						context.resolveCharacterPort( char.uuid );
-					}
-				}
-				next();
-			} );
-
-			engine.scene( 'scene-char' ).start();
-			expect( resolvedCharName ).toBe( 'Boss' );
-		} );
-
+	const branching = () => makeScene( {
+		blocks: [
+			condition( 'k1', [whenCase( 'out', [t( 'switches', 'flag', true )] )] ),
+			dialog( 'yes' ),
+			dialog( 'no' ),
+		],
+		connections: [conn( 'k1', 'yes', 'out' ), conn( 'k1', 'no', 'default' )],
 	} );
 
-	describe( 'action catch path', () => {
+	function playWith( engine: DialogueEngine ): string[] {
+		const visited: string[] = [];
+		engine.onDialog( ( { block, next } ) => { visited.push( block.id ); next(); } );
+		engine.scene( 's1' ).start();
+		return visited;
+	}
 
-		it( 'follows catch path when action handler rejects', () => {
-			const visited: string[] = [];
-			const actScene: BlueprintScene = {
-				uuid: 'scene-catch', label: 'Catch', date: '2025-01-01',
-				blocks: [
-					{ uuid: 'act1', type: 'ACTION', properties: [], isStartBlock: true,
-						actions: [{ uuid: 'a1', actionId: 'risky_op', params: [] }] },
-					{ uuid: 'success', type: 'DIALOG', properties: [] },
-					{ uuid: 'failure', type: 'DIALOG', properties: [] },
-				],
-				connections: [
-					{ id: 'c-ok', fromId: 'act1', toId: 'success', fromPort: 'then', toPort: 'in', fromPortIndex: 0 },
-					{ id: 'c-err', fromId: 'act1', toId: 'failure', fromPort: 'catch', toPort: 'in', fromPortIndex: 1 },
-				],
-			};
+	it( 'does not need onCondition once a resolver is installed', () => {
+		const engine = new DialogueEngine();
+		engine.init( { data: makeExport( [branching()] ) } );
+		engine.onDialog( ( { next } ) => next() );
+		engine.onChoice( ( { next } ) => next() );
+		engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
+		engine.onResolveCondition( () => true );
 
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [actScene] ) } );
-
-			engine.onAction( ( { context, next } ) => {
-				context.reject( new Error( 'something broke' ) );
-				next();
-			} );
-			engine.onDialog( ( { block, next } ) => {
-				visited.push( block.uuid );
-				next();
-			} );
-			engine.onChoice( ( { context, next } ) => {
-				if ( context.choices.length > 0 ) context.selectChoice( context.choices[0]!.uuid );
-				next();
-			} );
-			engine.onCondition( ( { context, next } ) => { context.resolve( true ); next(); } );
-
-			engine.scene( 'scene-catch' ).start();
-			expect( visited ).toEqual( ['failure'] );
-		} );
-
-		it( 'follows then path when action resolves', () => {
-			const visited: string[] = [];
-			const actScene: BlueprintScene = {
-				uuid: 'scene-ok', label: 'OK', date: '2025-01-01',
-				blocks: [
-					{ uuid: 'act1', type: 'ACTION', properties: [], isStartBlock: true,
-						actions: [{ uuid: 'a1', actionId: 'safe_op', params: [] }] },
-					{ uuid: 'success', type: 'DIALOG', properties: [] },
-					{ uuid: 'failure', type: 'DIALOG', properties: [] },
-				],
-				connections: [
-					{ id: 'c-ok', fromId: 'act1', toId: 'success', fromPort: 'then', toPort: 'in', fromPortIndex: 0 },
-					{ id: 'c-err', fromId: 'act1', toId: 'failure', fromPort: 'catch', toPort: 'in', fromPortIndex: 1 },
-				],
-			};
-
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [actScene] ) } );
-
-			engine.onAction( ( { context, next } ) => {
-				context.resolve();
-				next();
-			} );
-			engine.onDialog( ( { block, next } ) => {
-				visited.push( block.uuid );
-				next();
-			} );
-			engine.onChoice( ( { context, next } ) => {
-				if ( context.choices.length > 0 ) context.selectChoice( context.choices[0]!.uuid );
-				next();
-			} );
-			engine.onCondition( ( { context, next } ) => { context.resolve( true ); next(); } );
-
-			engine.scene( 'scene-ok' ).start();
-			expect( visited ).toEqual( ['success'] );
-		} );
-
+		expect( () => engine.scene( 's1' ).start() ).not.toThrow();
 	} );
 
-	describe( 'loop scenario (choice back to start)', () => {
+	it( 'throws when neither onCondition nor onResolveCondition is there', () => {
+		const engine = new DialogueEngine();
+		engine.init( { data: makeExport( [branching()] ) } );
+		engine.onDialog( ( { next } ) => next() );
+		engine.onChoice( ( { next } ) => next() );
+		engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
 
-		it( 'loops once then exits', () => {
-			const visited: string[] = [];
-			let loopCount = 0;
-
-			const loopScene: BlueprintScene = {
-				uuid: 'scene-loop', label: 'Loop', date: '2025-01-01',
-				blocks: [
-					{ uuid: 'start', type: 'DIALOG', properties: [], isStartBlock: true },
-					{ uuid: 'ask', type: 'CHOICE', properties: [],
-						choices: [
-							{ uuid: 'again', structureKey: 'again', dialogueText: { en: 'Again' } },
-							{ uuid: 'done', structureKey: 'done', dialogueText: { en: 'Done' } },
-						] },
-					{ uuid: 'end', type: 'DIALOG', properties: [] },
-				],
-				connections: [
-					{ id: 'c1', fromId: 'start', toId: 'ask', fromPort: 'out', toPort: 'in' },
-					{ id: 'c2', fromId: 'ask', toId: 'start', fromPort: 'again', toPort: 'in' },  // LOOP!
-					{ id: 'c3', fromId: 'ask', toId: 'end', fromPort: 'done', toPort: 'in' },
-				],
-			};
-
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [loopScene] ) } );
-
-			engine.onDialog( ( { block, next } ) => {
-				visited.push( block.uuid );
-				next();
-			} );
-			engine.onChoice( ( { context, next } ) => {
-				loopCount++;
-				if ( loopCount < 3 ) {
-					context.selectChoice( 'again' ); // loop back
-				} else {
-					context.selectChoice( 'done' );  // exit
-				}
-				next();
-			} );
-			engine.onCondition( ( { context, next } ) => { context.resolve( true ); next(); } );
-			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
-
-			engine.scene( 'scene-loop' ).start();
-			// start → ask → (again) → start → ask → (again) → start → ask → (done) → end
-			expect( visited ).toEqual( ['start', 'start', 'start', 'end'] );
-			expect( loopCount ).toBe( 3 );
-		} );
-
+		expect( () => engine.scene( 's1' ).start() ).toThrow( /onCondition/ );
 	} );
 
-	describe( 'multi-track async + follow scenario', () => {
+	it( 'routes on its own when the handler only calls next()', () => {
+		const engine = ready( [branching()] );
+		engine.onResolveCondition( () => true );
 
-		it( 'main track + async background + follow-narrative all execute', () => {
-			const calls: string[] = [];
-
-			const multiScene: BlueprintScene = {
-				uuid: 'scene-multi', label: 'Multi', date: '2025-01-01',
-				blocks: [
-					{ uuid: 'main1', type: 'DIALOG', properties: [], isStartBlock: true,
-						dialogueText: { en: 'Hero speaks' },
-						metadata: { characters: [{ uuid: 'hero-uuid', id: 'hero', name: 'Hero' }] } },
-					{ uuid: 'main2', type: 'DIALOG', properties: [],
-						dialogueText: { en: 'Hero continues' } },
-					{ uuid: 'bg1', type: 'DIALOG', properties: [],
-						nativeProperties: { isAsync: true },
-						dialogueText: { en: 'NPC mumbles in background' },
-						metadata: { characters: [{ uuid: 'npc-uuid', id: 'npc', name: 'NPC' }] } },
-					{ uuid: 'bg2', type: 'DIALOG', properties: [],
-						dialogueText: { en: 'NPC finishes mumbling' } },
-					{ uuid: 'follow1', type: 'DIALOG', properties: [],
-						nativeProperties: { isAsync: true },
-						dialogueText: { en: 'Crowd reacts' } },
-					{ uuid: 'follow2', type: 'DIALOG', properties: [],
-						dialogueText: { en: 'Crowd cheers' } },
-				],
-				connections: [
-					// Main track
-					{ id: 'c-main', fromId: 'main1', toId: 'main2', fromPort: 'out', toPort: 'in' },
-					// Async background fork (self-driven)
-					{ id: 'c-bg', fromId: 'main1', toId: 'bg1', fromPort: 'out', toPort: 'in' },
-					{ id: 'c-bg2', fromId: 'bg1', toId: 'bg2', fromPort: 'out', toPort: 'in' },
-					// Second async fork
-					{ id: 'c-follow', fromId: 'main1', toId: 'follow1', fromPort: 'out', toPort: 'in' },
-					{ id: 'c-follow2', fromId: 'follow1', toId: 'follow2', fromPort: 'out', toPort: 'in' },
-				],
-			};
-
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [multiScene] ) } );
-			registerAllHandlers( engine );
-
-			engine.onDialog( ( { block, next } ) => {
-				calls.push( block.uuid );
-				next();
-			} );
-
-			const handle = engine.scene( 'scene-multi' );
-			handle.start();
-
-			// main1 → forks to main2 (main) + bg1 (async) + follow1 (async)
-			// bg1 calls next() → bg2 (async track completes)
-			// follow1 calls next() → follow2 (async track completes)
-			// main2 next → end scene
-			expect( calls ).toContain( 'main1' );
-			expect( calls ).toContain( 'main2' );
-			expect( calls ).toContain( 'bg1' );
-			expect( calls ).toContain( 'bg2' );
-			expect( calls ).toContain( 'follow1' );
-			expect( calls ).toContain( 'follow2' );
-		} );
-
-		it( 'scene lifecycle hooks fire around multi-track flow', () => {
-			const enterSpy = vi.fn();
-			const exitSpy = vi.fn();
-
-			const simpleMulti: BlueprintScene = {
-				uuid: 'scene-hooks', label: 'Hooks', date: '2025-01-01',
-				blocks: [
-					{ uuid: 'm1', type: 'DIALOG', properties: [], isStartBlock: true },
-					{ uuid: 'a1', type: 'DIALOG', properties: [],
-						nativeProperties: { isAsync: true } },
-				],
-				connections: [
-					{ id: 'c1', fromId: 'm1', toId: 'a1', fromPort: 'out', toPort: 'in' },
-				],
-			};
-
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [simpleMulti] ) } );
-			engine.onSceneEnter( enterSpy );
-			engine.onSceneExit( exitSpy );
-			registerAllHandlers( engine );
-			engine.onDialog( ( { next } ) => next() );
-
-			engine.scene( 'scene-hooks' ).start();
-
-			expect( enterSpy ).toHaveBeenCalledOnce();
-			expect( exitSpy ).toHaveBeenCalledOnce();
-		} );
-
+		expect( playWith( engine ) ).toEqual( ['yes'] );
 	} );
 
-	describe( 'mixed full scenario (like blueprint.json)', () => {
+	it( 'routes to default when the case does not hold', () => {
+		const engine = ready( [branching()] );
+		engine.onResolveCondition( () => false );
 
-		it( 'traverses DIALOG → CHOICE → CONDITION → DIALOG with all block types', () => {
-			const visited: string[] = [];
-			const executed: string[] = [];
-
-			const fullScene: BlueprintScene = {
-				uuid: 'scene-full', label: 'Full', date: '2025-01-01',
-				blocks: [
-					// Start with action
-					{ uuid: 'act', type: 'ACTION', properties: [], isStartBlock: true,
-						actions: [{ uuid: 'a1', actionId: 'setup_quest', params: ['main'] }] },
-					// Then dialog
-					{ uuid: 'greet', type: 'DIALOG', properties: [],
-						dialogueText: { en: 'Greetings, adventurer!' },
-						metadata: { characters: [{ uuid: 'elder-uuid', id: 'elder', name: 'Elder' }] } },
-					// Then choice
-					{ uuid: 'choice', type: 'CHOICE', properties: [],
-						choices: [
-							{ uuid: 'opt-accept', structureKey: 'accept', dialogueText: { en: 'I accept the quest.' } },
-							{ uuid: 'opt-refuse', structureKey: 'refuse', dialogueText: { en: 'Not interested.' } },
-						] },
-					// Accept → condition check
-					{ uuid: 'cond', type: 'CONDITION', properties: [],
-						conditions: [[{ uuid: 'cv1', key: 'player_level', operator: '>', value: '5' }]] },
-					// Condition true → success dialog
-					{ uuid: 'success', type: 'DIALOG', properties: [], dialogueText: { en: 'You are worthy!' } },
-					// Condition false → fail dialog
-					{ uuid: 'fail', type: 'DIALOG', properties: [], dialogueText: { en: 'Too weak...' } },
-					// Refuse → goodbye
-					{ uuid: 'refuse-msg', type: 'DIALOG', properties: [], dialogueText: { en: 'Very well. Goodbye.' } },
-					// NOTE block (should be skipped)
-					{ uuid: 'note1', type: 'NOTE', properties: [] },
-				],
-				connections: [
-					{ id: 'c1', fromId: 'act', toId: 'note1', fromPort: 'then', toPort: 'in' },
-					{ id: 'c-note', fromId: 'note1', toId: 'greet', fromPort: 'out', toPort: 'in' },
-					{ id: 'c2', fromId: 'greet', toId: 'choice', fromPort: 'out', toPort: 'in' },
-					{ id: 'c3', fromId: 'choice', toId: 'cond', fromPort: 'opt-accept', toPort: 'in' },
-					{ id: 'c4', fromId: 'choice', toId: 'refuse-msg', fromPort: 'opt-refuse', toPort: 'in' },
-					{ id: 'c5', fromId: 'cond', toId: 'success', fromPort: 'true', toPort: 'in', fromPortIndex: 0 },
-					{ id: 'c6', fromId: 'cond', toId: 'fail', fromPort: 'false', toPort: 'in', fromPortIndex: 1 },
-				],
-			};
-
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [fullScene] ) } );
-
-			engine.onDialog( ( { block, next } ) => {
-				visited.push( block.uuid );
-				next();
-			} );
-			engine.onChoice( ( { context, next } ) => {
-				context.selectChoice( 'opt-accept' );
-				next();
-			} );
-			engine.onCondition( ( { context, next } ) => {
-				// Simulate: player_level > 5 → true
-				context.resolve( true );
-				next();
-			} );
-			engine.onAction( ( { block, context, next } ) => {
-				for ( const action of block.actions ?? [] ) {
-					executed.push( action.actionId );
-				}
-				context.resolve();
-				next();
-			} );
-
-			engine.scene( 'scene-full' ).start();
-
-			// act (handler) → NOTE (skip) → greet → choice (accept) → cond (handler, true) → success
-			expect( executed ).toEqual( ['setup_quest'] );
-			expect( visited ).toEqual( ['greet', 'success'] );
-		} );
-
+		expect( playWith( engine ) ).toEqual( ['no'] );
 	} );
 
-	describe( 'getSceneConnections', () => {
+	it( 'routes with no onCondition handler at all', () => {
+		const engine = new DialogueEngine();
+		engine.init( { data: makeExport( [branching()] ) } );
+		engine.onChoice( ( { next } ) => next() );
+		engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
+		engine.onResolveCondition( () => true );
 
-		it( 'returns connections for a known scene', () => {
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport() } );
-			expect( engine.getSceneConnections( 'scene-1' ) ).toHaveLength( 1 );
-		} );
-
-		it( 'returns empty array for unknown scene', () => {
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport() } );
-			expect( engine.getSceneConnections( 'unknown' ) ).toEqual( [] );
-		} );
-
+		expect( playWith( engine ) ).toEqual( ['yes'] );
 	} );
 
-	// ─── onResolveCondition integration ─────────────────────────────────────
+	it( 'hands the handler each case with its port and result', () => {
+		let seen: Array<[string, boolean | undefined]> = [];
+		const engine = ready( [branching()] );
+		engine.onResolveCondition( () => true );
+		engine.onCondition( ( { context, next } ) => {
+			seen = context.cases.map( c => [c.port, c.result] );
+			next();
+		} );
 
-	describe( 'onResolveCondition', () => {
+		playWith( engine );
 
-		const condScene: BlueprintScene = {
-			uuid: 'scene-rc', label: 'ResolveCondition', date: '2025-01-01',
+		expect( seen ).toEqual( [['out', true]] );
+	} );
+
+	it( 'lets the handler override the port it picked', () => {
+		const engine = ready( [branching()] );
+		engine.onResolveCondition( () => true );
+		engine.onCondition( ( { context, next } ) => { context.resolve( 'default' ); next(); } );
+
+		expect( playWith( engine ) ).toEqual( ['no'] );
+	} );
+
+	it( 'routes to the case port with portPerCase', () => {
+		const scene = makeScene( {
 			blocks: [
-				{ uuid: 'cond1', type: 'CONDITION', properties: [], isStartBlock: true,
-					conditions: [[{ uuid: 'c1', key: 'flag', operator: '=', value: 'true' }]] },
-				{ uuid: 'yes', type: 'DIALOG', properties: [] },
-				{ uuid: 'no', type: 'DIALOG', properties: [] },
+				condition( 'k1', [
+					whenCase( 'K1', [t( 'switches', 'a', true )] ),
+					whenCase( 'K2', [t( 'switches', 'b', true )] ),
+				], { props: { portPerCase: true } } ),
+				dialog( 'first' ), dialog( 'second' ), dialog( 'none' ),
 			],
 			connections: [
-				{ id: 'ct', fromId: 'cond1', toId: 'yes', fromPort: 'true', toPort: 'in', fromPortIndex: 0 },
-				{ id: 'cf', fromId: 'cond1', toId: 'no', fromPort: 'false', toPort: 'in', fromPortIndex: 1 },
+				conn( 'k1', 'first', 'K1' ), conn( 'k1', 'second', 'K2' ), conn( 'k1', 'none', 'default' ),
 			],
-		};
-
-		// ── P0: onCondition optionnel quand resolver installe ────────────
-
-		it( 'start() does not throw when onCondition is omitted but onResolveCondition is installed', () => {
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [condScene] ) } );
-			engine.onResolveCondition( () => true );
-			engine.onDialog( ( { next } ) => next() );
-			engine.onChoice( ( { next } ) => next() );
-			// NO engine.onCondition()
-			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
-			expect( () => engine.scene( 'scene-rc' ).start() ).not.toThrow();
 		} );
+		const engine = ready( [scene] );
+		engine.onResolveCondition( ( test ) => test.entry === 'b' );
 
-		it( 'start() throws when neither onCondition nor onResolveCondition is installed', () => {
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [condScene] ) } );
-			engine.onDialog( ( { next } ) => next() );
-			engine.onChoice( ( { next } ) => next() );
-			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
-			expect( () => engine.scene( 'scene-rc' ).start() ).toThrow( /onCondition/ );
-		} );
-
-		// ── P0: Auto-resolve sans resolve() ─────────────────────────────
-
-		it( 'auto-resolves condition when handler does not call resolve()', () => {
-			const visited: string[] = [];
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [condScene] ) } );
-			engine.onResolveCondition( () => true ); // flag=true → group matches → portIndex 0 → 'yes'
-			engine.onCondition( ( { next } ) => next() ); // no resolve() call
-			engine.onDialog( ( { block, next } ) => { visited.push( block.uuid ); next(); } );
-			engine.onChoice( ( { next } ) => next() );
-			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
-			engine.scene( 'scene-rc' ).start();
-			expect( visited ).toEqual( ['yes'] );
-		} );
-
-		it( 'auto-resolves to default when no group matches', () => {
-			const visited: string[] = [];
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [condScene] ) } );
-			engine.onResolveCondition( () => false ); // flag=false → no match → portIndex -1 → 'false' port
-			engine.onCondition( ( { next } ) => next() );
-			engine.onDialog( ( { block, next } ) => { visited.push( block.uuid ); next(); } );
-			engine.onChoice( ( { next } ) => next() );
-			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
-			engine.scene( 'scene-rc' ).start();
-			expect( visited ).toEqual( ['no'] );
-		} );
-
-		it( 'auto-resolves without onCondition handler at all', () => {
-			const visited: string[] = [];
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [condScene] ) } );
-			engine.onResolveCondition( () => true );
-			// No onCondition registered — engine routes automatically
-			engine.onDialog( ( { block, next } ) => { visited.push( block.uuid ); next(); } );
-			engine.onChoice( ( { next } ) => next() );
-			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
-			engine.scene( 'scene-rc' ).start();
-			expect( visited ).toEqual( ['yes'] );
-		} );
-
-		// ── P0: onResolveCondition pre-evalue les groupes ────────────────
-
-		it( 'handler receives pre-evaluated conditionGroups with portIndex and result', () => {
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [condScene] ) } );
-			engine.onResolveCondition( () => true );
-
-			let receivedGroups: unknown;
-			engine.onCondition( ( { context, next } ) => {
-				receivedGroups = context.conditionGroups;
-				next();
-			} );
-			engine.onDialog( ( { next } ) => next() );
-			engine.onChoice( ( { next } ) => next() );
-			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
-			engine.scene( 'scene-rc' ).start();
-
-			expect( receivedGroups ).toHaveLength( 1 );
-			expect( ( receivedGroups as any )[0].portIndex ).toBe( 0 );
-			expect( ( receivedGroups as any )[0].result ).toBe( true );
-		} );
-
-		it( 'handler can override auto-resolve with explicit resolve()', () => {
-			const visited: string[] = [];
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [condScene] ) } );
-			engine.onResolveCondition( () => true ); // would auto-route to 'yes'
-			engine.onCondition( ( { context, next } ) => {
-				context.resolve( false ); // override → route to 'no' instead
-				next();
-			} );
-			engine.onDialog( ( { block, next } ) => { visited.push( block.uuid ); next(); } );
-			engine.onChoice( ( { next } ) => next() );
-			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
-			engine.scene( 'scene-rc' ).start();
-			expect( visited ).toEqual( ['no'] );
-		} );
-
-		// ── P1: Switch mode integration ─────────────────────────────────
-
-		it( 'switch mode: routes to matching case port', () => {
-			const switchScene: BlueprintScene = {
-				uuid: 'scene-sw', label: 'Switch', date: '2025-01-01',
-				blocks: [
-					{ uuid: 'cond', type: 'CONDITION', properties: [], isStartBlock: true,
-						conditions: [
-							[{ uuid: 'c1', key: 'x', operator: '=', value: '1' }],
-							[{ uuid: 'c2', key: 'y', operator: '=', value: '2' }],
-						] },
-					{ uuid: 'case0', type: 'DIALOG', properties: [] },
-					{ uuid: 'case1', type: 'DIALOG', properties: [] },
-					{ uuid: 'default', type: 'DIALOG', properties: [] },
-				],
-				connections: [
-					{ id: 's0', fromId: 'cond', toId: 'case0', fromPort: 'case_0', toPort: 'in', fromPortIndex: 0 },
-					{ id: 's1', fromId: 'cond', toId: 'case1', fromPort: 'case_1', toPort: 'in', fromPortIndex: 1 },
-					{ id: 'sd', fromId: 'cond', toId: 'default', fromPort: 'default', toPort: 'in', fromPortIndex: 2 },
-				],
-			};
-			const visited: string[] = [];
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [switchScene] ) } );
-			// x != 1 (false), y == 2 (true) → case_1 matches
-			engine.onResolveCondition( ( c ) => c.key === 'y' );
-			engine.onDialog( ( { block, next } ) => { visited.push( block.uuid ); next(); } );
-			engine.onChoice( ( { next } ) => next() );
-			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
-			engine.scene( 'scene-sw' ).start();
-			expect( visited ).toEqual( ['case1'] );
-		} );
-
-		it( 'switch mode: routes to default when no case matches', () => {
-			const switchScene: BlueprintScene = {
-				uuid: 'scene-sw2', label: 'Switch2', date: '2025-01-01',
-				blocks: [
-					{ uuid: 'cond', type: 'CONDITION', properties: [], isStartBlock: true,
-						conditions: [
-							[{ uuid: 'c1', key: 'x', operator: '=', value: '1' }],
-							[{ uuid: 'c2', key: 'y', operator: '=', value: '2' }],
-						] },
-					{ uuid: 'case0', type: 'DIALOG', properties: [] },
-					{ uuid: 'default', type: 'DIALOG', properties: [] },
-				],
-				connections: [
-					{ id: 's0', fromId: 'cond', toId: 'case0', fromPort: 'case_0', toPort: 'in', fromPortIndex: 0 },
-					{ id: 'sd', fromId: 'cond', toId: 'default', fromPort: 'default', toPort: 'in', fromPortIndex: 2 },
-				],
-			};
-			const visited: string[] = [];
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [switchScene] ) } );
-			engine.onResolveCondition( () => false ); // nothing matches
-			engine.onDialog( ( { block, next } ) => { visited.push( block.uuid ); next(); } );
-			engine.onChoice( ( { next } ) => next() );
-			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
-			engine.scene( 'scene-sw2' ).start();
-			expect( visited ).toEqual( ['default'] );
-		} );
-
-		// ── P1: Dispatcher mode integration ─────────────────────────────
-
-		it( 'dispatcher mode: spawns async tracks for matched cases + main on default', () => {
-			const dispatchScene: BlueprintScene = {
-				uuid: 'scene-disp', label: 'Dispatch', date: '2025-01-01',
-				blocks: [
-					{ uuid: 'cond', type: 'CONDITION', properties: [], isStartBlock: true,
-						nativeProperties: { enableDispatcher: true },
-						conditions: [
-							[{ uuid: 'c1', key: 'a', operator: '=', value: '1' }],
-							[{ uuid: 'c2', key: 'b', operator: '=', value: '2' }],
-						] },
-					{ uuid: 'async0', type: 'DIALOG', properties: [], nativeProperties: { isAsync: true } },
-					{ uuid: 'async1', type: 'DIALOG', properties: [], nativeProperties: { isAsync: true } },
-					{ uuid: 'main', type: 'DIALOG', properties: [] },
-				],
-				connections: [
-					{ id: 'd0', fromId: 'cond', toId: 'async0', fromPort: 'case_0', toPort: 'in', fromPortIndex: 0 },
-					{ id: 'd1', fromId: 'cond', toId: 'async1', fromPort: 'case_1', toPort: 'in', fromPortIndex: 1 },
-					{ id: 'dd', fromId: 'cond', toId: 'main', fromPort: 'default', toPort: 'in', fromPortIndex: 2 },
-				],
-			};
-			const visited: string[] = [];
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [dispatchScene] ) } );
-			engine.onResolveCondition( () => true ); // both match
-			engine.onDialog( ( { block, next } ) => { visited.push( block.uuid ); next(); } );
-			engine.onChoice( ( { next } ) => next() );
-			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
-			engine.scene( 'scene-disp' ).start();
-			// main (default) + async0 + async1 — all 3 should be visited
-			expect( visited.sort() ).toEqual( ['async0', 'async1', 'main'] );
-		} );
-
-		// ── P1: evaluateCondition() uses resolver as fallback ────────────
-
-		it( 'scene.evaluateCondition() uses onResolveCondition for non-choice conditions', () => {
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [condScene] ) } );
-			engine.onResolveCondition( ( c ) => c.key === 'flag' );
-			registerAllHandlers( engine );
-
-			const handle = engine.scene( 'scene-rc' );
-			let evalResult: boolean | undefined;
-			handle.onCondition( ( { scene, next } ) => {
-				evalResult = scene.evaluateCondition( { uuid: 't', key: 'flag', operator: '=', value: '' } );
-				next();
-			} );
-			handle.start();
-			expect( evalResult ).toBe( true );
-		} );
-
-		it( 'scene.evaluateCondition() returns false for non-choice conditions without resolver', () => {
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [condScene] ) } );
-			registerAllHandlers( engine );
-
-			const handle = engine.scene( 'scene-rc' );
-			let evalResult: boolean | undefined;
-			handle.onCondition( ( { scene, context, next } ) => {
-				evalResult = scene.evaluateCondition( { uuid: 't', key: 'flag', operator: '=', value: '' } );
-				context.resolve( true );
-				next();
-			} );
-			handle.start();
-			expect( evalResult ).toBe( false );
-		} );
-
-		// ── P1: setChoiceFilter backward compat alias ───────────────────
-
-		it( 'setChoiceFilter still works as alias for onResolveCondition', () => {
-			const visited: string[] = [];
-			const engine = new DialogueEngine();
-			engine.init( { data: makeExport( [condScene] ) } );
-			engine.setChoiceFilter( () => true ); // alias
-			engine.onDialog( ( { block, next } ) => { visited.push( block.uuid ); next(); } );
-			engine.onChoice( ( { next } ) => next() );
-			// No onCondition — should auto-resolve via setChoiceFilter alias
-			engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
-			engine.scene( 'scene-rc' ).start();
-			expect( visited ).toEqual( ['yes'] );
-		} );
-
+		expect( playWith( engine ) ).toEqual( ['second'] );
 	} );
 
+	it( 'routes to default with portPerCase when no case holds', () => {
+		const scene = makeScene( {
+			blocks: [
+				condition( 'k1', [whenCase( 'K1', [t( 'switches', 'a', true )] )], { props: { portPerCase: true } } ),
+				dialog( 'first' ), dialog( 'none' ),
+			],
+			connections: [conn( 'k1', 'first', 'K1' ), conn( 'k1', 'none', 'default' )],
+		} );
+		const engine = ready( [scene] );
+		engine.onResolveCondition( () => false );
+
+		expect( playWith( engine ) ).toEqual( ['none'] );
+	} );
+
+	it( 'tags option visibility from the same resolver', () => {
+		let seen: Array<boolean | undefined> = [];
+		const scene = makeScene( {
+			blocks: [choice( 'c1', [
+				option( 'C1' ),
+				option( 'C2', { when: [t( 'switches', 'flag', true )] } ),
+			] )],
+		} );
+		const engine = ready( [scene] );
+		engine.onResolveCondition( () => false );
+		engine.onChoice( ( { context, next } ) => { seen = context.options.map( o => o.visible ); next(); } );
+
+		engine.scene( 's1' ).start();
+
+		expect( seen ).toEqual( [true, false] );
+	} );
+
+	it( 'answers a test through the scene handle', () => {
+		const engine = ready();
+		engine.onResolveCondition( ( test ) => test.entry === 'flag' );
+		const handle = engine.scene( 's1' );
+
+		expect( handle.evaluateCondition( t( 'switches', 'flag', true ) ) ).toBe( true );
+		expect( handle.evaluateCondition( t( 'switches', 'other', true ) ) ).toBe( false );
+	} );
+
+	it( 'answers false with no resolver installed', () => {
+		expect( ready().scene( 's1' ).evaluateCondition( t( 'switches', 'flag', true ) ) ).toBe( false );
+	} );
+} );
+
+// ─── Multiple scenes and tracks ──────────────────────────────────────────────
+
+describe( 'scenes and tracks', () => {
+
+	it( 'runs two scenes in parallel with independent state', () => {
+		const calls: string[] = [];
+		const engine = ready( [
+			makeScene( { blocks: [dialog( 'tavern-greet' )], path: 'tavern' } ),
+			makeScene( { blocks: [dialog( 'forest-enter' )], path: 'forest' } ),
+		] );
+		engine.onDialog( ( { block } ) => { calls.push( block.id ); } );
+
+		engine.scene( 'tavern' ).start();
+		engine.scene( 'forest' ).start();
+
+		expect( calls ).toEqual( ['tavern-greet', 'forest-enter'] );
+		expect( engine.getActiveScenes() ).toHaveLength( 2 );
+		expect( engine.isRunning() ).toBe( true );
+	} );
+
+	it( 'stop() cancels every scene', () => {
+		const engine = ready( [
+			makeScene( { blocks: [dialog( 'a' )], path: 'one' } ),
+			makeScene( { blocks: [dialog( 'b' )], path: 'two' } ),
+		] );
+		engine.onDialog( () => { /* parked */ } );
+
+		engine.scene( 'one' ).start();
+		engine.scene( 'two' ).start();
+		engine.stop();
+
+		expect( engine.isRunning() ).toBe( false );
+	} );
+
+	it( 'can start a scene again after stop()', () => {
+		const calls: string[] = [];
+		const engine = ready();
+		engine.onDialog( ( { block, next } ) => { calls.push( block.id ); next(); } );
+
+		engine.scene( 's1' ).start();
+		engine.stop();
+		engine.scene( 's1' ).start();
+
+		expect( calls ).toEqual( ['b1', 'b2', 'b1', 'b2'] );
+	} );
+
+	it( 'lists the current block of every running scene', () => {
+		const engine = ready();
+		engine.onDialog( () => { /* parked on b1 */ } );
+
+		engine.scene( 's1' ).start();
+
+		expect( engine.getCurrentBlocks().map( b => b.id ) ).toEqual( ['b1'] );
+	} );
+
+	it( 'runs an async branch alongside the main flow, with lifecycle hooks around both', () => {
+		const order: string[] = [];
+		const scene = makeScene( {
+			blocks: [
+				dialog( 'main1' ),
+				dialog( 'main2' ),
+				dialog( 'bg', { props: { isAsync: true } } ),
+			],
+			connections: [conn( 'main1', 'main2' ), conn( 'main1', 'bg' )],
+		} );
+		const engine = ready( [scene] );
+		engine.onSceneEnter( () => order.push( 'enter' ) );
+		engine.onSceneExit( () => order.push( 'exit' ) );
+		engine.onDialog( ( { block, next } ) => { order.push( block.id ); next(); } );
+
+		engine.scene( 's1' ).start();
+
+		expect( order[0] ).toBe( 'enter' );
+		expect( order[order.length - 1] ).toBe( 'exit' );
+		expect( order ).toContain( 'bg' );
+		expect( order ).toContain( 'main2' );
+	} );
+} );
+
+// ─── Graph inspection ────────────────────────────────────────────────────────
+
+describe( 'getSceneConnections', () => {
+
+	it( 'returns the wires INSIDE a scene, each with the block it leaves', () => {
+		const wires = ready().getSceneConnections( 's1' );
+
+		expect( wires ).toEqual( [{ from: 'b1', port: 'out', to: 'b2', toPort: 'in' }] );
+	} );
+
+	it( 'returns nothing for a scene that is not there', () => {
+		expect( ready().getSceneConnections( 'nope' ) ).toEqual( [] );
+	} );
+
+	it( 'returns nothing before init', () => {
+		expect( new DialogueEngine().getSceneConnections( 's1' ) ).toEqual( [] );
+	} );
 } );

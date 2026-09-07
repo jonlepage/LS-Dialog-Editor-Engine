@@ -1,6 +1,6 @@
 # 非同期トラック
 
-block に `nativeProperties.isAsync = true` が設定されている場合、engine はメインフローとは独立して動作する**並列トラック**を作成します。
+block に `props.isAsync = true` が設定されている場合、engine はメインフローとは独立して動作する**並列トラック**を作成します。
 
 ## トラックの作成方法
 
@@ -20,7 +20,7 @@ port 解決中に複数の送出 connection が存在する場合：
 
 ## waitForBlocks — トラック同期
 
-`nativeProperties.waitForBlocks` を使用して並列トラックを同期します。block が進行する前に訪問済みでなければならない block UUID の配列を受け入れます：
+`props.waitForBlocks` を使用して並列トラックを同期します。block が進行する前に訪問済みでなければならない block UUID の配列を受け入れます：
 
 - **開始 block の場合**：トラック全体が実行開始前に待機します。必要な block がすべて訪問されるまで `onBeforeBlock` は呼び出されません。
 - **その他の block の場合**：handler が `next()` を呼び出すと、条件が満たされるまで進行が延期されます。
@@ -33,7 +33,7 @@ spawn → waitForBlocks ゲート → onBeforeBlock (delay) → handler → next
 
 ## waitInput — プレイヤー入力フラグ
 
-`nativeProperties.waitInput` は**パッシブフラグ**です — engine はそれを公開しますが解釈しません。ゲーム handler がそれを読み取り、明示的なプレイヤー入力を待つかどうかを決定します。
+`props.waitInput` は**パッシブフラグ**です — engine はそれを公開しますが解釈しません。ゲーム handler がそれを読み取り、明示的なプレイヤー入力を待つかどうかを決定します。
 
 ## TrackInfo API — 可観測性
 

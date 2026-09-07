@@ -1,7 +1,7 @@
 ::: code-group
 ```ts [TypeScript]
 import { DialogueEngine } from '@lsde/dialog-engine';
-import blueprintJson from './blueprint.json';
+import blueprintJson from './blueprints.json';
 
 const engine = new DialogueEngine();
 engine.init({ data: blueprintJson });
@@ -44,7 +44,7 @@ using LsdeDialogEngine;
 using LsdeDialogEngine.Json; // LsdeDialogEngine.SystemTextJson package
 // Unity: use LsdeDialogEngine.Newtonsoft instead
 
-var blueprint = LsdeJson.Parse(File.ReadAllText("blueprint.json"));
+var blueprint = LsdeJson.Parse(File.ReadAllText("blueprints.json"));
 var engine = new DialogueEngine();
 engine.Init(new InitOptions { Data = blueprint });
 
@@ -86,7 +86,7 @@ engine.init({blueprint});
 
 // Unified condition resolver — evaluates game-state conditions for both
 // choice visibility and condition block pre-evaluation.
-engine.onResolveCondition([](const ExportCondition& cond) {
+engine.onResolveCondition([](const ConditionTest& cond) {
     return game->evaluateCondition(cond);
 });
 
@@ -97,7 +97,7 @@ engine.onDialog([](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn 
 });
 
 engine.onChoice([](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn {
-    game->showChoices(block, ctx, [next]() { next(); });
+    game->showOptions(block, ctx, [next]() { next(); });
     return {};
 });
 
@@ -129,7 +129,7 @@ engine.on_dialog(func(args):
 )
 
 engine.on_choice(func(args):
-    await game.show_choices(args["block"], args["context"])
+    await game.show_options(args["block"], args["context"])
     args["next"].call()
 )
 

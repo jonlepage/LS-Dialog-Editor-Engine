@@ -1,5 +1,8 @@
-## LSDE Dialog Engine — Integration tests for on_resolve_condition
-## Port of engine.test.ts §onResolveCondition (P0-2 excluded: assert non-catchable)
+## LSDE Dialog Engine — the condition resolver end to end (port of the TS suite).
+##
+## on_resolve_condition is the SINGLE game-state evaluator: it answers option visibility and it
+## pre-evaluates the cases of a condition block. Once it is installed the engine already knows
+## which port a condition leaves by, which is what makes on_condition optional.
 extends RefCounted
 
 var _passed: int = 0
@@ -22,266 +25,218 @@ func _assert_true(value: bool, label: String) -> void:
 func _assert_false(value: bool, label: String) -> void:
 	_assert_eq(value, false, label)
 
-static func _make_export(scenes: Array) -> Dictionary:
-	return {"version": "1.0.0", "exportDate": "2025-01-01", "locales": ["en"], "scenes": scenes}
+static func _block(id: String, type: String, extra: Dictionary = {}) -> Dictionary:
+	var b: Dictionary = {"id": id, "key": "__blueprints__.s1." + id, "type": type, "next": []}
+	b.merge(extra, true)
+	return b
 
-static func _register_all_handlers(engine: LsdeDialogueEngine) -> void:
-	engine.on_dialog(func(args: Dictionary) -> Variant:
-		args["next"].call(); return null)
-	engine.on_choice(func(args: Dictionary) -> Variant:
-		var choices: Array = args["context"].choices
-		if choices.size() > 0:
-			args["context"].select_choice(choices[0]["uuid"])
-		args["next"].call(); return null)
-	engine.on_condition(func(args: Dictionary) -> Variant:
-		args["context"].resolve(true); args["next"].call(); return null)
+static func _dialog(id: String) -> Dictionary:
+	return _block(id, LsdeTypes.BLOCK_DIALOG)
+
+static func _link(to: String, port: String = "out") -> Dictionary:
+	return {"port": port, "to": to, "toPort": "in"}
+
+static func _test(entry: String) -> Dictionary:
+	return {"dict": "switches", "entry": entry, "op": LsdeTypes.OP_EQUALS, "value": true}
+
+static func _one_scene(blocks: Array) -> Dictionary:
+	return {
+		"format": LsdeTypes.SUPPORTED_FORMAT,
+		"version": LsdeTypes.SUPPORTED_VERSION,
+		"generator": {"app": "LSDE", "version": "2.0.3"},
+		"exportedAt": "2026-09-07T00:00:00.000Z",
+		"project": "Test",
+		"locales": ["en"],
+		"referenceLocale": "en",
+		"dictionaries": [], "functions": [], "cards": [],
+		"scenes": [{
+			"scene": "s1",
+			"id": "sc_test0001",
+			"start": blocks[0]["id"] if blocks.size() > 0 else null,
+			"blocks": blocks,
+		}],
+	}
+
+## A condition in if mode: out when it holds, default when it does not.
+static func _branching() -> Dictionary:
+	var cond: Dictionary = _block("k1", LsdeTypes.BLOCK_CONDITION, {
+		"cases": [{"port": LsdeTypes.PORT_OUT, "when": [_test("flag")]}],
+		"next": [_link("yes", LsdeTypes.PORT_OUT), _link("no", LsdeTypes.PORT_DEFAULT)],
+	})
+	return _one_scene([cond, _dialog("yes"), _dialog("no")])
+
+func _base_engine(data: Dictionary, with_condition: bool = true) -> LsdeDialogueEngine:
+	var engine := LsdeDialogueEngine.new()
+	var report: Dictionary = engine.init({"data": data})
+	_assert_eq(report["errors"].size(), 0, "payload loads")
+
+	engine.on_dialog(func(args: Dictionary) -> Variant: args["next"].call(); return null)
+	engine.on_choice(func(args: Dictionary) -> Variant: args["next"].call(); return null)
 	engine.on_action(func(args: Dictionary) -> Variant:
 		args["context"].resolve(); args["next"].call(); return null)
+	if with_condition:
+		engine.on_condition(func(args: Dictionary) -> Variant: args["next"].call(); return null)
+	return engine
 
-# ─── Shared Blueprints ───────────────────────────────────────────────────
+func _play(engine: LsdeDialogueEngine) -> Array:
+	var visited: Array = []
+	engine.on_dialog(func(args: Dictionary) -> Variant:
+		visited.append(args["block"]["id"]); args["next"].call(); return null)
+	engine.scene("s1").start()
+	return visited
 
-static func _cond_scene() -> Dictionary:
-	return {
-		"uuid": "scene-rc", "label": "ResolveCondition", "date": "2025-01-01",
-		"blocks": [
-			{"uuid": "cond1", "type": "CONDITION", "properties": [], "isStartBlock": true,
-				"conditions": [[{"uuid": "c1", "key": "flag", "operator": "=", "value": "true"}]]},
-			{"uuid": "yes", "type": "DIALOG", "properties": []},
-			{"uuid": "no", "type": "DIALOG", "properties": []},
-		],
-		"connections": [
-			{"id": "ct", "fromId": "cond1", "toId": "yes", "fromPort": "true", "toPort": "in", "fromPortIndex": 0},
-			{"id": "cf", "fromId": "cond1", "toId": "no", "fromPort": "false", "toPort": "in", "fromPortIndex": 1},
-		],
-	}
+# ─── Routing ──────────────────────────────────────────────────────────────
 
-static func _switch_scene(uuid: String = "scene-sw") -> Dictionary:
-	return {
-		"uuid": uuid, "label": "Switch", "date": "2025-01-01",
-		"blocks": [
-			{"uuid": "cond", "type": "CONDITION", "properties": [], "isStartBlock": true,
-				"conditions": [
-					[{"uuid": "c1", "key": "x", "operator": "=", "value": "1"}],
-					[{"uuid": "c2", "key": "y", "operator": "=", "value": "2"}],
-				]},
-			{"uuid": "case0", "type": "DIALOG", "properties": []},
-			{"uuid": "case1", "type": "DIALOG", "properties": []},
-			{"uuid": "default", "type": "DIALOG", "properties": []},
-		],
-		"connections": [
-			{"id": "s0", "fromId": "cond", "toId": "case0", "fromPort": "case_0", "toPort": "in", "fromPortIndex": 0},
-			{"id": "s1", "fromId": "cond", "toId": "case1", "fromPort": "case_1", "toPort": "in", "fromPortIndex": 1},
-			{"id": "sd", "fromId": "cond", "toId": "default", "fromPort": "default", "toPort": "in", "fromPortIndex": 2},
-		],
-	}
+func _test_routes_on_its_own_when_the_handler_only_calls_next() -> void:
+	var engine := _base_engine(_branching())
+	engine.on_resolve_condition(func(_t: Dictionary) -> bool: return true)
+	_assert_eq(_play(engine), ["yes"], "routes to out when the case holds")
 
-static func _dispatch_scene() -> Dictionary:
-	return {
-		"uuid": "scene-disp", "label": "Dispatch", "date": "2025-01-01",
-		"blocks": [
-			{"uuid": "cond", "type": "CONDITION", "properties": [], "isStartBlock": true,
-				"nativeProperties": {"enableDispatcher": true},
-				"conditions": [
-					[{"uuid": "c1", "key": "a", "operator": "=", "value": "1"}],
-					[{"uuid": "c2", "key": "b", "operator": "=", "value": "2"}],
-				]},
-			{"uuid": "async0", "type": "DIALOG", "properties": [], "nativeProperties": {"isAsync": true}},
-			{"uuid": "async1", "type": "DIALOG", "properties": [], "nativeProperties": {"isAsync": true}},
-			{"uuid": "main", "type": "DIALOG", "properties": []},
-		],
-		"connections": [
-			{"id": "d0", "fromId": "cond", "toId": "async0", "fromPort": "case_0", "toPort": "in", "fromPortIndex": 0},
-			{"id": "d1", "fromId": "cond", "toId": "async1", "fromPort": "case_1", "toPort": "in", "fromPortIndex": 1},
-			{"id": "dd", "fromId": "cond", "toId": "main", "fromPort": "default", "toPort": "in", "fromPortIndex": 2},
-		],
-	}
+func _test_routes_to_default_when_the_case_does_not_hold() -> void:
+	var engine := _base_engine(_branching())
+	engine.on_resolve_condition(func(_t: Dictionary) -> bool: return false)
+	_assert_eq(_play(engine), ["no"], "routes to default when it does not")
 
-# ─── Run all tests ────────────────────────────────────────────────────────
+func _test_routes_with_no_on_condition_handler_at_all() -> void:
+	var engine := _base_engine(_branching(), false)
+	engine.on_resolve_condition(func(_t: Dictionary) -> bool: return true)
+	_assert_eq(_play(engine), ["yes"], "on_condition is optional once a resolver is installed")
+
+func _test_hands_the_handler_each_case_with_its_port_and_result() -> void:
+	var seen: Array = []
+	var engine := _base_engine(_branching())
+	engine.on_resolve_condition(func(_t: Dictionary) -> bool: return true)
+	engine.on_condition(func(args: Dictionary) -> Variant:
+		for c in args["context"].cases:
+			seen.append([c["port"], c["result"]])
+		args["next"].call(); return null)
+
+	_play(engine)
+
+	_assert_eq(seen, [[LsdeTypes.PORT_OUT, true]], "cases carry their port and result")
+
+func _test_the_handler_can_override_the_port() -> void:
+	var engine := _base_engine(_branching())
+	engine.on_resolve_condition(func(_t: Dictionary) -> bool: return true)
+	engine.on_condition(func(args: Dictionary) -> Variant:
+		args["context"].resolve(LsdeTypes.PORT_DEFAULT); args["next"].call(); return null)
+
+	_assert_eq(_play(engine), ["no"], "resolve() overrides what the cases said")
+
+func _test_routes_to_the_case_port_with_port_per_case() -> void:
+	var cond: Dictionary = _block("k1", LsdeTypes.BLOCK_CONDITION, {
+		"props": {"portPerCase": true},
+		"cases": [
+			{"port": "K1", "when": [_test("a")]},
+			{"port": "K2", "when": [_test("b")]},
+		],
+		"next": [_link("first", "K1"), _link("second", "K2"), _link("none", LsdeTypes.PORT_DEFAULT)],
+	})
+	var engine := _base_engine(_one_scene([
+		cond, _dialog("first"), _dialog("second"), _dialog("none")]))
+	engine.on_resolve_condition(func(t: Dictionary) -> bool: return t["entry"] == "b")
+
+	_assert_eq(_play(engine), ["second"], "portPerCase takes the first holding case port")
+
+func _test_routes_to_default_with_port_per_case_when_none_holds() -> void:
+	var cond: Dictionary = _block("k1", LsdeTypes.BLOCK_CONDITION, {
+		"props": {"portPerCase": true},
+		"cases": [{"port": "K1", "when": [_test("a")]}],
+		"next": [_link("first", "K1"), _link("none", LsdeTypes.PORT_DEFAULT)],
+	})
+	var engine := _base_engine(_one_scene([cond, _dialog("first"), _dialog("none")]))
+	engine.on_resolve_condition(func(_t: Dictionary) -> bool: return false)
+
+	_assert_eq(_play(engine), ["none"], "portPerCase falls back to default")
+
+# ─── Option visibility comes from the same resolver ───────────────────────
+
+func _test_tags_option_visibility_from_the_same_resolver() -> void:
+	var seen: Array = []
+	var choice: Dictionary = _block("c1", LsdeTypes.BLOCK_CHOICE, {
+		"options": [
+			{"id": "C1", "key": "k1"},
+			{"id": "C2", "key": "k2", "when": [_test("flag")]},
+		],
+	})
+	var engine := _base_engine(_one_scene([choice]))
+	engine.on_resolve_condition(func(_t: Dictionary) -> bool: return false)
+	engine.on_choice(func(args: Dictionary) -> Variant:
+		for o in args["context"].options:
+			seen.append(o.get("visible"))
+		args["next"].call(); return null)
+
+	engine.scene("s1").start()
+
+	_assert_eq(seen, [true, false], "the same resolver tags option visibility")
+
+func _test_leaves_option_visibility_unknown_with_no_resolver() -> void:
+	# Saying false about a question nobody could answer would HIDE an answer from the player.
+	var seen: Array = []
+	var choice: Dictionary = _block("c1", LsdeTypes.BLOCK_CHOICE, {
+		"options": [{"id": "C1", "key": "k1", "when": [_test("flag")]}],
+	})
+	var engine := _base_engine(_one_scene([choice]))
+	engine.on_choice(func(args: Dictionary) -> Variant:
+		for o in args["context"].options:
+			seen.append(o.has("visible"))
+		args["next"].call(); return null)
+
+	engine.scene("s1").start()
+
+	_assert_eq(seen, [false], "no resolver → visible unset, not false")
+
+# ─── The reserved choice dictionary ───────────────────────────────────────
+
+func _test_a_choice_test_is_answered_from_the_scene_history() -> void:
+	var asked: Array = []
+	var choice: Dictionary = _block("c1", LsdeTypes.BLOCK_CHOICE, {
+		"options": [{"id": "C1", "key": "k1"}, {"id": "C2", "key": "k2"}],
+		"next": [_link("k1", "C1"), _link("k1", "C2")],
+	})
+	var cond: Dictionary = _block("k1", LsdeTypes.BLOCK_CONDITION, {
+		"cases": [{"port": LsdeTypes.PORT_OUT, "when": [
+			{"dict": LsdeTypes.DICT_CHOICE, "entry": "c1", "op": LsdeTypes.OP_EQUALS, "value": "C1"},
+		]}],
+		"next": [_link("yes", LsdeTypes.PORT_OUT), _link("no", LsdeTypes.PORT_DEFAULT)],
+	})
+
+	var engine := _base_engine(_one_scene([choice, cond, _dialog("yes"), _dialog("no")]))
+	engine.on_resolve_condition(func(t: Dictionary) -> bool:
+		asked.append(t["dict"]); return false)
+	engine.on_choice(func(args: Dictionary) -> Variant:
+		args["context"].select_choice("C1"); args["next"].call(); return null)
+
+	_assert_eq(_play(engine), ["yes"], "the engine remembers the answer")
+	_assert_eq(asked.size(), 0, "the game is never asked about a choice test")
+
+func _test_evaluate_condition_answers_through_the_scene_handle() -> void:
+	var engine := _base_engine(_branching())
+	engine.on_resolve_condition(func(t: Dictionary) -> bool: return t["entry"] == "flag")
+	var handle: LsdeSceneHandle = engine.scene("s1")
+
+	_assert_true(handle.evaluate_condition(_test("flag")), "known entry is true")
+	_assert_false(handle.evaluate_condition(_test("other")), "unknown entry is false")
+
+func _test_evaluate_condition_is_false_with_no_resolver() -> void:
+	var engine := _base_engine(_branching())
+	_assert_false(engine.scene("s1").evaluate_condition(_test("flag")),
+		"no resolver → game-state tests are false")
+
+# ─── Entry point ──────────────────────────────────────────────────────────
 
 func run() -> Dictionary:
-	print("\n── OnResolveCondition Integration Tests ──")
-	_test_p0_start_does_not_crash()
-	_test_p0_auto_resolve_when_handler_does_not_call_resolve()
-	_test_p0_auto_resolve_to_default_when_no_group_matches()
-	_test_p0_auto_resolve_without_on_condition_handler()
-	_test_p0_handler_receives_pre_evaluated_groups()
-	_test_p0_handler_can_override_auto_resolve()
-	_test_p1_switch_mode_routes_to_matching_case()
-	_test_p1_switch_mode_routes_to_default()
-	_test_p1_dispatcher_mode_spawns_async_tracks()
-	_test_p1_evaluate_condition_uses_resolver()
-	_test_p1_evaluate_condition_returns_false_without_resolver()
-	_test_p1_set_choice_filter_alias()
+	print("\n── onResolveCondition Tests ──")
+	_test_routes_on_its_own_when_the_handler_only_calls_next()
+	_test_routes_to_default_when_the_case_does_not_hold()
+	_test_routes_with_no_on_condition_handler_at_all()
+	_test_hands_the_handler_each_case_with_its_port_and_result()
+	_test_the_handler_can_override_the_port()
+	_test_routes_to_the_case_port_with_port_per_case()
+	_test_routes_to_default_with_port_per_case_when_none_holds()
+	_test_tags_option_visibility_from_the_same_resolver()
+	_test_leaves_option_visibility_unknown_with_no_resolver()
+	_test_a_choice_test_is_answered_from_the_scene_history()
+	_test_evaluate_condition_answers_through_the_scene_handle()
+	_test_evaluate_condition_is_false_with_no_resolver()
 	return {"passed": _passed, "failed": _failed, "total": _total}
-
-# ─── P0: on_condition optionnel quand resolver installe ──────────────────
-
-func _test_p0_start_does_not_crash() -> void:
-	var engine: LsdeDialogueEngine = LsdeDialogueEngine.new()
-	engine.init({"data": _make_export([_cond_scene()])})
-	engine.on_resolve_condition(func(_c: Dictionary) -> bool: return true)
-	engine.on_dialog(func(args: Dictionary) -> Variant: args["next"].call(); return null)
-	engine.on_choice(func(args: Dictionary) -> Variant: args["next"].call(); return null)
-	# NO engine.on_condition()
-	engine.on_action(func(args: Dictionary) -> Variant: args["context"].resolve(); args["next"].call(); return null)
-	engine.scene("scene-rc").start()
-	_assert_true(true, "P0-1: start() does not crash when on_condition omitted but resolver installed")
-
-# P0-2 (start throws when neither) SKIPPED: GDScript assert is non-catchable
-
-# ─── P0: Auto-resolve sans resolve() ────────────────────────────────────
-
-func _test_p0_auto_resolve_when_handler_does_not_call_resolve() -> void:
-	var visited: Array = []
-	var engine: LsdeDialogueEngine = LsdeDialogueEngine.new()
-	engine.init({"data": _make_export([_cond_scene()])})
-	engine.on_resolve_condition(func(_c: Dictionary) -> bool: return true)
-	engine.on_condition(func(args: Dictionary) -> Variant: args["next"].call(); return null) # no resolve()
-	engine.on_dialog(func(args: Dictionary) -> Variant: visited.append(args["block"]["uuid"]); args["next"].call(); return null)
-	engine.on_choice(func(args: Dictionary) -> Variant: args["next"].call(); return null)
-	engine.on_action(func(args: Dictionary) -> Variant: args["context"].resolve(); args["next"].call(); return null)
-	engine.scene("scene-rc").start()
-	_assert_eq(visited, ["yes"], "P0-3: auto-resolve when handler does not call resolve()")
-
-func _test_p0_auto_resolve_to_default_when_no_group_matches() -> void:
-	var visited: Array = []
-	var engine: LsdeDialogueEngine = LsdeDialogueEngine.new()
-	engine.init({"data": _make_export([_cond_scene()])})
-	engine.on_resolve_condition(func(_c: Dictionary) -> bool: return false)
-	engine.on_condition(func(args: Dictionary) -> Variant: args["next"].call(); return null)
-	engine.on_dialog(func(args: Dictionary) -> Variant: visited.append(args["block"]["uuid"]); args["next"].call(); return null)
-	engine.on_choice(func(args: Dictionary) -> Variant: args["next"].call(); return null)
-	engine.on_action(func(args: Dictionary) -> Variant: args["context"].resolve(); args["next"].call(); return null)
-	engine.scene("scene-rc").start()
-	_assert_eq(visited, ["no"], "P0-4: auto-resolve to default when no group matches")
-
-func _test_p0_auto_resolve_without_on_condition_handler() -> void:
-	var visited: Array = []
-	var engine: LsdeDialogueEngine = LsdeDialogueEngine.new()
-	engine.init({"data": _make_export([_cond_scene()])})
-	engine.on_resolve_condition(func(_c: Dictionary) -> bool: return true)
-	# No on_condition registered
-	engine.on_dialog(func(args: Dictionary) -> Variant: visited.append(args["block"]["uuid"]); args["next"].call(); return null)
-	engine.on_choice(func(args: Dictionary) -> Variant: args["next"].call(); return null)
-	engine.on_action(func(args: Dictionary) -> Variant: args["context"].resolve(); args["next"].call(); return null)
-	engine.scene("scene-rc").start()
-	_assert_eq(visited, ["yes"], "P0-5: auto-resolve without on_condition handler at all")
-
-# ─── P0: pre-evaluated condition_groups ──────────────────────────────────
-
-func _test_p0_handler_receives_pre_evaluated_groups() -> void:
-	var engine: LsdeDialogueEngine = LsdeDialogueEngine.new()
-	engine.init({"data": _make_export([_cond_scene()])})
-	engine.on_resolve_condition(func(_c: Dictionary) -> bool: return true)
-
-	var received_groups: Array = []
-	engine.on_condition(func(args: Dictionary) -> Variant:
-		var groups: Array = args["context"].condition_groups
-		for g in groups:
-			received_groups.append(g)
-		args["next"].call(); return null)
-	engine.on_dialog(func(args: Dictionary) -> Variant: args["next"].call(); return null)
-	engine.on_choice(func(args: Dictionary) -> Variant: args["next"].call(); return null)
-	engine.on_action(func(args: Dictionary) -> Variant: args["context"].resolve(); args["next"].call(); return null)
-	engine.scene("scene-rc").start()
-
-	_assert_eq(received_groups.size(), 1, "P0-6: received 1 conditionGroup")
-	if received_groups.size() > 0:
-		_assert_eq(received_groups[0].get("port_index", -1), 0, "P0-6: portIndex = 0")
-		_assert_true(received_groups[0].get("result", false), "P0-6: result = true")
-
-func _test_p0_handler_can_override_auto_resolve() -> void:
-	var visited: Array = []
-	var engine: LsdeDialogueEngine = LsdeDialogueEngine.new()
-	engine.init({"data": _make_export([_cond_scene()])})
-	engine.on_resolve_condition(func(_c: Dictionary) -> bool: return true) # would auto-route to 'yes'
-	engine.on_condition(func(args: Dictionary) -> Variant:
-		args["context"].resolve(false) # override → route to 'no'
-		args["next"].call(); return null)
-	engine.on_dialog(func(args: Dictionary) -> Variant: visited.append(args["block"]["uuid"]); args["next"].call(); return null)
-	engine.on_choice(func(args: Dictionary) -> Variant: args["next"].call(); return null)
-	engine.on_action(func(args: Dictionary) -> Variant: args["context"].resolve(); args["next"].call(); return null)
-	engine.scene("scene-rc").start()
-	_assert_eq(visited, ["no"], "P0-7: handler can override auto-resolve with explicit resolve()")
-
-# ─── P1: Switch mode integration ────────────────────────────────────────
-
-func _test_p1_switch_mode_routes_to_matching_case() -> void:
-	var visited: Array = []
-	var engine: LsdeDialogueEngine = LsdeDialogueEngine.new()
-	engine.init({"data": _make_export([_switch_scene()])})
-	engine.on_resolve_condition(func(c: Dictionary) -> bool: return c.get("key", "") == "y")
-	engine.on_dialog(func(args: Dictionary) -> Variant: visited.append(args["block"]["uuid"]); args["next"].call(); return null)
-	engine.on_choice(func(args: Dictionary) -> Variant: args["next"].call(); return null)
-	engine.on_action(func(args: Dictionary) -> Variant: args["context"].resolve(); args["next"].call(); return null)
-	engine.scene("scene-sw").start()
-	_assert_eq(visited, ["case1"], "P1-1: switch mode routes to matching case port")
-
-func _test_p1_switch_mode_routes_to_default() -> void:
-	var visited: Array = []
-	var engine: LsdeDialogueEngine = LsdeDialogueEngine.new()
-	engine.init({"data": _make_export([_switch_scene("scene-sw2")])})
-	engine.on_resolve_condition(func(_c: Dictionary) -> bool: return false)
-	engine.on_dialog(func(args: Dictionary) -> Variant: visited.append(args["block"]["uuid"]); args["next"].call(); return null)
-	engine.on_choice(func(args: Dictionary) -> Variant: args["next"].call(); return null)
-	engine.on_action(func(args: Dictionary) -> Variant: args["context"].resolve(); args["next"].call(); return null)
-	engine.scene("scene-sw2").start()
-	_assert_eq(visited, ["default"], "P1-3: switch mode routes to default when no case matches")
-
-# ─── P1: Dispatcher mode integration ────────────────────────────────────
-
-func _test_p1_dispatcher_mode_spawns_async_tracks() -> void:
-	var visited: Array = []
-	var engine: LsdeDialogueEngine = LsdeDialogueEngine.new()
-	engine.init({"data": _make_export([_dispatch_scene()])})
-	engine.on_resolve_condition(func(_c: Dictionary) -> bool: return true)
-	engine.on_dialog(func(args: Dictionary) -> Variant: visited.append(args["block"]["uuid"]); args["next"].call(); return null)
-	engine.on_choice(func(args: Dictionary) -> Variant: args["next"].call(); return null)
-	engine.on_action(func(args: Dictionary) -> Variant: args["context"].resolve(); args["next"].call(); return null)
-	engine.scene("scene-disp").start()
-	visited.sort()
-	_assert_eq(visited, ["async0", "async1", "main"], "P1-4: dispatcher mode spawns async tracks")
-
-# ─── P1: evaluate_condition() uses resolver ──────────────────────────────
-
-func _test_p1_evaluate_condition_uses_resolver() -> void:
-	var engine: LsdeDialogueEngine = LsdeDialogueEngine.new()
-	engine.init({"data": _make_export([_cond_scene()])})
-	engine.on_resolve_condition(func(c: Dictionary) -> bool: return c.get("key", "") == "flag")
-	_register_all_handlers(engine)
-
-	var handle: LsdeSceneHandle = engine.scene("scene-rc")
-	var eval_result: Array = [false]
-	handle.on_condition(func(args: Dictionary) -> Variant:
-		eval_result[0] = args["scene"].evaluate_condition({"uuid": "t", "key": "flag", "operator": "=", "value": ""})
-		args["next"].call(); return null)
-	handle.start()
-	_assert_true(eval_result[0], "P1-5: evaluate_condition() uses resolver for non-choice conditions")
-
-func _test_p1_evaluate_condition_returns_false_without_resolver() -> void:
-	var engine: LsdeDialogueEngine = LsdeDialogueEngine.new()
-	engine.init({"data": _make_export([_cond_scene()])})
-	_register_all_handlers(engine)
-
-	var handle: LsdeSceneHandle = engine.scene("scene-rc")
-	var eval_result: Array = [true] # init to true, expect false
-	handle.on_condition(func(args: Dictionary) -> Variant:
-		eval_result[0] = args["scene"].evaluate_condition({"uuid": "t", "key": "flag", "operator": "=", "value": ""})
-		args["context"].resolve(true)
-		args["next"].call(); return null)
-	handle.start()
-	_assert_false(eval_result[0], "P1-6: evaluate_condition() returns false without resolver")
-
-# ─── P1: set_choice_filter backward compat alias ────────────────────────
-
-func _test_p1_set_choice_filter_alias() -> void:
-	var visited: Array = []
-	var engine: LsdeDialogueEngine = LsdeDialogueEngine.new()
-	engine.init({"data": _make_export([_cond_scene()])})
-	engine.set_choice_filter(func(_c: Dictionary) -> bool: return true) # alias
-	engine.on_dialog(func(args: Dictionary) -> Variant: visited.append(args["block"]["uuid"]); args["next"].call(); return null)
-	engine.on_choice(func(args: Dictionary) -> Variant: args["next"].call(); return null)
-	# No on_condition — should auto-resolve via set_choice_filter alias
-	engine.on_action(func(args: Dictionary) -> Variant: args["context"].resolve(); args["next"].call(); return null)
-	engine.scene("scene-rc").start()
-	_assert_eq(visited, ["yes"], "P1-7: set_choice_filter still works as alias for on_resolve_condition")

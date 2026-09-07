@@ -3,7 +3,7 @@
 // Include the optional JSON loader (requires nlohmann/json)
 #include <lsde/json_loader.h>
 
-auto blueprint = lsde::LsdeJson::parseFile("blueprint.json");
+auto blueprint = lsde::LsdeJson::parseFile("blueprints.json");
 // or from string:
 // auto blueprint = lsde::LsdeJson::parse(jsonString);
 engine.init({blueprint});
@@ -13,7 +13,7 @@ engine.init({blueprint});
 #include <nlohmann/json.hpp>
 #include <lsde/engine.h>
 
-std::ifstream f("blueprint.json");
+std::ifstream f("blueprints.json");
 auto j = nlohmann::json::parse(f);
 auto blueprint = j.get<lsde::BlueprintExport>();
 // Requires custom from_json — see polymorphic dispatch below.

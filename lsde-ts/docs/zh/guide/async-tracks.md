@@ -1,6 +1,6 @@
 # 异步轨道
 
-当 block 设置了 `nativeProperties.isAsync = true` 时，engine 会创建一个独立于主流程运行的**并行轨道**。
+当 block 设置了 `props.isAsync = true` 时，engine 会创建一个独立于主流程运行的**并行轨道**。
 
 ## 轨道的创建方式
 
@@ -20,7 +20,7 @@
 
 ## waitForBlocks — 轨道同步
 
-使用 `nativeProperties.waitForBlocks` 来同步并行轨道。它接受一个 block UUID 数组，这些 block 必须在当前 block 可以继续之前被访问：
+使用 `props.waitForBlocks` 来同步并行轨道。它接受一个 block UUID 数组，这些 block 必须在当前 block 可以继续之前被访问：
 
 - **在起始 block 上**：整个轨道在开始执行之前等待。在所有必需的 block 被访问之前，不会调用 `onBeforeBlock`。
 - **在其他 block 上**：当 handler 调用 `next()` 时，推进会被延迟直到条件满足。
@@ -33,7 +33,7 @@ spawn → waitForBlocks 门控 → onBeforeBlock (delay) → handler → next()
 
 ## waitInput — 玩家输入标志
 
-`nativeProperties.waitInput` 是一个**被动标志** — engine 公开它但不解释它。您的游戏 handler 读取它来决定是否等待明确的玩家输入。
+`props.waitInput` 是一个**被动标志** — engine 公开它但不解释它。您的游戏 handler 读取它来决定是否等待明确的玩家输入。
 
 ## TrackInfo API — 可观测性
 

@@ -3,6 +3,7 @@
 import type {
 	BlueprintBlock, DialogBlock, ChoiceBlock, ConditionBlock, ActionBlock, NoteBlock,
 } from './types.js';
+import { BlockType } from './types.js';
 
 /** Exhaustive switch helper — causes a compile error if a case is missing. */
 export function assertNever( x: never ): never {
@@ -12,22 +13,22 @@ export function assertNever( x: never ): never {
 // ─── Type Guards ─────────────────────────────────────────────────────────────
 
 export function isDialogBlock( block: BlueprintBlock ): block is DialogBlock {
-	return block.type === 'DIALOG';
+	return block.type === BlockType.Dialog;
 }
 
 export function isChoiceBlock( block: BlueprintBlock ): block is ChoiceBlock {
-	return block.type === 'CHOICE';
+	return block.type === BlockType.Choice;
 }
 
 export function isConditionBlock( block: BlueprintBlock ): block is ConditionBlock {
-	return block.type === 'CONDITION';
+	return block.type === BlockType.Condition;
 }
 
 export function isActionBlock( block: BlueprintBlock ): block is ActionBlock {
-	return block.type === 'ACTION';
+	return block.type === BlockType.Action;
 }
 
 export function isNoteBlock( block: BlueprintBlock ): block is NoteBlock {
-	return block.type === 'NOTE';
+	return block.type === BlockType.Note;
 }
 

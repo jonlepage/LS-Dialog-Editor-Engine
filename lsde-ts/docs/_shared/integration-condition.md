@@ -10,9 +10,9 @@ engine.onResolveCondition((cond) =>
 // The engine auto-resolves from pre-evaluated groups.
 // Add onCondition only if you need logging, UI, or custom override logic.
 engine.onCondition(({ block, context, next }) => {
-  const { conditionGroups } = context;
-  for (const g of conditionGroups)
-    console.log(`  group ${g.portIndex}: ${g.result}`);
+  const { cases } = context;
+  for (const g of cases)
+    console.log(`  group ${g.port}: ${g.result}`);
   // context.resolve() is optional — engine already set the result
   next();
 });
@@ -23,7 +23,7 @@ engine.OnResolveCondition(cond =>
 
 // Optional — add only for logging or override
 engine.OnCondition(args => {
-    var groups = args.Context.ConditionGroups!;
+    var groups = args.Context.Cases!;
     foreach (var g in groups)
         Debug.Log($"  group {g.PortIndex}: {g.Result}");
     args.Next();
@@ -31,7 +31,7 @@ engine.OnCondition(args => {
 });
 ```
 ```cpp [C++ — Unreal]
-engine.onResolveCondition([this](const ExportCondition& cond) {
+engine.onResolveCondition([this](const ConditionTest& cond) {
     return GetGameState()->Evaluate(cond.key, cond.op, cond.value);
 });
 
@@ -48,7 +48,7 @@ engine.on_resolve_condition(func(cond):
 
 # Optional — add only for logging or override
 engine.on_condition(func(args):
-    var groups = args["context"].condition_groups
+    var groups = args["context"].cases
     for g in groups:
         print("  group %d: %s" % [g.get("port_index", 0), str(g.get("result"))])
     args["next"].call()

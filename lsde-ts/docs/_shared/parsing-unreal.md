@@ -4,7 +4,7 @@
 #include <lsde/engine.h>
 
 FString JsonStr;
-FFileHelper::LoadFileToString(JsonStr, TEXT("blueprint.json"));
+FFileHelper::LoadFileToString(JsonStr, TEXT("blueprints.json"));
 
 TSharedPtr<FJsonObject> JsonObject;
 auto Reader = TJsonReaderFactory<>::Create(JsonStr);

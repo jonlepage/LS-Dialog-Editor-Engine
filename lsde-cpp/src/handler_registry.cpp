@@ -6,44 +6,42 @@ namespace lsde {
 
 // ─── HandlerRegistry (Tier 1) ────────────────────────────────────────────────
 
-InternalBlockHandler HandlerRegistry::getTypeHandler(BlockType type) const {
-    switch (type) {
-        case BlockType::Dialog:    return dialogHandler;
-        case BlockType::Choice:    return choiceHandler;
-        case BlockType::Condition: return conditionHandler;
-        case BlockType::Action:    return actionHandler;
-        case BlockType::Note:      return {};
-    }
+InternalBlockHandler HandlerRegistry::getTypeHandler(const std::string& type) const {
+    if (type == BlockType::Dialog)    return dialogHandler;
+    if (type == BlockType::Choice)    return choiceHandler;
+    if (type == BlockType::Condition) return conditionHandler;
+    if (type == BlockType::Action)    return actionHandler;
+    // A note is never dispatched, and a type this engine does not know is not either.
+    return {};
     return {};
 }
 
 // ─── SceneHandlerRegistry (Tier 2) ──────────────────────────────────────────
 
-void SceneHandlerRegistry::setBlockHandler(const std::string& blockUuid, InternalBlockHandler handler) {
-    _blockHandlers[blockUuid] = std::move(handler);
+void SceneHandlerRegistry::setBlockHandler(const std::string& blockId, InternalBlockHandler handler) {
+    _blockHandlers[blockId] = std::move(handler);
 }
 
-InternalBlockHandler SceneHandlerRegistry::getBlockHandler(const std::string& blockUuid) const {
-    auto it = _blockHandlers.find(blockUuid);
+InternalBlockHandler SceneHandlerRegistry::getBlockHandler(const std::string& blockId) const {
+    auto it = _blockHandlers.find(blockId);
     return it != _blockHandlers.end() ? it->second : InternalBlockHandler{};
 }
 
-InternalBlockHandler SceneHandlerRegistry::getTypeHandler(BlockType type) const {
-    switch (type) {
-        case BlockType::Dialog:    return dialogHandler;
-        case BlockType::Choice:    return choiceHandler;
-        case BlockType::Condition: return conditionHandler;
-        case BlockType::Action:    return actionHandler;
-        case BlockType::Note:      return {};
-    }
+InternalBlockHandler SceneHandlerRegistry::getTypeHandler(const std::string& type) const {
+    if (type == BlockType::Dialog)    return dialogHandler;
+    if (type == BlockType::Choice)    return choiceHandler;
+    if (type == BlockType::Condition) return conditionHandler;
+    if (type == BlockType::Action)    return actionHandler;
+    // A note is never dispatched, and a type this engine does not know is not either.
+    return {};
     return {};
 }
 
 // ─── Resolution ──────────────────────────────────────────────────────────────
 
 ResolvedHandlers resolveHandler(
-    BlockType blockType,
-    const std::string& blockUuid,
+    const std::string& blockType,
+    const std::string& blockId,
     const SceneHandlerRegistry* sceneRegistry,
     const HandlerRegistry& globalRegistry)
 {
@@ -54,7 +52,7 @@ ResolvedHandlers resolveHandler(
     }
 
     // Most specific: onBlock(uuid)
-    auto blockOverride = sceneRegistry->getBlockHandler(blockUuid);
+    auto blockOverride = sceneRegistry->getBlockHandler(blockId);
     if (blockOverride) {
         return {blockOverride, globalHandler};
     }

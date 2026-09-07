@@ -1,70 +1,142 @@
 {
-  "version": "1.0",
+  "version": "2.0",
+  "format": "lsde-blueprints",
+  "formatVersion": 1,
+  "description": "Playing a scene: input to expected output. Every runtime must produce the same walk.",
   "suites": [
     {
       "id": "linear-dialog",
-      "description": "P0 — Two sequential DIALOG blocks forming a minimal linear flow",
+      "description": "Three dialogs in a row, each leaving by out.",
       "blueprint": {
-        "version": "1.0.0",
-        "exportDate": "2025-01-01",
-        "projectName": "test",
-        "primaryLanguage": "en",
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
         "locales": [
-          "en"
+          "en",
+          "fr"
         ],
-        "dictionaries": [],
-        "signatures": [],
-        "scenes": [
+        "referenceLocale": "en",
+        "dictionaries": [
           {
-            "uuid": "scene-linear",
-            "label": "Linear Scene",
-            "date": "2025-01-01",
-            "blocks": [
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
               {
-                "uuid": "b1",
-                "type": "DIALOG",
-                "label": "Hello Block",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Hello"
-                },
-                "isStartBlock": true
-              },
-              {
-                "uuid": "b2",
-                "type": "DIALOG",
-                "label": "World Block",
-                "properties": [],
-                "dialogueText": {
-                  "en": "World"
-                }
+                "name": "track",
+                "type": "string"
               }
-            ],
-            "connections": [
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
               {
-                "id": "conn-1",
-                "fromId": "b1",
-                "toId": "b2",
-                "fromPort": "out",
-                "toPort": "in"
+                "name": "item",
+                "type": "string"
               }
             ]
           }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "First",
+                  "fr": "First"
+                },
+                "next": [
+                  {
+                    "port": "out",
+                    "to": "DIALOG-002",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-002",
+                "key": "__blueprints__.s1.DIALOG-002",
+                "type": "dialog",
+                "text": {
+                  "en": "Second",
+                  "fr": "Second"
+                },
+                "next": [
+                  {
+                    "port": "out",
+                    "to": "DIALOG-003",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-003",
+                "key": "__blueprints__.s1.DIALOG-003",
+                "type": "dialog",
+                "text": {
+                  "en": "Third",
+                  "fr": "Third"
+                }
+              }
+            ],
+            "start": "DIALOG-001"
+          }
         ]
       },
-      "sceneId": "scene-linear",
-      "locale": "en",
-      "stateBridge": {},
+      "sceneId": "s1",
       "cases": [
         {
-          "id": "linear-001",
-          "description": "Advance through two dialogs then reach end of scene",
+          "id": "walks-in-order",
           "steps": [
             {
               "expect": {
-                "type": "DIALOG",
-                "blockUuid": "b1",
-                "dialogueText": "Hello"
+                "type": "dialog",
+                "blockId": "DIALOG-001",
+                "text": "First"
               },
               "action": {
                 "type": "next"
@@ -72,9 +144,9 @@
             },
             {
               "expect": {
-                "type": "DIALOG",
-                "blockUuid": "b2",
-                "dialogueText": "World"
+                "type": "dialog",
+                "blockId": "DIALOG-002",
+                "text": "Second"
               },
               "action": {
                 "type": "next"
@@ -82,323 +154,383 @@
             },
             {
               "expect": {
-                "type": "END_OF_SCENE"
+                "type": "dialog",
+                "blockId": "DIALOG-003",
+                "text": "Third"
+              },
+              "action": {
+                "type": "next"
               }
             }
           ],
           "expectedVisited": [
-            "b1",
-            "b2"
+            "DIALOG-001",
+            "DIALOG-002",
+            "DIALOG-003"
           ],
-          "expectedCleanupCalls": 2
+          "expectedCleanupCalls": 3
         }
       ]
     },
     {
       "id": "choice-branch",
-      "description": "P0 — DIALOG into CHOICE with two branches leading to different outcomes",
+      "description": "An option id IS its exit port. There is no out on a choice.",
       "blueprint": {
-        "version": "1.0.0",
-        "exportDate": "2025-01-01",
-        "projectName": "test",
-        "primaryLanguage": "en",
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
         "locales": [
-          "en"
+          "en",
+          "fr"
         ],
-        "dictionaries": [],
-        "signatures": [],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
         "scenes": [
           {
-            "uuid": "scene-choice",
-            "label": "Choice Scene",
-            "date": "2025-01-01",
+            "scene": "s1",
+            "id": "sc_s1",
             "blocks": [
               {
-                "uuid": "greeting",
-                "type": "DIALOG",
-                "label": "Greeting",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Welcome!"
-                },
-                "isStartBlock": true
-              },
-              {
-                "uuid": "choice1",
-                "type": "CHOICE",
-                "label": "Buy or Leave",
-                "properties": [],
-                "choices": [
+                "id": "CHOICE-001",
+                "key": "__blueprints__.s1.CHOICE-001",
+                "type": "choice",
+                "options": [
                   {
-                    "uuid": "opt-buy",
-                    "structureKey": "buy",
-                    "dialogueText": {
-                      "en": "Buy"
+                    "id": "C1",
+                    "key": "__blueprints__.s1.CHOICE-001.C1",
+                    "text": {
+                      "en": "Left",
+                      "fr": "Left"
                     }
                   },
                   {
-                    "uuid": "opt-leave",
-                    "structureKey": "leave",
-                    "dialogueText": {
-                      "en": "Leave"
+                    "id": "C2",
+                    "key": "__blueprints__.s1.CHOICE-001.C2",
+                    "text": {
+                      "en": "Right",
+                      "fr": "Right"
                     }
+                  }
+                ],
+                "next": [
+                  {
+                    "port": "C1",
+                    "to": "DIALOG-001",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "C2",
+                    "to": "DIALOG-002",
+                    "toPort": "in"
                   }
                 ]
               },
               {
-                "uuid": "shop",
-                "type": "DIALOG",
-                "label": "Shop",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Here are my wares."
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "Went left",
+                  "fr": "Went left"
                 }
               },
               {
-                "uuid": "bye",
-                "type": "DIALOG",
-                "label": "Bye",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Safe travels."
+                "id": "DIALOG-002",
+                "key": "__blueprints__.s1.DIALOG-002",
+                "type": "dialog",
+                "text": {
+                  "en": "Went right",
+                  "fr": "Went right"
                 }
               }
             ],
-            "connections": [
-              {
-                "id": "conn-1",
-                "fromId": "greeting",
-                "toId": "choice1",
-                "fromPort": "out",
-                "toPort": "in"
-              },
-              {
-                "id": "conn-2",
-                "fromId": "choice1",
-                "toId": "shop",
-                "fromPort": "opt-buy",
-                "toPort": "in"
-              },
-              {
-                "id": "conn-3",
-                "fromId": "choice1",
-                "toId": "bye",
-                "fromPort": "opt-leave",
-                "toPort": "in"
-              }
-            ]
+            "start": "CHOICE-001"
           }
         ]
       },
-      "sceneId": "scene-choice",
-      "locale": "en",
-      "stateBridge": {},
+      "sceneId": "s1",
       "cases": [
         {
-          "id": "choice-buy",
-          "description": "Select Buy and reach the shop dialog",
+          "id": "picks-first-option",
           "steps": [
             {
               "expect": {
-                "type": "DIALOG",
-                "blockUuid": "greeting",
-                "dialogueText": "Welcome!"
-              },
-              "action": {
-                "type": "next"
-              }
-            },
-            {
-              "expect": {
-                "type": "CHOICE",
-                "blockUuid": "choice1",
-                "visibleChoiceCount": 2
+                "type": "choice",
+                "blockId": "CHOICE-001",
+                "visibleOptionCount": 2
               },
               "action": {
                 "type": "selectChoice",
-                "choiceUuid": "opt-buy"
+                "optionId": "C1"
               }
             },
             {
               "expect": {
-                "type": "DIALOG",
-                "blockUuid": "shop",
-                "dialogueText": "Here are my wares."
+                "type": "dialog",
+                "blockId": "DIALOG-001"
               },
               "action": {
                 "type": "next"
-              }
-            },
-            {
-              "expect": {
-                "type": "END_OF_SCENE"
               }
             }
           ],
           "expectedVisited": [
-            "greeting",
-            "choice1",
-            "shop"
+            "CHOICE-001",
+            "DIALOG-001"
           ]
         },
         {
-          "id": "choice-leave",
-          "description": "Select Leave and reach the goodbye dialog",
+          "id": "picks-second-option",
           "steps": [
             {
               "expect": {
-                "type": "DIALOG",
-                "blockUuid": "greeting",
-                "dialogueText": "Welcome!"
-              },
-              "action": {
-                "type": "next"
-              }
-            },
-            {
-              "expect": {
-                "type": "CHOICE",
-                "blockUuid": "choice1",
-                "visibleChoiceCount": 2
+                "type": "choice",
+                "blockId": "CHOICE-001"
               },
               "action": {
                 "type": "selectChoice",
-                "choiceUuid": "opt-leave"
+                "optionId": "C2"
               }
             },
             {
               "expect": {
-                "type": "DIALOG",
-                "blockUuid": "bye",
-                "dialogueText": "Safe travels."
+                "type": "dialog",
+                "blockId": "DIALOG-002"
               },
               "action": {
                 "type": "next"
               }
-            },
+            }
+          ],
+          "expectedVisited": [
+            "CHOICE-001",
+            "DIALOG-002"
+          ]
+        },
+        {
+          "id": "unwired-option-ends-the-flow",
+          "description": "C3 exists on no wire: a dead end, which is the drawing, not an error.",
+          "steps": [
             {
               "expect": {
-                "type": "END_OF_SCENE"
+                "type": "choice",
+                "blockId": "CHOICE-001"
+              },
+              "action": {
+                "type": "selectChoice",
+                "optionId": "C3"
               }
             }
           ],
           "expectedVisited": [
-            "greeting",
-            "choice1",
-            "bye"
+            "CHOICE-001"
           ]
         }
       ]
     },
     {
-      "id": "condition-auto",
-      "description": "P0 — CONDITION block auto-evaluates to true, routing to the yes branch",
+      "id": "condition-if-mode",
+      "description": "No portPerCase: every case must hold. out when they do, default when not.",
       "blueprint": {
-        "version": "1.0.0",
-        "exportDate": "2025-01-01",
-        "projectName": "test",
-        "primaryLanguage": "en",
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
         "locales": [
-          "en"
+          "en",
+          "fr"
         ],
-        "dictionaries": [],
-        "signatures": [],
-        "scenes": [
+        "referenceLocale": "en",
+        "dictionaries": [
           {
-            "uuid": "scene-cond",
-            "label": "Condition Scene",
-            "date": "2025-01-01",
-            "blocks": [
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
               {
-                "uuid": "start",
-                "type": "DIALOG",
-                "label": "Start",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Begin"
-                },
-                "isStartBlock": true
-              },
-              {
-                "uuid": "cond1",
-                "type": "CONDITION",
-                "label": "Check Quest",
-                "properties": [],
-                "conditions": [
-                  [
-                    {
-                      "uuid": "vc1",
-                      "key": "quest_active",
-                      "operator": "=",
-                      "value": "true"
-                    }
-                  ]
-                ]
-              },
-              {
-                "uuid": "yes",
-                "type": "DIALOG",
-                "label": "Quest Active",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Quest active!"
-                }
-              },
-              {
-                "uuid": "no",
-                "type": "DIALOG",
-                "label": "No Quest",
-                "properties": [],
-                "dialogueText": {
-                  "en": "No quest."
-                }
+                "name": "track",
+                "type": "string"
               }
-            ],
-            "connections": [
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
               {
-                "id": "conn-1",
-                "fromId": "start",
-                "toId": "cond1",
-                "fromPort": "out",
-                "toPort": "in"
-              },
-              {
-                "id": "conn-2",
-                "fromId": "cond1",
-                "toId": "yes",
-                "fromPort": "true",
-                "toPort": "in",
-                "fromPortIndex": 0
-              },
-              {
-                "id": "conn-3",
-                "fromId": "cond1",
-                "toId": "no",
-                "fromPort": "false",
-                "toPort": "in",
-                "fromPortIndex": 1
+                "name": "item",
+                "type": "string"
               }
             ]
           }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "COND-001",
+                "key": "__blueprints__.s1.COND-001",
+                "type": "condition",
+                "cases": [
+                  {
+                    "port": "out",
+                    "when": [
+                      {
+                        "dict": "switches",
+                        "entry": "door_unlocked",
+                        "op": "equals",
+                        "value": true
+                      }
+                    ]
+                  }
+                ],
+                "next": [
+                  {
+                    "port": "out",
+                    "to": "DIALOG-001",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "default",
+                    "to": "DIALOG-002",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "Open",
+                  "fr": "Open"
+                }
+              },
+              {
+                "id": "DIALOG-002",
+                "key": "__blueprints__.s1.DIALOG-002",
+                "type": "dialog",
+                "text": {
+                  "en": "Locked",
+                  "fr": "Locked"
+                }
+              }
+            ],
+            "start": "COND-001"
+          }
         ]
       },
-      "sceneId": "scene-cond",
-      "locale": "en",
+      "sceneId": "s1",
       "stateBridge": {
         "conditions": {
-          "quest_active": true
+          "switches.door_unlocked": true
         }
       },
       "cases": [
         {
-          "id": "condition-true",
-          "description": "Condition evaluates to true, routes to yes branch",
+          "id": "takes-out-when-it-holds",
           "steps": [
             {
               "expect": {
-                "type": "DIALOG",
-                "blockUuid": "start",
-                "dialogueText": "Begin"
+                "type": "condition",
+                "blockId": "COND-001"
               },
               "action": {
                 "type": "next"
@@ -406,137 +538,165 @@
             },
             {
               "expect": {
-                "type": "DIALOG",
-                "blockUuid": "yes",
-                "dialogueText": "Quest active!"
+                "type": "dialog",
+                "blockId": "DIALOG-001"
               },
               "action": {
                 "type": "next"
-              }
-            },
-            {
-              "expect": {
-                "type": "END_OF_SCENE"
               }
             }
           ],
           "expectedVisited": [
-            "start",
-            "cond1",
-            "yes"
+            "COND-001",
+            "DIALOG-001"
           ]
         }
       ]
     },
     {
-      "id": "condition-auto-false",
-      "description": "P0 — CONDITION block auto-evaluates to false, routing to the no branch",
+      "id": "condition-if-mode-false",
+      "description": "The false exit of an if-style condition is `default`. v1 called it `false`.",
       "blueprint": {
-        "version": "1.0.0",
-        "exportDate": "2025-01-01",
-        "projectName": "test",
-        "primaryLanguage": "en",
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
         "locales": [
-          "en"
+          "en",
+          "fr"
         ],
-        "dictionaries": [],
-        "signatures": [],
-        "scenes": [
+        "referenceLocale": "en",
+        "dictionaries": [
           {
-            "uuid": "scene-cond-false",
-            "label": "Condition Scene False",
-            "date": "2025-01-01",
-            "blocks": [
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
               {
-                "uuid": "start",
-                "type": "DIALOG",
-                "label": "Start",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Begin"
-                },
-                "isStartBlock": true
-              },
-              {
-                "uuid": "cond1",
-                "type": "CONDITION",
-                "label": "Check Quest",
-                "properties": [],
-                "conditions": [
-                  [
-                    {
-                      "uuid": "vc1",
-                      "key": "quest_active",
-                      "operator": "=",
-                      "value": "true"
-                    }
-                  ]
-                ]
-              },
-              {
-                "uuid": "yes",
-                "type": "DIALOG",
-                "label": "Quest Active",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Quest active!"
-                }
-              },
-              {
-                "uuid": "no",
-                "type": "DIALOG",
-                "label": "No Quest",
-                "properties": [],
-                "dialogueText": {
-                  "en": "No quest."
-                }
+                "name": "track",
+                "type": "string"
               }
-            ],
-            "connections": [
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
               {
-                "id": "conn-1",
-                "fromId": "start",
-                "toId": "cond1",
-                "fromPort": "out",
-                "toPort": "in"
-              },
-              {
-                "id": "conn-2",
-                "fromId": "cond1",
-                "toId": "yes",
-                "fromPort": "true",
-                "toPort": "in",
-                "fromPortIndex": 0
-              },
-              {
-                "id": "conn-3",
-                "fromId": "cond1",
-                "toId": "no",
-                "fromPort": "false",
-                "toPort": "in",
-                "fromPortIndex": 1
+                "name": "item",
+                "type": "string"
               }
             ]
           }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "COND-001",
+                "key": "__blueprints__.s1.COND-001",
+                "type": "condition",
+                "cases": [
+                  {
+                    "port": "out",
+                    "when": [
+                      {
+                        "dict": "switches",
+                        "entry": "door_unlocked",
+                        "op": "equals",
+                        "value": true
+                      }
+                    ]
+                  }
+                ],
+                "next": [
+                  {
+                    "port": "out",
+                    "to": "DIALOG-001",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "default",
+                    "to": "DIALOG-002",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "Open",
+                  "fr": "Open"
+                }
+              },
+              {
+                "id": "DIALOG-002",
+                "key": "__blueprints__.s1.DIALOG-002",
+                "type": "dialog",
+                "text": {
+                  "en": "Locked",
+                  "fr": "Locked"
+                }
+              }
+            ],
+            "start": "COND-001"
+          }
         ]
       },
-      "sceneId": "scene-cond-false",
-      "locale": "en",
+      "sceneId": "s1",
       "stateBridge": {
         "conditions": {
-          "quest_active": false
+          "switches.door_unlocked": false
         }
       },
       "cases": [
         {
-          "id": "condition-false",
-          "description": "Condition evaluates to false, routes to no branch",
+          "id": "takes-default-when-it-does-not",
           "steps": [
             {
               "expect": {
-                "type": "DIALOG",
-                "blockUuid": "start",
-                "dialogueText": "Begin"
+                "type": "condition",
+                "blockId": "COND-001"
               },
               "action": {
                 "type": "next"
@@ -544,111 +704,565 @@
             },
             {
               "expect": {
-                "type": "DIALOG",
-                "blockUuid": "no",
-                "dialogueText": "No quest."
+                "type": "dialog",
+                "blockId": "DIALOG-002"
               },
               "action": {
                 "type": "next"
-              }
-            },
-            {
-              "expect": {
-                "type": "END_OF_SCENE"
               }
             }
           ],
           "expectedVisited": [
-            "start",
-            "cond1",
-            "no"
+            "COND-001",
+            "DIALOG-002"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "condition-port-per-case",
+      "description": "portPerCase: the FIRST case that holds takes its own port.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "COND-001",
+                "key": "__blueprints__.s1.COND-001",
+                "type": "condition",
+                "props": {
+                  "portPerCase": true
+                },
+                "cases": [
+                  {
+                    "port": "K1",
+                    "when": [
+                      {
+                        "dict": "switches",
+                        "entry": "door_unlocked",
+                        "op": "equals",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "port": "K2",
+                    "when": [
+                      {
+                        "dict": "switches",
+                        "entry": "met_vesk",
+                        "op": "equals",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "port": "K3"
+                  }
+                ],
+                "next": [
+                  {
+                    "port": "K1",
+                    "to": "DIALOG-001",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "K2",
+                    "to": "DIALOG-002",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "K3",
+                    "to": "DIALOG-003",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "default",
+                    "to": "DIALOG-004",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "One",
+                  "fr": "One"
+                }
+              },
+              {
+                "id": "DIALOG-002",
+                "key": "__blueprints__.s1.DIALOG-002",
+                "type": "dialog",
+                "text": {
+                  "en": "Two",
+                  "fr": "Two"
+                }
+              },
+              {
+                "id": "DIALOG-003",
+                "key": "__blueprints__.s1.DIALOG-003",
+                "type": "dialog",
+                "text": {
+                  "en": "Three",
+                  "fr": "Three"
+                }
+              },
+              {
+                "id": "DIALOG-004",
+                "key": "__blueprints__.s1.DIALOG-004",
+                "type": "dialog",
+                "text": {
+                  "en": "None",
+                  "fr": "None"
+                }
+              }
+            ],
+            "start": "COND-001"
+          }
+        ]
+      },
+      "sceneId": "s1",
+      "stateBridge": {
+        "conditions": {
+          "switches.door_unlocked": false,
+          "switches.met_vesk": true
+        }
+      },
+      "cases": [
+        {
+          "id": "takes-the-first-case-that-holds",
+          "steps": [
+            {
+              "expect": {
+                "type": "condition",
+                "blockId": "COND-001"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-002"
+              },
+              "action": {
+                "type": "next"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "COND-001",
+            "DIALOG-002"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "condition-case-with-no-when",
+      "description": "A case with no `when` is always true, and shadows every case below it.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "COND-001",
+                "key": "__blueprints__.s1.COND-001",
+                "type": "condition",
+                "props": {
+                  "portPerCase": true
+                },
+                "cases": [
+                  {
+                    "port": "K1",
+                    "when": [
+                      {
+                        "dict": "switches",
+                        "entry": "door_unlocked",
+                        "op": "equals",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "port": "K2"
+                  },
+                  {
+                    "port": "K3",
+                    "when": [
+                      {
+                        "dict": "switches",
+                        "entry": "met_vesk",
+                        "op": "equals",
+                        "value": true
+                      }
+                    ]
+                  }
+                ],
+                "next": [
+                  {
+                    "port": "K1",
+                    "to": "DIALOG-001",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "K2",
+                    "to": "DIALOG-002",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "K3",
+                    "to": "DIALOG-003",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "One",
+                  "fr": "One"
+                }
+              },
+              {
+                "id": "DIALOG-002",
+                "key": "__blueprints__.s1.DIALOG-002",
+                "type": "dialog",
+                "text": {
+                  "en": "Two",
+                  "fr": "Two"
+                }
+              },
+              {
+                "id": "DIALOG-003",
+                "key": "__blueprints__.s1.DIALOG-003",
+                "type": "dialog",
+                "text": {
+                  "en": "Three",
+                  "fr": "Three"
+                }
+              }
+            ],
+            "start": "COND-001"
+          }
+        ]
+      },
+      "sceneId": "s1",
+      "stateBridge": {
+        "conditions": {
+          "switches.door_unlocked": false,
+          "switches.met_vesk": true
+        }
+      },
+      "cases": [
+        {
+          "id": "the-catch-all-wins-over-a-later-match",
+          "steps": [
+            {
+              "expect": {
+                "type": "condition",
+                "blockId": "COND-001"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-002"
+              },
+              "action": {
+                "type": "next"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "COND-001",
+            "DIALOG-002"
           ]
         }
       ]
     },
     {
       "id": "action-then-catch",
-      "description": "P0 — ACTION block with then/catch branching based on resolve or reject",
+      "description": "An action leaves by then, or by catch when a call failed.",
       "blueprint": {
-        "version": "1.0.0",
-        "exportDate": "2025-01-01",
-        "projectName": "test",
-        "primaryLanguage": "en",
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
         "locales": [
-          "en"
+          "en",
+          "fr"
         ],
-        "dictionaries": [],
-        "signatures": [],
-        "scenes": [
+        "referenceLocale": "en",
+        "dictionaries": [
           {
-            "uuid": "scene-action",
-            "label": "Action Scene",
-            "date": "2025-01-01",
-            "blocks": [
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
               {
-                "uuid": "act1",
-                "type": "ACTION",
-                "label": "Risky Operation",
-                "properties": [],
-                "actions": [
-                  {
-                    "uuid": "a1",
-                    "actionId": "risky_op",
-                    "params": []
-                  }
-                ],
-                "isStartBlock": true
-              },
-              {
-                "uuid": "success",
-                "type": "DIALOG",
-                "label": "Success",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Success!"
-                }
-              },
-              {
-                "uuid": "failure",
-                "type": "DIALOG",
-                "label": "Failure",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Failed!"
-                }
+                "name": "track",
+                "type": "string"
               }
-            ],
-            "connections": [
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
               {
-                "id": "conn-1",
-                "fromId": "act1",
-                "toId": "success",
-                "fromPort": "then",
-                "toPort": "in"
-              },
-              {
-                "id": "conn-2",
-                "fromId": "act1",
-                "toId": "failure",
-                "fromPort": "catch",
-                "toPort": "in"
+                "name": "item",
+                "type": "string"
               }
             ]
           }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "ACTION-001",
+                "key": "__blueprints__.s1.ACTION-001",
+                "type": "action",
+                "calls": [
+                  {
+                    "fn": "play_music",
+                    "args": {
+                      "track": "theme"
+                    }
+                  }
+                ],
+                "next": [
+                  {
+                    "port": "then",
+                    "to": "DIALOG-001",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "catch",
+                    "to": "DIALOG-002",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "Worked",
+                  "fr": "Worked"
+                }
+              },
+              {
+                "id": "DIALOG-002",
+                "key": "__blueprints__.s1.DIALOG-002",
+                "type": "dialog",
+                "text": {
+                  "en": "Failed",
+                  "fr": "Failed"
+                }
+              }
+            ],
+            "start": "ACTION-001"
+          }
         ]
       },
-      "sceneId": "scene-action",
-      "locale": "en",
-      "stateBridge": {},
+      "sceneId": "s1",
       "cases": [
         {
-          "id": "action-resolve",
-          "description": "ACTION resolves and routes to the then branch",
+          "id": "then-on-success",
           "steps": [
             {
               "expect": {
-                "type": "ACTION",
-                "blockUuid": "act1"
+                "type": "action",
+                "blockId": "ACTION-001"
               },
               "action": {
                 "type": "resolveAction"
@@ -656,513 +1270,969 @@
             },
             {
               "expect": {
-                "type": "DIALOG",
-                "blockUuid": "success",
-                "dialogueText": "Success!"
+                "type": "dialog",
+                "blockId": "DIALOG-001"
               },
               "action": {
                 "type": "next"
               }
-            },
-            {
-              "expect": {
-                "type": "END_OF_SCENE"
-              }
             }
           ],
           "expectedVisited": [
-            "act1",
-            "success"
+            "ACTION-001",
+            "DIALOG-001"
           ]
         },
         {
-          "id": "action-reject",
-          "description": "ACTION rejects and routes to the catch branch",
+          "id": "catch-on-failure",
           "steps": [
             {
               "expect": {
-                "type": "ACTION",
-                "blockUuid": "act1"
+                "type": "action",
+                "blockId": "ACTION-001"
               },
               "action": {
                 "type": "rejectAction",
-                "reason": "error msg"
+                "error": "boom"
               }
             },
             {
               "expect": {
-                "type": "DIALOG",
-                "blockUuid": "failure",
-                "dialogueText": "Failed!"
+                "type": "dialog",
+                "blockId": "DIALOG-002"
               },
               "action": {
                 "type": "next"
               }
+            }
+          ],
+          "expectedVisited": [
+            "ACTION-001",
+            "DIALOG-002"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "action-catch-fallback",
+      "description": "A failure with no catch wired carries on through then.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "ACTION-001",
+                "key": "__blueprints__.s1.ACTION-001",
+                "type": "action",
+                "calls": [
+                  {
+                    "fn": "give_item",
+                    "args": {
+                      "item": "keycard"
+                    }
+                  }
+                ],
+                "next": [
+                  {
+                    "port": "then",
+                    "to": "DIALOG-001",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "Carried on",
+                  "fr": "Carried on"
+                }
+              }
+            ],
+            "start": "ACTION-001"
+          }
+        ]
+      },
+      "sceneId": "s1",
+      "cases": [
+        {
+          "id": "falls-back-to-then",
+          "steps": [
+            {
+              "expect": {
+                "type": "action",
+                "blockId": "ACTION-001"
+              },
+              "action": {
+                "type": "rejectAction",
+                "error": "boom"
+              }
             },
             {
               "expect": {
-                "type": "END_OF_SCENE"
+                "type": "dialog",
+                "blockId": "DIALOG-001"
+              },
+              "action": {
+                "type": "next"
               }
             }
           ],
           "expectedVisited": [
-            "act1",
-            "failure"
+            "ACTION-001",
+            "DIALOG-001"
           ]
         }
       ]
     },
     {
       "id": "port-per-character",
-      "description": "P1 — DIALOG with portPerCharacter routing to character-specific branches",
+      "description": "The actor port is the CARD ID, with out as the else exit.",
       "blueprint": {
-        "version": "1.0.0",
-        "exportDate": "2025-01-01",
-        "projectName": "test",
-        "primaryLanguage": "en",
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
         "locales": [
-          "en"
+          "en",
+          "fr"
         ],
-        "dictionaries": [],
-        "signatures": [],
-        "scenes": [
+        "referenceLocale": "en",
+        "dictionaries": [
           {
-            "uuid": "scene-ppc",
-            "label": "Port Per Character Scene",
-            "date": "2025-01-01",
-            "blocks": [
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
               {
-                "uuid": "multi",
-                "type": "DIALOG",
-                "label": "Multi Character",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Who speaks?"
-                },
-                "isStartBlock": true,
-                "nativeProperties": {
-                  "portPerCharacter": true
-                },
-                "metadata": {
-                  "characters": [
-                    {
-                      "name": "Hero"
-                    },
-                    {
-                      "name": "Boss"
-                    }
-                  ]
-                }
-              },
-              {
-                "uuid": "hero-path",
-                "type": "DIALOG",
-                "label": "Hero Path",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Hero speaks."
-                }
-              },
-              {
-                "uuid": "boss-path",
-                "type": "DIALOG",
-                "label": "Boss Path",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Boss roars."
-                }
-              },
-              {
-                "uuid": "fallback",
-                "type": "DIALOG",
-                "label": "Fallback",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Default."
-                }
+                "name": "track",
+                "type": "string"
               }
-            ],
-            "connections": [
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
               {
-                "id": "conn-1",
-                "fromId": "multi",
-                "toId": "hero-path",
-                "fromPort": "char-hero-uuid",
-                "toPort": "in",
-                "fromPortIndex": 0
-              },
-              {
-                "id": "conn-2",
-                "fromId": "multi",
-                "toId": "boss-path",
-                "fromPort": "char-boss-uuid",
-                "toPort": "in",
-                "fromPortIndex": 1
-              },
-              {
-                "id": "conn-3",
-                "fromId": "multi",
-                "toId": "fallback",
-                "fromPort": "out",
-                "toPort": "in"
+                "name": "item",
+                "type": "string"
               }
             ]
           }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "Who says this?",
+                  "fr": "Who says this?"
+                },
+                "actors": [
+                  "var1",
+                  "var2"
+                ],
+                "props": {
+                  "portPerCharacter": true
+                },
+                "next": [
+                  {
+                    "port": "var1",
+                    "to": "DIALOG-002",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "var2",
+                    "to": "DIALOG-003",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "out",
+                    "to": "DIALOG-004",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-002",
+                "key": "__blueprints__.s1.DIALOG-002",
+                "type": "dialog",
+                "text": {
+                  "en": "Kael did",
+                  "fr": "Kael did"
+                }
+              },
+              {
+                "id": "DIALOG-003",
+                "key": "__blueprints__.s1.DIALOG-003",
+                "type": "dialog",
+                "text": {
+                  "en": "Nora did",
+                  "fr": "Nora did"
+                }
+              },
+              {
+                "id": "DIALOG-004",
+                "key": "__blueprints__.s1.DIALOG-004",
+                "type": "dialog",
+                "text": {
+                  "en": "Someone else",
+                  "fr": "Someone else"
+                }
+              }
+            ],
+            "start": "DIALOG-001"
+          }
         ]
       },
-      "sceneId": "scene-ppc",
-      "locale": "en",
-      "stateBridge": {},
+      "sceneId": "s1",
       "cases": [
         {
-          "id": "resolve-hero",
-          "description": "Resolve character port to Hero, follow hero-path",
+          "id": "first-actor-port",
           "steps": [
             {
               "expect": {
-                "type": "DIALOG",
-                "blockUuid": "multi",
-                "dialogueText": "Who speaks?"
+                "type": "dialog",
+                "blockId": "DIALOG-001"
               },
               "action": {
                 "type": "resolveCharacterPort",
-                "characterName": "Hero"
+                "cardId": "var1"
               }
             },
             {
               "expect": {
-                "type": "DIALOG",
-                "blockUuid": "hero-path",
-                "dialogueText": "Hero speaks."
+                "type": "dialog",
+                "blockId": "DIALOG-002"
               },
               "action": {
                 "type": "next"
               }
-            },
-            {
-              "expect": {
-                "type": "END_OF_SCENE"
-              }
             }
           ],
           "expectedVisited": [
-            "multi",
-            "hero-path"
+            "DIALOG-001",
+            "DIALOG-002"
           ]
         },
         {
-          "id": "resolve-boss",
-          "description": "Resolve character port to Boss, follow boss-path",
+          "id": "second-actor-port",
           "steps": [
             {
               "expect": {
-                "type": "DIALOG",
-                "blockUuid": "multi",
-                "dialogueText": "Who speaks?"
+                "type": "dialog",
+                "blockId": "DIALOG-001"
               },
               "action": {
                 "type": "resolveCharacterPort",
-                "characterName": "Boss"
+                "cardId": "var2"
               }
             },
             {
               "expect": {
-                "type": "DIALOG",
-                "blockUuid": "boss-path",
-                "dialogueText": "Boss roars."
+                "type": "dialog",
+                "blockId": "DIALOG-003"
               },
               "action": {
                 "type": "next"
               }
-            },
-            {
-              "expect": {
-                "type": "END_OF_SCENE"
-              }
             }
           ],
           "expectedVisited": [
-            "multi",
-            "boss-path"
+            "DIALOG-001",
+            "DIALOG-003"
           ]
         },
         {
-          "id": "resolve-unknown-fallback",
-          "description": "Resolve unknown character falls back to default out port",
+          "id": "falls-back-to-out",
+          "description": "A card the block does not cite has no port; out is the else exit.",
           "steps": [
             {
               "expect": {
-                "type": "DIALOG",
-                "blockUuid": "multi",
-                "dialogueText": "Who speaks?"
+                "type": "dialog",
+                "blockId": "DIALOG-001"
               },
               "action": {
                 "type": "resolveCharacterPort",
-                "characterName": "Ghost"
+                "cardId": "var9"
               }
             },
             {
               "expect": {
-                "type": "DIALOG",
-                "blockUuid": "fallback",
-                "dialogueText": "Default."
+                "type": "dialog",
+                "blockId": "DIALOG-004"
               },
               "action": {
                 "type": "next"
               }
-            },
-            {
-              "expect": {
-                "type": "END_OF_SCENE"
-              }
             }
           ],
           "expectedVisited": [
-            "multi",
-            "fallback"
+            "DIALOG-001",
+            "DIALOG-004"
           ]
         }
       ]
     },
     {
-      "id": "choice-visibility",
-      "description": "P1 — CHOICE with visibility conditions filtering out hidden choices",
+      "id": "option-visibility",
+      "description": "Options are tagged, never removed. The game filters.",
       "blueprint": {
-        "version": "1.0.0",
-        "exportDate": "2025-01-01",
-        "projectName": "test",
-        "primaryLanguage": "en",
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
         "locales": [
-          "en"
+          "en",
+          "fr"
         ],
-        "dictionaries": [],
-        "signatures": [],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
         "scenes": [
           {
-            "uuid": "scene-vis",
-            "label": "Visibility Scene",
-            "date": "2025-01-01",
+            "scene": "s1",
+            "id": "sc_s1",
             "blocks": [
               {
-                "uuid": "greeting",
-                "type": "DIALOG",
-                "label": "Greeting",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Welcome!"
-                },
-                "isStartBlock": true
-              },
-              {
-                "uuid": "choice1",
-                "type": "CHOICE",
-                "label": "Buy or Leave",
-                "properties": [],
-                "choices": [
+                "id": "CHOICE-001",
+                "key": "__blueprints__.s1.CHOICE-001",
+                "type": "choice",
+                "options": [
                   {
-                    "uuid": "opt-buy",
-                    "structureKey": "buy",
-                    "dialogueText": {
-                      "en": "Buy"
+                    "id": "C1",
+                    "key": "__blueprints__.s1.CHOICE-001.C1",
+                    "text": {
+                      "en": "Always",
+                      "fr": "Always"
                     }
                   },
                   {
-                    "uuid": "opt-leave",
-                    "structureKey": "leave",
-                    "dialogueText": {
-                      "en": "Leave"
+                    "id": "C2",
+                    "key": "__blueprints__.s1.CHOICE-001.C2",
+                    "text": {
+                      "en": "Needs credits",
+                      "fr": "Needs credits"
                     },
-                    "visibilityConditions": [
+                    "when": [
                       {
-                        "uuid": "vc1",
-                        "key": "can_leave",
-                        "operator": "=",
-                        "value": "true"
+                        "dict": "variables",
+                        "entry": "credits",
+                        "op": "greaterOrEqual",
+                        "value": 50
                       }
                     ]
+                  }
+                ],
+                "next": [
+                  {
+                    "port": "C1",
+                    "to": "DIALOG-001",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "C2",
+                    "to": "DIALOG-001",
+                    "toPort": "in"
                   }
                 ]
               },
               {
-                "uuid": "shop",
-                "type": "DIALOG",
-                "label": "Shop",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Here are my wares."
-                }
-              },
-              {
-                "uuid": "bye",
-                "type": "DIALOG",
-                "label": "Bye",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Safe travels."
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "Done",
+                  "fr": "Done"
                 }
               }
             ],
-            "connections": [
-              {
-                "id": "conn-1",
-                "fromId": "greeting",
-                "toId": "choice1",
-                "fromPort": "out",
-                "toPort": "in"
-              },
-              {
-                "id": "conn-2",
-                "fromId": "choice1",
-                "toId": "shop",
-                "fromPort": "opt-buy",
-                "toPort": "in"
-              },
-              {
-                "id": "conn-3",
-                "fromId": "choice1",
-                "toId": "bye",
-                "fromPort": "opt-leave",
-                "toPort": "in"
-              }
-            ]
+            "start": "CHOICE-001"
           }
         ]
       },
-      "sceneId": "scene-vis",
-      "locale": "en",
+      "sceneId": "s1",
       "stateBridge": {
         "conditions": {
-          "can_leave": false
+          "variables.credits": false
         }
       },
       "cases": [
         {
-          "id": "visibility-filtered",
-          "description": "Leave choice hidden because can_leave is false, only Buy visible",
+          "id": "one-visible-one-hidden",
           "steps": [
             {
               "expect": {
-                "type": "DIALOG",
-                "blockUuid": "greeting",
-                "dialogueText": "Welcome!"
-              },
-              "action": {
-                "type": "next"
-              }
-            },
-            {
-              "expect": {
-                "type": "CHOICE",
-                "blockUuid": "choice1",
-                "visibleChoiceCount": 1
+                "type": "choice",
+                "blockId": "CHOICE-001",
+                "visibleOptionCount": 1
               },
               "action": {
                 "type": "selectChoice",
-                "choiceUuid": "opt-buy"
+                "optionId": "C1"
               }
             },
             {
               "expect": {
-                "type": "DIALOG",
-                "blockUuid": "shop",
-                "dialogueText": "Here are my wares."
+                "type": "dialog",
+                "blockId": "DIALOG-001"
               },
               "action": {
                 "type": "next"
-              }
-            },
-            {
-              "expect": {
-                "type": "END_OF_SCENE"
               }
             }
           ],
           "expectedVisited": [
-            "greeting",
-            "choice1",
-            "shop"
+            "CHOICE-001",
+            "DIALOG-001"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "choice-memory",
+      "description": "The reserved `choice` dictionary reads a past answer of THIS scene.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "CHOICE-001",
+                "key": "__blueprints__.s1.CHOICE-001",
+                "type": "choice",
+                "options": [
+                  {
+                    "id": "C1",
+                    "key": "__blueprints__.s1.CHOICE-001.C1",
+                    "text": {
+                      "en": "Yes",
+                      "fr": "Yes"
+                    }
+                  },
+                  {
+                    "id": "C2",
+                    "key": "__blueprints__.s1.CHOICE-001.C2",
+                    "text": {
+                      "en": "No",
+                      "fr": "No"
+                    }
+                  }
+                ],
+                "next": [
+                  {
+                    "port": "C1",
+                    "to": "COND-001",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "C2",
+                    "to": "COND-001",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "COND-001",
+                "key": "__blueprints__.s1.COND-001",
+                "type": "condition",
+                "cases": [
+                  {
+                    "port": "out",
+                    "when": [
+                      {
+                        "dict": "choice",
+                        "entry": "CHOICE-001",
+                        "op": "equals",
+                        "value": "C1"
+                      }
+                    ]
+                  }
+                ],
+                "next": [
+                  {
+                    "port": "out",
+                    "to": "DIALOG-001",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "default",
+                    "to": "DIALOG-002",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "You said yes",
+                  "fr": "You said yes"
+                }
+              },
+              {
+                "id": "DIALOG-002",
+                "key": "__blueprints__.s1.DIALOG-002",
+                "type": "dialog",
+                "text": {
+                  "en": "You did not",
+                  "fr": "You did not"
+                }
+              }
+            ],
+            "start": "CHOICE-001"
+          }
+        ]
+      },
+      "sceneId": "s1",
+      "cases": [
+        {
+          "id": "remembers-the-answer",
+          "steps": [
+            {
+              "expect": {
+                "type": "choice",
+                "blockId": "CHOICE-001"
+              },
+              "action": {
+                "type": "selectChoice",
+                "optionId": "C1"
+              }
+            },
+            {
+              "expect": {
+                "type": "condition",
+                "blockId": "COND-001"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-001"
+              },
+              "action": {
+                "type": "next"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "CHOICE-001",
+            "COND-001",
+            "DIALOG-001"
+          ]
+        },
+        {
+          "id": "knows-when-it-was-a-different-answer",
+          "steps": [
+            {
+              "expect": {
+                "type": "choice",
+                "blockId": "CHOICE-001"
+              },
+              "action": {
+                "type": "selectChoice",
+                "optionId": "C2"
+              }
+            },
+            {
+              "expect": {
+                "type": "condition",
+                "blockId": "COND-001"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-002"
+              },
+              "action": {
+                "type": "next"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "CHOICE-001",
+            "COND-001",
+            "DIALOG-002"
           ]
         }
       ]
     },
     {
       "id": "note-skip",
-      "description": "P1 — NOTE block is silently skipped by the engine, never appears in visited",
+      "description": "A note is never dispatched; the walk steps over it.",
       "blueprint": {
-        "version": "1.0.0",
-        "exportDate": "2025-01-01",
-        "projectName": "test",
-        "primaryLanguage": "en",
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
         "locales": [
-          "en"
+          "en",
+          "fr"
         ],
-        "dictionaries": [],
-        "signatures": [],
-        "scenes": [
+        "referenceLocale": "en",
+        "dictionaries": [
           {
-            "uuid": "scene-note",
-            "label": "Note Scene",
-            "date": "2025-01-01",
-            "blocks": [
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
               {
-                "uuid": "b1",
-                "type": "DIALOG",
-                "label": "Before Note",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Before note"
-                },
-                "isStartBlock": true
-              },
-              {
-                "uuid": "note1",
-                "type": "NOTE",
-                "label": "Designer Note",
-                "properties": [],
-                "note": "This is a designer note, should be skipped"
-              },
-              {
-                "uuid": "b3",
-                "type": "DIALOG",
-                "label": "After Note",
-                "properties": [],
-                "dialogueText": {
-                  "en": "After note"
-                }
+                "name": "track",
+                "type": "string"
               }
-            ],
-            "connections": [
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
               {
-                "id": "conn-1",
-                "fromId": "b1",
-                "toId": "note1",
-                "fromPort": "out",
-                "toPort": "in"
-              },
-              {
-                "id": "conn-2",
-                "fromId": "note1",
-                "toId": "b3",
-                "fromPort": "out",
-                "toPort": "in"
+                "name": "item",
+                "type": "string"
               }
             ]
           }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "Before",
+                  "fr": "Before"
+                },
+                "next": [
+                  {
+                    "port": "out",
+                    "to": "NOTE-001",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "NOTE-001",
+                "key": "__blueprints__.s1.NOTE-001",
+                "type": "note",
+                "note": "Designer only",
+                "next": [
+                  {
+                    "port": "out",
+                    "to": "DIALOG-002",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-002",
+                "key": "__blueprints__.s1.DIALOG-002",
+                "type": "dialog",
+                "text": {
+                  "en": "After",
+                  "fr": "After"
+                }
+              }
+            ],
+            "start": "DIALOG-001"
+          }
         ]
       },
-      "sceneId": "scene-note",
-      "locale": "en",
-      "stateBridge": {},
+      "sceneId": "s1",
       "cases": [
         {
-          "id": "note-skip-001",
-          "description": "NOTE block is transparently skipped, flow goes directly from b1 to b3",
+          "id": "steps-over-the-note",
           "steps": [
             {
               "expect": {
-                "type": "DIALOG",
-                "blockUuid": "b1",
-                "dialogueText": "Before note"
+                "type": "dialog",
+                "blockId": "DIALOG-001"
               },
               "action": {
                 "type": "next"
@@ -1170,262 +2240,315 @@
             },
             {
               "expect": {
-                "type": "DIALOG",
-                "blockUuid": "b3",
-                "dialogueText": "After note"
+                "type": "dialog",
+                "blockId": "DIALOG-002"
               },
               "action": {
                 "type": "next"
-              }
-            },
-            {
-              "expect": {
-                "type": "END_OF_SCENE"
               }
             }
           ],
           "expectedVisited": [
-            "b1",
-            "b3"
+            "DIALOG-001",
+            "DIALOG-002"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "note-loop",
+      "description": "A note wired back on itself ends the flow instead of overflowing the stack.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "Before",
+                  "fr": "Before"
+                },
+                "next": [
+                  {
+                    "port": "out",
+                    "to": "NOTE-001",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "NOTE-001",
+                "key": "__blueprints__.s1.NOTE-001",
+                "type": "note",
+                "next": [
+                  {
+                    "port": "out",
+                    "to": "NOTE-002",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "NOTE-002",
+                "key": "__blueprints__.s1.NOTE-002",
+                "type": "note",
+                "next": [
+                  {
+                    "port": "out",
+                    "to": "NOTE-001",
+                    "toPort": "in"
+                  }
+                ]
+              }
+            ],
+            "start": "DIALOG-001"
+          }
+        ]
+      },
+      "sceneId": "s1",
+      "cases": [
+        {
+          "id": "ends-the-scene",
+          "steps": [
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-001"
+              },
+              "action": {
+                "type": "next"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "DIALOG-001"
           ]
         }
       ]
     },
     {
       "id": "loop-exit",
-      "description": "P1 — CHOICE loops back to start then exits on second pass",
+      "description": "A choice wired back to itself, left on the second pass.",
       "blueprint": {
-        "version": "1.0.0",
-        "exportDate": "2025-01-01",
-        "projectName": "test",
-        "primaryLanguage": "en",
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
         "locales": [
-          "en"
+          "en",
+          "fr"
         ],
-        "dictionaries": [],
-        "signatures": [],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
         "scenes": [
           {
-            "uuid": "scene-loop",
-            "label": "Loop Scene",
-            "date": "2025-01-01",
+            "scene": "s1",
+            "id": "sc_s1",
             "blocks": [
               {
-                "uuid": "start",
-                "type": "DIALOG",
-                "label": "Start",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Hello!"
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "Hub",
+                  "fr": "Hub"
                 },
-                "isStartBlock": true
-              },
-              {
-                "uuid": "ask",
-                "type": "CHOICE",
-                "label": "Again or Done",
-                "properties": [],
-                "choices": [
+                "next": [
                   {
-                    "uuid": "opt-again",
-                    "structureKey": "again",
-                    "dialogueText": {
-                      "en": "Again"
-                    }
-                  },
-                  {
-                    "uuid": "opt-done",
-                    "structureKey": "done",
-                    "dialogueText": {
-                      "en": "Done"
-                    }
+                    "port": "out",
+                    "to": "CHOICE-001",
+                    "toPort": "in"
                   }
                 ]
               },
               {
-                "uuid": "end",
-                "type": "DIALOG",
-                "label": "End",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Goodbye!"
-                }
-              }
-            ],
-            "connections": [
-              {
-                "id": "conn-1",
-                "fromId": "start",
-                "toId": "ask",
-                "fromPort": "out",
-                "toPort": "in"
-              },
-              {
-                "id": "conn-2",
-                "fromId": "ask",
-                "toId": "start",
-                "fromPort": "opt-again",
-                "toPort": "in"
-              },
-              {
-                "id": "conn-3",
-                "fromId": "ask",
-                "toId": "end",
-                "fromPort": "opt-done",
-                "toPort": "in"
-              }
-            ]
-          }
-        ]
-      },
-      "sceneId": "scene-loop",
-      "locale": "en",
-      "stateBridge": {},
-      "cases": [
-        {
-          "id": "loop-once-exit",
-          "description": "Loop back once via Again then exit via Done",
-          "steps": [
-            {
-              "expect": {
-                "type": "DIALOG",
-                "blockUuid": "start",
-                "dialogueText": "Hello!"
-              },
-              "action": {
-                "type": "next"
-              }
-            },
-            {
-              "expect": {
-                "type": "CHOICE",
-                "blockUuid": "ask",
-                "visibleChoiceCount": 2
-              },
-              "action": {
-                "type": "selectChoice",
-                "choiceUuid": "opt-again"
-              }
-            },
-            {
-              "expect": {
-                "type": "DIALOG",
-                "blockUuid": "start",
-                "dialogueText": "Hello!"
-              },
-              "action": {
-                "type": "next"
-              }
-            },
-            {
-              "expect": {
-                "type": "CHOICE",
-                "blockUuid": "ask",
-                "visibleChoiceCount": 2
-              },
-              "action": {
-                "type": "selectChoice",
-                "choiceUuid": "opt-done"
-              }
-            },
-            {
-              "expect": {
-                "type": "DIALOG",
-                "blockUuid": "end",
-                "dialogueText": "Goodbye!"
-              },
-              "action": {
-                "type": "next"
-              }
-            },
-            {
-              "expect": {
-                "type": "END_OF_SCENE"
-              }
-            }
-          ],
-          "expectedVisited": [
-            "start",
-            "ask",
-            "end"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "action-auto-execute",
-      "description": "P1 — ACTION block auto-executes via stateBridge, does not appear as a step",
-      "blueprint": {
-        "version": "1.0.0",
-        "exportDate": "2025-01-01",
-        "projectName": "test",
-        "primaryLanguage": "en",
-        "locales": [
-          "en"
-        ],
-        "dictionaries": [],
-        "signatures": [],
-        "scenes": [
-          {
-            "uuid": "scene-auto-action",
-            "label": "Auto Action Scene",
-            "date": "2025-01-01",
-            "blocks": [
-              {
-                "uuid": "act1",
-                "type": "ACTION",
-                "label": "Give Item",
-                "properties": [],
-                "actions": [
+                "id": "CHOICE-001",
+                "key": "__blueprints__.s1.CHOICE-001",
+                "type": "choice",
+                "options": [
                   {
-                    "uuid": "a1",
-                    "actionId": "give_item",
-                    "params": [
-                      "sword"
-                    ]
+                    "id": "C1",
+                    "key": "__blueprints__.s1.CHOICE-001.C1",
+                    "text": {
+                      "en": "Again",
+                      "fr": "Again"
+                    }
+                  },
+                  {
+                    "id": "C2",
+                    "key": "__blueprints__.s1.CHOICE-001.C2",
+                    "text": {
+                      "en": "Leave",
+                      "fr": "Leave"
+                    }
                   }
                 ],
-                "isStartBlock": true
+                "next": [
+                  {
+                    "port": "C1",
+                    "to": "DIALOG-001",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "C2",
+                    "to": "DIALOG-002",
+                    "toPort": "in"
+                  }
+                ]
               },
               {
-                "uuid": "after",
-                "type": "DIALOG",
-                "label": "After Action",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Item received."
+                "id": "DIALOG-002",
+                "key": "__blueprints__.s1.DIALOG-002",
+                "type": "dialog",
+                "text": {
+                  "en": "Left",
+                  "fr": "Left"
                 }
               }
             ],
-            "connections": [
-              {
-                "id": "conn-1",
-                "fromId": "act1",
-                "toId": "after",
-                "fromPort": "then",
-                "toPort": "in"
-              }
-            ]
+            "start": "DIALOG-001"
           }
         ]
       },
-      "sceneId": "scene-auto-action",
-      "locale": "en",
-      "stateBridge": {
-        "actions": {
-          "give_item": "ok"
-        }
-      },
+      "sceneId": "s1",
       "cases": [
         {
-          "id": "auto-exec-001",
-          "description": "ACTION auto-executes, first visible step is the DIALOG after it",
+          "id": "loops-once",
           "steps": [
             {
               "expect": {
-                "type": "DIALOG",
-                "blockUuid": "after",
-                "dialogueText": "Item received."
+                "type": "dialog",
+                "blockId": "DIALOG-001"
               },
               "action": {
                 "type": "next"
@@ -1433,341 +2556,352 @@
             },
             {
               "expect": {
-                "type": "END_OF_SCENE"
+                "type": "choice",
+                "blockId": "CHOICE-001"
+              },
+              "action": {
+                "type": "selectChoice",
+                "optionId": "C1"
+              }
+            },
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-001"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "choice",
+                "blockId": "CHOICE-001"
+              },
+              "action": {
+                "type": "selectChoice",
+                "optionId": "C2"
+              }
+            },
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-002"
+              },
+              "action": {
+                "type": "next"
               }
             }
           ],
           "expectedVisited": [
-            "act1",
-            "after"
-          ],
-          "expectedCleanupCalls": 1
-        }
-      ]
-    },
-    {
-      "id": "multi-track-async",
-      "description": "P2 — Async DIALOG spawns a background track that auto-advances alongside the main track",
-      "blueprint": {
-        "version": "1.0.0",
-        "exportDate": "2025-01-01",
-        "projectName": "test",
-        "primaryLanguage": "en",
-        "locales": [
-          "en"
-        ],
-        "dictionaries": [],
-        "signatures": [],
-        "scenes": [
-          {
-            "uuid": "scene-async",
-            "label": "Async Scene",
-            "date": "2025-01-01",
-            "blocks": [
-              {
-                "uuid": "main1",
-                "type": "DIALOG",
-                "label": "Main 1",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Main 1"
-                },
-                "isStartBlock": true
-              },
-              {
-                "uuid": "main2",
-                "type": "DIALOG",
-                "label": "Main 2",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Main 2"
-                }
-              },
-              {
-                "uuid": "bg1",
-                "type": "DIALOG",
-                "label": "Background 1",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Background 1"
-                },
-                "nativeProperties": {
-                  "isAsync": true
-                }
-              },
-              {
-                "uuid": "bg2",
-                "type": "DIALOG",
-                "label": "Background 2",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Background 2"
-                }
-              }
-            ],
-            "connections": [
-              {
-                "id": "conn-1",
-                "fromId": "main1",
-                "toId": "main2",
-                "fromPort": "out",
-                "toPort": "in",
-                "fromPortIndex": 0
-              },
-              {
-                "id": "conn-2",
-                "fromId": "main1",
-                "toId": "bg1",
-                "fromPort": "out",
-                "toPort": "in",
-                "fromPortIndex": 1
-              },
-              {
-                "id": "conn-3",
-                "fromId": "bg1",
-                "toId": "bg2",
-                "fromPort": "out",
-                "toPort": "in"
-              }
-            ]
-          }
-        ]
-      },
-      "sceneId": "scene-async",
-      "locale": "en",
-      "stateBridge": {},
-      "cases": [
-        {
-          "id": "multi-track-001",
-          "description": "Main track advances while async track auto-advances in background",
-          "steps": [
-            {
-              "expect": {
-                "type": "DIALOG",
-                "blockUuid": "main1",
-                "dialogueText": "Main 1"
-              },
-              "action": {
-                "type": "next"
-              }
-            },
-            {
-              "expect": {
-                "type": "DIALOG",
-                "blockUuid": "main2",
-                "dialogueText": "Main 2"
-              },
-              "action": {
-                "type": "next"
-              }
-            },
-            {
-              "expect": {
-                "type": "END_OF_SCENE"
-              }
-            }
-          ],
-          "expectedVisited": [
-            "main1",
-            "main2",
-            "bg1",
-            "bg2"
+            "DIALOG-001",
+            "CHOICE-001",
+            "DIALOG-002"
           ],
           "orderIndependent": true
         }
       ]
     },
     {
-      "id": "full-mixed",
-      "description": "P2 — Complex flow combining ACTION, NOTE, DIALOG, CHOICE, and CONDITION blocks",
+      "id": "multi-track-async",
+      "description": "The first non-async target is the main flow; the rest run in parallel.",
       "blueprint": {
-        "version": "1.0.0",
-        "exportDate": "2025-01-01",
-        "projectName": "test",
-        "primaryLanguage": "en",
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
         "locales": [
-          "en"
+          "en",
+          "fr"
         ],
-        "dictionaries": [],
-        "signatures": [],
-        "scenes": [
+        "referenceLocale": "en",
+        "dictionaries": [
           {
-            "uuid": "scene-mixed",
-            "label": "Mixed Scene",
-            "date": "2025-01-01",
-            "blocks": [
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
               {
-                "uuid": "act",
-                "type": "ACTION",
-                "label": "Setup Quest",
-                "properties": [],
-                "actions": [
-                  {
-                    "uuid": "a1",
-                    "actionId": "setup_quest",
-                    "params": []
-                  }
-                ],
-                "isStartBlock": true
-              },
-              {
-                "uuid": "note1",
-                "type": "NOTE",
-                "label": "Designer Note",
-                "properties": [],
-                "note": "Quest setup complete, greet the player"
-              },
-              {
-                "uuid": "greet",
-                "type": "DIALOG",
-                "label": "Greet",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Greetings, adventurer!"
-                }
-              },
-              {
-                "uuid": "choice",
-                "type": "CHOICE",
-                "label": "Accept or Refuse",
-                "properties": [],
-                "choices": [
-                  {
-                    "uuid": "opt-accept",
-                    "structureKey": "accept",
-                    "dialogueText": {
-                      "en": "Accept quest"
-                    }
-                  },
-                  {
-                    "uuid": "opt-refuse",
-                    "structureKey": "refuse",
-                    "dialogueText": {
-                      "en": "Refuse"
-                    }
-                  }
-                ]
-              },
-              {
-                "uuid": "cond",
-                "type": "CONDITION",
-                "label": "Check Worthy",
-                "properties": [],
-                "conditions": [
-                  [
-                    {
-                      "uuid": "c1",
-                      "key": "player_worthy",
-                      "operator": "=",
-                      "value": "true"
-                    }
-                  ]
-                ]
-              },
-              {
-                "uuid": "success",
-                "type": "DIALOG",
-                "label": "Success",
-                "properties": [],
-                "dialogueText": {
-                  "en": "You are worthy!"
-                }
-              },
-              {
-                "uuid": "fail",
-                "type": "DIALOG",
-                "label": "Fail",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Not worthy enough."
-                }
-              },
-              {
-                "uuid": "refuse-msg",
-                "type": "DIALOG",
-                "label": "Refuse Message",
-                "properties": [],
-                "dialogueText": {
-                  "en": "Very well, perhaps another time."
-                }
+                "name": "track",
+                "type": "string"
               }
-            ],
-            "connections": [
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
               {
-                "id": "conn-1",
-                "fromId": "act",
-                "toId": "note1",
-                "fromPort": "then",
-                "toPort": "in"
-              },
-              {
-                "id": "conn-2",
-                "fromId": "note1",
-                "toId": "greet",
-                "fromPort": "out",
-                "toPort": "in"
-              },
-              {
-                "id": "conn-3",
-                "fromId": "greet",
-                "toId": "choice",
-                "fromPort": "out",
-                "toPort": "in"
-              },
-              {
-                "id": "conn-4",
-                "fromId": "choice",
-                "toId": "cond",
-                "fromPort": "opt-accept",
-                "toPort": "in"
-              },
-              {
-                "id": "conn-5",
-                "fromId": "choice",
-                "toId": "refuse-msg",
-                "fromPort": "opt-refuse",
-                "toPort": "in"
-              },
-              {
-                "id": "conn-6",
-                "fromId": "cond",
-                "toId": "success",
-                "fromPort": "true",
-                "toPort": "in",
-                "fromPortIndex": 0
-              },
-              {
-                "id": "conn-7",
-                "fromId": "cond",
-                "toId": "fail",
-                "fromPort": "false",
-                "toPort": "in",
-                "fromPortIndex": 1
+                "name": "item",
+                "type": "string"
               }
             ]
           }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "Fork",
+                  "fr": "Fork"
+                },
+                "next": [
+                  {
+                    "port": "out",
+                    "to": "DIALOG-002",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "out",
+                    "to": "DIALOG-003",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-002",
+                "key": "__blueprints__.s1.DIALOG-002",
+                "type": "dialog",
+                "text": {
+                  "en": "Main",
+                  "fr": "Main"
+                }
+              },
+              {
+                "id": "DIALOG-003",
+                "key": "__blueprints__.s1.DIALOG-003",
+                "type": "dialog",
+                "text": {
+                  "en": "Background",
+                  "fr": "Background"
+                },
+                "props": {
+                  "isAsync": true
+                }
+              }
+            ],
+            "start": "DIALOG-001"
+          }
         ]
       },
-      "sceneId": "scene-mixed",
-      "locale": "en",
+      "sceneId": "s1",
+      "cases": [
+        {
+          "id": "both-tracks-run",
+          "steps": [
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-001"
+              },
+              "action": {
+                "type": "next"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "DIALOG-001",
+            "DIALOG-002",
+            "DIALOG-003"
+          ],
+          "orderIndependent": true
+        }
+      ]
+    },
+    {
+      "id": "condition-chain",
+      "description": "Tests chain left to right with NO precedence.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "COND-001",
+                "key": "__blueprints__.s1.COND-001",
+                "type": "condition",
+                "cases": [
+                  {
+                    "port": "out",
+                    "when": [
+                      {
+                        "dict": "switches",
+                        "entry": "door_unlocked",
+                        "op": "equals",
+                        "value": true
+                      },
+                      {
+                        "dict": "switches",
+                        "entry": "met_vesk",
+                        "op": "equals",
+                        "value": true,
+                        "join": "and"
+                      }
+                    ]
+                  }
+                ],
+                "next": [
+                  {
+                    "port": "out",
+                    "to": "DIALOG-001",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "default",
+                    "to": "DIALOG-002",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "Both",
+                  "fr": "Both"
+                }
+              },
+              {
+                "id": "DIALOG-002",
+                "key": "__blueprints__.s1.DIALOG-002",
+                "type": "dialog",
+                "text": {
+                  "en": "Not both",
+                  "fr": "Not both"
+                }
+              }
+            ],
+            "start": "COND-001"
+          }
+        ]
+      },
+      "sceneId": "s1",
       "stateBridge": {
         "conditions": {
-          "player_worthy": true
-        },
-        "actions": {
-          "setup_quest": "ok"
+          "switches.door_unlocked": true,
+          "switches.met_vesk": true
         }
       },
       "cases": [
         {
-          "id": "mixed-accept-worthy",
-          "description": "ACTION auto-exec, NOTE skip, accept quest, CONDITION true, reach success",
+          "id": "and-of-two-true",
           "steps": [
             {
               "expect": {
-                "type": "DIALOG",
-                "blockUuid": "greet",
-                "dialogueText": "Greetings, adventurer!"
+                "type": "condition",
+                "blockId": "COND-001"
               },
               "action": {
                 "type": "next"
@@ -1775,239 +2909,1101 @@
             },
             {
               "expect": {
-                "type": "CHOICE",
-                "blockUuid": "choice",
-                "visibleChoiceCount": 2
-              },
-              "action": {
-                "type": "selectChoice",
-                "choiceUuid": "opt-accept"
-              }
-            },
-            {
-              "expect": {
-                "type": "DIALOG",
-                "blockUuid": "success",
-                "dialogueText": "You are worthy!"
+                "type": "dialog",
+                "blockId": "DIALOG-001"
               },
               "action": {
                 "type": "next"
-              }
-            },
-            {
-              "expect": {
-                "type": "END_OF_SCENE"
               }
             }
           ],
           "expectedVisited": [
-            "act",
-            "greet",
-            "choice",
-            "cond",
-            "success"
-          ]
-        },
-        {
-          "id": "mixed-refuse",
-          "description": "ACTION auto-exec, NOTE skip, refuse quest, reach refuse message",
-          "steps": [
-            {
-              "expect": {
-                "type": "DIALOG",
-                "blockUuid": "greet",
-                "dialogueText": "Greetings, adventurer!"
-              },
-              "action": {
-                "type": "next"
-              }
-            },
-            {
-              "expect": {
-                "type": "CHOICE",
-                "blockUuid": "choice",
-                "visibleChoiceCount": 2
-              },
-              "action": {
-                "type": "selectChoice",
-                "choiceUuid": "opt-refuse"
-              }
-            },
-            {
-              "expect": {
-                "type": "DIALOG",
-                "blockUuid": "refuse-msg",
-                "dialogueText": "Very well, perhaps another time."
-              },
-              "action": {
-                "type": "next"
-              }
-            },
-            {
-              "expect": {
-                "type": "END_OF_SCENE"
-              }
-            }
-          ],
-          "expectedVisited": [
-            "act",
-            "greet",
-            "choice",
-            "refuse-msg"
+            "COND-001",
+            "DIALOG-001"
           ]
         }
       ]
     },
     {
-      "id": "condition-chain-and",
-      "description": "P1 — Chained conditions: (has_sword AND has_shield) OR is_warrior — passes via AND path",
-      "blueprint": {
-        "version": "1.0.0",
-        "exportDate": "2025-01-01",
-        "projectName": "test",
-        "primaryLanguage": "en",
-        "locales": ["en"],
-        "dictionaries": [],
-        "signatures": [],
-        "scenes": [{
-          "uuid": "scene-chain",
-          "label": "Chain Conditions",
-          "date": "2025-01-01",
-          "blocks": [
-            { "uuid": "start", "type": "DIALOG", "label": "Start", "properties": [], "isStartBlock": true, "dialogueText": { "en": "Checking equipment..." } },
-            { "uuid": "cond1", "type": "CONDITION", "label": "Equipment Check", "properties": [], "conditions": [
-              [
-                { "uuid": "c1", "key": "has_sword", "operator": "=", "value": "true" },
-                { "uuid": "c2", "key": "has_shield", "operator": "=", "value": "true", "chain": "&" },
-                { "uuid": "c3", "key": "is_warrior", "operator": "=", "value": "true", "chain": "|" }
-              ]
-            ]},
-            { "uuid": "pass", "type": "DIALOG", "label": "Pass", "properties": [], "dialogueText": { "en": "You are ready!" } },
-            { "uuid": "fail", "type": "DIALOG", "label": "Fail", "properties": [], "dialogueText": { "en": "Not ready." } }
-          ],
-          "connections": [
-            { "id": "conn-1", "fromId": "start", "toId": "cond1", "fromPort": "out", "toPort": "in" },
-            { "id": "conn-2", "fromId": "cond1", "toId": "pass", "fromPort": "true", "toPort": "in", "fromPortIndex": 0 },
-            { "id": "conn-3", "fromId": "cond1", "toId": "fail", "fromPort": "false", "toPort": "in", "fromPortIndex": 1 }
-          ]
-        }]
-      },
-      "sceneId": "scene-chain",
-      "locale": "en",
-      "stateBridge": {
-        "conditions": { "has_sword": true, "has_shield": true, "is_warrior": false }
-      },
-      "cases": [{
-        "id": "chain-and-pass",
-        "description": "has_sword=true AND has_shield=true → condition passes via AND path",
-        "steps": [
-          { "expect": { "type": "DIALOG", "blockUuid": "start", "dialogueText": "Checking equipment..." }, "action": { "type": "next" } },
-          { "expect": { "type": "DIALOG", "blockUuid": "pass", "dialogueText": "You are ready!" }, "action": { "type": "next" } },
-          { "expect": { "type": "END_OF_SCENE" } }
-        ],
-        "expectedVisited": ["start", "cond1", "pass"],
-        "expectedCleanupCalls": 2
-      }]
-    },
-    {
       "id": "condition-chain-or",
-      "description": "P1 — Chained conditions: (has_sword AND has_shield) OR is_warrior — passes via OR path",
+      "description": "One true on an OR chain is enough.",
       "blueprint": {
-        "version": "1.0.0",
-        "exportDate": "2025-01-01",
-        "projectName": "test",
-        "primaryLanguage": "en",
-        "locales": ["en"],
-        "dictionaries": [],
-        "signatures": [],
-        "scenes": [{
-          "uuid": "scene-chain",
-          "label": "Chain Conditions",
-          "date": "2025-01-01",
-          "blocks": [
-            { "uuid": "start", "type": "DIALOG", "label": "Start", "properties": [], "isStartBlock": true, "dialogueText": { "en": "Checking equipment..." } },
-            { "uuid": "cond1", "type": "CONDITION", "label": "Equipment Check", "properties": [], "conditions": [
-              [
-                { "uuid": "c1", "key": "has_sword", "operator": "=", "value": "true" },
-                { "uuid": "c2", "key": "has_shield", "operator": "=", "value": "true", "chain": "&" },
-                { "uuid": "c3", "key": "is_warrior", "operator": "=", "value": "true", "chain": "|" }
-              ]
-            ]},
-            { "uuid": "pass", "type": "DIALOG", "label": "Pass", "properties": [], "dialogueText": { "en": "You are ready!" } },
-            { "uuid": "fail", "type": "DIALOG", "label": "Fail", "properties": [], "dialogueText": { "en": "Not ready." } }
-          ],
-          "connections": [
-            { "id": "conn-1", "fromId": "start", "toId": "cond1", "fromPort": "out", "toPort": "in" },
-            { "id": "conn-2", "fromId": "cond1", "toId": "pass", "fromPort": "true", "toPort": "in", "fromPortIndex": 0 },
-            { "id": "conn-3", "fromId": "cond1", "toId": "fail", "fromPort": "false", "toPort": "in", "fromPortIndex": 1 }
-          ]
-        }]
-      },
-      "sceneId": "scene-chain",
-      "locale": "en",
-      "stateBridge": {
-        "conditions": { "has_sword": false, "has_shield": false, "is_warrior": true }
-      },
-      "cases": [{
-        "id": "chain-or-pass",
-        "description": "is_warrior=true → condition passes via OR path despite AND failing",
-        "steps": [
-          { "expect": { "type": "DIALOG", "blockUuid": "start" }, "action": { "type": "next" } },
-          { "expect": { "type": "DIALOG", "blockUuid": "pass" }, "action": { "type": "next" } },
-          { "expect": { "type": "END_OF_SCENE" } }
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
         ],
-        "expectedVisited": ["start", "cond1", "pass"]
-      }]
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "COND-001",
+                "key": "__blueprints__.s1.COND-001",
+                "type": "condition",
+                "cases": [
+                  {
+                    "port": "out",
+                    "when": [
+                      {
+                        "dict": "switches",
+                        "entry": "door_unlocked",
+                        "op": "equals",
+                        "value": true
+                      },
+                      {
+                        "dict": "switches",
+                        "entry": "met_vesk",
+                        "op": "equals",
+                        "value": true,
+                        "join": "or"
+                      }
+                    ]
+                  }
+                ],
+                "next": [
+                  {
+                    "port": "out",
+                    "to": "DIALOG-001",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "default",
+                    "to": "DIALOG-002",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "Either",
+                  "fr": "Either"
+                }
+              },
+              {
+                "id": "DIALOG-002",
+                "key": "__blueprints__.s1.DIALOG-002",
+                "type": "dialog",
+                "text": {
+                  "en": "Neither",
+                  "fr": "Neither"
+                }
+              }
+            ],
+            "start": "COND-001"
+          }
+        ]
+      },
+      "sceneId": "s1",
+      "stateBridge": {
+        "conditions": {
+          "switches.door_unlocked": false,
+          "switches.met_vesk": true
+        }
+      },
+      "cases": [
+        {
+          "id": "or-of-false-and-true",
+          "steps": [
+            {
+              "expect": {
+                "type": "condition",
+                "blockId": "COND-001"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-001"
+              },
+              "action": {
+                "type": "next"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "COND-001",
+            "DIALOG-001"
+          ]
+        }
+      ]
     },
     {
       "id": "condition-chain-false",
-      "description": "P1 — Chained conditions: (has_sword AND has_shield) OR is_warrior — all fail",
+      "description": "An AND chain with one false is false.",
       "blueprint": {
-        "version": "1.0.0",
-        "exportDate": "2025-01-01",
-        "projectName": "test",
-        "primaryLanguage": "en",
-        "locales": ["en"],
-        "dictionaries": [],
-        "signatures": [],
-        "scenes": [{
-          "uuid": "scene-chain",
-          "label": "Chain Conditions",
-          "date": "2025-01-01",
-          "blocks": [
-            { "uuid": "start", "type": "DIALOG", "label": "Start", "properties": [], "isStartBlock": true, "dialogueText": { "en": "Checking equipment..." } },
-            { "uuid": "cond1", "type": "CONDITION", "label": "Equipment Check", "properties": [], "conditions": [
-              [
-                { "uuid": "c1", "key": "has_sword", "operator": "=", "value": "true" },
-                { "uuid": "c2", "key": "has_shield", "operator": "=", "value": "true", "chain": "&" },
-                { "uuid": "c3", "key": "is_warrior", "operator": "=", "value": "true", "chain": "|" }
-              ]
-            ]},
-            { "uuid": "pass", "type": "DIALOG", "label": "Pass", "properties": [], "dialogueText": { "en": "You are ready!" } },
-            { "uuid": "fail", "type": "DIALOG", "label": "Fail", "properties": [], "dialogueText": { "en": "Not ready." } }
-          ],
-          "connections": [
-            { "id": "conn-1", "fromId": "start", "toId": "cond1", "fromPort": "out", "toPort": "in" },
-            { "id": "conn-2", "fromId": "cond1", "toId": "pass", "fromPort": "true", "toPort": "in", "fromPortIndex": 0 },
-            { "id": "conn-3", "fromId": "cond1", "toId": "fail", "fromPort": "false", "toPort": "in", "fromPortIndex": 1 }
-          ]
-        }]
-      },
-      "sceneId": "scene-chain",
-      "locale": "en",
-      "stateBridge": {
-        "conditions": { "has_sword": true, "has_shield": false, "is_warrior": false }
-      },
-      "cases": [{
-        "id": "chain-all-fail",
-        "description": "has_sword=true but has_shield=false (AND fails) and is_warrior=false (OR fails) → false path",
-        "steps": [
-          { "expect": { "type": "DIALOG", "blockUuid": "start" }, "action": { "type": "next" } },
-          { "expect": { "type": "DIALOG", "blockUuid": "fail", "dialogueText": "Not ready." }, "action": { "type": "next" } },
-          { "expect": { "type": "END_OF_SCENE" } }
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
         ],
-        "expectedVisited": ["start", "cond1", "fail"]
-      }]
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "COND-001",
+                "key": "__blueprints__.s1.COND-001",
+                "type": "condition",
+                "cases": [
+                  {
+                    "port": "out",
+                    "when": [
+                      {
+                        "dict": "switches",
+                        "entry": "door_unlocked",
+                        "op": "equals",
+                        "value": true
+                      },
+                      {
+                        "dict": "switches",
+                        "entry": "met_vesk",
+                        "op": "equals",
+                        "value": true,
+                        "join": "and"
+                      }
+                    ]
+                  }
+                ],
+                "next": [
+                  {
+                    "port": "out",
+                    "to": "DIALOG-001",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "default",
+                    "to": "DIALOG-002",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "Both",
+                  "fr": "Both"
+                }
+              },
+              {
+                "id": "DIALOG-002",
+                "key": "__blueprints__.s1.DIALOG-002",
+                "type": "dialog",
+                "text": {
+                  "en": "Not both",
+                  "fr": "Not both"
+                }
+              }
+            ],
+            "start": "COND-001"
+          }
+        ]
+      },
+      "sceneId": "s1",
+      "stateBridge": {
+        "conditions": {
+          "switches.door_unlocked": true,
+          "switches.met_vesk": false
+        }
+      },
+      "cases": [
+        {
+          "id": "and-with-one-false",
+          "steps": [
+            {
+              "expect": {
+                "type": "condition",
+                "blockId": "COND-001"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-002"
+              },
+              "action": {
+                "type": "next"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "COND-001",
+            "DIALOG-002"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "block-ids-repeat-between-scenes",
+      "description": "DIALOG-001 exists in both scenes. A block is (scene, id), nothing else.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "first",
+            "id": "sc_first",
+            "blocks": [
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "In the first scene",
+                  "fr": "In the first scene"
+                }
+              }
+            ],
+            "start": "DIALOG-001"
+          },
+          {
+            "scene": "second",
+            "id": "sc_second",
+            "blocks": [
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "In the second scene",
+                  "fr": "In the second scene"
+                }
+              }
+            ],
+            "start": "DIALOG-001"
+          }
+        ]
+      },
+      "sceneId": "second",
+      "cases": [
+        {
+          "id": "resolves-within-its-own-scene",
+          "steps": [
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-001",
+                "text": "In the second scene"
+              },
+              "action": {
+                "type": "next"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "DIALOG-001"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "scene-by-stable-id",
+      "description": "A scene answers to its path AND to the id that survives a rename.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "Only line",
+                  "fr": "Only line"
+                }
+              }
+            ],
+            "start": "DIALOG-001"
+          }
+        ]
+      },
+      "sceneId": "sc_s1",
+      "cases": [
+        {
+          "id": "opens-by-stable-id",
+          "steps": [
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-001"
+              },
+              "action": {
+                "type": "next"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "DIALOG-001"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "wait-for-blocks-main-track",
+      "description": "waitForBlocks parks the MAIN flow too, not only a parallel track.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "A",
+                  "fr": "A"
+                },
+                "next": [
+                  {
+                    "port": "out",
+                    "to": "DIALOG-002",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-002",
+                "key": "__blueprints__.s1.DIALOG-002",
+                "type": "dialog",
+                "text": {
+                  "en": "waits"
+                },
+                "props": {
+                  "waitForBlocks": [
+                    "DIALOG-404"
+                  ]
+                },
+                "next": [
+                  {
+                    "port": "out",
+                    "to": "DIALOG-003",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-003",
+                "key": "__blueprints__.s1.DIALOG-003",
+                "type": "dialog",
+                "text": {
+                  "en": "never reached",
+                  "fr": "never reached"
+                }
+              }
+            ],
+            "start": "DIALOG-001"
+          }
+        ]
+      },
+      "sceneId": "s1",
+      "cases": [
+        {
+          "id": "parks-on-an-unreachable-wait",
+          "description": "DIALOG-404 is not in the scene, so DIALOG-002 never advances.",
+          "steps": [
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-001"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-002"
+              },
+              "action": {
+                "type": "next"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "DIALOG-001",
+            "DIALOG-002"
+          ],
+          "expectedRunning": true
+        }
+      ]
+    },
+    {
+      "id": "wait-for-blocks-already-satisfied",
+      "description": "A wait on a block already visited lets the flow through at once.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "A",
+                  "fr": "A"
+                },
+                "next": [
+                  {
+                    "port": "out",
+                    "to": "DIALOG-002",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-002",
+                "key": "__blueprints__.s1.DIALOG-002",
+                "type": "dialog",
+                "text": {
+                  "en": "waits for the one behind it"
+                },
+                "props": {
+                  "waitForBlocks": [
+                    "DIALOG-001"
+                  ]
+                },
+                "next": [
+                  {
+                    "port": "out",
+                    "to": "DIALOG-003",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-003",
+                "key": "__blueprints__.s1.DIALOG-003",
+                "type": "dialog",
+                "text": {
+                  "en": "reached",
+                  "fr": "reached"
+                }
+              }
+            ],
+            "start": "DIALOG-001"
+          }
+        ]
+      },
+      "sceneId": "s1",
+      "cases": [
+        {
+          "id": "walks-through",
+          "steps": [
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-001"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-002"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-003"
+              },
+              "action": {
+                "type": "next"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "DIALOG-001",
+            "DIALOG-002",
+            "DIALOG-003"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "wait-for-blocks-async-track",
+      "description": "The same rule on a parallel track: an unreachable wait parks the branch.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "forks"
+                },
+                "next": [
+                  {
+                    "port": "out",
+                    "to": "DIALOG-002",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "out",
+                    "to": "DIALOG-003",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-002",
+                "key": "__blueprints__.s1.DIALOG-002",
+                "type": "dialog",
+                "text": {
+                  "en": "main",
+                  "fr": "main"
+                }
+              },
+              {
+                "id": "DIALOG-003",
+                "key": "__blueprints__.s1.DIALOG-003",
+                "type": "dialog",
+                "text": {
+                  "en": "parallel, waits"
+                },
+                "props": {
+                  "isAsync": true,
+                  "waitForBlocks": [
+                    "DIALOG-404"
+                  ]
+                },
+                "next": [
+                  {
+                    "port": "out",
+                    "to": "DIALOG-004",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-004",
+                "key": "__blueprints__.s1.DIALOG-004",
+                "type": "dialog",
+                "text": {
+                  "en": "never reached",
+                  "fr": "never reached"
+                }
+              }
+            ],
+            "start": "DIALOG-001"
+          }
+        ]
+      },
+      "sceneId": "s1",
+      "cases": [
+        {
+          "id": "the-branch-parks-the-main-flow-does-not",
+          "steps": [
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-001"
+              },
+              "action": {
+                "type": "next"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "DIALOG-001",
+            "DIALOG-002"
+          ],
+          "orderIndependent": true
+        }
+      ]
     }
   ]
 }

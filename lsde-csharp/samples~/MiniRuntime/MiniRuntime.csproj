@@ -7,5 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../Runtime/LsdeDialogEngine.csproj" />
+    <ProjectReference Include="../../src~/LsdeDialogEngine.SystemTextJson/LsdeDialogEngine.SystemTextJson.csproj" />
   </ItemGroup>
 </Project>

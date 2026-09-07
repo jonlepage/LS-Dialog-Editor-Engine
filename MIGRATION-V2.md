@@ -669,22 +669,25 @@ Deux points de confort, petits, sans urgence :
 |---|---|---|---|
 | 1 | Charger et valider | — | **fait (ts)** |
 | 8 | Brancher les types générés | — | **fait (ts)** |
-| 2 | Le routage | 1 | **suivant** |
-| 3 | Les conditions | 1 | |
-| 4 | Retirer le dispatcher | 3 | |
-| 5 | La distribution | 1 | |
-| 6 | Le sac `props` | 1 | |
-| 7 | Le `sceneId` | 1 | *moitié faite avec le 1* |
-| 12 | Les specs partagées | 2, 3 | |
-| — | **Porter C#, C++, GDScript** | tout ce qui précède | |
-| 13 | La documentation | tout | |
-| 9, 10 | Convention de nommage, multi-fichiers | 1 | |
-| 11 | Faire remonter les erreurs | — | |
-| 16 | L'émotion sur le bloc | 1 | |
-| 18 | Utilitaire de table de langue + retirer `getLocale` | — *confort* | |
-| 15 | Reconstruire `getSceneConnections` | 1 | **fait avec le 1** |
-| 17 | — *refermé, rien à faire* | — | **fait avec le 1** |
-| 14 | Monter le CI | **tout** — c'est la dernière étape | |
+| 2 | Le routage | 1 | **fait (ts)** |
+| 3 | Les conditions | 1 | **fait (ts)** |
+| 4 | Retirer le dispatcher | 3 | **fait (ts)** |
+| 5 | La distribution | 1 | **fait (ts)** |
+| 6 | Le sac `props` | 1 | **fait (ts)** |
+| 7 | Le `sceneId` | 1 | **fait (ts)** |
+| 12 | Les specs partagées | 2, 3 | **fait** — regénérées en v2 |
+| 9, 10 | Convention de nommage, multi-fichiers | 1 | **fait (ts)** |
+| 11 | Faire remonter les erreurs | — | **fait (ts)** |
+| 16 | L'émotion sur le bloc | 1 | **fait (ts)** |
+| 18 | Table de langue + retirer `getLocale` | — | **fait (ts)** |
+| 15 | Reconstruire `getSceneConnections` | 1 | **fait (ts)** |
+| 17 | — *refermé, rien à faire* | — | **fait (ts)** |
+| — | **Porter C#, C++, GDScript** | tout ce qui précède | **fait — les quatre** |
+| 13 | La documentation | tout | **fait** |
+| 14 | Monter le CI | **tout** — c'est la dernière étape | **fait** |
+
+**Le TypeScript est fini : 393 tests, `tsc --noEmit` propre, `npm run build` propre.** La
+référence est en v2 ; les trois ports se font contre elle et contre `tests/*.json`.
 
 ---
 
@@ -704,8 +707,14 @@ pour casser.
 - **Rupture nette, pas de double lecteur.** Les deux formats n'ont aucun champ en commun : un lecteur
   double serait deux moteurs dans un paquet, pour servir un éditeur que les clients vont quitter. La
   0.3.x reste disponible pour les projets LSDE 1.6.
-- **Publication en 1.0.0.** Le format porte `version: 1` ; « moteur 1.x lit format 1 » est lisible
-  pour un client. Une 0.4.0 qui casse tout serait un mensonge poli.
+- ~~**Publication en 1.0.0.**~~ **Publication en 2.0.0** — décidé par Jonathan le 2026-09-07,
+  appliqué. L'ancien raisonnement (« le format porte `version: 1`, donc moteur 1.x lit format 1 »)
+  regardait le mauvais numéro : ce n'est pas le format que le client a sous les yeux, c'est LSDE.
+  Il ouvre un éditeur qui affiche **2.0.3** et cherche le moteur qui va avec ; `2.x` le lui dit
+  sans qu'il ait à savoir qu'un numéro de format existe. Le `"version": 1` du fichier reste ce que
+  [validator.ts](lsde-ts/src/validator.ts) vérifie — les deux numéros ne parlent pas au même
+  public. Ce qui tenait dans l'ancienne décision tient toujours : une 0.4.0 qui casse tout serait
+  un mensonge poli.
 
 **Les deux dépôts :**
 
@@ -849,7 +858,7 @@ note bouclée par un designer ne faisait pas échouer une scène, elle **tuait l
 
 ## État des tests
 
-| Runtime | Tests | Vérifié comment |
+| Runtime | Tests (v1, avant migration) | Vérifié comment |
 |---|---|---|
 | TypeScript | 306 | `vitest` + `tsc --noEmit` |
 | C# | 107 | `dotnet test`, 3 projets |
@@ -857,6 +866,15 @@ note bouclée par un designer ne faisait pas échouer une scène, elle **tuait l
 | GDScript | 91 | Godot 4.3 headless |
 
 Le README annonçait 216 / 42 / **40-sur-42** / 42. Les quatre étaient faux.
+
+**Après la migration v2** — recomptés le 2026-09-07 :
+
+| Runtime | Tests | Vérifié comment |
+|---|---|---|
+| TypeScript | **393** | `vitest` + `tsc --noEmit` propre |
+| C# | **115** | `dotnet test`, 3 projets |
+| C++ | **52** | MSVC + gtest (les suites regroupent, d'où le compte plus bas) |
+| GDScript | **115** | Godot 4.6 headless |
 
 ---
 
@@ -928,7 +946,393 @@ Le README annonçait 216 / 42 / **40-sur-42** / 42. Les quatre étaient faux.
 - **Le C#, le C++ et le GDScript n'ont pas été touchés** et restent verts sur la v1.
   `blueprints/blueprint.json` (v1) n'a pas bougé : leurs playgrounds et leurs tests le lisent, et
   le remplacer maintenant les casserait tous les trois pour rien. Il part avec le portage.
-- **Question ouverte pour Jonathan : le numéro de version du paquet.** Le plan a tranché
+- **Question tranchée : le numéro de version du paquet.** Le plan avait tranché
   **1.0.0** (« moteur 1.x lit format 1 »), et l'export confirme le raisonnement — le fichier porte
-  bien `"version": 1`. Jonathan a demandé « le JSON en version 2.0 ». Rien n'est bumpé tant que ce
-  n'est pas dit : le paquet est en 0.3.0, les trois `.csproj` et `CMakeLists.txt` aussi.
+  bien `"version": 1`. **Jonathan a tranché : 2.0.0**, pour que le client voie tout de suite que le
+  moteur s'aligne sur LSDE 2.x. Appliqué dans les cinq fichiers (`lsde-ts/package.json`, les trois
+  `.csproj`, `CMakeLists.txt`) — à la main, jamais par `publish.sh` qui écrit dans l'historique.
+
+### La référence TypeScript est en v2 — les 16 problèmes qui la concernaient sont livrés
+
+Fait dans l'ordre du plan, chaque module avec sa suite réécrite. **393 tests, zéro erreur `tsc`.**
+
+| Problème | Ce qui a changé |
+|---|---|
+| **2** — le routage | `port-resolver.ts` route sur des **noms de ports**. `fromPortIndex` n'existe plus. 31 tests exhaustifs : c'est le fichier que les trois ports copient. |
+| **3** — les conditions | Liste de cas portant leur port. `evaluateConditionCases()` remplace `evaluateConditionGroups()` et rend un port, plus un index. |
+| **4** — le dispatcher | Retiré. Un test prouve qu'aucun chemin ne peut plus rendre deux ports. |
+| **5** — la distribution | `resolveCards()` résout `actors` et `emotion` par la table `cards`. Le contexte porte **toute** la liste : le moteur n'élit plus un premier. |
+| **6** — le sac `props` | `NATIVE_PROPERTY_IDS` (neuf ids) trie le sac. `LsdeUtils.getNativeProperties()` / `getCustomProperties()`. |
+| **7** — le `sceneId` | `engine.scene()` accepte le chemin **ou** `sc_u0vqg2g8`. |
+| **9** — la convention | Un fichier en `snake_case` ou `PascalCase` est refusé avec `WRONG_NAMING_CONVENTION`, qui **nomme le réglage à changer** — pas « ce n'est pas un blueprint » sur un fichier qui en est un. |
+| **10** — multi-fichiers | `init()` accepte une liste. `project` + `exportedAt` doivent concorder, sinon `MISMATCHED_EXPORTS`. Vérifié sur les vrais fichiers de `mock/all/`. |
+| **11** — les erreurs | Les deux `catch` relancent après avoir fermé la scène. Quatre tests : l'erreur arrive au jeu **avec** les nettoyages passés, les pistes annulées et `onSceneExit` tiré. |
+| **16** — l'émotion | Sur le bloc. `context.emotion` + `context.intensity`, `context.actors` pour le casting. |
+| **18** — les textes | `LsdeUtils.getTextFromTable()` navigue une table de langue (`scène → bloc`, `→ option`). `getLocale` retiré du scene handle. **Aucun callback ajouté.** |
+
+**Deux choses trouvées en écrivant les tests, pas avant :**
+
+1. **La visibilité des options était taguée même sans résolveur installé.** Le routage doit choisir
+   une branche, donc une question sans réponse devient `false` ; une option n'a pas cette
+   obligation, et répondre `false` **cacherait au joueur** une réponse que personne n'a pu
+   évaluer. Deux évaluateurs séparés maintenant : `routingEvaluator()` et
+   `visibilityEvaluator()`, ce dernier rendant `undefined` — *inconnu*, pas *caché*.
+2. **Les conditions `choice` marchent sans une ligne de code du jeu.** Une scène qui ne pose de
+   questions que sur ses propres réponses passées se joue sans `onResolveCondition`.
+
+**Ce qui a été supprimé de l'API :** `setChoiceFilter()` (déprécié), `filterVisibleChoices()`
+(remplacé par `tagOptionVisibility`, qui ne raccourcit pas la liste), `evaluateConditionGroups()`,
+`resolve( boolean | number | number[] )`, `getLocale`.
+
+**Les specs partagées (12)** sont regénérées par `tests/generate-specs.py` — 40 suites, 46 cas, en
+v2. Écrites depuis un script et non à la main pour que les quatre runtimes ne puissent pas diverger
+sur la forme d'une charge. Elles couvrent ce que la v1 ne pouvait pas dire : les ids qui se
+répètent entre scènes, l'ouverture par `sceneId`, la mémoire `choice`, `portPerCase`, le cas sans
+`when`, et deux pièges — un port de cas non branché ne retombe **pas** sur `default`, et un
+payload encore câblé sur `true`/`false` ne route nulle part.
+
+### Le C# est porté — 115 tests au vert
+
+Même ordre, mêmes décisions, un seul écart assumé.
+
+**L'écart : le C# n'importe pas le fichier généré tel quel.** Le TypeScript le copie verbatim
+(`blueprint-types.ts`), le C# ne peut pas : le fichier généré met les propriétés en `camelCase` et
+son namespace porte le nom du projet du client. `Types.cs` reprend donc le contrat en `PascalCase`,
+alimenté par un `CamelCasePropertyNamesContractResolver` — ce qui est exactement l'argument du
+problème 9 : *le désérialiseur fait déjà la conversion*.
+
+**Ce qui a disparu du C# :** le convertisseur JSON polymorphe des deux loaders. La v2 a **un** seul
+`BlueprintBlock` dont les champs optionnels dépendent de son `Type`, donc il n'y a plus rien à
+aiguiller à la lecture. Cinq sous-classes, deux convertisseurs, en moins.
+
+**Une chose trouvée en portant :** un payload v1 écrivait `"version": "1.0.0"`, une chaîne, là où
+le contrat v2 attend un nombre. Un jeu C# qui reçoit un vieil export voyait donc une exception de
+désérialisation sur un type de token — alors que le moteur a un diagnostic qui **nomme** le
+problème. Refuser un payload est le travail du chargeur, pas de l'analyseur, donc l'analyse doit
+survivre assez longtemps pour que le validateur puisse parler : `TolerantVersionConverter` est là
+pour ça. Le TypeScript n'avait pas ce problème (JSON dynamique), et c'est le genre de divergence
+que seuls les tests partagés font sortir.
+
+| Projet | Tests |
+|---|---|
+| `LsdeDialogEngine.Tests` | 91 — conformité partagée, robustesse, conditions |
+| `LsdeDialogEngine.Newtonsoft.Tests` | 12 — lecture du vrai export |
+| `LsdeDialogEngine.SystemTextJson.Tests` | 12 — idem |
+
+**Le `MiniRuntime` C# produit une sortie identique au playground TypeScript** sur
+`mock/blueprints/` — mêmes blocs, mêmes acteurs, mêmes émotions, même branche prise par le
+dictionnaire `choice`. C'est la preuve de conformité qui compte plus que n'importe quel test unitaire.
+
+### Le C++ est porté — 52 tests au vert
+
+Le cœur reste **stdlib-only** : `nlohmann/json` n'apparaît que dans `json_loader.cpp`, les tests et
+le playground, comme avant.
+
+**Deux choses que seul le C++ a imposées :**
+
+1. **L'héritage en diamant.** `InternalDialogContext` est à la fois un `InternalBlockContext` (qui
+   porte les cartes, l'émotion, l'intensité) et un `IDialogContext`. Sans `virtual`, il y a **deux**
+   `IBaseBlockContext` dans l'objet et le compilateur refuse la conversion. Les quatre interfaces
+   dérivent donc `public virtual IBaseBlockContext`, et `wrapHandler` passe du `static_cast` au
+   `dynamic_cast` — un `static_cast` descendant depuis une base virtuelle est interdit.
+2. **`_previousCharacter` devait devenir propriétaire.** Il sert au `fromContext` de
+   `onValidateNextBlock`, et il pointait dans le contexte du bloc précédent — détruit en sortant du
+   bloc. En v1 il pointait dans `block.metadata`, qui vivait aussi longtemps que le payload ; en v2
+   la carte est une copie tirée de la table. Un `std::optional<Card>` le tient maintenant.
+
+**Ce qui a disparu :** le lecteur JSON polymorphe (5 sous-classes, un `from_json` chacune), et
+`switch (BlockType)` — le type v2 est une chaîne, donc les registres comparent des noms.
+
+Comme le C#, le loader C++ lit un `"version": "1.0.0"` de v1 comme `0` au lieu de lever : refuser
+un payload est le travail du chargeur, pas de l'analyseur, donc l'analyse doit survivre assez
+longtemps pour que le validateur nomme le problème.
+
+**Le playground C++ produit la même scène que le TypeScript et que le C#.** Trois runtimes, même
+sortie, sur le même fichier.
+
+### Le GDScript est porté — les quatre runtimes jouent la même scène
+
+**Une divergence trouvée, et elle n'aurait pu l'être que par les specs partagées :** le parseur
+JSON de Godot n'a pas de type entier. Il lit `"version": 1` comme le **flottant 1.0**, donc le
+`version is int` du validateur refusait tout export valide avec `UNSUPPORTED_FORMAT_VERSION`. Le
+validateur compare maintenant la **valeur**, pas le type. Les trois autres runtimes n'avaient pas
+ce problème ; c'est exactement ce que `tests/*.json` sert à attraper.
+
+**Le second obstacle était le piège déjà consigné au problème 14 :** un `class_name` ne se résout
+pas sur une machine fraîche sans un `godot --headless --import` préalable, parce que
+`.godot/global_script_class_cache.cfg` est dans `.gitignore`. Tous les tests échouaient au parse.
+C'est la ligne qui manquera au CI si personne ne l'écrit.
+
+**Une note qui reste vraie :** GDScript n'a pas de `try/catch`, donc une exception d'un handler
+remontait déjà au jeu. Ce runtime faisait depuis le début ce que le problème 11 a fait faire aux
+trois autres.
+
+### Les quatre runtimes, même sortie
+
+| Runtime | Tests | La preuve qui compte |
+|---|---|---|
+| TypeScript | **393** | `npm run playground` |
+| C# | **115** | `dotnet run --project samples~/MiniRuntime` |
+| C++ | **52** | `npm run playground` |
+| GDScript | **115** | `npm run playground` |
+
+**675 tests, zéro échec.** Et les quatre playgrounds, lancés sur `mock/blueprints/`, impriment la
+même scène : mêmes blocs, mêmes acteurs, même émotion par bloc, même branche prise par le
+dictionnaire `choice`, mêmes marqueurs de texte passés bruts. C'est la preuve de conformité qui
+vaut plus que n'importe quel test unitaire — quatre implémentations indépendantes qui lisent le
+même fichier et racontent la même histoire.
+
+### 13 — la documentation est reprise
+
+`CLAUDE.md` d'abord : c'est le document que lit un agent avant de toucher quoi que ce soit, donc
+une ligne fausse y coûte plus cher qu'ailleurs. La section « Migration status » ne décrit plus un
+chantier en cours mais les cinq changements qui expliquent tous les autres — les ports sont des
+noms, un bloc est (scène, id), les fils vivent sur le bloc, les natives partagent `props` en
+millisecondes, l'émotion appartient au bloc.
+
+Les deux lignes fausses annoncées au problème 15 sont corrigées, et une troisième s'y ajoute :
+`engine.scene()` prend le chemin **ou** l'id stable, et c'est l'id qu'il faut stocker hors du
+payload.
+
+**53 fichiers VitePress touchés**, sur quatre locales. Le levier est `docs/_shared/` : les guides
+`en`/`fr`/`ja`/`zh` incluent les mêmes extraits, donc un extrait corrigé l'est partout. Trois ont
+été **réécrits** plutôt que renommés, parce qu'un remplacement mécanique y aurait produit du code
+faux :
+
+- `block-condition.md` — les groupes indexés deviennent des cas portant leur port, et l'encadré dit
+  pourquoi le dispatcher est parti.
+- `block-choice.md` — `visible` est un **tag, pas un filtre** : `visible !== false`, jamais
+  `visible === true`, sinon une option qu'aucun résolveur n'a pu évaluer disparaît de l'écran.
+- `choice-reusable-filter.md` — un seul résolveur pour deux usages, et l'encadré explique pourquoi
+  le moteur garde deux réponses distinctes à l'intérieur.
+
+`guide/lifecycle.md` documentait l'avalement des exceptions comme un choix — la phrase exacte était
+*« The error is silent — it is not logged or re-thrown. »* Elle est remplacée par ce que fait
+maintenant le moteur, avec l'ordre qui rend la chose utilisable : la scène est fermée **puis**
+l'erreur remonte.
+
+### 14 — le CI, la dernière étape
+
+`.github/workflows/tests.yml` — cinq jobs, un par runtime plus un pour les specs.
+
+**Le job `specs` est celui qui compte le plus** : il relance `tests/generate-specs.py` et exige un
+diff vide. Une modification à la main du JSON partagé devient rouge tout de suite, au lieu de
+laisser les quatre runtimes diverger en silence pendant des mois — ce qui est exactement ce qui
+était arrivé aux compteurs du README.
+
+Le piège GDScript annoncé dans le problème est dans le YAML avec son explication : sans
+`godot --headless --import`, `.godot/global_script_class_cache.cfg` n'existe pas sur un checkout
+frais, aucun `class_name` ne se résout, et **tous** les scripts échouent au parse. Ce n'est pas un
+test qui tombe, c'est la suite entière qui ne charge pas. Rencontré pour de vrai pendant le
+portage.
+
+**Un `.gitattributes` a dû venir avec.** Le générateur écrit en LF ; un checkout Windows avec
+`core.autocrlf=true` les rend en CRLF ; le job `specs` verrait alors chaque ligne comme modifiée et
+accuserait quelqu'un d'avoir édité le JSON à la main. `* text=auto eol=lf` ferme la porte.
+
+Le job TypeScript lance `npm run lint` **avant** les tests, et ce n'est pas décoratif : vitest
+transpile sans vérifier les types, donc une signature cassée passe la suite et casse le build d'un
+client.
+
+---
+
+## Le chantier est terminé
+
+Les 18 problèmes sont livrés, les quatre runtimes lisent le format v2, la documentation le décrit,
+et le CI le garde.
+
+Ce qui reste hors périmètre, volontairement : `blueprints/` contient toujours l'export **v1** — il
+n'est plus lu par rien, et le remplacer n'apporterait qu'un renommage. Les paquets Rust, Lua et
+Python restent des placeholders.
+
+**La seule action manuelle qui reste : publier.** `npm run publish:*` écrit dans l'historique git
+et pousse sur npm et NuGet — c'est une décision de release, pas une étape de migration, et elle
+appartient à Jonathan.
+
+---
+
+# Revue d'avant-publication
+
+Relecture des 74 fichiers source touchés par la migration, avant que Jonathan ne publie. La
+consigne était de tout revoir, et de me remettre en question à chaque fois : *est-ce vraiment un
+problème, ou est-ce que j'exagère ?* Chaque constat ci-dessous a été **prouvé par un test** avant
+d'être corrigé, et trois soupçons sont tombés à l'épreuve.
+
+Ce qu'ils ont tous en commun : le moteur faisait quelque chose de raisonnable sur **un** chemin et
+autre chose sur l'autre, et rien à l'exécution ne le disait.
+
+## 1. Un cleanup qui lève laissait une scène zombie
+
+Le problème 12 avait corrigé le handler qui lève : la scène est fermée, **puis** l'erreur est
+relancée. Le cleanup que ce même handler retourne, lui, n'avait pas été touché — il s'échappait au
+milieu du démontage. Mesuré : `onSceneExit` jamais tiré, `running` resté à `true`, la poignée
+toujours dans le registre du moteur, les pistes parallèles jamais annulées. Le jeu recevait son
+exception **et** un moteur inutilisable.
+
+Une faute, deux comportements opposés : exactement ce que le problème 12 disait avoir réglé, juste
+déplacé d'un cran.
+
+`runCleanup()` rend maintenant ce qui a été levé au lieu de le laisser passer. Le démontage va
+toujours jusqu'au bout, et la faute est relancée quand il ne reste plus rien à dérouler. Deux
+conséquences qui ne sautent pas aux yeux :
+
+- `endScene()` annule **toutes** les pistes même si le cleanup de l'une d'elles lève. Avant, la
+  première qui levait interrompait la boucle et laissait vivre celles d'après.
+- `combineCleanups()` exécute **les deux** cleanups. Ils libèrent des choses sans rapport — le
+  panneau d'un handler de scène, la voix audio d'un handler global — et laisser l'échec du premier
+  sauter le second fuyait ce que le second possédait.
+
+GDScript n'a pas d'exceptions : rien à attraper, rien qui s'échappe. Le commentaire qui y annonçait
+une « error boundary » a été corrigé, il promettait une garde qui n'existe pas.
+
+## 2. Chaque test de condition partait deux fois chez le jeu
+
+`createContext` évaluait tous les cas pour remplir `context.cases[i].result`, puis
+`evaluateConditionCases` réévaluait tout pour choisir le port. Mesuré sur deux cas d'un bloc :
+trois appels en mode `portPerCase`, quatre en mode if. Le nombre dépendait du mode **et** du cas
+qui matchait.
+
+Ce qui contredit l'engagement écrit dans `condition-evaluator.ts` : pas de court-circuit dans une
+chaîne, *parce que* l'évaluateur du jeu est aussi l'endroit où un projet journalise et compte ce
+qu'on lui a demandé.
+
+**J'ai failli casser un choix délibéré en corrigeant.** Un test existant —
+« stops asking once a case holds » — documente que le court-circuit **entre cas** est voulu : un
+cas plus bas est une autre question, et la poser laisserait un jeu journaliser une branche jamais
+prise. `evaluateConditionCases` garde donc son court-circuit, tel quel. C'est le moteur qui change :
+`pickPortFromResults()` lit le port dans les résultats déjà calculés. Chaque test atteint
+`onResolveCondition` **exactement une fois**, quel que soit le mode.
+
+## 3. `waitForBlocks` était inerte sur la piste principale
+
+Seul `AsyncTrack` lisait la propriété. Un bloc de la piste principale la portant avançait quand
+même. Mesuré : un bloc attendant `DIALOG-404`, absent de la scène, s'exécutait et continuait.
+
+Le format tranche, dans ses propres mots : « *waitForBlocks, an array of block ids OF THIS SCENE
+**the block waits for before it advances*** ». C'est une propriété du **bloc**. Pas d'une piste.
+
+Une correction que j'ai failli justifier de travers : j'ai d'abord cru que l'export de référence le
+prouvait, parce que `DIALOG-008` porte `waitForBlocks` sans `isAsync`. Vérification faite,
+`DIALOG-008` n'est atteignable que via `DIALOG-012`, qui est async — il est donc **toujours** sur
+une piste parallèle. Le mock ne prouvait rien. C'est le texte du format qui décide.
+
+L'interface `IWaiter` (`Waiter` en TS) sort de là : une piste est une piste, et la principale est
+celle que le joueur regarde. Elle se gare dans le même `pendingWaits`.
+
+**Le risque assumé :** une attente insatisfiable sur la piste principale fige tout le dialogue,
+sans `onSceneExit`. Sur une piste parallèle ce n'était qu'une branche morte. D'où le diagnostic
+d'init qui vient avec, `UNKNOWN_WAIT_BLOCK` : un `waitForBlocks` nommant un bloc absent de la scène
+est signalé au chargement plutôt que découvert sur scène. Un avertissement, pas une erreur — le
+reste de la scène joue.
+
+## 4. `onValidateNextBlock` ne se déclenchait pas sur les pistes parallèles
+
+Le hook vivait en ligne dans le `processBlock` de la piste principale seulement. Mesuré : blocs
+dispatchés `[D1, D3, D4, D2]`, blocs validés `[D1, D2]`.
+
+Un jeu qui s'en sert comme garde — « n'entre pas dans ce bloc si le joueur n'a pas la carte » —
+était contourné dès qu'une branche était marquée `isAsync`. Rien dans le contrat du hook ne disait
+qu'il ne valait que pour le flux regardé, et la doc du cycle de vie le place dans la séquence de
+**chaque** bloc.
+
+`runValidation()` est extrait et appelé par les deux pistes. Un refus arrête la piste concernée,
+pas la scène.
+
+## 5. Le validateur levait au lieu de diagnostiquer
+
+Une scène sans `blocks` produisait `TypeError: scene.blocks is not iterable`, jeté hors de
+`init()` — hors de la seule fonction dont le travail est de **refuser** un payload illisible en
+disant pourquoi. C'était aussi une divergence : C++ et GDScript ne plantaient pas, TypeScript et C#
+si. L'implémentation de référence était la plus fragile des quatre.
+
+**Et j'ai corrigé de travers du premier coup.** J'avais ajouté un code `MISSING_SCENE_BLOCKS` — que
+la spec partagée a immédiatement rejeté en C# : `Blocks` a un initialiseur, et un `std::vector` C++
+existe toujours. « Absent » et « vide » sont **indiscernables** dans deux des quatre langages. Un
+diagnostic que trois runtimes sur quatre peuvent lever n'est pas une vérification, c'est une
+divergence. Il est retiré : la liste est normalisée, et `NO_START_BLOCK` dit déjà ce qui compte —
+la scène ne peut pas jouer. Les quatre le disent pareil.
+
+C'est exactement le service que la spec cross-langage doit rendre, et elle l'a rendu sur mon
+propre correctif.
+
+## 6. Deux poignées sur la même scène : la vivante disparaissait du registre
+
+`onSceneEnded` faisait un `delete activeScenes[sceneRef]` aveugle. Rien n'interdit d'ouvrir deux
+fois la même scène — un hub revisité pendant qu'un premier passage est garé sur un handler.
+Mesuré : `b.isRunning() === true` pendant que `engine.isRunning() === false`. `stop()` ne
+l'atteignait plus. On ne supprime plus que si l'entrée pointe encore sur la poignée qui se termine.
+
+## 7. La façade était encore en v1 dans les cinq README
+
+Le plus visible, et celui que j'avais annoncé corrigé à tort : les guides VitePress avaient été
+migrés, **pas** les README. Treize lignes parlant d'`uuid` dans chacun des quatre runtimes, et un
+quick-start hybride — `context.options` en v2 à côté de `visible[0].uuid` en v1, du
+`enableDispatcher` alors que le dispatcher a été supprimé au problème 4, un `resolve(matched[0] ?? -1)`
+alors que `resolve()` prend un **nom de port**. Le code d'exemple ne compilait pas.
+
+Les compteurs de tests ont été **retirés de la prose** plutôt que corrigés. Ce fichier avertit
+depuis le problème 17 qu'ils dérivent en silence ; les réécrire n'aurait fait que remettre le
+compteur à zéro avant la prochaine dérive.
+
+## Ce que la revue a trouvé en passant
+
+- **`GetTextFromTable` manquait en C++**, alors que l'en-tête `utils.h` y renvoyait le lecteur. Le
+  mode texte séparé — celui que la plupart des intégrations veulent — était injoignable depuis
+  Unreal. Ajouté, avec `LocaleTable` en stdlib pur.
+- **`BlueprintGraph` était copiable en C++, et sa copie était de l'UB.** Il possède `_data` par
+  valeur pendant que `_functionsById`, `_cardsById` et chaque `SceneGraph::_scene` pointent dedans.
+  Personne ne le copie aujourd'hui, mais `= delete` transforme une corruption mémoire silencieuse
+  en erreur de compilation.
+- **Divergence GDScript** : `condition_case.get("port", PORT_OUT)` faisait retomber un cas sans
+  port sur `out`, quand les trois autres ne routent nulle part. Aligné.
+- **`getAllSceneIds()` retournait des chemins.** Dans un format dont l'objet même est de séparer le
+  chemin de l'id, le nom était un piège. Renommé `getAllScenePaths()` dans les quatre.
+- Le validateur reconstruisait son index par bloc : `init()` était en O(blocs²). Hissé.
+- `lsde_state_bridge.gd.uid` était suivi par git sans son `.gd`, supprimé en `e101d74`. Retiré.
+
+## Le trou de couverture qui expliquait tout
+
+`waitForBlocks` — l'une des **deux** seules natives qui ne sont pas inertes — n'avait **aucune**
+spec cross-langage. Zéro occurrence dans les trois JSON. Et les trois tests TypeScript qui la
+couvraient marquaient tous leur bloc `isAsync : true`. Le cas principal n'était testé nulle part,
+dans aucun langage. C'est ça qui a laissé vivre le constat 3.
+
+Trois suites l'entourent désormais : une attente insatisfiable sur la piste principale, une attente
+déjà satisfaite, et la même chose sur une piste parallèle. Elles ont demandé un champ de plus au
+contrat partagé, `expectedRunning` : une piste principale garée laisse la scène **vivante**, et le
+runner exigeait jusqu'ici que toute scène de spec soit terminée. Une scène garée n'est pas une
+scène finie, et c'est précisément la propriété à vérifier.
+
+## Ce que j'ai retiré après vérification
+
+Trois choses signalées puis abandonnées, parce que la vérification les a contredites :
+
+- **Un `next()` tardif après la fin naturelle d'une scène.** Je soupçonnais un double
+  `onSceneExit`. Testé : non. La garde de `executeBlockHandler` suffit.
+- **`docs/api-ref/` et `dist/` pleins de v1** (`setChoiceFilter`, `ChoiceItem`, `fromPortIndex`).
+  Les deux sont dans `.gitignore` et régénérés par le build. Aucun problème.
+- **`start()` qui exige les quatre handlers même sans bloc du type.** J'y voyais une friction ;
+  c'est un fail-fast délibéré. L'assouplir ferait échouer une scène **plus tard**, sur une branche
+  rare, au lieu de tout de suite. Laissé tel quel.
+
+Et un constat qui n'appartient pas au moteur : **le type `PropertyValue` généré par LSDE est faux.**
+`boolean | number | string` en TypeScript, `std::variant<bool, double, std::string>` en C++ — pas
+de liste. Or le commentaire du champ `props`, écrit par le même exporteur, dit qu'« *une native
+porte une LISTE plutôt qu'un scalaire : waitForBlocks* », et l'export de référence contient bel et
+bien `"waitForBlocks": ["DIALOG-012", "DIALOG-007"]`. Le moteur s'en tire, son `PropertyValue` C++
+à lui inclut `std::vector<std::string>`. **C'est l'éditeur qu'il faut corriger**, pas le moteur —
+`blueprint-types.ts` est copié verbatim et ne s'édite pas à la main.
+
+## La duplication qui reste
+
+La boucle de parcours existe **deux fois par runtime** : `processBlock`, `executeBlockHandler`,
+`advanceToNextBlock` sont dupliqués entre `AsyncTrack` et `SceneHandleImpl`, avec le commentaire
+« mirrors SceneHandleImpl logic » qui l'admet.
+
+Ce n'est pas du dogme DRY : **les deux copies avaient déjà divergé**, et les constats 3 et 4 *sont*
+cette divergence. Les deux correctifs les rapprochent — `IWaiter` et `runValidation()` sont
+partagés — mais les deux copies subsistent.
+
+Les fusionner pour de bon veut dire faire de la piste principale une piste comme les autres, d'id 0.
+C'est la bonne forme, et c'est un chantier à part : quatre langages, avec l'héritage virtuel du C++
+et les classes internes de GDScript. À faire délibérément, pas en marge d'une revue.

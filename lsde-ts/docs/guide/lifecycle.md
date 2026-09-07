@@ -39,13 +39,28 @@ A handler can return a cleanup function, called when leaving the block:
 
 ## Error Boundaries
 
-Every handler call is wrapped in a try/catch. If a handler throws:
+**Nothing is swallowed.** If a handler throws, the engine shuts the scene down first and then
+re-throws the error to whoever called `start()` or `next()`.
 
-- The error is **silent** — it is not logged or re-thrown. If your scene ends unexpectedly, check your handlers.
-- For the main track: the scene ends cleanly
-- For async tracks: only the affected track is terminated — other tracks and the main flow continue
+The order is what makes this usable. By the time the error reaches your code:
 
-This is cross-language compatible (try/catch in TS, C#, C++, GDScript).
+- the cleanup functions have run
+- the async tracks are cancelled
+- `onSceneExit` has fired
+
+The dialogue stopped **properly**, and you decide what happens next — carry on without it, show a
+screen, or let it crash. Put your own `try/catch` around `start()` or `next()`.
+
+An exception thrown by a **cleanup function** reaches you the same way.
+
+::: tip Why this changed
+v1 swallowed a handler exception silently — not even logged — while an exception from the cleanup
+that same handler returned reached the caller. One fault, two opposite behaviours, and the quiet
+one hid real bugs for as long as a project ran.
+
+GDScript, having no `try/catch` in the language, was already doing the right thing. Nobody had
+noticed.
+:::
 
 ## cancel()
 
@@ -95,7 +110,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A["block.metadata.characters\n= [Lia, Bob, Sam]"] --> B["onResolveCharacter\ngame returns: Lia"]
+    A["block.actors\n= [Lia, Bob, Sam]"] --> B["onResolveCharacter\ngame returns: Lia"]
     B --> C["onValidateNextBlock\nnextContext.character = Lia\nfromContext.character = prev"]
     C --> D{valid?}
     D -- "Lia OK" --> E["execute block\ncontext.character = Lia"]

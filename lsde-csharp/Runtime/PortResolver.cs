@@ -1,5 +1,25 @@
 // LSDE Dialog Engine — Port resolution (C# port of port-resolver.ts)
-// Critical algorithm — must be identical across all runtimes.
+//
+// This function decides where the flow goes next, and it is the one piece of the engine that must
+// behave identically in all four runtimes — a divergence here does not throw, it sends a player
+// down the wrong branch.
+//
+// It routes on PORT NAMES. In v1 it routed on FromPortIndex, a position in a list, and that is the
+// single change that broke the loudest: a v1 engine on a v2 payload found no connection at all on
+// a dialog with per-character ports, on the true branch of a condition, on every switch case. The
+// scene stopped where the player expected a branch, and nothing was logged.
+//
+// The ports, per block type:
+//
+//   dialog     "out", or one port per actor CARD ID with PortPerCharacter — "out" is the fallback
+//   choice     the picked option's id (C1…) — there is no "out" on a choice
+//   condition  "out" (true) and "default" (false), or K1… per case with PortPerCase
+//   action     "then", and "catch" when a call failed
+//   note       never dispatched; the traversal steps over it
+//
+// The block decides WHICH port; this file only finds the wires on it. A port the writer left
+// unwired resolves to nothing, and nothing is a legitimate end of flow — "default" is the fallback
+// for "no case matched", not for "that exit has no wire".
 
 using System.Collections.Generic;
 
@@ -8,162 +28,106 @@ namespace LsdeDialogEngine
     public static class PortResolver
     {
         /// <summary>
-        /// Determine which outgoing connections to follow based on block type and context.
-        /// Returns ALL matching connections — the caller decides which are main vs async tracks.
+        /// Pick the outgoing links to follow, given a block and what happened while it ran.
+        /// <para>Returns EVERY matching link. Deciding which one is the main track and which run in
+        /// parallel belongs to the traversal, not here — this function is pure and knows nothing
+        /// about tracks.</para>
         /// </summary>
         public static PortResolutionResult ResolvePort(PortResolutionInput input)
         {
             var block = input.Block;
-            var connections = input.Connections;
+            var links = input.Links;
 
             switch (block.Type)
             {
-                case BlockType.DIALOG:
-                    return ResolveDialogPort(connections, input.CharacterPortIndex);
+                case BlockType.Dialog:
+                    return ResolveDialogPort(links, input.ActorPort);
 
-                case BlockType.CHOICE:
-                    return ResolveChoicePort(connections, input.SelectedChoiceUuid);
+                case BlockType.Choice:
+                    return ResolveChoicePort(links, input.SelectedOptionId);
 
-                case BlockType.CONDITION:
-                    return ResolveConditionPort(connections, input.ConditionResult);
+                case BlockType.Condition:
+                    return ResolveConditionPort(links, input.ConditionPort);
 
-                case BlockType.ACTION:
-                    return ResolveActionPort(connections, input.ActionRejected);
+                case BlockType.Action:
+                    return ResolveActionPort(links, input.ActionRejected);
 
-                case BlockType.NOTE:
-                    return new PortResolutionResult(new List<BlueprintConnection>(connections));
+                case BlockType.Note:
+                    return new PortResolutionResult(new List<Link>(links));
 
                 default:
+                    // A block type this engine does not know — a v1 payload, say — routes nowhere
+                    // rather than to the wrong handler.
                     return PortResolutionResult.None;
             }
         }
 
-        private static PortResolutionResult ResolveDialogPort(
-            List<BlueprintConnection> connections,
-            int? characterPortIndex)
+        /// <summary>
+        /// A dialog leaves by "out".
+        /// <para>With PortPerCharacter it grows one port per actor instead, named by the actor's
+        /// CARD ID (var1, var2) — the same id Block.Actors lists. "out" stays as the "else" exit:
+        /// a dialog whose actor has no port of its own still goes somewhere.</para>
+        /// </summary>
+        private static PortResolutionResult ResolveDialogPort(List<Link> links, string? actorPort)
         {
-            if (characterPortIndex.HasValue)
+            if (actorPort != null)
             {
-                var matches = new List<BlueprintConnection>();
-                foreach (var c in connections)
-                {
-                    if (c.FromPortIndex == characterPortIndex.Value)
-                        matches.Add(c);
-                }
+                var matches = OnPort(links, actorPort);
                 if (matches.Count > 0) return new PortResolutionResult(matches);
-                // Fallback to 'out' when character port index not found
+                // The actor has no port of its own — fall through to "out".
             }
-            return FilterByFromPort(connections, "out");
+            return new PortResolutionResult(OnPort(links, Ports.Out));
         }
 
-        private static PortResolutionResult ResolveChoicePort(
-            List<BlueprintConnection> connections,
-            string? selectedChoiceUuid)
+        /// <summary>
+        /// A choice leaves by the id of the option the player picked — C1, C2. That id IS the port.
+        /// <para>There is no "out" and no fallback: until an option is picked there is nowhere to
+        /// go, and an option the writer left unwired ends the flow. Both are the drawing.</para>
+        /// </summary>
+        private static PortResolutionResult ResolveChoicePort(List<Link> links, string? selectedOptionId)
         {
-            if (selectedChoiceUuid == null) return PortResolutionResult.None;
-            return FilterByFromPort(connections, selectedChoiceUuid);
+            if (selectedOptionId == null) return PortResolutionResult.None;
+            return new PortResolutionResult(OnPort(links, selectedOptionId));
         }
 
-        private static PortResolutionResult FilterDefaultPort(List<BlueprintConnection> connections)
+        /// <summary>
+        /// A condition leaves by the port its cases picked — "out" or "default" in if mode, K1… or
+        /// "default" with PortPerCase.
+        /// <para>Which port that is was decided before we got here, by the condition evaluator: it
+        /// is the only thing that knows the two modes and the game's answers. This function does
+        /// not re-derive it. Null means nothing was decided, so nowhere to go.</para>
+        /// </summary>
+        private static PortResolutionResult ResolveConditionPort(List<Link> links, string? conditionPort)
         {
-            var matches = new List<BlueprintConnection>();
-            foreach (var c in connections)
-            {
-                if (c.FromPort == "default" || c.FromPort == "false")
-                    matches.Add(c);
-            }
-            return new PortResolutionResult(matches);
+            if (conditionPort == null) return PortResolutionResult.None;
+            return new PortResolutionResult(OnPort(links, conditionPort));
         }
 
-        private static PortResolutionResult ResolveConditionPort(
-            List<BlueprintConnection> connections,
-            object? conditionResult)
-        {
-            if (conditionResult == null) return PortResolutionResult.None;
-
-            switch (conditionResult)
-            {
-                case bool b:
-                {
-                    // Legacy boolean: true → port 0, false → port 1
-                    int targetIndex = b ? 0 : 1;
-                    var matches = new List<BlueprintConnection>();
-                    foreach (var c in connections)
-                    {
-                        if (c.FromPortIndex == targetIndex)
-                            matches.Add(c);
-                    }
-                    return new PortResolutionResult(matches);
-                }
-                case int n:
-                {
-                    if (n >= 0)
-                    {
-                        // Switch mode: matched case index
-                        var matches = new List<BlueprintConnection>();
-                        foreach (var c in connections)
-                        {
-                            if (c.FromPortIndex == n)
-                                matches.Add(c);
-                        }
-                        return new PortResolutionResult(matches);
-                    }
-                    // No match (-1): default/false port
-                    return FilterDefaultPort(connections);
-                }
-                case List<int> indices:
-                {
-                    // Dispatcher mode: all matched case ports + default port
-                    var indexSet = new HashSet<int>(indices);
-                    var matches = new List<BlueprintConnection>();
-                    // Default port (main continuation)
-                    foreach (var c in connections)
-                    {
-                        if (c.FromPort == "default" || c.FromPort == "false")
-                            matches.Add(c);
-                    }
-                    // Matched case ports (async tracks)
-                    foreach (var c in connections)
-                    {
-                        if (c.FromPortIndex.HasValue && indexSet.Contains(c.FromPortIndex.Value))
-                            matches.Add(c);
-                    }
-                    return new PortResolutionResult(matches);
-                }
-                default:
-                    return PortResolutionResult.None;
-            }
-        }
-
-        private static PortResolutionResult ResolveActionPort(
-            List<BlueprintConnection> connections,
-            bool? actionRejected)
+        /// <summary>
+        /// An action leaves by "then" once its calls went through, and by "catch" when one failed.
+        /// <para>A failure with no "catch" wired falls back to "then": the writer who drew no error
+        /// branch meant the flow to carry on, and stopping the scene on an unhandled failure would
+        /// strand the player mid-dialogue.</para>
+        /// </summary>
+        private static PortResolutionResult ResolveActionPort(List<Link> links, bool? actionRejected)
         {
             if (actionRejected == true)
             {
-                var catchPorts = new List<BlueprintConnection>();
-                foreach (var c in connections)
-                {
-                    if (c.FromPort == "catch")
-                        catchPorts.Add(c);
-                }
-                if (catchPorts.Count > 0) return new PortResolutionResult(catchPorts);
-                // Fallback to 'then' on reject when no catch port
+                var caught = OnPort(links, Ports.Catch);
+                if (caught.Count > 0) return new PortResolutionResult(caught);
+                // No error branch drawn — carry on through "then".
             }
-            return FilterByFromPort(connections, "then");
+            return new PortResolutionResult(OnPort(links, Ports.Then));
         }
 
-        private static PortResolutionResult FilterByFromPort(
-            List<BlueprintConnection> connections,
-            string port)
+        private static List<Link> OnPort(List<Link> links, string port)
         {
-            var matches = new List<BlueprintConnection>();
-            foreach (var c in connections)
+            var matches = new List<Link>();
+            foreach (var link in links)
             {
-                if (c.FromPort == port)
-                    matches.Add(c);
+                if (link.Port == port) matches.Add(link);
             }
-            return new PortResolutionResult(matches);
+            return matches;
         }
     }
 }

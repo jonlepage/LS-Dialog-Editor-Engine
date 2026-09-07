@@ -15,6 +15,6 @@
     <ProjectReference Include="../../src~/LsdeDialogEngine.SystemTextJson/LsdeDialogEngine.SystemTextJson.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="../../../blueprints/blueprint.json" Link="blueprint.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../mock/blueprints/Engine-Conformance-Scene.blueprints.json" Link="Engine-Conformance-Scene.blueprints.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

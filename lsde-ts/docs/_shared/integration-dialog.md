@@ -18,9 +18,9 @@ export class DialogueUI extends Phaser.Scene {
     this.input.on('pointerdown', () => this.advance());
 
     params.engine.onDialog(({ block, context, next }) => {
-      const { dialogueText, nativeProperties } = block;
+      const { text, props } = block;
       const { character, resolveCharacterPort } = context;
-      const text = LsdeUtils.getLocalizedText(dialogueText);
+      const text = LsdeUtils.getLocalizedText(text);
 
       character && resolveCharacterPort(character.uuid);
 
@@ -32,9 +32,9 @@ export class DialogueUI extends Phaser.Scene {
 
       // auto-advance after a delay (cinematics, tutorials)
       let timer: Phaser.Time.TimerEvent | null = null;
-      if (nativeProperties?.timeout) {
+      if (props?.timeout) {
         timer = this.time.delayedCall(
-          nativeProperties.timeout * 1000,
+          props.timeout * 1000,
           () => this.advance(),
         );
       }
@@ -110,7 +110,7 @@ public class DialogueUI : MonoBehaviour
     {
         engine.OnDialog(args => {
             var (_, block, context, next) = args;
-            var text = LsdeUtils.GetLocalizedText(block.DialogueText);
+            var text = LsdeUtils.GetLocalizedText(block.Text);
             var ch = context.Character;
 
             if (ch != null) context.ResolveCharacterPort(ch.Uuid);
@@ -152,7 +152,7 @@ public class DialogueUI : MonoBehaviour
 void UDialogueSubsystem::RegisterHandlers()
 {
     Engine.onDialog([this](auto* scene, const auto* block, auto* ctx, auto next) -> lsde::CleanupFn {
-        auto localized = lsde::LsdeUtils::GetLocalizedText(block->dialogueText);
+        auto localized = lsde::LsdeUtils::GetLocalizedText(block->text);
         auto* ch = ctx->character();
 
         if (ch) ctx->resolveCharacterPort(ch->uuid);
@@ -195,7 +195,7 @@ var _pending_next: Callable
 
 func _ready() -> void:
     # load and initialize the engine
-    var json = JSON.parse_string(FileAccess.open("res://data/blueprint.json", FileAccess.READ).get_as_text())
+    var json = JSON.parse_string(FileAccess.open("res://data/blueprints.json", FileAccess.READ).get_as_text())
     _engine = LsdeDialogueEngine.new()
     _engine.init({"data": json})
     _engine.set_locale("en")
@@ -208,7 +208,7 @@ func _register_handlers() -> void:
         var ctx = args["context"]
         var next_fn = args["next"]
         var ch = ctx.character
-        var text = LsdeUtils.get_localized_text(block.get("dialogueText"))
+        var text = LsdeUtils.get_localized_text(block.get("text"))
 
         if ch:
             ctx.resolve_character_port(ch.get("uuid", ""))

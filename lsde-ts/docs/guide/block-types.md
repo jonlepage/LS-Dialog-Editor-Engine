@@ -16,7 +16,7 @@ When the narrative designer assigns a dedicated output per character ([`portPerC
 
 ## CHOICE
 
-A choice block represents a branching point where the player picks a response — a dialogue menu, a list of options. `context.choices` contains all available options. When [`onResolveCondition()`](/guide/choice-visibility) is configured, each option is tagged `visible: true | false` — the handler filters and displays whichever it wants. After the player interacts, `selectChoice(uuid)` tells the engine which path to follow, then `next()` advances the flow.
+A choice block represents a branching point where the player picks a response — a dialogue menu, a list of options. `context.options` contains all available options. When [`onResolveCondition()`](/guide/choice-visibility) is configured, each option is tagged `visible: true | false` — the handler filters and displays whichever it wants. After the player interacts, `selectChoice(uuid)` tells the engine which path to follow, then `next()` advances the flow.
 
 <!--@include: ../_shared/block-choice.md-->
 
@@ -26,11 +26,11 @@ See [Choice Visibility](/guide/choice-visibility) for the full opt-in tagging sy
 
 A condition block is an invisible switch — it evaluates game state and silently sends the flow down one or more paths without the player seeing it. Conditions are grouped in a 2D array: each group is a "case" evaluated as an AND/OR chain.
 
-**When `onResolveCondition` is installed**, the engine pre-evaluates all groups before calling `onCondition`. Each group in `context.conditionGroups` has a `result` (true/false) and a `portIndex`. The engine auto-resolves the routing — `onCondition` is optional and serves as a logging/override hook.
+**When `onResolveCondition` is installed**, the engine pre-evaluates all groups before calling `onCondition`. Each group in `context.cases` has a `result` (true/false) and a `port`. The engine auto-resolves the routing — `onCondition` is optional and serves as a logging/override hook.
 
 **Routing modes:**
 - **Switch mode** (default): first matching group index routes the flow. `-1` (no match) follows the default port.
-- **Dispatcher mode** (`enableDispatcher: true`): all matching group indices fire as independent async tracks, default port is the main continuation.
+- **Dispatcher mode** (`portPerCase: true`): all matching group indices fire as independent async tracks, default port is the main continuation.
 
 `context.resolve()` accepts `boolean` (legacy), `number` (switch), or `number[]` (dispatcher).
 
@@ -58,9 +58,9 @@ All blocks share these base fields ([`BlueprintBlockBase`](/api-ref/interfaces/B
 | [`parentLabels`](/api-ref/interfaces/BlueprintBlockBase#parentlabels) | `string[]?` | Parent folder hierarchy from the editor |
 | [`properties`](/api-ref/interfaces/BlueprintBlockBase#properties) | `BlockProperty[]` | Key-value properties |
 | [`userProperties`](/api-ref/interfaces/BlueprintBlockBase#userproperties) | `Record?` | Free-form user properties |
-| [`nativeProperties`](/api-ref/interfaces/BlueprintBlockBase#nativeproperties) | `NativeProperties?` | Execution properties |
+| [`props`](/api-ref/interfaces/BlueprintBlockBase#nativeproperties) | `NativeProperties?` | Execution properties |
 | [`metadata`](/api-ref/interfaces/BlueprintBlockBase#metadata) | `BlockMetadata?` | Display metadata (characters, tags, color) |
-| [`isStartBlock`](/api-ref/interfaces/BlueprintBlockBase#isstartblock) | `boolean?` | Marks the entry block |
+| [`scene.start`](/api-ref/interfaces/BlueprintBlockBase#isstartblock) | `boolean?` | Marks the entry block |
 
 ### NativeProperties
 
@@ -74,4 +74,4 @@ All blocks share these base fields ([`BlueprintBlockBase`](/api-ref/interfaces/B
 | [`debug`](/api-ref/interfaces/NativeProperties#debug) | `boolean?` | Debug flag for the editor |
 | [`waitForBlocks`](/api-ref/interfaces/NativeProperties#waitforblocks) | `string[]?` | Block UUIDs that must be visited before this block can progress |
 | [`waitInput`](/api-ref/interfaces/NativeProperties#waitinput) | `boolean?` | Passive flag for explicit player input control |
-| [`enableDispatcher`](/api-ref/interfaces/NativeProperties#enabledispatcher) | `boolean?` | Condition block: all matching groups fire as async tracks |
+| [`portPerCase`](/api-ref/interfaces/NativeProperties#enabledispatcher) | `boolean?` | Condition block: all matching groups fire as async tracks |

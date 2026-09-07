@@ -1,96 +1,80 @@
 // LSDE Dialog Engine — Robustness tests (C# port of robustness.test.ts)
 //
-// Every case here is something a game integration does by accident: a coroutine that
-// resolves twice, a Resolve() kept past the end of the scene, a NOTE block a designer
-// wired back on itself. The engine cannot prevent any of these; it can only refuse to
-// make them worse than they are.
+// Every case here is something a game integration does by accident: a coroutine that resolves
+// twice, a Resolve() kept past the end of the scene, a NOTE block a designer wired back on itself,
+// a handler that throws.
+//
+// The engine cannot prevent any of these. It can only refuse to make them worse — and, since the
+// v2 work, refuse to hide them: an exception now reaches the game instead of vanishing.
+//
+// The NOTE case matters most in C#: before the walk kept a `seen` set, a self-wired NOTE recursed
+// until the stack gave out, and a StackOverflowException is not catchable in .NET. A designer's
+// stray wire did not fail a scene — it killed the whole Unity process.
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Xunit;
 
 namespace LsdeDialogEngine.Tests
 {
     public class RobustnessTests
     {
-        // ─── Helpers ─────────────────────────────────────────────────────────────
-
-        private static BlueprintExport MakeExport(params BlueprintScene[] scenes) =>
-            new() { Version = "1.0.0", ExportDate = "2025-01-01", Locales = new List<string> { "en" }, Scenes = scenes.ToList() };
-
-        private static DialogBlock Dialog(string uuid, bool start = false) =>
-            new() { Uuid = uuid, Type = BlockType.DIALOG, Properties = new List<BlockProperty>(), IsStartBlock = start };
-
-        private static NoteBlock Note(string uuid, bool start = false) =>
-            new() { Uuid = uuid, Type = BlockType.NOTE, Properties = new List<BlockProperty>(), IsStartBlock = start };
-
-        private static BlueprintConnection Conn(string from, string to, string port = "out") =>
-            new() { Id = $"{from}-{to}", FromId = from, ToId = to, FromPort = port, ToPort = "in" };
-
         private static void RegisterAllHandlers(DialogueEngine engine)
         {
             engine.OnDialog(args => { args.Next(); });
             engine.OnChoice(args =>
             {
-                if (args.Context.Choices.Count > 0) args.Context.SelectChoice(args.Context.Choices[0].Uuid);
+                if (args.Context.Options.Count > 0) args.Context.SelectChoice(args.Context.Options[0].Id);
                 args.Next();
             });
-            engine.OnCondition(args => { args.Context.Resolve(true); args.Next(); });
+            engine.OnCondition(args => { args.Next(); });
             engine.OnAction(args => { args.Context.Resolve(); args.Next(); });
         }
 
-        private static BlueprintScene Scene(List<BlueprintBlock> blocks, List<BlueprintConnection> connections) =>
-            new() { Uuid = "s1", Label = "S1", Date = "2025-01-01", Blocks = blocks, Connections = connections };
+        private static DialogueEngine Ready(BlueprintExport data)
+        {
+            var engine = new DialogueEngine();
+            var report = engine.Init(new InitOptions { Data = data });
+            Assert.Empty(report.Errors);
+            RegisterAllHandlers(engine);
+            return engine;
+        }
 
-        // ─── OnBeforeBlock Resolve() called twice ────────────────────────────────
+        // ─── onBeforeBlock Resolve() called twice ────────────────────────────
 
         [Fact]
-        public void SecondResolveDoesNotDispatchTheBlockTwice()
+        public void SecondResolveDoesNotRunTheBlockHandlerTwice()
         {
             var dispatched = new List<string>();
-            var engine = new DialogueEngine();
-            engine.Init(new InitOptions
-            {
-                Data = MakeExport(Scene(
-                    new List<BlueprintBlock> { Dialog("b1", start: true), Dialog("b2") },
-                    new List<BlueprintConnection> { Conn("b1", "b2") }))
-            });
+            var engine = Ready(Build.OneScene(
+                Build.Dialog("b1").Wire("b2"),
+                Build.Dialog("b2")));
 
-            RegisterAllHandlers(engine);
             engine.OnBeforeBlock(args =>
             {
                 args.Resolve();
-                args.Resolve(); // a coroutine that resumed twice — must be ignored
+                args.Resolve(); // a double-fired coroutine, or a retry — must be ignored
             });
-            engine.OnDialog(args => { dispatched.Add(args.Block.Uuid); args.Next(); });
+            engine.OnDialog(args => { dispatched.Add(args.Block.Id); args.Next(); });
 
             engine.Scene("s1").Start();
 
-            Assert.Equal(new[] { "b1", "b2" }, dispatched);
+            Assert.Equal(new List<string> { "b1", "b2" }, dispatched);
         }
 
-        // ─── A stale Resolve() must not revive a finished scene ──────────────────
+        // ─── A stale Resolve() must not restart a finished scene ─────────────
 
         [Fact]
         public void ResolveAfterTheSceneEndedDoesNotReviveIt()
         {
             var dispatched = new List<string>();
             var stale = new List<Action>();
-            var exits = 0;
+            int exits = 0;
 
-            var engine = new DialogueEngine();
-            engine.Init(new InitOptions
-            {
-                Data = MakeExport(Scene(
-                    new List<BlueprintBlock> { Dialog("b1", start: true) },
-                    new List<BlueprintConnection>()))
-            });
-
-            RegisterAllHandlers(engine);
+            var engine = Ready(Build.OneScene(Build.Dialog("b1")));
             engine.OnSceneExit(_ => exits++);
             engine.OnBeforeBlock(args => { stale.Add(args.Resolve); args.Resolve(); });
-            engine.OnDialog(args => { dispatched.Add(args.Block.Uuid); args.Next(); });
+            engine.OnDialog(args => { dispatched.Add(args.Block.Id); args.Next(); });
 
             var handle = engine.Scene("s1");
             handle.Start();
@@ -98,6 +82,7 @@ namespace LsdeDialogEngine.Tests
             Assert.False(handle.IsRunning());
             Assert.Single(dispatched);
 
+            // The game's UI kept the Resolve() from a delay it never cancelled.
             foreach (var resolve in stale) resolve();
 
             Assert.Single(dispatched);
@@ -110,17 +95,12 @@ namespace LsdeDialogEngine.Tests
             var dispatched = new List<string>();
             var stale = new List<Action>();
 
-            var engine = new DialogueEngine();
-            engine.Init(new InitOptions
-            {
-                Data = MakeExport(Scene(
-                    new List<BlueprintBlock> { Dialog("b1", start: true), Dialog("b2") },
-                    new List<BlueprintConnection> { Conn("b1", "b2") }))
-            });
+            var engine = Ready(Build.OneScene(
+                Build.Dialog("b1").Wire("b2"),
+                Build.Dialog("b2")));
 
-            RegisterAllHandlers(engine);
             engine.OnBeforeBlock(args => stale.Add(args.Resolve));
-            engine.OnDialog(args => { dispatched.Add(args.Block.Uuid); args.Next(); });
+            engine.OnDialog(args => { dispatched.Add(args.Block.Id); args.Next(); });
 
             var handle = engine.Scene("s1");
             handle.Start();
@@ -131,21 +111,14 @@ namespace LsdeDialogEngine.Tests
             Assert.Empty(dispatched);
         }
 
-        // ─── A NOTE wired back on itself ─────────────────────────────────────────
+        // ─── A NOTE wired back on itself ─────────────────────────────────────
 
         [Fact]
-        public void NoteWiredToItselfEndsTheSceneInsteadOfOverflowingTheStack()
+        public void NoteWiredToItselfEndsTheSceneInsteadOfKillingTheProcess()
         {
-            var engine = new DialogueEngine();
-            engine.Init(new InitOptions
-            {
-                Data = MakeExport(Scene(
-                    new List<BlueprintBlock> { Note("n1", start: true) },
-                    new List<BlueprintConnection> { Conn("n1", "n1") }))
-            });
-            RegisterAllHandlers(engine);
-
+            var engine = Ready(Build.OneScene(Build.Note("n1").Wire("n1")));
             var handle = engine.Scene("s1");
+
             handle.Start();
 
             Assert.False(handle.IsRunning());
@@ -154,16 +127,11 @@ namespace LsdeDialogEngine.Tests
         [Fact]
         public void TwoNotesWiredInALoopEndTheScene()
         {
-            var engine = new DialogueEngine();
-            engine.Init(new InitOptions
-            {
-                Data = MakeExport(Scene(
-                    new List<BlueprintBlock> { Note("n1", start: true), Note("n2") },
-                    new List<BlueprintConnection> { Conn("n1", "n2"), Conn("n2", "n1") }))
-            });
-            RegisterAllHandlers(engine);
-
+            var engine = Ready(Build.OneScene(
+                Build.Note("n1").Wire("n2"),
+                Build.Note("n2").Wire("n1")));
             var handle = engine.Scene("s1");
+
             handle.Start();
 
             Assert.False(handle.IsRunning());
@@ -173,19 +141,64 @@ namespace LsdeDialogEngine.Tests
         public void ANoteChainStillReachesTheRealBlockBehindIt()
         {
             var dispatched = new List<string>();
-            var engine = new DialogueEngine();
-            engine.Init(new InitOptions
-            {
-                Data = MakeExport(Scene(
-                    new List<BlueprintBlock> { Note("n1", start: true), Note("n2"), Dialog("b1") },
-                    new List<BlueprintConnection> { Conn("n1", "n2"), Conn("n2", "b1") }))
-            });
-            RegisterAllHandlers(engine);
-            engine.OnDialog(args => { dispatched.Add(args.Block.Uuid); args.Next(); });
+            var engine = Ready(Build.OneScene(
+                Build.Note("n1").Wire("n2"),
+                Build.Note("n2").Wire("b1"),
+                Build.Dialog("b1")));
 
+            engine.OnDialog(args => { dispatched.Add(args.Block.Id); args.Next(); });
             engine.Scene("s1").Start();
 
-            Assert.Equal(new[] { "b1" }, dispatched);
+            Assert.Equal(new List<string> { "b1" }, dispatched);
+        }
+
+        // ─── A handler that throws ───────────────────────────────────────────
+
+        [Fact]
+        public void AnExceptionInAHandlerReachesTheCaller()
+        {
+            // v1 swallowed this one, silently, while an exception from the cleanup that same
+            // handler returned reached the caller. One fault, two opposite behaviours.
+            var engine = Ready(Build.OneScene(Build.Dialog("b1")));
+            engine.OnDialog(_ => throw new InvalidOperationException("game blew up"));
+
+            var handle = engine.Scene("s1");
+
+            var error = Assert.Throws<InvalidOperationException>(() => handle.Start());
+            Assert.Equal("game blew up", error.Message);
+        }
+
+        [Fact]
+        public void TheSceneIsClosedDownBeforeTheErrorSurfaces()
+        {
+            // The order is what makes it usable: by the time the game sees the error, the cleanups
+            // have run and OnSceneExit has fired. The dialogue stopped properly.
+            var events = new List<string>();
+            var engine = Ready(Build.OneScene(Build.Dialog("b1")));
+            engine.OnSceneExit(_ => events.Add("exit"));
+            engine.OnDialog(_ => throw new InvalidOperationException("boom"));
+
+            var handle = engine.Scene("s1");
+
+            Assert.Throws<InvalidOperationException>(() => handle.Start());
+            Assert.Equal(new List<string> { "exit" }, events);
+            Assert.False(handle.IsRunning());
+        }
+
+        [Fact]
+        public void AnExceptionInACleanupReachesTheCallerToo()
+        {
+            var engine = Ready(Build.OneScene(Build.Dialog("b1")));
+            engine.OnDialog(args =>
+            {
+                args.Next();
+                return () => throw new InvalidOperationException("cleanup blew up");
+            });
+
+            var handle = engine.Scene("s1");
+
+            var error = Assert.Throws<InvalidOperationException>(() => handle.Start());
+            Assert.Equal("cleanup blew up", error.Message);
         }
     }
 }

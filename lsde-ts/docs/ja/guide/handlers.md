@@ -24,7 +24,7 @@ engine は以下の handler を公開しています：
 | [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | UUID で特定の CONDITION block をオーバーライド（型安全） |
 | [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | UUID で特定の ACTION block をオーバーライド（型安全） |
 | [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) | global | 統合 condition リゾルバー（choice の可視性 + condition の事前評価） |
-| ~~[`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter)~~ | global | _非推奨 — 代わりに `onResolveCondition` を使用してください_ |
+| ~~[`onResolveCondition`](/api-ref/classes/DialogueEngine#setchoicefilter)~~ | global | _非推奨 — 代わりに `onResolveCondition` を使用してください_ |
 
 `onDialog`、`onChoice`、`onAction` は**必須**です — `start()` 呼び出し時に engine がその存在を検証し、欠けている場合は記述的なエラーをスローします。`onCondition` は `onResolveCondition` がインストールされている場合は**オプション**です — engine が事前評価された condition グループから自動ルーティングします。
 
@@ -48,7 +48,7 @@ block がディスパッチされると、engine は以下の順序で handler �
 
 ## Character Resolution
 
-キャラクター解決はオプションです。`onResolveCharacter` callback を登録すると、engine は `metadata.characters` にキャラクターを持つすべての block の前にそれを呼び出します。callback は block に割り当てられたキャラクターのリストを受け取り、アクティブにすべきキャラクターを返します — 利用可能なキャラクターがいない場合は `undefined` を返します。解決されたキャラクターは、すべての handler で `context.character` としてアクセスできます。
+キャラクター解決はオプションです。`onResolveCharacter` callback を登録すると、engine は `actors` にキャラクターを持つすべての block の前にそれを呼び出します。callback は block に割り当てられたキャラクターのリストを受け取り、アクティブにすべきキャラクターを返します — 利用可能なキャラクターがいない場合は `undefined` を返します。解決されたキャラクターは、すべての handler で `context.character` としてアクセスできます。
 
 これはゲーム状態を照会するための理想的な統合ポイントです：キャラクターがシーンに存在するか、生存しているか、カメラ範囲内にいるかなどを確認できます。`undefined` を返すことで、[`skipIfMissingActor`](/api-ref/interfaces/NativeProperties#skipifmissingactor) による block スキップ、`handle.cancel()` による scene キャンセル、handler 内での直接処理など、複数の戦略が可能になります。
 

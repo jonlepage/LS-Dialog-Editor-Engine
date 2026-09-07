@@ -14,21 +14,41 @@ namespace LsdeDialogEngine
         private readonly Dictionary<string, SceneHandleImpl> _activeScenes = new Dictionary<string, SceneHandleImpl>();
         private bool _initialized;
         /// <summary>Character resolution callback. Default: first character in the list.</summary>
-        private Func<List<BlockCharacter>, BlockCharacter?> _resolveCharacter = chars => chars.Count > 0 ? chars[0] : null;
+        /// <summary>
+        /// Which actor of a block is the one speaking. Defaults to the first.
+        /// <para>LSDE deliberately refuses to say what the order of Actors means — whether it is
+        /// who speaks or who is present is a decision each game makes. The default picks the first
+        /// because a default has to pick something, not because the format says so.</para>
+        /// </summary>
+        private Func<List<Card>, Card?> _resolveCharacter = actors => actors.Count > 0 ? actors[0] : null;
         /// <summary>Unified condition resolver for choice visibility and condition block pre-evaluation.</summary>
-        private Func<ExportCondition, bool>? _conditionResolver;
+        private Func<ConditionTest, bool>? _conditionResolver;
 
         // ─── Initialization ──────────────────────────────────────────────
 
-        /// <summary>Validate blueprint data, build internal graph, return diagnostic report.</summary>
+        /// <summary>
+        /// Load a payload and report what is wrong with it.
+        /// <para>Takes one export in Data, or the several files of a per-scene one in Files — each
+        /// of those carries the whole header, so they are folded into a single payload after
+        /// checking they come from one export.</para>
+        /// <para>The engine is initialized only when there are no errors: a payload it cannot read
+        /// leaves it unusable rather than half-loaded.</para>
+        /// </summary>
         public DiagnosticReport Init(InitOptions options)
         {
             var report = Validator.ValidateBlueprint(options);
 
             if (report.Errors.Count == 0)
             {
-                _graph = new BlueprintGraph(options.Data);
-                _initialized = true;
+                var payload = options.Files != null
+                    ? Validator.MergePayloads(options.Files, out _)
+                    : options.Data;
+
+                if (payload != null)
+                {
+                    _graph = new BlueprintGraph(payload);
+                    _initialized = true;
+                }
             }
 
             return report;
@@ -53,24 +73,18 @@ namespace LsdeDialogEngine
         // ─── Character resolution ────────────────────────────────────────
 
         /// <summary>Set the character resolution callback used to pick which character is active on a block.</summary>
-        public void OnResolveCharacter(Func<List<BlockCharacter>, BlockCharacter?> resolver)
+        public void OnResolveCharacter(Func<List<Card>, Card?> resolver)
         {
             _resolveCharacter = resolver;
         }
 
         /// <summary>Install a unified condition evaluator for both choice visibility and condition block pre-evaluation.
         /// The engine handles choice: conditions internally via choice history — this callback evaluates game-state conditions only.</summary>
-        public void OnResolveCondition(Func<ExportCondition, bool> evaluator)
+        public void OnResolveCondition(Func<ConditionTest, bool> evaluator)
         {
             _conditionResolver = evaluator;
         }
 
-        /// <summary>Set the choice visibility evaluator.</summary>
-        [Obsolete("Use OnResolveCondition() instead.")]
-        public void SetChoiceFilter(Func<ExportCondition, bool> evaluator)
-        {
-            _conditionResolver = evaluator;
-        }
 
         // ─── Validation ──────────────────────────────────────────────────
 
@@ -97,49 +111,49 @@ namespace LsdeDialogEngine
         // ─── Type handlers ───────────────────────────────────────────────
 
         /// <summary>Register a global handler for DIALOG blocks (with optional cleanup).</summary>
-        public void OnDialog(BlockHandler<DialogBlock, IDialogContext> handler)
+        public void OnDialog(BlockHandler<BlueprintBlock, IDialogContext> handler)
         {
             _globalRegistry.DialogHandler = handler;
         }
 
         /// <summary>Register a global handler for DIALOG blocks (no cleanup).</summary>
-        public void OnDialog(Action<BlockHandlerArgs<DialogBlock, IDialogContext>> handler)
+        public void OnDialog(Action<BlockHandlerArgs<BlueprintBlock, IDialogContext>> handler)
         {
             _globalRegistry.DialogHandler = args => { handler(args); return null; };
         }
 
         /// <summary>Register a global handler for CHOICE blocks (with optional cleanup).</summary>
-        public void OnChoice(BlockHandler<ChoiceBlock, IChoiceContext> handler)
+        public void OnChoice(BlockHandler<BlueprintBlock, IChoiceContext> handler)
         {
             _globalRegistry.ChoiceHandler = handler;
         }
 
         /// <summary>Register a global handler for CHOICE blocks (no cleanup).</summary>
-        public void OnChoice(Action<BlockHandlerArgs<ChoiceBlock, IChoiceContext>> handler)
+        public void OnChoice(Action<BlockHandlerArgs<BlueprintBlock, IChoiceContext>> handler)
         {
             _globalRegistry.ChoiceHandler = args => { handler(args); return null; };
         }
 
         /// <summary>Register a global handler for CONDITION blocks (with optional cleanup).</summary>
-        public void OnCondition(BlockHandler<ConditionBlock, IConditionContext> handler)
+        public void OnCondition(BlockHandler<BlueprintBlock, IConditionContext> handler)
         {
             _globalRegistry.ConditionHandler = handler;
         }
 
         /// <summary>Register a global handler for CONDITION blocks (no cleanup).</summary>
-        public void OnCondition(Action<BlockHandlerArgs<ConditionBlock, IConditionContext>> handler)
+        public void OnCondition(Action<BlockHandlerArgs<BlueprintBlock, IConditionContext>> handler)
         {
             _globalRegistry.ConditionHandler = args => { handler(args); return null; };
         }
 
         /// <summary>Register a global handler for ACTION blocks (with optional cleanup).</summary>
-        public void OnAction(BlockHandler<ActionBlock, IActionContext> handler)
+        public void OnAction(BlockHandler<BlueprintBlock, IActionContext> handler)
         {
             _globalRegistry.ActionHandler = handler;
         }
 
         /// <summary>Register a global handler for ACTION blocks (no cleanup).</summary>
-        public void OnAction(Action<BlockHandlerArgs<ActionBlock, IActionContext>> handler)
+        public void OnAction(Action<BlockHandlerArgs<BlueprintBlock, IActionContext>> handler)
         {
             _globalRegistry.ActionHandler = args => { handler(args); return null; };
         }
@@ -160,27 +174,46 @@ namespace LsdeDialogEngine
 
         // ─── Scene handles ───────────────────────────────────────────────
 
-        /// <summary>Create a scene handle. Does NOT start the flow — call handle.Start().</summary>
-        public ISceneHandle Scene(string sceneId)
+        /// <summary>
+        /// Open a scene by its path (reactor_breach) or by its stable id (sc_u0vqg2g8).
+        /// <para>Take the id wherever the reference is stored OUTSIDE the payload — a Unity asset, a
+        /// save file, a database row. The path is what a writer reads and what builds the i18n
+        /// keys, but it changes the day someone renames the scene, and a serialized path then stops
+        /// resolving with no compiler to catch it. The id survives a rename.</para>
+        /// <para>Does NOT start the flow — call handle.Start().</para>
+        /// </summary>
+        public ISceneHandle Scene(string sceneRef)
         {
             if (!_initialized || _graph == null)
             {
                 throw new InvalidOperationException("Engine not initialized. Call Init() first.");
             }
 
-            var sceneGraph = _graph.GetSceneGraph(sceneId);
+            var graph = _graph;
+            var sceneGraph = graph.GetSceneGraph(sceneRef);
             if (sceneGraph == null)
             {
-                throw new InvalidOperationException($"Scene \"{sceneId}\" not found.");
+                throw new InvalidOperationException($"Scene \"{sceneRef}\" not found.");
             }
 
             var handle = new SceneHandleImpl(sceneGraph, _globalRegistry, new SceneHandleCallbacks
             {
-                OnSceneStarted = h => _activeScenes[sceneId] = h,
-                OnSceneEnded = _ => _activeScenes.Remove(sceneId),
+                OnSceneStarted = h => _activeScenes[sceneRef] = h,
+                // Only if the entry still points at the handle that is ending. Nothing stops a
+                // game from opening the same scene twice — a hub revisited while a first pass is
+                // parked on a handler — and a blind remove then dropped the LIVE one from the
+                // registry: the engine reported itself idle while a scene was still running, and
+                // Stop() no longer reached it.
+                OnSceneEnded = h =>
+                {
+                    if (_activeScenes.TryGetValue(sceneRef, out var current) && ReferenceEquals(current, h))
+                    {
+                        _activeScenes.Remove(sceneRef);
+                    }
+                },
                 GetResolveCharacter = () => _resolveCharacter,
                 GetConditionResolver = () => _conditionResolver,
-                GetLocale = () => _locale,
+                GetCard = cardId => graph.GetCard(cardId),
             });
 
             return handle;
@@ -225,10 +258,10 @@ namespace LsdeDialogEngine
         }
 
         /// <summary>Get connections for a scene (for inter-scene navigation).</summary>
-        public List<BlueprintConnection> GetSceneConnections(string sceneId)
+        public List<BlueprintConnection> GetSceneConnections(string sceneRef)
         {
             if (_graph == null) return new List<BlueprintConnection>();
-            return _graph.GetSceneConnections(sceneId);
+            return _graph.GetSceneConnections(sceneRef);
         }
     }
 }

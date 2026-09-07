@@ -24,7 +24,7 @@ Le engine expose les handlers suivants :
 | [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | Override un block CONDITION spécifique par UUID (type-safe) |
 | [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | Override un block ACTION spécifique par UUID (type-safe) |
 | [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) | global | Résolveur unifié de conditions (visibilité des choix + pré-évaluation des conditions) |
-| ~~[`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter)~~ | global | _Déprécié — utilisez `onResolveCondition` à la place_ |
+| ~~[`onResolveCondition`](/api-ref/classes/DialogueEngine#setchoicefilter)~~ | global | _Déprécié — utilisez `onResolveCondition` à la place_ |
 
 `onDialog`, `onChoice` et `onAction` sont **required** — le engine valide leur présence à l'appel de `start()` et throw une erreur descriptive si un manque. `onCondition` est **optionnel** quand `onResolveCondition` est installé — le engine auto-route depuis les groupes de conditions pré-évalués.
 
@@ -48,7 +48,7 @@ Quand les deux niveaux sont présents, les deux s'exécutent en séquence — sc
 
 ## Character Resolution
 
-Le système de résolution de personnage est optionnel. En enregistrant un callback `onResolveCharacter`, le engine l'invoque avant chaque block qui contient des personnages dans ses `metadata.characters`. Le callback reçoit la liste des personnages assignés au block et retourne celui qui doit être actif — ou `undefined` si aucun n'est disponible. Le personnage résolu est ensuite accessible via `context.character` dans tous les handlers.
+Le système de résolution de personnage est optionnel. En enregistrant un callback `onResolveCharacter`, le engine l'invoque avant chaque block qui contient des personnages dans ses `actors`. Le callback reçoit la liste des personnages assignés au block et retourne celui qui doit être actif — ou `undefined` si aucun n'est disponible. Le personnage résolu est ensuite accessible via `context.character` dans tous les handlers.
 
 C'est le point d'intégration idéal pour interroger l'état de votre jeu : vérifier si un personnage est présent dans la scène, en vie, dans le champ de la caméra, etc. Retourner `undefined` ouvre la porte à plusieurs stratégies : sauter le block via [`skipIfMissingActor`](/api-ref/interfaces/NativeProperties#skipifmissingactor), annuler la scène via `handle.cancel()`, ou gérer le cas directement dans le handler.
 

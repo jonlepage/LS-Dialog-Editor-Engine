@@ -13,7 +13,9 @@
 
 export * from './blueprint-types.js';
 
-import type { Blueprints, Scene, Block, Link, ConditionTest, Option, Card } from './blueprint-types.js';
+import type {
+	Blueprints, Scene, Block, Link, ConditionTest, Option, Card, ActionCall,
+} from './blueprint-types.js';
 import { BlockType } from './blueprint-types.js';
 
 /** A whole export. The engine's name for the generated {@link Blueprints}. */
@@ -120,13 +122,16 @@ export interface RuntimeChoiceItem extends Option {
 /**
  * A condition case with its pre-evaluated result, set when `onResolveCondition()` is installed.
  * Mirrors how {@link RuntimeChoiceItem} tags an option.
+ *
+ * The case carries its own exit port, so there is no index to map back to anything — that is the
+ * v1 shape (`portIndex`) and it is gone. Pass the `port` to `resolve()` to override the routing.
  */
-export interface RuntimeConditionGroup {
-	/** The comparisons of this case, chained left to right with no precedence. */
-	conditions: ConditionTest[];
-	/** Port index this group maps to (case_0 = 0, case_1 = 1, ...). Pass to `resolve()` for routing. */
-	portIndex: number;
-	/** Pre-evaluated result. `true` if the case matches, `false` if not, `undefined` if no resolver is installed. */
+export interface RuntimeConditionCase {
+	/** The exit port of this case: `K1`… with `portPerCase`, otherwise the block's `out`. */
+	port: string;
+	/** Its comparisons, chained left to right with no precedence. Absent = always true. */
+	when?: ConditionTest[];
+	/** `true` if the case holds, `false` if not, `undefined` if no resolver is installed. */
 	result?: boolean;
 }
 
@@ -170,7 +175,15 @@ export interface CheckOptions {
 
 /** Options passed to `engine.init()`. */
 export interface InitOptions {
-	data: BlueprintExport;
+	/**
+	 * One payload, or the several files of a per-scene export.
+	 *
+	 * LSDE can write one file per scene, and each of those is self-contained: it carries the whole
+	 * header — every dictionary, function and card — so a scene loads and plays on its own. Pass
+	 * the list and the engine stacks the scenes behind one header, after checking that the files
+	 * really do come from the same export.
+	 */
+	data: BlueprintExport | BlueprintExport[];
 	check?: CheckOptions;
 }
 
@@ -187,59 +200,89 @@ export type CleanupFn = () => void;
 
 // ─── Context Types ───────────────────────────────────────────────────────────
 
-/** Base context available to all block handlers. */
+/** What every block handler gets, whatever the block type. */
 export interface BaseBlockContext {
-	/** Character resolved by the `onResolveCharacter` callback for this block, or `undefined` if none. */
+	/**
+	 * The actor `onResolveCharacter()` picked for this block, or `undefined`.
+	 *
+	 * A block lists a CAST in `actors` — card ids, in an order LSDE deliberately refuses to give a
+	 * meaning to. Whether the first one speaks, whether they all do, whether the rest are simply
+	 * present is the game's call, so the engine hands the whole list to `onResolveCharacter()` and
+	 * keeps whatever comes back. It does not elect a first one, the way v1 did.
+	 */
 	character: Card | undefined;
-	/** Prevent the global (Tier 1) handler from executing after this scene handler. */
+	/** Every card the block cites, resolved through the export's `cards` table, in file order. */
+	actors: Card[];
+	/**
+	 * The emotion of the block, resolved through `cards` — the TONE of the line, not of a speaker.
+	 *
+	 * In v1 each character carried its own emotion, which meant writing the same feeling twice for
+	 * two actors saying one sentence, and being free to desynchronise them by accident. A block is
+	 * one line and one line has one tone; `actors` says who may carry it.
+	 */
+	emotion: Card | undefined;
+	/** How strongly, when the writer set an emotion. Passed through untouched. */
+	intensity: number | undefined;
+	/** Stop the global (Tier 1) handler from running after this scene handler. */
 	preventGlobalHandler: () => void;
 }
 
-/** Context for DIALOG block handlers. */
+/** What a DIALOG handler gets. */
 export interface DialogContext extends BaseBlockContext {
-	/** When portPerCharacter is enabled, specify which character port to follow. */
-	resolveCharacterPort: (characterUuid: string) => void;
+	/**
+	 * With `portPerCharacter`, name the actor whose port the flow should take.
+	 *
+	 * Takes a CARD ID (`var1`) — the same id `block.actors` lists and the same one the port is
+	 * named after. A card the block does not cite, or one with no port drawn, falls back to `out`.
+	 */
+	resolveCharacterPort: ( cardId: string ) => void;
 }
 
-/** Context for CHOICE block handlers. */
+/** What a CHOICE handler gets. */
 export interface ChoiceContext extends BaseBlockContext {
 	/**
-	 * All choices with optional visibility tags. When `engine.onResolveCondition()` is configured,
-	 * each choice is tagged `visible: true | false`. Filter with `choices.filter(c => c.visible !== false)`.
-	 * Without a filter, `visible` is `undefined` and all choices pass.
+	 * EVERY option of the block, tagged. Not a shortened list.
+	 *
+	 * With `engine.onResolveCondition()` installed, each carries `visible: true | false`; without
+	 * one it is `undefined` — unknown, not hidden. Show the offered ones with
+	 * `options.filter( o => o.visible !== false )`, or keep the rest to grey them out.
 	 */
-	choices: RuntimeChoiceItem[];
-	/** Select a choice by UUID. The engine follows the matching port. */
-	selectChoice: (choiceUuid: string) => void;
+	options: RuntimeChoiceItem[];
+	/** Pick an option by its id (`C1`). That id is also the port the flow leaves by. */
+	selectChoice: ( optionId: string ) => void;
 }
 
-/** Context for CONDITION block handlers. */
+/** What a CONDITION handler gets. */
 export interface ConditionContext extends BaseBlockContext {
 	/**
-	 * All condition groups with optional pre-evaluated results.
-	 * When {@link IDialogueEngine.onResolveCondition | onResolveCondition()} is configured,
-	 * each group has `result: true | false`. Without a resolver, `result` is `undefined`.
+	 * The block's cases, each with its port and its pre-evaluated `result`.
+	 *
+	 * With `onResolveCondition()` installed the engine has already evaluated them and already
+	 * knows where to go — the handler becomes a place to log or to override, and is optional.
 	 */
-	conditionGroups: RuntimeConditionGroup[];
+	cases: RuntimeConditionCase[];
 	/**
-	 * Resolve the condition evaluation result.
-	 * - `boolean`: legacy single-group mode — `true` → port index 0, `false` → port index 1.
-	 * - `number`: switch mode — `>= 0` follows the matching case port, `< 0` follows `default`.
-	 * - `number[]`: dispatcher mode — all matching case indices fire as async tracks, `default` is the main track.
+	 * Override the exit port. Takes a PORT NAME: `out`, `default`, or a case port (`K1`).
+	 *
+	 * v1 took `boolean | number | number[]` — three shapes for one method, the third being the
+	 * dispatcher. Both are gone: a condition picks one path.
 	 */
-	resolve: (result: boolean | number | number[]) => void;
+	resolve: ( port: string ) => void;
 }
 
-/** Context for ACTION block handlers. */
+/** What an ACTION handler gets. */
 export interface ActionContext extends BaseBlockContext {
-	/** Mark action as succeeded. Engine follows the `then` port. */
+	/** The calls the block asks the game to run, in order, with their arguments BY NAME. */
+	calls: ActionCall[];
+	/** The calls went through. The flow leaves by `then`. */
 	resolve: () => void;
-	/** Mark action as failed. Engine follows the `catch` port (fallback `then` if no catch port exists). */
-	reject: (error: unknown) => void;
+	/** A call failed. The flow leaves by `catch`, or by `then` when no error branch was drawn. */
+	reject: ( error: unknown ) => void;
 }
 
-/** Context passed to onBeforeBlock handler. */
+/** What `onBeforeBlock` gets. */
 export interface BeforeBlockContext {
+	/** The engine-facing properties of the block, read out of `props`. */
 	nativeProperties: NativeProperties | undefined;
 }
 
@@ -572,8 +615,6 @@ export interface IDialogueEngine {
 	 */
 	onResolveCondition(evaluator: (condition: ConditionTest) => boolean): void;
 
-	/** @deprecated Use {@link onResolveCondition} instead. */
-	setChoiceFilter(evaluator: (condition: ConditionTest) => boolean): void;
 
 	// ── Scene lifecycle ─────────────────────────────────────────────────
 
@@ -603,28 +644,23 @@ export interface IDialogueEngine {
 
 // ─── Port Resolution Types ──────────────────────────────────────────────────
 
-/** Input data for port resolution. */
+/** What `resolvePort()` needs to pick the wires to follow. */
 export interface PortResolutionInput {
-	/** The block whose output port is being resolved. Its `type` determines the routing rules. */
+	/** The block being left. Its `type` picks the routing rule. */
 	block: BlueprintBlock;
-	/** All outgoing connections from this block. The resolver picks the one to follow. */
-	connections: BlueprintConnection[];
-	/** CHOICE blocks only — UUID of the selected choice. Matches `connection.fromPort`. */
-	selectedChoiceUuid?: string;
-	/**
-	 * CONDITION blocks only — evaluation result.
-	 * - `boolean`: `true` → port index 0, `false` → port index 1 (legacy single-group).
-	 * - `number`: `>= 0` follows matching case port, `< 0` follows `default`/`false` (switch mode).
-	 * - `number[]`: all matching case indices + `default` (dispatcher mode).
-	 */
-	conditionResult?: boolean | number | number[];
-	/** ACTION blocks only — if `true`, the resolver looks for a `catch` port before falling back to `then`. */
+	/** The wires it carries — `block.next`, straight off the block. */
+	links: Link[];
+	/** CHOICE only: the option the player picked. Its id **is** its port (`C1`…). */
+	selectedOptionId?: string;
+	/** CONDITION only: the port its cases picked — `out`, `default`, or `K1`…. */
+	conditionPort?: string;
+	/** ACTION only: `true` when a call failed, so `catch` is tried before `then`. */
 	actionRejected?: boolean;
-	/** DIALOG blocks with `portPerCharacter` — character index in metadata.characters to match against `connection.fromPortIndex`. */
-	characterPortIndex?: number;
+	/** DIALOG with `portPerCharacter`: the CARD ID of the speaking actor (`var1`), never an index. */
+	actorPort?: string;
 }
 
-/** Result of port resolution — all matching connections. */
+/** The wires to follow. The traversal decides which is the main track. */
 export interface PortResolutionResult {
-	connections: BlueprintConnection[];
+	links: Link[];
 }

@@ -1,25 +1,42 @@
 // LSDE Dialog Engine — Context factory per block type
+//
+// A context is what a handler is handed alongside its block: the resolved cards, and the few
+// methods that let the game answer back. Everything the engine needs to hear from a handler comes
+// back through here, which is why each factory keeps its answer in a `_`-prefixed field the
+// traversal reads once the handler returns.
+//
+// Two v1 habits are gone from this file:
+//
+// **Actors are card ids now.** A block cites `["var1"]`, not a copy of the character. The ids are
+// resolved through the export's `cards` table before the context is built, and the WHOLE list is
+// handed over — the engine does not elect a first one, because LSDE deliberately refuses to say
+// whether the order means "who speaks" or "who is present". That belongs to the game.
+//
+// **The emotion belongs to the block.** It used to sit on each character, so two actors saying one
+// sentence meant writing the same feeling twice, with nothing stopping them from drifting apart.
 
 import type {
-	DialogBlock, ChoiceBlock, RuntimeChoiceItem, RuntimeConditionGroup,
-	DialogContext, ChoiceContext, ConditionContext, ActionContext, BlockCharacter,
+	Block, Card, RuntimeChoiceItem, RuntimeConditionCase,
+	DialogContext, ChoiceContext, ConditionContext, ActionContext,
 } from './types.js';
 
 // ─── Internal extended types (engine-internal state) ─────────────────────────
 
 export interface InternalDialogContext extends DialogContext {
 	_globalPrevented: boolean;
-	_characterPortIndex: number | undefined;
+	/** The card id whose port to take, or `undefined` for `out`. */
+	_actorPort: string | undefined;
 }
 
 export interface InternalChoiceContext extends ChoiceContext {
 	_globalPrevented: boolean;
-	_selectedChoiceUuid: string | undefined;
+	_selectedOptionId: string | undefined;
 }
 
 export interface InternalConditionContext extends ConditionContext {
 	_globalPrevented: boolean;
-	_conditionResult: boolean | number | number[] | undefined;
+	/** The port the handler picked, overriding what the cases said. */
+	_conditionPort: string | undefined;
 }
 
 export interface InternalActionContext extends ActionContext {
@@ -27,20 +44,56 @@ export interface InternalActionContext extends ActionContext {
 	_actionRejected: boolean;
 }
 
+/** The cards a block cites, already looked up. Built once per block, shared by every context. */
+export interface ResolvedCards {
+	/** Every card in `block.actors`, in file order. Ids with no card are dropped. */
+	actors: Card[];
+	/** The card in `block.emotion`, when the writer set one. */
+	emotion: Card | undefined;
+	/** The one `onResolveCharacter()` picked out of `actors`, when a resolver is installed. */
+	character: Card | undefined;
+}
+
+/**
+ * Look up a block's `actors` and `emotion` in the export's card table.
+ *
+ * An id with no card is dropped rather than reported: a payload citing a card that is not in its
+ * own tables is an exporter bug, and the traversal is not where a game should learn about it —
+ * `init()` is.
+ */
+export function resolveCards(
+	block: Block,
+	lookup: ( cardId: string ) => Card | undefined,
+	pickCharacter: ( ( actors: Card[] ) => Card | undefined ) | undefined,
+): ResolvedCards {
+	const actors: Card[] = [];
+	for ( const id of block.actors ?? [] ) {
+		const card = lookup( id );
+		if ( card ) actors.push( card );
+	}
+
+	const emotion = block.emotion ? lookup( block.emotion ) : undefined;
+	const character = pickCharacter ? pickCharacter( actors ) : undefined;
+
+	return { actors, emotion, character };
+}
+
 // ─── Factories ───────────────────────────────────────────────────────────────
 
-export function createDialogContext( block: DialogBlock, resolvedCharacter: BlockCharacter | undefined ): InternalDialogContext {
-	const characters = block.metadata?.characters ?? [];
+export function createDialogContext( block: Block, cards: ResolvedCards ): InternalDialogContext {
+	// The port of an actor IS its card id — `var1`, the same string `block.actors` lists. Only an
+	// id the block actually cites can pick a port; anything else falls through to `out`.
+	const cited = new Set( block.actors ?? [] );
+
 	const ctx: InternalDialogContext = {
 		_globalPrevented: false,
-		_characterPortIndex: undefined,
-		character: resolvedCharacter,
-		resolveCharacterPort( characterUuid: string ) {
-			let index = characters.findIndex( c => c.uuid === characterUuid );
-			if ( index < 0 ) {
-				index = characters.findIndex( c => c.name === characterUuid );
-			}
-			ctx._characterPortIndex = index >= 0 ? index : undefined;
+		_actorPort: undefined,
+		character: cards.character,
+		actors: cards.actors,
+		emotion: cards.emotion,
+		intensity: block.intensity,
+		resolveCharacterPort( cardId: string ) {
+			ctx._actorPort = cited.has( cardId ) ? cardId : undefined;
 		},
 		preventGlobalHandler() {
 			ctx._globalPrevented = true;
@@ -50,21 +103,26 @@ export function createDialogContext( block: DialogBlock, resolvedCharacter: Bloc
 }
 
 export function createChoiceContext(
-	block: ChoiceBlock,
-	taggedChoices: RuntimeChoiceItem[],
-	onChoiceSelected: ( ( blockUuid: string, choiceUuid: string ) => void ) | undefined,
-	resolvedCharacter: BlockCharacter | undefined,
+	block: Block,
+	cards: ResolvedCards,
+	taggedOptions: RuntimeChoiceItem[],
+	onChoiceSelected: ( ( blockId: string, optionId: string ) => void ) | undefined,
 ): InternalChoiceContext {
-	const choices: RuntimeChoiceItem[] = taggedChoices;
 	const ctx: InternalChoiceContext = {
 		_globalPrevented: false,
-		_selectedChoiceUuid: undefined,
-		character: resolvedCharacter,
-		choices,
-		selectChoice( choiceUuid: string ) {
-			ctx._selectedChoiceUuid = choiceUuid;
+		_selectedOptionId: undefined,
+		character: cards.character,
+		actors: cards.actors,
+		emotion: cards.emotion,
+		intensity: block.intensity,
+		options: taggedOptions,
+		selectChoice( optionId: string ) {
+			ctx._selectedOptionId = optionId;
+			// Recorded even for an option that does not exist: the history is what the reserved
+			// `choice` dictionary reads back, and silently dropping an answer would make a later
+			// condition lie about what the player did.
 			if ( onChoiceSelected ) {
-				onChoiceSelected( block.uuid, choiceUuid );
+				onChoiceSelected( block.id, optionId );
 			}
 		},
 		preventGlobalHandler() {
@@ -75,16 +133,20 @@ export function createChoiceContext(
 }
 
 export function createConditionContext(
-	resolvedCharacter: BlockCharacter | undefined,
-	conditionGroups: RuntimeConditionGroup[],
+	block: Block,
+	cards: ResolvedCards,
+	cases: RuntimeConditionCase[],
 ): InternalConditionContext {
 	const ctx: InternalConditionContext = {
 		_globalPrevented: false,
-		_conditionResult: undefined,
-		character: resolvedCharacter,
-		conditionGroups,
-		resolve( result: boolean | number | number[] ) {
-			ctx._conditionResult = result;
+		_conditionPort: undefined,
+		character: cards.character,
+		actors: cards.actors,
+		emotion: cards.emotion,
+		intensity: block.intensity,
+		cases,
+		resolve( port: string ) {
+			ctx._conditionPort = port;
 		},
 		preventGlobalHandler() {
 			ctx._globalPrevented = true;
@@ -93,11 +155,15 @@ export function createConditionContext(
 	return ctx;
 }
 
-export function createActionContext( resolvedCharacter: BlockCharacter | undefined ): InternalActionContext {
+export function createActionContext( block: Block, cards: ResolvedCards ): InternalActionContext {
 	const ctx: InternalActionContext = {
 		_globalPrevented: false,
 		_actionRejected: false,
-		character: resolvedCharacter,
+		character: cards.character,
+		actors: cards.actors,
+		emotion: cards.emotion,
+		intensity: block.intensity,
+		calls: block.calls ?? [],
 		resolve() {
 			ctx._actionRejected = false;
 		},

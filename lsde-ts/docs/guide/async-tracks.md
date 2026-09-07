@@ -1,6 +1,6 @@
 # Async Tracks
 
-When a block has `nativeProperties.isAsync = true`, the engine creates a **parallel track** that runs independently of the main flow.
+When a block has `props.isAsync = true`, the engine creates a **parallel track** that runs independently of the main flow.
 
 ## How Tracks are Created
 
@@ -20,7 +20,7 @@ This applies to both the main track **and** async tracks — an async track can 
 
 ## waitForBlocks — Track Synchronization
 
-Use `nativeProperties.waitForBlocks` to synchronize parallel tracks. It accepts an array of block UUIDs that must be visited before the block can proceed:
+Use `props.waitForBlocks` to synchronize parallel tracks. It accepts an array of block UUIDs that must be visited before the block can proceed:
 
 - **On the start block**: The entire track waits before even beginning execution. `onBeforeBlock` is not called until all required blocks are visited.
 - **On any other block**: When the handler calls `next()`, the advance is deferred until the condition is met.
@@ -33,7 +33,7 @@ spawn → waitForBlocks gate → onBeforeBlock (delay) → handler → next()
 
 ## waitInput — Player Input Flag
 
-`nativeProperties.waitInput` is a **passive flag** — the engine exposes it but does not interpret it. Your game handler reads it to decide whether to wait for explicit player input (e.g., a second controller, a custom event, or an NPC auto-selection).
+`props.waitInput` is a **passive flag** — the engine exposes it but does not interpret it. Your game handler reads it to decide whether to wait for explicit player input (e.g., a second controller, a custom event, or an NPC auto-selection).
 
 ## TrackInfo API — Observability
 

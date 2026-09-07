@@ -16,7 +16,7 @@ dialog block 代表一句台词 — 角色对话、旁白、屏幕文字。engin
 
 ## CHOICE
 
-choice block 是玩家做出选择的分支点 — 对话菜单、选项列表。`context.choices` 包含所有可用选项。当配置了 [`onResolveCondition()`](/zh/guide/choice-visibility) 时，每个选项被标记为 `visible: true | false` — handler 过滤并显示想要的选项。玩家交互后，`selectChoice(uuid)` 告诉 engine 走哪条路径，然后 `next()` 推进 flow。
+choice block 是玩家做出选择的分支点 — 对话菜单、选项列表。`context.options` 包含所有可用选项。当配置了 [`onResolveCondition()`](/zh/guide/choice-visibility) 时，每个选项被标记为 `visible: true | false` — handler 过滤并显示想要的选项。玩家交互后，`selectChoice(uuid)` 告诉 engine 走哪条路径，然后 `next()` 推进 flow。
 
 <!--@include: ../../_shared/block-choice.md-->
 
@@ -29,7 +29,7 @@ condition block 是一个不可见的开关 — 它评估游戏状态，在玩�
 condition block 支持两种评估模式：
 
 - **switch 模式**（默认）：按顺序评估条件组。第一个匹配的组路由到对应的 port（`true`/`case_N`）。如果没有匹配，则走 `false`/`default` port。
-- **dispatcher 模式**（[`enableDispatcher`](/api-ref/interfaces/NativeProperties#enabledispatcher) `= true`）：**所有**匹配的组同时作为 async track 触发。`false`/`default` port 变为主继续 track（"Continue"），**始终执行**。连接到条件 port 的 block 必须是 async 的。
+- **dispatcher 模式**（[`portPerCase`](/api-ref/interfaces/NativeProperties#enabledispatcher) `= true`）：**所有**匹配的组同时作为 async track 触发。`false`/`default` port 变为主继续 track（"Continue"），**始终执行**。连接到条件 port 的 block 必须是 async 的。
 
 <!--@include: ../../_shared/block-condition.md-->
 
@@ -55,9 +55,9 @@ note block 是叙事设计师的便签 — 注释、提醒、上下文。在遍�
 | [`parentLabels`](/api-ref/interfaces/BlueprintBlockBase#parentlabels) | `string[]?` | 编辑器中的父文件夹层级 |
 | [`properties`](/api-ref/interfaces/BlueprintBlockBase#properties) | `BlockProperty[]` | 键值属性 |
 | [`userProperties`](/api-ref/interfaces/BlueprintBlockBase#userproperties) | `Record?` | 自由格式的用户属性 |
-| [`nativeProperties`](/api-ref/interfaces/BlueprintBlockBase#nativeproperties) | `NativeProperties?` | 执行属性 |
+| [`props`](/api-ref/interfaces/BlueprintBlockBase#nativeproperties) | `NativeProperties?` | 执行属性 |
 | [`metadata`](/api-ref/interfaces/BlueprintBlockBase#metadata) | `BlockMetadata?` | 显示元数据（角色、标签、颜色） |
-| [`isStartBlock`](/api-ref/interfaces/BlueprintBlockBase#isstartblock) | `boolean?` | 标记入口 block |
+| [`scene.start`](/api-ref/interfaces/BlueprintBlockBase#isstartblock) | `boolean?` | 标记入口 block |
 
 ### NativeProperties
 
@@ -71,4 +71,4 @@ note block 是叙事设计师的便签 — 注释、提醒、上下文。在遍�
 | [`debug`](/api-ref/interfaces/NativeProperties#debug) | `boolean?` | 编辑器调试标志 |
 | [`waitForBlocks`](/api-ref/interfaces/NativeProperties#waitforblocks) | `string[]?` | 此 block 可以继续之前必须已访问的 block UUID |
 | [`waitInput`](/api-ref/interfaces/NativeProperties#waitinput) | `boolean?` | 用于显式玩家输入控制的被动标志 |
-| [`enableDispatcher`](/api-ref/interfaces/NativeProperties#enabledispatcher) | `boolean?` | dispatcher 模式：所有匹配的条件作为 async track 触发，false/default port 变为继续 track |
+| [`portPerCase`](/api-ref/interfaces/NativeProperties#enabledispatcher) | `boolean?` | dispatcher 模式：所有匹配的条件作为 async track 触发，false/default port 变为继续 track |

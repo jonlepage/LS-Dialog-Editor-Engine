@@ -1,39 +1,38 @@
+// LSDE Dialog Engine — SceneHandle and the traversal loop
+//
+// The scene walks: skip notes, validate, fire onBeforeBlock, run the handler, resolve the port,
+// follow it. Everything a game can say back to the engine goes through here.
+
 import { describe, it, expect, vi } from 'vitest';
 import { SceneHandleImpl, type SceneHandleCallbacks } from './scene-handle.js';
 import { SceneGraph } from './graph.js';
 import { HandlerRegistry } from './handler-registry.js';
-import type { BlueprintScene, BlueprintBlock, BlockCharacter, ExportCondition } from './types.js';
+import type { Scene, Card, ConditionTest } from './types.js';
+import {
+	scene as makeScene, dialog, choice, condition, action, note,
+	link, option, card, whenCase, choiceTest, test as t,
+} from './test-builders.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function makeScene( overrides: Partial<BlueprintScene> = {} ): BlueprintScene {
-	return {
-		uuid: 'scene-1', label: 'Test', date: '2025-01-01',
-		blocks: [], connections: [],
-		...overrides,
-	};
-}
+const CARDS: Record<string, Card> = {
+	var1: card( 'var1', 'kael' ),
+	var2: card( 'var2', 'nora' ),
+	var7: card( 'var7', 'afraid', 'emotions' ),
+};
 
 function makeCallbacks( overrides?: Partial<SceneHandleCallbacks> ): SceneHandleCallbacks {
 	return {
 		onSceneStarted: vi.fn(),
 		onSceneEnded: vi.fn(),
-		getResolveCharacter: () => ( chars ) => chars[0],
+		getResolveCharacter: () => ( actors ) => actors[0],
 		getConditionResolver: () => null,
-		getLocale: () => 'en',
+		getCard: ( id ) => CARDS[id],
 		...overrides,
 	};
 }
 
-function dialog( uuid: string, start = false ): BlueprintBlock {
-	return { uuid, type: 'DIALOG', properties: [], isStartBlock: start } as BlueprintBlock;
-}
-
-function conn( fromId: string, toId: string, fromPort = 'out' ) {
-	return { id: `${ fromId }-${ toId }`, fromId, toId, fromPort, toPort: 'in' };
-}
-
-/** Registers all 4 mandatory handlers with sensible defaults (next-only). Override individual handlers after calling. */
+/** All four mandatory handlers, next-only. Override the one under test afterwards. */
 function registerBaseHandlers( registry: HandlerRegistry ): void {
 	registry.dialogHandler = ( { next } ) => next();
 	registry.choiceHandler = ( { next } ) => next();
@@ -41,948 +40,847 @@ function registerBaseHandlers( registry: HandlerRegistry ): void {
 	registry.actionHandler = ( { next } ) => next();
 }
 
-// ─── Tests ───────────────────────────────────────────────────────────────────
+function handleFor( scene: Scene, registry: HandlerRegistry, cb?: Partial<SceneHandleCallbacks> ) {
+	return new SceneHandleImpl( new SceneGraph( scene ), registry, makeCallbacks( cb ) );
+}
 
-describe( 'SceneHandleImpl', () => {
+// ─── Traversal ───────────────────────────────────────────────────────────────
+
+describe( 'traversal', () => {
 
 	it( 'traverses two dialog blocks linearly', () => {
 		const visited: string[] = [];
-		const scene = makeScene( {
-			blocks: [dialog( 'b1', true ), dialog( 'b2' )],
-			connections: [conn( 'b1', 'b2' )],
-		} );
+		const scene = makeScene( [
+			dialog( 'b1', { next: [link( 'b2' )] } ),
+			dialog( 'b2' ),
+		] );
 		const global = new HandlerRegistry();
 		registerBaseHandlers( global );
-		global.dialogHandler = ( { block, next } ) => {
-			visited.push( block.uuid );
-			next();
-		};
+		global.dialogHandler = ( { block, next } ) => { visited.push( block.id ); next(); };
 
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
-		handle.start();
+		handleFor( scene, global ).start();
 
 		expect( visited ).toEqual( ['b1', 'b2'] );
-		expect( handle.isRunning() ).toBe( false );
-		expect( Array.from( handle.getVisitedBlocks() ) ).toEqual( ['b1', 'b2'] );
 	} );
+
+	it( 'starts on the block the SCENE names, not on a per-block flag', () => {
+		const visited: string[] = [];
+		const scene = makeScene(
+			[dialog( 'b1', { next: [link( 'b2' )] } ), dialog( 'b2' )],
+			{ start: 'b2' },
+		);
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.dialogHandler = ( { block, next } ) => { visited.push( block.id ); next(); };
+
+		handleFor( scene, global ).start();
+
+		expect( visited ).toEqual( ['b2'] );
+	} );
+
+	it( 'ends immediately when the scene names no start block', () => {
+		const scene = makeScene( [dialog( 'b1' )], { start: undefined } );
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		const handle = handleFor( scene, global );
+
+		handle.start();
+
+		expect( handle.isRunning() ).toBe( false );
+	} );
+
+	it( 'handles an empty scene gracefully', () => {
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		const handle = handleFor( makeScene( [] ), global );
+
+		expect( () => handle.start() ).not.toThrow();
+		expect( handle.isRunning() ).toBe( false );
+	} );
+
+	it( 'skips NOTE blocks and follows their links', () => {
+		const visited: string[] = [];
+		const scene = makeScene( [
+			dialog( 'b1', { next: [link( 'n1' )] } ),
+			note( 'n1', { next: [link( 'b2' )] } ),
+			dialog( 'b2' ),
+		] );
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.dialogHandler = ( { block, next } ) => { visited.push( block.id ); next(); };
+
+		handleFor( scene, global ).start();
+
+		expect( visited ).toEqual( ['b1', 'b2'] );
+	} );
+
+	it( 'follows a link by port name, never by position', () => {
+		const visited: string[] = [];
+		const scene = makeScene( [
+			action( 'a1', [], { next: [link( 'wrong', 'catch' ), link( 'right', 'then' )] } ),
+			dialog( 'wrong' ),
+			dialog( 'right' ),
+		] );
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.dialogHandler = ( { block, next } ) => { visited.push( block.id ); next(); };
+		global.actionHandler = ( { context, next } ) => { context.resolve(); next(); };
+
+		handleFor( scene, global ).start();
+
+		expect( visited ).toEqual( ['right'] );
+	} );
+} );
+
+// ─── Lifecycle ───────────────────────────────────────────────────────────────
+
+describe( 'lifecycle', () => {
 
 	it( 'fires onSceneEnter and onSceneExit', () => {
-		const enterSpy = vi.fn();
-		const exitSpy = vi.fn();
-		const scene = makeScene( {
-			blocks: [dialog( 'b1', true )],
-			connections: [],
-		} );
+		const events: string[] = [];
 		const global = new HandlerRegistry();
 		registerBaseHandlers( global );
-		global.sceneEnterHandler = enterSpy;
-		global.sceneExitHandler = exitSpy;
+		global.sceneEnterHandler = () => events.push( 'enter' );
+		global.sceneExitHandler = () => events.push( 'exit' );
 
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
-		handle.start();
+		handleFor( makeScene( [dialog( 'b1' )] ), global ).start();
 
-		expect( enterSpy ).toHaveBeenCalledOnce();
-		expect( exitSpy ).toHaveBeenCalledOnce();
+		expect( events ).toEqual( ['enter', 'exit'] );
 	} );
 
-	it( 'Tier 2 onEnter overrides global onSceneEnter', () => {
-		const globalEnter = vi.fn();
-		const sceneEnter = vi.fn();
-		const scene = makeScene( { blocks: [dialog( 'b1', true )] } );
+	it( 'Tier 2 onEnter overrides the global onSceneEnter', () => {
+		const events: string[] = [];
 		const global = new HandlerRegistry();
 		registerBaseHandlers( global );
-		global.sceneEnterHandler = globalEnter;
+		global.sceneEnterHandler = () => events.push( 'global' );
 
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
-		handle.onEnter( sceneEnter );
+		const handle = handleFor( makeScene( [dialog( 'b1' )] ), global );
+		handle.onEnter( () => events.push( 'scene' ) );
 		handle.start();
 
-		expect( sceneEnter ).toHaveBeenCalledOnce();
-		expect( globalEnter ).not.toHaveBeenCalled();
+		expect( events ).toEqual( ['scene'] );
 	} );
 
 	it( 'cancel() stops the flow and fires onSceneExit', () => {
-		const exitSpy = vi.fn();
-		const scene = makeScene( {
-			blocks: [dialog( 'b1', true ), dialog( 'b2' )],
-			connections: [conn( 'b1', 'b2' )],
-		} );
+		const events: string[] = [];
+		const scene = makeScene( [dialog( 'b1', { next: [link( 'b2' )] } ), dialog( 'b2' )] );
 		const global = new HandlerRegistry();
 		registerBaseHandlers( global );
-		global.sceneExitHandler = exitSpy;
+		global.sceneExitHandler = () => events.push( 'exit' );
 
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
-
+		let handle!: SceneHandleImpl;
 		global.dialogHandler = ( { block, next } ) => {
-			if ( block.uuid === 'b1' ) {
-				handle.cancel();
-				next(); // should be no-op after cancel
-			}
-		};
-
-		handle.start();
-		expect( handle.isRunning() ).toBe( false );
-		expect( exitSpy ).toHaveBeenCalledOnce();
-		// b2 should never be visited
-		expect( handle.getVisitedBlocks().has( 'b2' ) ).toBe( false );
-	} );
-
-	it( 'skips NOTE blocks and follows their connections', () => {
-		const visited: string[] = [];
-		const scene = makeScene( {
-			blocks: [
-				dialog( 'b1', true ),
-				{ uuid: 'note1', type: 'NOTE', properties: [] } as BlueprintBlock,
-				dialog( 'b3' ),
-			],
-			connections: [conn( 'b1', 'note1' ), conn( 'note1', 'b3', 'any' )],
-		} );
-		const global = new HandlerRegistry();
-		registerBaseHandlers( global );
-		global.dialogHandler = ( { block, next } ) => {
-			visited.push( block.uuid );
+			events.push( block.id );
+			if ( block.id === 'b1' ) handle.cancel();
 			next();
 		};
-
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		handle = handleFor( scene, global );
 		handle.start();
 
-		expect( visited ).toEqual( ['b1', 'b3'] );
+		expect( events ).toEqual( ['b1', 'exit'] );
 	} );
 
-	it( 'calls cleanup when advancing to next block', () => {
-		const cleanupSpy = vi.fn();
-		const scene = makeScene( {
-			blocks: [dialog( 'b1', true ), dialog( 'b2' )],
-			connections: [conn( 'b1', 'b2' )],
-		} );
-		const global = new HandlerRegistry();
-		registerBaseHandlers( global );
-		let callCount = 0;
-		global.dialogHandler = ( { next } ) => {
-			callCount++;
-			if ( callCount === 1 ) {
-				next();
-				return cleanupSpy;
-			}
-			next();
-		};
-
-		new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() ).start();
-
-		expect( cleanupSpy ).toHaveBeenCalledOnce();
-	} );
-
-	it( 'calls cleanup of last block when scene ends', () => {
-		const cleanupSpy = vi.fn();
-		const scene = makeScene( {
-			blocks: [dialog( 'b1', true )],
-			connections: [],
-		} );
-		const global = new HandlerRegistry();
-		registerBaseHandlers( global );
-		global.dialogHandler = ( { next } ) => {
-			next();
-			return cleanupSpy;
-		};
-
-		new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() ).start();
-		expect( cleanupSpy ).toHaveBeenCalledOnce();
-	} );
-
-	it( 'onValidateNextBlock can block a block', () => {
-		const invalidateSpy = vi.fn();
-		const scene = makeScene( {
-			blocks: [dialog( 'b1', true ), dialog( 'b2' )],
-			connections: [conn( 'b1', 'b2' )],
-		} );
-		const global = new HandlerRegistry();
-		registerBaseHandlers( global );
-		global.validateNextBlockHandler = ( { nextBlock } ) => {
-			if ( nextBlock.uuid === 'b2' ) return { valid: false, reason: 'blocked' };
-			return { valid: true };
-		};
-		global.invalidateBlockHandler = invalidateSpy;
-
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
-		handle.start();
-
-		expect( invalidateSpy ).toHaveBeenCalledOnce();
-		expect( invalidateSpy.mock.calls[0]![0].reason ).toBe( 'blocked' );
-		// b2 should not be visited
-		expect( handle.getVisitedBlocks().has( 'b2' ) ).toBe( false );
-	} );
-
-	it( 'onValidateNextBlock receives nextContext.character', () => {
-		const charLia: BlockCharacter = { uuid: 'c1', id: 'a1', name: 'Lia' };
-		const b1 = { uuid: 'b1', type: 'DIALOG', properties: [], isStartBlock: true,
-			metadata: { characters: [charLia] } } as unknown as BlueprintBlock;
-		const scene = makeScene( {
-			blocks: [b1],
-			connections: [],
-		} );
-		const global = new HandlerRegistry();
-		registerBaseHandlers( global );
-		let receivedCharacter: BlockCharacter | undefined;
-		global.validateNextBlockHandler = ( { nextContext } ) => {
-			receivedCharacter = nextContext.character;
-			return { valid: true };
-		};
-
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
-		handle.start();
-
-		expect( receivedCharacter ).toEqual( charLia );
-	} );
-
-	it( 'onValidateNextBlock receives fromContext.character from previous block', () => {
-		const charLia: BlockCharacter = { uuid: 'c1', id: 'a1', name: 'Lia' };
-		const charBob: BlockCharacter = { uuid: 'c2', id: 'a2', name: 'Bob' };
-		const b1 = { uuid: 'b1', type: 'DIALOG', properties: [], isStartBlock: true,
-			metadata: { characters: [charLia] } } as unknown as BlueprintBlock;
-		const b2 = { uuid: 'b2', type: 'DIALOG', properties: [],
-			metadata: { characters: [charBob] } } as unknown as BlueprintBlock;
-		const scene = makeScene( {
-			blocks: [b1, b2],
-			connections: [conn( 'b1', 'b2' )],
-		} );
-		const global = new HandlerRegistry();
-		registerBaseHandlers( global );
-		let fromChar: BlockCharacter | undefined;
-		let nextChar: BlockCharacter | undefined;
-		global.validateNextBlockHandler = ( { nextBlock, nextContext, fromContext } ) => {
-			if ( nextBlock.uuid === 'b2' ) {
-				fromChar = fromContext?.character;
-				nextChar = nextContext.character;
-			}
-			return { valid: true };
-		};
-
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
-		handle.start();
-
-		expect( fromChar ).toEqual( charLia );
-		expect( nextChar ).toEqual( charBob );
-	} );
-
-	it( 'onValidateNextBlock fromContext is null for the first block', () => {
-		const scene = makeScene( {
-			blocks: [dialog( 'b1', true )],
-			connections: [],
-		} );
-		const global = new HandlerRegistry();
-		registerBaseHandlers( global );
-		let receivedFromContext: unknown = 'not_called';
-		global.validateNextBlockHandler = ( { fromContext } ) => {
-			receivedFromContext = fromContext;
-			return { valid: true };
-		};
-
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
-		handle.start();
-
-		expect( receivedFromContext ).toBeNull();
-	} );
-
-	it( 'onValidateNextBlock nextContext.character is undefined when block has no characters', () => {
-		const scene = makeScene( {
-			blocks: [dialog( 'b1', true )],
-			connections: [],
-		} );
-		const global = new HandlerRegistry();
-		registerBaseHandlers( global );
-		let receivedCharacter: BlockCharacter | undefined = { uuid: 'placeholder', id: '', name: '' };
-		global.validateNextBlockHandler = ( { nextContext } ) => {
-			receivedCharacter = nextContext.character;
-			return { valid: true };
-		};
-
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
-		handle.start();
-
-		expect( receivedCharacter ).toBeUndefined();
-	} );
-
-	it( 'onValidateNextBlock can invalidate based on character', () => {
-		const charLia: BlockCharacter = { uuid: 'c1', id: 'a1', name: 'Lia' };
-		const b1 = { uuid: 'b1', type: 'DIALOG', properties: [], isStartBlock: true } as BlueprintBlock;
-		const b2 = { uuid: 'b2', type: 'DIALOG', properties: [],
-			metadata: { characters: [charLia] } } as unknown as BlueprintBlock;
-		const scene = makeScene( {
-			blocks: [b1, b2],
-			connections: [conn( 'b1', 'b2' )],
-		} );
-		const global = new HandlerRegistry();
-		registerBaseHandlers( global );
-		const invalidateSpy = vi.fn();
-		global.validateNextBlockHandler = ( { nextContext } ) => {
-			if ( nextContext.character?.name === 'Lia' ) return { valid: false, reason: 'lia_not_allowed' };
-			return { valid: true };
-		};
-		global.invalidateBlockHandler = invalidateSpy;
-
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
-		handle.start();
-
-		expect( invalidateSpy ).toHaveBeenCalledOnce();
-		expect( invalidateSpy.mock.calls[0]![0].reason ).toBe( 'lia_not_allowed' );
-		expect( handle.getVisitedBlocks().has( 'b2' ) ).toBe( false );
-	} );
-
-	it( 'onBeforeBlock delays handler execution until resolve()', () => {
-		const order: string[] = [];
-		const scene = makeScene( {
-			blocks: [dialog( 'b1', true )],
-			connections: [],
-		} );
+	it( 'notifies the engine on start and on end', () => {
+		const onSceneStarted = vi.fn();
+		const onSceneEnded = vi.fn();
 		const global = new HandlerRegistry();
 		registerBaseHandlers( global );
 
-		let resolveBeforeBlock: (() => void) | null = null;
-		global.beforeBlockHandler = ( { resolve } ) => {
-			order.push( 'before' );
-			resolveBeforeBlock = resolve;
-		};
-		global.dialogHandler = ( { next } ) => {
-			order.push( 'handler' );
-			next();
-		};
+		handleFor( makeScene( [dialog( 'b1' )] ), global, { onSceneStarted, onSceneEnded } ).start();
 
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
-		handle.start();
-
-		// Handler should not have fired yet
-		expect( order ).toEqual( ['before'] );
-		expect( handle.isRunning() ).toBe( true );
-
-		// Resolve triggers the handler
-		resolveBeforeBlock!();
-		expect( order ).toEqual( ['before', 'handler'] );
+		expect( onSceneStarted ).toHaveBeenCalledTimes( 1 );
+		expect( onSceneEnded ).toHaveBeenCalledTimes( 1 );
 	} );
 
-	it( 'start() throws if mandatory handlers missing', () => {
-		const scene = makeScene( { blocks: [dialog( 'b1', true )] } );
+	it( 'throws when a mandatory handler is missing, and names it', () => {
 		const global = new HandlerRegistry();
-		// No handlers registered at all
-
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
-		expect( () => handle.start() ).toThrowError( /missing required handler/ );
-	} );
-
-	it( 'tagChoiceVisibility tags choices when filter installed', () => {
-		const scene = makeScene( {
-			blocks: [
-				{
-					uuid: 'ch1', type: 'CHOICE', properties: [], isStartBlock: true,
-					choices: [
-						{ uuid: 'c1', structureKey: 'c1' },
-						{ uuid: 'c2', structureKey: 'c2', visibilityConditions: [{ uuid: 'v1', key: 'flag', operator: '==', value: 'true' }] },
-					],
-				} as BlueprintBlock,
-				dialog( 'after' ),
-			],
-			connections: [
-				{ id: 'ch1-c1', fromId: 'ch1', toId: 'after', fromPort: 'c1', toPort: 'in' },
-			],
-		} );
-		const global = new HandlerRegistry();
-		let capturedChoices: unknown[] = [];
-		global.choiceHandler = ( { context, next } ) => {
-			capturedChoices = context.choices;
-			context.selectChoice( 'c1' );
-			next();
-		};
 		global.dialogHandler = ( { next } ) => next();
-		global.conditionHandler = ( { next } ) => next();
+
+		expect( () => handleFor( makeScene( [dialog( 'b1' )] ), global ).start() )
+			.toThrow( /onChoice/ );
+	} );
+
+	it( 'does not need onCondition once a resolver is installed', () => {
+		const global = new HandlerRegistry();
+		global.dialogHandler = ( { next } ) => next();
+		global.choiceHandler = ( { next } ) => next();
 		global.actionHandler = ( { next } ) => next();
 
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks( {
-			getConditionResolver: () => () => false, // all external conditions fail
-		} ) );
-		handle.start();
-
-		// c1 has no visibilityConditions → visible defaults to true
-		// c2 has visibilityConditions that fail → visible = false
-		expect( capturedChoices ).toHaveLength( 2 );
-		expect( ( capturedChoices[0] as { uuid: string; visible?: boolean } ).visible ).toBe( true );
-		expect( ( capturedChoices[1] as { uuid: string; visible?: boolean } ).visible ).toBe( false );
-	} );
-
-	it( 'preventGlobalHandler() prevents global handler from firing', () => {
-		const globalSpy = vi.fn();
-		const sceneSpy = vi.fn();
-		const scene = makeScene( {
-			blocks: [dialog( 'b1', true )],
-			connections: [],
+		const handle = handleFor( makeScene( [dialog( 'b1' )] ), global, {
+			getConditionResolver: () => () => true,
 		} );
-		const global = new HandlerRegistry();
-		registerBaseHandlers( global );
-		global.dialogHandler = ( args ) => {
-			globalSpy();
-			args.next();
-		};
 
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
-		handle.onDialog( ( args ) => {
-			sceneSpy();
-			args.context.preventGlobalHandler();
-			args.next();
-		} );
-		handle.start();
-
-		expect( sceneSpy ).toHaveBeenCalledOnce();
-		expect( globalSpy ).not.toHaveBeenCalled();
+		expect( () => handle.start() ).not.toThrow();
 	} );
-
-	it( 'both scene and global handlers fire when preventGlobalHandler is not called', () => {
-		const calls: string[] = [];
-		const scene = makeScene( {
-			blocks: [dialog( 'b1', true )],
-			connections: [],
-		} );
-		const global = new HandlerRegistry();
-		registerBaseHandlers( global );
-		global.dialogHandler = ( { next } ) => {
-			calls.push( 'global' );
-			next();
-		};
-
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
-		handle.onDialog( ( { next } ) => {
-			calls.push( 'scene' );
-			// NOT calling preventGlobalHandler
-			next();
-		} );
-		handle.start();
-
-		expect( calls ).toEqual( ['scene', 'global'] );
-	} );
-
-	it( 'notifies engine callbacks on start and end', () => {
-		const cbs = makeCallbacks();
-		const scene = makeScene( { blocks: [dialog( 'b1', true )] } );
-		const global = new HandlerRegistry();
-		registerBaseHandlers( global );
-
-		new SceneHandleImpl( new SceneGraph( scene ), global, cbs ).start();
-
-		expect( cbs.onSceneStarted ).toHaveBeenCalledOnce();
-		expect( cbs.onSceneEnded ).toHaveBeenCalledOnce();
-	} );
-
-	it( 'handles empty scene gracefully', () => {
-		const cbs = makeCallbacks();
-		const scene = makeScene( { blocks: [] } );
-		const global = new HandlerRegistry();
-		registerBaseHandlers( global );
-
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, cbs );
-		handle.start();
-
-		expect( handle.isRunning() ).toBe( false );
-		expect( cbs.onSceneEnded ).toHaveBeenCalledOnce();
-	} );
-
 } );
 
-// ─── Choice History ──────────────────────────────────────────────────────────
+// ─── Cleanups ────────────────────────────────────────────────────────────────
 
-function choiceBlock( uuid: string, choices: { uuid: string }[], start = false ): BlueprintBlock {
-	return { uuid, type: 'CHOICE', properties: [], choices: choices.map( c => ( { ...c, structureKey: c.uuid } ) ), isStartBlock: start } as BlueprintBlock;
-}
+describe( 'cleanups', () => {
 
-function conditionBlock( uuid: string, conditions: { uuid: string; key: string; operator: string; value: string; chain?: '|' | '&' }[], start = false ): BlueprintBlock {
-	return { uuid, type: 'CONDITION', properties: [], conditions: [conditions], isStartBlock: start } as BlueprintBlock;
-}
+	it( 'runs the cleanup when leaving a block', () => {
+		const events: string[] = [];
+		const scene = makeScene( [dialog( 'b1', { next: [link( 'b2' )] } ), dialog( 'b2' )] );
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.dialogHandler = ( { block, next } ) => {
+			events.push( `run:${ block.id }` );
+			next();
+			return () => events.push( `clean:${ block.id }` );
+		};
 
-function condConn( fromId: string, toIdTrue: string, toIdFalse: string ) {
-	return [
-		{ id: `${ fromId }-t`, fromId, toId: toIdTrue, fromPort: 'true', toPort: 'in', fromPortIndex: 0 },
-		{ id: `${ fromId }-f`, fromId, toId: toIdFalse, fromPort: 'false', toPort: 'in', fromPortIndex: 1 },
-	];
-}
+		handleFor( scene, global ).start();
 
-describe( 'SceneHandleImpl — Choice History', () => {
+		expect( events ).toEqual( ['run:b1', 'clean:b1', 'run:b2', 'clean:b2'] );
+	} );
 
-	it( 'records selected choice in history', () => {
-		const scene = makeScene( {
-			blocks: [
-				choiceBlock( 'ch1', [{ uuid: 'opt-a' }, { uuid: 'opt-b' }], true ),
-				dialog( 'after' ),
-			],
-			connections: [
-				{ id: 'ch1-a', fromId: 'ch1', toId: 'after', fromPort: 'opt-a', toPort: 'in' },
-			],
+	it( 'runs the last cleanup when the scene ends', () => {
+		const events: string[] = [];
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.dialogHandler = ( { next } ) => { next(); return () => events.push( 'clean' ); };
+
+		handleFor( makeScene( [dialog( 'b1' )] ), global ).start();
+
+		expect( events ).toEqual( ['clean'] );
+	} );
+} );
+
+// ─── Validation ──────────────────────────────────────────────────────────────
+
+describe( 'onValidateNextBlock', () => {
+
+	it( 'can stop a block', () => {
+		const visited: string[] = [];
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.dialogHandler = ( { block, next } ) => { visited.push( block.id ); next(); };
+		global.validateNextBlockHandler = () => ( { valid: false, reason: 'nope' } );
+
+		handleFor( makeScene( [dialog( 'b1' )] ), global ).start();
+
+		expect( visited ).toEqual( [] );
+	} );
+
+	it( 'routes to onInvalidateBlock with the reason', () => {
+		const reasons: string[] = [];
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.validateNextBlockHandler = () => ( { valid: false, reason: 'character_stunned' } );
+		global.invalidateBlockHandler = ( { reason } ) => reasons.push( reason );
+
+		handleFor( makeScene( [dialog( 'b1' )] ), global ).start();
+
+		expect( reasons ).toEqual( ['character_stunned'] );
+	} );
+
+	it( 'receives the resolved character of the next block', () => {
+		let seen: Card | undefined;
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.validateNextBlockHandler = ( { nextContext } ) => {
+			seen = nextContext.character;
+			return { valid: true };
+		};
+
+		handleFor( makeScene( [dialog( 'b1', { actors: ['var1'] } )] ), global ).start();
+
+		expect( seen?.name ).toBe( 'kael' );
+	} );
+
+	it( 'has no character when the block cites no actor', () => {
+		let seen: Card | undefined = CARDS.var1;
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.validateNextBlockHandler = ( { nextContext } ) => {
+			seen = nextContext.character;
+			return { valid: true };
+		};
+
+		handleFor( makeScene( [dialog( 'b1' )] ), global ).start();
+
+		expect( seen ).toBeUndefined();
+	} );
+
+	it( 'fromContext is null on the first block', () => {
+		const seen: Array<unknown> = [];
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.validateNextBlockHandler = ( { fromContext } ) => {
+			seen.push( fromContext );
+			return { valid: true };
+		};
+
+		handleFor( makeScene( [dialog( 'b1' )] ), global ).start();
+
+		expect( seen ).toEqual( [null] );
+	} );
+
+	it( 'fromContext carries the character of the block just left', () => {
+		const seen: Array<string | undefined> = [];
+		const scene = makeScene( [
+			dialog( 'b1', { actors: ['var1'], next: [link( 'b2' )] } ),
+			dialog( 'b2', { actors: ['var2'] } ),
+		] );
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.validateNextBlockHandler = ( { fromContext } ) => {
+			seen.push( fromContext?.character?.name );
+			return { valid: true };
+		};
+
+		handleFor( scene, global ).start();
+
+		expect( seen ).toEqual( [undefined, 'kael'] );
+	} );
+
+	it( 'can invalidate on the character', () => {
+		const visited: string[] = [];
+		const scene = makeScene( [
+			dialog( 'b1', { actors: ['var1'], next: [link( 'b2' )] } ),
+			dialog( 'b2', { actors: ['var2'] } ),
+		] );
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.dialogHandler = ( { block, next } ) => { visited.push( block.id ); next(); };
+		global.validateNextBlockHandler = ( { nextContext } ) =>
+			nextContext.character?.name === 'nora' ? { valid: false } : { valid: true };
+
+		handleFor( scene, global ).start();
+
+		expect( visited ).toEqual( ['b1'] );
+	} );
+} );
+
+// ─── onBeforeBlock ───────────────────────────────────────────────────────────
+
+describe( 'onBeforeBlock', () => {
+
+	it( 'holds the handler back until resolve()', () => {
+		const events: string[] = [];
+		let release: ( () => void ) | null = null;
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.beforeBlockHandler = ( { resolve } ) => { events.push( 'before' ); release = resolve; };
+		global.dialogHandler = ( { next } ) => { events.push( 'dialog' ); next(); };
+
+		handleFor( makeScene( [dialog( 'b1' )] ), global ).start();
+
+		expect( events ).toEqual( ['before'] );
+		release!();
+		expect( events ).toEqual( ['before', 'dialog'] );
+	} );
+
+	it( 'hands over the native properties read out of props', () => {
+		let seen: unknown;
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.beforeBlockHandler = ( { context, resolve } ) => {
+			seen = context.nativeProperties;
+			resolve();
+		};
+
+		handleFor( makeScene( [dialog( 'b1', { props: { delay: 1000, debug: true } } )] ), global ).start();
+
+		expect( seen ).toEqual( { delay: 1000, debug: true } );
+	} );
+} );
+
+// ─── Handler tiers ───────────────────────────────────────────────────────────
+
+describe( 'handler tiers', () => {
+
+	it( 'runs the scene handler then the global one', () => {
+		const events: string[] = [];
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.dialogHandler = ( { next } ) => { events.push( 'global' ); next(); };
+
+		const handle = handleFor( makeScene( [dialog( 'b1' )] ), global );
+		handle.onDialog( ( { next } ) => { events.push( 'scene' ); next(); } );
+		handle.start();
+
+		expect( events ).toEqual( ['scene', 'global'] );
+	} );
+
+	it( 'preventGlobalHandler() stops the global one', () => {
+		const events: string[] = [];
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.dialogHandler = ( { next } ) => { events.push( 'global' ); next(); };
+
+		const handle = handleFor( makeScene( [dialog( 'b1' )] ), global );
+		handle.onDialog( ( { context, next } ) => {
+			context.preventGlobalHandler();
+			events.push( 'scene' );
+			next();
 		} );
+		handle.start();
+
+		expect( events ).toEqual( ['scene'] );
+	} );
+
+	it( 'onDialogId targets one block by id', () => {
+		const events: string[] = [];
+		const scene = makeScene( [dialog( 'b1', { next: [link( 'b2' )] } ), dialog( 'b2' )] );
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+
+		const handle = handleFor( scene, global );
+		handle.onDialogId( 'b2', ( { next } ) => { events.push( 'targeted' ); next(); } );
+		handle.start();
+
+		expect( events ).toEqual( ['targeted'] );
+	} );
+} );
+
+// ─── Choices ─────────────────────────────────────────────────────────────────
+
+describe( 'choices', () => {
+
+	const choiceScene = () => makeScene( [
+		choice( 'c1', [option( 'C1' ), option( 'C2' )], { next: [link( 'b2', 'C1' ), link( 'b3', 'C2' )] } ),
+		dialog( 'b2' ),
+		dialog( 'b3' ),
+	] );
+
+	it( 'follows the port named after the picked option', () => {
+		const visited: string[] = [];
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.choiceHandler = ( { context, next } ) => { context.selectChoice( 'C2' ); next(); };
+		global.dialogHandler = ( { block, next } ) => { visited.push( block.id ); next(); };
+
+		handleFor( choiceScene(), global ).start();
+
+		expect( visited ).toEqual( ['b3'] );
+	} );
+
+	it( 'records the pick in the scene history', () => {
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.choiceHandler = ( { context, next } ) => { context.selectChoice( 'C1' ); next(); };
+
+		const handle = handleFor( choiceScene(), global );
+		handle.start();
+
+		expect( handle.getChoice( 'c1' ) ).toEqual( ['C1'] );
+	} );
+
+	it( 'returns nothing for a block that is not a choice', () => {
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		const handle = handleFor( choiceScene(), global );
+		handle.start();
+
+		expect( handle.getChoice( 'b2' ) ).toBeUndefined();
+	} );
+
+	it( 'accumulates every pass through a choice in a loop', () => {
+		let passes = 0;
+		const scene = makeScene( [
+			choice( 'c1', [option( 'C1' ), option( 'C2' )], { next: [link( 'c1', 'C1' ), link( 'b2', 'C2' )] } ),
+			dialog( 'b2' ),
+		] );
 		const global = new HandlerRegistry();
 		registerBaseHandlers( global );
 		global.choiceHandler = ( { context, next } ) => {
-			context.selectChoice( 'opt-a' );
+			passes++;
+			context.selectChoice( passes < 3 ? 'C1' : 'C2' );
 			next();
 		};
 
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		const handle = handleFor( scene, global );
 		handle.start();
 
-		expect( handle.getChoiceHistory().size ).toBe( 1 );
-		expect( handle.getChoice( 'ch1' ) ).toEqual( ['opt-a'] );
+		expect( handle.getChoice( 'c1' ) ).toEqual( ['C1', 'C1', 'C2'] );
 	} );
 
-	it( 'getChoice returns undefined for non-choice blocks', () => {
-		const scene = makeScene( { blocks: [dialog( 'b1', true )] } );
+	it( 'has an empty history when nothing was picked', () => {
 		const global = new HandlerRegistry();
 		registerBaseHandlers( global );
-
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
-		handle.start();
-
-		expect( handle.getChoice( 'b1' ) ).toBeUndefined();
-	} );
-
-	it( 'accumulates choices in loops', () => {
-		const scene = makeScene( {
-			blocks: [
-				choiceBlock( 'ch1', [{ uuid: 'opt-a' }, { uuid: 'opt-b' }], true ),
-				dialog( 'mid' ),
-			],
-			connections: [
-				{ id: 'ch1-a', fromId: 'ch1', toId: 'mid', fromPort: 'opt-a', toPort: 'in' },
-				{ id: 'ch1-b', fromId: 'ch1', toId: 'mid', fromPort: 'opt-b', toPort: 'in' },
-				conn( 'mid', 'ch1' ),
-			],
-		} );
-		const global = new HandlerRegistry();
-		registerBaseHandlers( global );
-		let visit = 0;
-		global.choiceHandler = ( { context, next } ) => {
-			visit++;
-			if ( visit === 1 ) context.selectChoice( 'opt-a' );
-			else if ( visit === 2 ) context.selectChoice( 'opt-b' );
-			// 3rd visit: don't select → ends flow
-			next();
-		};
-
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
-		handle.start();
-
-		expect( handle.getChoice( 'ch1' ) ).toEqual( ['opt-a', 'opt-b'] );
-	} );
-
-	it( 'getChoiceHistory returns empty map when no choices', () => {
-		const scene = makeScene( { blocks: [dialog( 'b1', true )] } );
-		const global = new HandlerRegistry();
-		registerBaseHandlers( global );
-
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		const handle = handleFor( makeScene( [dialog( 'b1' )] ), global );
 		handle.start();
 
 		expect( handle.getChoiceHistory().size ).toBe( 0 );
 	} );
 
-	it( 'choice history survives after scene ends', () => {
-		const scene = makeScene( {
-			blocks: [
-				choiceBlock( 'ch1', [{ uuid: 'opt-a' }], true ),
-				dialog( 'after' ),
-			],
-			connections: [
-				{ id: 'ch1-a', fromId: 'ch1', toId: 'after', fromPort: 'opt-a', toPort: 'in' },
-			],
-		} );
+	it( 'keeps the history readable after the scene ends', () => {
 		const global = new HandlerRegistry();
 		registerBaseHandlers( global );
-		global.choiceHandler = ( { context, next } ) => { context.selectChoice( 'opt-a' ); next(); };
+		global.choiceHandler = ( { context, next } ) => { context.selectChoice( 'C1' ); next(); };
 
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		const handle = handleFor( choiceScene(), global );
 		handle.start();
 
 		expect( handle.isRunning() ).toBe( false );
-		expect( handle.getChoice( 'ch1' ) ).toEqual( ['opt-a'] );
+		expect( handle.getChoiceHistory().get( 'c1' ) ).toEqual( ['C1'] );
 	} );
 
+	it( 'tags option visibility when a resolver is installed', () => {
+		let seen: Array<boolean | undefined> = [];
+		const scene = makeScene( [
+			choice( 'c1', [
+				option( 'C1' ),
+				option( 'C2', { when: [t( 'variables', 'credits', 50, 'greaterOrEqual' )] } ),
+			] ),
+		] );
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.choiceHandler = ( { context, next } ) => {
+			seen = context.options.map( o => o.visible );
+			next();
+		};
+
+		handleFor( scene, global, { getConditionResolver: () => () => false } ).start();
+
+		expect( seen ).toEqual( [true, false] );
+	} );
+
+	it( 'leaves visibility unknown when no resolver is installed', () => {
+		let seen: Array<boolean | undefined> = [];
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.choiceHandler = ( { context, next } ) => {
+			seen = context.options.map( o => o.visible );
+			next();
+		};
+
+		handleFor( choiceScene(), global ).start();
+
+		expect( seen ).toEqual( [undefined, undefined] );
+	} );
 } );
 
-// ─── Choice Condition Resolution ─────────────────────────────────────────────
+// ─── The reserved `choice` dictionary ────────────────────────────────────────
 
-describe( 'SceneHandleImpl — Choice Condition Resolution', () => {
+describe( 'conditions that read a past answer', () => {
 
-	it( 'choice: condition resolves == match via handler', () => {
+	/** A scene that picks an option, then asks a condition about it. */
+	function askAbout( when: ConditionTest[], resolver?: ( t: ConditionTest ) => boolean ) {
 		const visited: string[] = [];
-		const scene = makeScene( {
-			blocks: [
-				choiceBlock( 'ch1', [{ uuid: 'opt-a' }], true ),
-				conditionBlock( 'cond1', [{ uuid: 'c1', key: 'choice:ch1', operator: '==', value: 'opt-a' }] ),
-				dialog( 'yes' ),
-				dialog( 'no' ),
-			],
-			connections: [
-				{ id: 'ch1-a', fromId: 'ch1', toId: 'cond1', fromPort: 'opt-a', toPort: 'in' },
-				...condConn( 'cond1', 'yes', 'no' ),
-			],
-		} );
+		const scene = makeScene( [
+			choice( 'c1', [option( 'C1' ), option( 'C2' )], { next: [link( 'k1', 'C1' ), link( 'k1', 'C2' )] } ),
+			condition( 'k1', [whenCase( 'out', when )], {
+				next: [link( 'yes' ), link( 'no', 'default' )],
+			} ),
+			dialog( 'yes' ),
+			dialog( 'no' ),
+		] );
 		const global = new HandlerRegistry();
 		registerBaseHandlers( global );
-		global.choiceHandler = ( { context, next } ) => { context.selectChoice( 'opt-a' ); next(); };
-		global.conditionHandler = ( { scene: s, block, context, next } ) => {
-			const groups = ( block as unknown as { conditions: ExportCondition[][] } ).conditions;
-			const result = ( groups[0] ?? [] ).every( c => s.evaluateCondition( c ) );
-			context.resolve( result );
-			next();
-		};
-		global.dialogHandler = ( { block, next } ) => { visited.push( block.uuid ); next(); };
+		global.choiceHandler = ( { context, next } ) => { context.selectChoice( 'C1' ); next(); };
+		global.dialogHandler = ( { block, next } ) => { visited.push( block.id ); next(); };
 
-		new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() ).start();
+		handleFor( scene, global, { getConditionResolver: () => resolver ?? ( () => false ) } ).start();
+		return visited;
+	}
+
+	it( 'is answered from the scene history, never by the game', () => {
+		const asked: ConditionTest[] = [];
+		const visited = askAbout( [choiceTest( 'c1', 'C1' )], ( test ) => { asked.push( test ); return false; } );
+
+		expect( visited ).toEqual( ['yes'] );
+		expect( asked ).toEqual( [] );
+	} );
+
+	it( 'is false when the player picked something else', () => {
+		expect( askAbout( [choiceTest( 'c1', 'C2' )] ) ).toEqual( ['no'] );
+	} );
+
+	it( 'handles notEquals', () => {
+		expect( askAbout( [choiceTest( 'c1', 'C2', 'notEquals' )] ) ).toEqual( ['yes'] );
+		expect( askAbout( [choiceTest( 'c1', 'C1', 'notEquals' )] ) ).toEqual( ['no'] );
+	} );
+
+	it( 'is false for a CHOICE block that was never reached', () => {
+		expect( askAbout( [choiceTest( 'never-visited', 'C1' )] ) ).toEqual( ['no'] );
+	} );
+
+	it( 'is TRUE with notEquals for a block that was never reached', () => {
+		// Nothing was picked there, so "not C1" holds.
+		expect( askAbout( [choiceTest( 'never-visited', 'C1', 'notEquals' )] ) ).toEqual( ['yes'] );
+	} );
+
+	it( 'chains with a game-state test in the same case', () => {
+		const visited = askAbout(
+			[choiceTest( 'c1', 'C1' ), t( 'switches', 'door_unlocked', true, 'equals', 'and' )],
+			( test ) => test.entry === 'door_unlocked',
+		);
+		expect( visited ).toEqual( ['yes'] );
+	} );
+
+	it( 'answers a choice test even with no game resolver installed', () => {
+		const visited: string[] = [];
+		const scene = makeScene( [
+			choice( 'c1', [option( 'C1' )], { next: [link( 'k1', 'C1' )] } ),
+			condition( 'k1', [whenCase( 'out', [choiceTest( 'c1', 'C1' )] )], {
+				next: [link( 'yes' ), link( 'no', 'default' )],
+			} ),
+			dialog( 'yes' ),
+			dialog( 'no' ),
+		] );
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.choiceHandler = ( { context, next } ) => { context.selectChoice( 'C1' ); next(); };
+		global.dialogHandler = ( { block, next } ) => { visited.push( block.id ); next(); };
+		global.conditionHandler = ( { next } ) => next();
+
+		handleFor( scene, global ).start();
 
 		expect( visited ).toEqual( ['yes'] );
 	} );
 
-	it( 'choice: condition resolves == no match via handler', () => {
-		const visited: string[] = [];
-		const scene = makeScene( {
-			blocks: [
-				choiceBlock( 'ch1', [{ uuid: 'opt-a' }], true ),
-				conditionBlock( 'cond1', [{ uuid: 'c1', key: 'choice:ch1', operator: '==', value: 'opt-b' }] ),
-				dialog( 'yes' ),
-				dialog( 'no' ),
-			],
-			connections: [
-				{ id: 'ch1-a', fromId: 'ch1', toId: 'cond1', fromPort: 'opt-a', toPort: 'in' },
-				...condConn( 'cond1', 'yes', 'no' ),
-			],
-		} );
+	it( 'exposes the history and a single test through the handle', () => {
 		const global = new HandlerRegistry();
 		registerBaseHandlers( global );
-		global.choiceHandler = ( { context, next } ) => { context.selectChoice( 'opt-a' ); next(); };
-		global.conditionHandler = ( { scene: s, block, context, next } ) => {
-			const groups = ( block as unknown as { conditions: ExportCondition[][] } ).conditions;
-			const result = ( groups[0] ?? [] ).every( c => s.evaluateCondition( c ) );
-			context.resolve( result );
-			next();
-		};
-		global.dialogHandler = ( { block, next } ) => { visited.push( block.uuid ); next(); };
+		global.choiceHandler = ( { context, next } ) => { context.selectChoice( 'C1' ); next(); };
 
-		new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() ).start();
+		const handle = handleFor(
+			makeScene( [choice( 'c1', [option( 'C1' )] )] ),
+			global,
+		);
+		handle.start();
 
-		expect( visited ).toEqual( ['no'] );
+		expect( handle.evaluateCondition( choiceTest( 'c1', 'C1' ) ) ).toBe( true );
+		expect( handle.evaluateCondition( choiceTest( 'c1', 'C9' ) ) ).toBe( false );
 	} );
-
-	it( 'choice: condition resolves != operator', () => {
-		const visited: string[] = [];
-		const scene = makeScene( {
-			blocks: [
-				choiceBlock( 'ch1', [{ uuid: 'opt-a' }], true ),
-				conditionBlock( 'cond1', [{ uuid: 'c1', key: 'choice:ch1', operator: '!=', value: 'opt-a' }] ),
-				dialog( 'yes' ),
-				dialog( 'no' ),
-			],
-			connections: [
-				{ id: 'ch1-a', fromId: 'ch1', toId: 'cond1', fromPort: 'opt-a', toPort: 'in' },
-				...condConn( 'cond1', 'yes', 'no' ),
-			],
-		} );
-		const global = new HandlerRegistry();
-		registerBaseHandlers( global );
-		global.choiceHandler = ( { context, next } ) => { context.selectChoice( 'opt-a' ); next(); };
-		global.conditionHandler = ( { scene: s, block, context, next } ) => {
-			const groups = ( block as unknown as { conditions: ExportCondition[][] } ).conditions;
-			const result = ( groups[0] ?? [] ).every( c => s.evaluateCondition( c ) );
-			context.resolve( result );
-			next();
-		};
-		global.dialogHandler = ( { block, next } ) => { visited.push( block.uuid ); next(); };
-
-		new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() ).start();
-
-		expect( visited ).toEqual( ['no'] );
-	} );
-
-	it( 'choice: condition returns false for unvisited block', () => {
-		const visited: string[] = [];
-		const scene = makeScene( {
-			blocks: [
-				conditionBlock( 'cond1', [{ uuid: 'c1', key: 'choice:nonexistent', operator: '==', value: 'opt-a' }], true ),
-				dialog( 'yes' ),
-				dialog( 'no' ),
-			],
-			connections: condConn( 'cond1', 'yes', 'no' ),
-		} );
-		const global = new HandlerRegistry();
-		registerBaseHandlers( global );
-		global.conditionHandler = ( { scene: s, block, context, next } ) => {
-			const groups = ( block as unknown as { conditions: ExportCondition[][] } ).conditions;
-			const result = ( groups[0] ?? [] ).every( c => s.evaluateCondition( c ) );
-			context.resolve( result );
-			next();
-		};
-		global.dialogHandler = ( { block, next } ) => { visited.push( block.uuid ); next(); };
-
-		new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() ).start();
-
-		expect( visited ).toEqual( ['no'] );
-	} );
-
-	it( 'choice: condition works with internal choice history', () => {
-		const visited: string[] = [];
-		const scene = makeScene( {
-			blocks: [
-				choiceBlock( 'ch1', [{ uuid: 'opt-a' }], true ),
-				conditionBlock( 'cond1', [{ uuid: 'c1', key: 'choice:ch1', operator: '==', value: 'opt-a' }] ),
-				dialog( 'yes' ),
-				dialog( 'no' ),
-			],
-			connections: [
-				{ id: 'ch1-a', fromId: 'ch1', toId: 'cond1', fromPort: 'opt-a', toPort: 'in' },
-				...condConn( 'cond1', 'yes', 'no' ),
-			],
-		} );
-		const global = new HandlerRegistry();
-		registerBaseHandlers( global );
-		global.choiceHandler = ( { context, next } ) => { context.selectChoice( 'opt-a' ); next(); };
-		global.conditionHandler = ( { scene: s, block, context, next } ) => {
-			const groups = ( block as unknown as { conditions: ExportCondition[][] } ).conditions;
-			const result = ( groups[0] ?? [] ).every( c => s.evaluateCondition( c ) );
-			context.resolve( result );
-			next();
-		};
-		global.dialogHandler = ( { block, next } ) => { visited.push( block.uuid ); next(); };
-
-		new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() ).start();
-
-		expect( visited ).toEqual( ['yes'] );
-	} );
-
-	it( 'mixed choice: and external conditions chain correctly', () => {
-		const visited: string[] = [];
-		const scene = makeScene( {
-			blocks: [
-				choiceBlock( 'ch1', [{ uuid: 'opt-a' }], true ),
-				conditionBlock( 'cond1', [
-					{ uuid: 'c1', key: 'choice:ch1', operator: '==', value: 'opt-a' },
-					{ uuid: 'c2', key: 'quest', operator: '==', value: 'active', chain: '&' },
-				] ),
-				dialog( 'yes' ),
-				dialog( 'no' ),
-			],
-			connections: [
-				{ id: 'ch1-a', fromId: 'ch1', toId: 'cond1', fromPort: 'opt-a', toPort: 'in' },
-				...condConn( 'cond1', 'yes', 'no' ),
-			],
-		} );
-		const global = new HandlerRegistry();
-		registerBaseHandlers( global );
-		global.choiceHandler = ( { context, next } ) => { context.selectChoice( 'opt-a' ); next(); };
-		global.conditionHandler = ( { scene: s, block, context, next } ) => {
-			const groups = ( block as unknown as { conditions: ExportCondition[][] } ).conditions;
-			// Use scene.evaluateCondition for choice: keys, return true for external keys
-			const result = ( groups[0] ?? [] ).every( c =>
-				c.key.startsWith( 'choice:' ) ? s.evaluateCondition( c ) : true,
-			);
-			context.resolve( result );
-			next();
-		};
-		global.dialogHandler = ( { block, next } ) => { visited.push( block.uuid ); next(); };
-
-		new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() ).start();
-
-		expect( visited ).toEqual( ['yes'] );
-	} );
-
 } );
 
-// ─── Multi-track (AsyncTrack) ────────────────────────────────────────────────
+// ─── Conditions ──────────────────────────────────────────────────────────────
 
-function asyncDialog( uuid: string ): BlueprintBlock {
-	return {
-		uuid, type: 'DIALOG', properties: [],
-		nativeProperties: { isAsync: true },
-	} as BlueprintBlock;
-}
+describe( 'conditions', () => {
 
-describe( 'SceneHandleImpl — ValidateNextBlock cache safety', () => {
-
-	it( 'async track does not consume main track pre-resolved character cache', () => {
-		const charLia: BlockCharacter = { uuid: 'c1', id: 'a1', name: 'Lia' };
-		const charBob: BlockCharacter = { uuid: 'c2', id: 'a2', name: 'Bob' };
-		const b1 = { uuid: 'b1', type: 'DIALOG', properties: [], isStartBlock: true,
-			metadata: { characters: [charLia] } } as unknown as BlueprintBlock;
-		const asyncBlock = { uuid: 'async1', type: 'DIALOG', properties: [],
-			nativeProperties: { isAsync: true },
-			metadata: { characters: [charBob] } } as unknown as BlueprintBlock;
-		const scene = makeScene( {
-			blocks: [b1, asyncBlock],
-			connections: [conn( 'b1', 'async1' )],
-		} );
+	it( 'routes by itself once a resolver is installed', () => {
+		const visited: string[] = [];
+		const scene = makeScene( [
+			condition( 'k1', [whenCase( 'out', [t( 'switches', 'x', true )] )], {
+				next: [link( 'yes' ), link( 'no', 'default' )],
+			} ),
+			dialog( 'yes' ),
+			dialog( 'no' ),
+		] );
 		const global = new HandlerRegistry();
 		registerBaseHandlers( global );
+		global.dialogHandler = ( { block, next } ) => { visited.push( block.id ); next(); };
 
-		const resolvedChars: Array<{ block: string; char: string | undefined }> = [];
+		handleFor( scene, global, { getConditionResolver: () => () => true } ).start();
+
+		expect( visited ).toEqual( ['yes'] );
+	} );
+
+	it( 'takes the case port with portPerCase', () => {
+		const visited: string[] = [];
+		const scene = makeScene( [
+			condition( 'k1', [
+				whenCase( 'K1', [t( 'switches', 'a', true )] ),
+				whenCase( 'K2', [t( 'switches', 'b', true )] ),
+			], {
+				props: { portPerCase: true },
+				next: [link( 'first', 'K1' ), link( 'second', 'K2' ), link( 'none', 'default' )],
+			} ),
+			dialog( 'first' ), dialog( 'second' ), dialog( 'none' ),
+		] );
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.dialogHandler = ( { block, next } ) => { visited.push( block.id ); next(); };
+
+		handleFor( scene, global, { getConditionResolver: () => ( test ) => test.entry === 'b' } ).start();
+
+		expect( visited ).toEqual( ['second'] );
+	} );
+
+	it( 'lets the handler override the port', () => {
+		const visited: string[] = [];
+		const scene = makeScene( [
+			condition( 'k1', [whenCase( 'out', [t( 'switches', 'x', true )] )], {
+				next: [link( 'yes' ), link( 'no', 'default' )],
+			} ),
+			dialog( 'yes' ), dialog( 'no' ),
+		] );
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.dialogHandler = ( { block, next } ) => { visited.push( block.id ); next(); };
+		global.conditionHandler = ( { context, next } ) => { context.resolve( 'default' ); next(); };
+
+		handleFor( scene, global, { getConditionResolver: () => () => true } ).start();
+
+		expect( visited ).toEqual( ['no'] );
+	} );
+
+	it( 'hands the handler each case with its port and result', () => {
+		let seen: Array<[string, boolean | undefined]> = [];
+		const scene = makeScene( [
+			condition( 'k1', [
+				whenCase( 'K1', [t( 'switches', 'a', true )] ),
+				whenCase( 'K2' ),
+			], { props: { portPerCase: true } } ),
+		] );
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.conditionHandler = ( { context, next } ) => {
+			seen = context.cases.map( c => [c.port, c.result] );
+			next();
+		};
+
+		handleFor( scene, global, { getConditionResolver: () => () => false } ).start();
+
+		expect( seen ).toEqual( [['K1', false], ['K2', true]] );
+	} );
+} );
+
+// ─── Actors and emotion ──────────────────────────────────────────────────────
+
+describe( 'actors and emotion', () => {
+
+	it( 'resolves the cast through the export card table', () => {
+		let names: string[] = [];
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.dialogHandler = ( { context, next } ) => {
+			names = context.actors.map( c => c.name );
+			next();
+		};
+
+		handleFor( makeScene( [dialog( 'b1', { actors: ['var1', 'var2'] } )] ), global ).start();
+
+		expect( names ).toEqual( ['kael', 'nora'] );
+	} );
+
+	it( 'carries the block emotion, one line one tone', () => {
+		let seen: string | undefined;
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.dialogHandler = ( { context, next } ) => { seen = context.emotion?.name; next(); };
+
+		handleFor(
+			makeScene( [dialog( 'b1', { actors: ['var1', 'var2'], emotion: 'var7', intensity: 60 } )] ),
+			global,
+		).start();
+
+		expect( seen ).toBe( 'afraid' );
+	} );
+
+	it( 'follows the port named after the actor with portPerCharacter', () => {
+		const visited: string[] = [];
+		const scene = makeScene( [
+			dialog( 'b1', {
+				actors: ['var1', 'var2'],
+				props: { portPerCharacter: true },
+				next: [link( 'kaelSaid', 'var1' ), link( 'noraSaid', 'var2' ), link( 'anyone' )],
+			} ),
+			dialog( 'kaelSaid' ), dialog( 'noraSaid' ), dialog( 'anyone' ),
+		] );
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
 		global.dialogHandler = ( { block, context, next } ) => {
-			resolvedChars.push( { block: block.uuid, char: context.character?.name } );
+			visited.push( block.id );
+			if ( block.id === 'b1' ) context.resolveCharacterPort( 'var2' );
 			next();
 		};
 
-		// Validate handler sets the cache for each block
-		global.validateNextBlockHandler = () => ( { valid: true } );
+		handleFor( scene, global ).start();
 
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
-		handle.start();
-
-		// b1 should get Lia, async1 should get Bob (not Lia from stale cache)
-		const b1Char = resolvedChars.find( r => r.block === 'b1' );
-		const asyncChar = resolvedChars.find( r => r.block === 'async1' );
-		expect( b1Char?.char ).toBe( 'Lia' );
-		expect( asyncChar?.char ).toBe( 'Bob' );
+		expect( visited ).toEqual( ['b1', 'noraSaid'] );
 	} );
 
-	it( 'pre-resolved character cache does not leak across blocks after invalidation', () => {
-		const charLia: BlockCharacter = { uuid: 'c1', id: 'a1', name: 'Lia' };
-		const charBob: BlockCharacter = { uuid: 'c2', id: 'a2', name: 'Bob' };
-		const b1 = { uuid: 'b1', type: 'DIALOG', properties: [], isStartBlock: true } as BlueprintBlock;
-		const b2 = { uuid: 'b2', type: 'DIALOG', properties: [],
-			metadata: { characters: [charLia] } } as unknown as BlueprintBlock;
-		const b3 = { uuid: 'b3', type: 'DIALOG', properties: [],
-			metadata: { characters: [charBob] } } as unknown as BlueprintBlock;
-		const scene = makeScene( {
-			blocks: [b1, b2, b3],
-			connections: [conn( 'b1', 'b2' ), conn( 'b2', 'b3' )],
-		} );
+	it( 'falls back to out when no actor port was picked', () => {
+		const visited: string[] = [];
+		const scene = makeScene( [
+			dialog( 'b1', {
+				actors: ['var1'],
+				next: [link( 'kaelSaid', 'var1' ), link( 'anyone' )],
+			} ),
+			dialog( 'kaelSaid' ), dialog( 'anyone' ),
+		] );
 		const global = new HandlerRegistry();
 		registerBaseHandlers( global );
-		const receivedNextChars: Array<{ block: string; char: string | undefined }> = [];
-		global.validateNextBlockHandler = ( { nextBlock, nextContext } ) => {
-			receivedNextChars.push( { block: nextBlock.uuid, char: nextContext.character?.name } );
-			if ( nextBlock.uuid === 'b2' ) return { valid: false, reason: 'blocked' };
-			return { valid: true };
-		};
-		global.invalidateBlockHandler = vi.fn();
+		global.dialogHandler = ( { block, next } ) => { visited.push( block.id ); next(); };
 
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
-		handle.start();
+		handleFor( scene, global ).start();
 
-		// b1: no characters → undefined, b2: Lia (rejected)
-		expect( receivedNextChars.find( r => r.block === 'b1' )?.char ).toBeUndefined();
-		expect( receivedNextChars.find( r => r.block === 'b2' )?.char ).toBe( 'Lia' );
-		// b3 is never reached because b2 invalidation stops the flow
-		expect( handle.getVisitedBlocks().has( 'b2' ) ).toBe( false );
+		expect( visited ).toEqual( ['b1', 'anyone'] );
+	} );
+
+	it( 'resolves the cast fresh for every block', () => {
+		// No caching: this runs for the main track and for async tracks alike, and a cache would
+		// leak one track's actor into another released later by waitForBlocks.
+		const seen: Array<string | undefined> = [];
+		const scene = makeScene( [
+			dialog( 'b1', { actors: ['var1'], next: [link( 'b2' )] } ),
+			dialog( 'b2', { actors: ['var2'] } ),
+		] );
+		const global = new HandlerRegistry();
+		registerBaseHandlers( global );
+		global.dialogHandler = ( { context, next } ) => { seen.push( context.character?.name ); next(); };
+
+		handleFor( scene, global ).start();
+
+		expect( seen ).toEqual( ['kael', 'nora'] );
 	} );
 } );
 
-describe( 'SceneHandleImpl — AsyncTracks', () => {
+// ─── Async tracks ────────────────────────────────────────────────────────────
 
-	it( 'spawns async track for isAsync target block', () => {
+describe( 'async tracks', () => {
+
+	const forked = () => makeScene( [
+		dialog( 'b1', { next: [link( 'main' ), link( 'side' )] } ),
+		dialog( 'main' ),
+		dialog( 'side', { props: { isAsync: true } } ),
+	] );
+
+	it( 'spawns a track for an isAsync target', () => {
 		const visited: string[] = [];
-		const scene = makeScene( {
-			blocks: [
-				dialog( 'b1', true ),
-				asyncDialog( 'async1' ),
-				dialog( 'b2' ),
-			],
-			connections: [
-				conn( 'b1', 'b2' ),       // main track
-				conn( 'b1', 'async1' ),    // async track (same fromPort 'out')
-			],
-		} );
 		const global = new HandlerRegistry();
 		registerBaseHandlers( global );
-		global.dialogHandler = ( { block, next } ) => {
-			visited.push( block.uuid );
-			next();
-		};
+		global.dialogHandler = ( { block, next } ) => { visited.push( block.id ); next(); };
 
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
-		handle.start();
+		handleFor( forked(), global ).start();
 
-		expect( visited ).toContain( 'b1' );
-		expect( visited ).toContain( 'b2' );
-		expect( visited ).toContain( 'async1' );
+		expect( visited ).toContain( 'main' );
+		expect( visited ).toContain( 'side' );
 	} );
 
-	it( 'async track handler fires independently', () => {
-		const calls: string[] = [];
-		const scene = makeScene( {
-			blocks: [
-				dialog( 'main1', true ),
-				asyncDialog( 'async1' ),
-				dialog( 'async2' ),  // connected after async1
-			],
-			connections: [
-				conn( 'main1', 'async1' ),         // async fork
-				conn( 'async1', 'async2' ),         // async continues
-			],
-		} );
+	it( 'counts the running tracks while the scene is still going', () => {
+		// Both handlers hold on to next(), so nothing finishes: the main flow is parked on `main`
+		// and the side track is parked on `side`. Let the main flow end and endScene() cancels
+		// every live track, which is the point of the next test.
 		const global = new HandlerRegistry();
 		registerBaseHandlers( global );
-		global.dialogHandler = ( { block, next } ) => {
-			calls.push( block.uuid );
-			next();
-		};
+		global.dialogHandler = ( { block } ) => { if ( block.id === 'b1' ) return; };
 
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		const handle = handleFor( forked(), global );
+		global.dialogHandler = ( { block, next } ) => { if ( block.id === 'b1' ) next(); };
 		handle.start();
 
-		// main1 fires, then async1 fires in track, async2 follows
-		expect( calls ).toContain( 'main1' );
-		expect( calls ).toContain( 'async1' );
-		expect( calls ).toContain( 'async2' );
+		expect( handle.getActiveTracks() ).toBe( 1 );
+		expect( handle.getTrackInfos()[0]?.startBlockUuid ).toBe( 'side' );
 	} );
 
-	it( 'cancel() cascades to async tracks', () => {
-		const cleanupSpy = vi.fn();
-		const scene = makeScene( {
-			blocks: [
-				dialog( 'main1', true ),
-				asyncDialog( 'async1' ),
-				dialog( 'main2' ),
-			],
-			connections: [
-				conn( 'main1', 'main2' ),
-				conn( 'main1', 'async1' ),
-			],
-		} );
+	it( 'ends every live track when the scene ends', () => {
 		const global = new HandlerRegistry();
 		registerBaseHandlers( global );
-		global.dialogHandler = ( { block, next } ) => {
-			if ( block.uuid === 'async1' ) {
-				// Don't call next — keep async track alive
-				return cleanupSpy;
-			}
-			next();
-		};
+		// The main flow runs to the end; the side track stays parked on next().
+		global.dialogHandler = ( { block, next } ) => { if ( block.id !== 'side' ) next(); };
 
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
+		const handle = handleFor( forked(), global );
 		handle.start();
 
-		// main track finishes (main1 → main2 → end), async still alive?
-		// Actually main track ends → endScene cancels async tracks
-		expect( cleanupSpy ).toHaveBeenCalled();
+		expect( handle.isRunning() ).toBe( false );
+		expect( handle.getActiveTracks() ).toBe( 0 );
 	} );
 
-	it( 'getActiveTracks() returns correct count', () => {
-		let capturedCount = -1;
-		const scene = makeScene( {
-			blocks: [
-				dialog( 'main1', true ),
-				asyncDialog( 'async1' ),
-				dialog( 'main2' ),
-			],
-			connections: [
-				conn( 'main1', 'main2' ),
-				conn( 'main1', 'async1' ),
-			],
-		} );
+	it( 'cancel() cascades to the tracks', () => {
 		const global = new HandlerRegistry();
 		registerBaseHandlers( global );
+		global.dialogHandler = ( { block, next } ) => { if ( block.id === 'b1' ) next(); };
 
-		const handle = new SceneHandleImpl( new SceneGraph( scene ), global, makeCallbacks() );
-		// Capture count during main2 handler
-		global.dialogHandler = ( { block, next } ) => {
-			if ( block.uuid === 'async1' ) return; // stay active
-			if ( block.uuid === 'main2' ) capturedCount = handle.getActiveTracks();
-			next();
-		};
+		const handle = handleFor( forked(), global );
 		handle.start();
+		expect( handle.getActiveTracks() ).toBe( 1 );
 
-		expect( capturedCount ).toBe( 1 );
+		handle.cancel();
+		expect( handle.getActiveTracks() ).toBe( 0 );
 	} );
-
 } );

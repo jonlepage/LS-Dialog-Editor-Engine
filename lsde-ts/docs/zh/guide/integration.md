@@ -28,5 +28,5 @@ handler 的详细实现请参阅 [Block Types](./block-types) 和 [Handlers](./h
 
 - **`next()` 是遥控器。** 立即调用实现快速对话，或保留它直到动画结束。engine 会等待 — 它没有时间概念。
 - **清理函数负责善后。** 从任何 handler 返回一个函数，engine 在移到下一个 block 时会调用它。非常适合隐藏 UI、停止音频或释放节点。
-- **`onBeforeBlock` 处理 delay。** engine 不强制执行 `nativeProperties.delay` — 由 `onBeforeBlock` 读取它并在定时器后调用 `resolve()`。完全控制。
+- **`onBeforeBlock` 处理 delay。** engine 不强制执行 `props.delay` — 由 `onBeforeBlock` 读取它并在定时器后调用 `resolve()`。完全控制。
 - **async track 是并行流。** 当过场动画需要同时进行对话和摄像机移动时，在编辑器中标记为 `isAsync` 的 block 会在独立 track 上运行。

@@ -32,7 +32,9 @@ export class SceneGraph {
 		this.scene = scene;
 		this.blocksById = new Map();
 
-		for ( const block of scene.blocks ) {
+		// `?? []` rather than a bare read: `init()` refuses a scene with no block list, but the
+		// graph is also built directly by tools and tests, and an index is not the place to throw.
+		for ( const block of scene.blocks ?? [] ) {
 			this.blocksById.set( block.id, block );
 		}
 	}
@@ -61,7 +63,7 @@ export class SceneGraph {
 	 */
 	getConnections(): BlueprintConnection[] {
 		const out: BlueprintConnection[] = [];
-		for ( const block of this.scene.blocks ) {
+		for ( const block of this.scene.blocks ?? [] ) {
 			if ( !block.next ) continue;
 			for ( const link of block.next ) {
 				out.push( { from: block.id, port: link.port, to: link.to, toPort: link.toPort } );
@@ -85,7 +87,7 @@ export class SceneGraph {
 	}
 
 	getAllBlocks(): Block[] {
-		return this.scene.blocks;
+		return this.scene.blocks ?? [];
 	}
 }
 
@@ -169,8 +171,15 @@ export class BlueprintGraph {
 		return out;
 	}
 
-	/** The path of every scene in the export — what `engine.scene()` takes. */
-	getAllSceneIds(): string[] {
+	/**
+	 * The PATH of every scene in the export — `reactor_breach`, what a writer reads.
+	 *
+	 * Not the ids. It was called `getAllSceneIds` and returned paths, in a format whose whole
+	 * point is that a path and an id are different things: the path builds the i18n keys and
+	 * changes on a rename, the id (`sc_u0vqg2g8`) is what survives one. `engine.scene()` takes
+	 * either; anything stored OUTSIDE the payload should take the id.
+	 */
+	getAllScenePaths(): string[] {
 		return Array.from( this.sceneGraphs.keys() );
 	}
 

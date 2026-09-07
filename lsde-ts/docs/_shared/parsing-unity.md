@@ -5,7 +5,7 @@
 using LsdeDialogEngine;
 using LsdeDialogEngine.Newtonsoft;
 
-var json = File.ReadAllText("blueprint.json");
+var json = File.ReadAllText("blueprints.json");
 var blueprint = LsdeJson.Parse(json);
 engine.Init(new InitOptions { Data = blueprint });
 ```
@@ -14,7 +14,7 @@ engine.Init(new InitOptions { Data = blueprint });
 using Newtonsoft.Json;
 using LsdeDialogEngine;
 
-var json = File.ReadAllText("blueprint.json");
+var json = File.ReadAllText("blueprints.json");
 var settings = new JsonSerializerSettings();
 settings.Converters.Add(new BlueprintBlockNewtonsoftConverter()); // see Polymorphic Dispatch
 var blueprint = JsonConvert.DeserializeObject<BlueprintExport>(json, settings);

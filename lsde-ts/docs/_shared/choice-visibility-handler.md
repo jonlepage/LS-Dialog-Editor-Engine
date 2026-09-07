@@ -1,8 +1,8 @@
 ::: code-group
 ```ts [TypeScript]
 engine.onChoice(({ block, context, next }) => {
-  const visible = context.choices.filter(c => c.visible !== false);
-  showChoicesUI(visible, (uuid) => {
+  const offered = context.options.filter(c => c.visible !== false);
+  showOptionsUI(visible, (uuid) => {
     context.selectChoice(uuid);
     next();
   });
@@ -10,7 +10,7 @@ engine.onChoice(({ block, context, next }) => {
 ```
 ```csharp [C#]
 engine.OnChoice(args => {
-    var visible = args.Context.Choices
+    var visible = args.Context.Options
         .Where(c => c.Visible != false).ToList();
     ShowChoicesUI(visible, uuid => {
         args.Context.SelectChoice(uuid);
@@ -21,11 +21,11 @@ engine.OnChoice(args => {
 ```
 ```cpp [C++]
 engine.onChoice([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
-    std::vector<const RuntimeChoiceItem*> visible;
-    for (const auto& c : ctx->choices())
+    std::vector<const RuntimeOption*> visible;
+    for (const auto& c : ctx->options())
         if (!c.visible.has_value() || c.visible.value())
             visible.push_back(&c);
-    showChoicesUI(visible, [ctx, next](auto& uuid) {
+    showOptionsUI(visible, [ctx, next](auto& uuid) {
         ctx->selectChoice(uuid);
         next();
     });
@@ -35,10 +35,10 @@ engine.onChoice([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
 ```gdscript [GDScript]
 engine.on_choice(func(args):
     var visible = []
-    for c in args["context"].choices:
+    for c in args["context"].options:
         if c.get("visible") != false:
             visible.append(c)
-    show_choices_ui(visible, func(uuid):
+    show_options_ui(visible, func(uuid):
         args["context"].select_choice(uuid)
         args["next"].call()
     )

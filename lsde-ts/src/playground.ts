@@ -1,219 +1,135 @@
-declare const console: { log: (...args: unknown[]) => void };
+declare const console: { log: ( ...args: unknown[] ) => void };
 
-// Playground — tests the engine API with a real blueprint.
-// This file is excluded from build (tsconfig.json exclude).
+// Playground — drives the engine against a real LSDE v2 export.
+// Excluded from the build (tsconfig.json exclude). Run it with `npm run playground`.
+//
+// Read it as the shortest complete integration: init, a locale, the two resolvers, the four
+// handlers. Everything the engine asks of a game is in here, and nothing else is needed.
 
 import { DialogueEngine, LsdeUtils } from "./index.js";
-import type { BlueprintExport, ExportCondition, RuntimeChoiceItem } from "./index.js";
-import blueprintJson from "../../blueprints/blueprint.json";
+import type { BlueprintExport, ConditionTest } from "./index.js";
+import blueprintJson from "../../mock/blueprints/Engine-Conformance-Scene.blueprints.json";
 
-// simulation
-function GameOnResolveCondition(cond: ExportCondition): boolean {
-	console.log('◽onResolveCondition:', cond)
-	const [target, key] = cond.key.split('.');
-	switch (target) {
-		case "VariableGlobal":
-			switch (key) {
-				case "key1": return true;
-				case "key2": return false;
-			}
-		default:
-			return true;
+// ─── The game's state ───────────────────────────────────────────────────────
+//
+// A real game reads its own save here. What matters is the SHAPE of the answer: the engine hands
+// over a test and expects true or false. It never reads a dictionary itself, never implements an
+// operator, never knows what `credits` holds.
+
+const gameState: Record<string, Record<string, boolean | number | string>> = {
+	switches: { door_unlocked: true, oracle_awake: false, reactor_stable: false, met_vesk: true, alarm_armed: true },
+	variables: { chapter: 3, credits: 80, trust_kael: 2, alarm_level: 3 },
+	items: { plasma_cell: 1, keycard: 0, ration: 2 },
+	flags: { faction: "salvage", last_port: "reactor_deck", player_callsign: "Vane" },
+};
+
+function resolveCondition( test: ConditionTest ): boolean {
+	const actual = gameState[test.dict]?.[test.entry];
+	const expected = test.value;
+
+	switch ( test.op ) {
+		case "equals": return actual === expected;
+		case "notEquals": return actual !== expected;
+		case "lessThan": return Number( actual ) < Number( expected );
+		case "lessOrEqual": return Number( actual ) <= Number( expected );
+		case "greaterThan": return Number( actual ) > Number( expected );
+		case "greaterOrEqual": return Number( actual ) >= Number( expected );
+		default: return false;
 	}
 }
 
-
-const testData = blueprintJson as unknown as BlueprintExport;
-const engine = new DialogueEngine();
-
 // ─── Init ───────────────────────────────────────────────────────────────────
 
-const { errors, warnings, stats } = engine.init({ data: testData });
-const { sceneCount, blockCount, connectionCount } = stats;
-console.log(`\n🔧 Init — ${errors.length} errors, ${warnings.length} warnings`);
+const engine = new DialogueEngine();
+const { errors, warnings, stats } = engine.init( { data: blueprintJson as unknown as BlueprintExport } );
 
-for (const { code, message } of warnings)
-	console.log(`   ⚠️  ${code}: ${message}`);
+console.log( `\n🔧 Init — ${ errors.length } errors, ${ warnings.length } warnings` );
+for ( const { code, message } of errors ) console.log( `   ⛔ ${ code }: ${ message }` );
+for ( const { code, message } of warnings ) console.log( `   ⚠️  ${ code }: ${ message }` );
+console.log( `📊`, stats );
 
-console.log(`📊`, { sceneCount, blockCount, connectionCount });
+engine.setLocale( "fr" );
 
-// on peut changer les locales on the fly
-engine.setLocale("fr");
+// Which actor of the block is the one speaking. `actors` is a CAST, and LSDE deliberately refuses
+// to say whether its order means "who speaks" or "who is present" — so the game decides. Returning
+// undefined is legitimate: it means nobody available can carry this line.
+engine.onResolveCharacter( ( actors ) => actors[0] );
 
-// on ajoute l'algorithme de résolution de personnage
-// ex: ex esceque au moment T le actors est dispo dans le party en jeux ? si non , on met undefined et le flow arretera.
+// The single game-state evaluator. It answers option visibility AND condition cases. Tests on the
+// reserved `choice` dictionary never reach it — the engine answers those from its own history.
+engine.onResolveCondition( resolveCondition );
 
-engine.onResolveCharacter((characters) => characters[0]);
+// ─── The four handlers ──────────────────────────────────────────────────────
 
-// Unified condition resolver — evaluates game-state conditions for both choice visibility and condition blocks.
-// choice: conditions are handled internally by the engine via choice history.
-engine.onResolveCondition(GameOnResolveCondition);
+engine.onDialog( ( { block, context, next } ) => {
+	// The engine hands the RAW string over and never looks inside it. `{{@a1}}` and the like are
+	// the game's own markers, in the game's own keys, filled by the game's own system.
+	const line = LsdeUtils.getLocalizedText( block.text );
+	const who = context.actors.map( a => a.name ).join( " + " ) || "—";
 
-// ─── 4 Required Handlers ────────────────────────────────────────────────────
+	console.log( `\n💬 ${ block.id }  [${ who }]${ context.emotion ? ` (${ context.emotion.name } ${ context.intensity ?? "" })` : "" }` );
+	console.log( `   ${ line ?? "«no text in this export»" }` );
 
-engine.onDialog(({ block, context, next }) => {
-	const { dialogueText } = block;
-	const { character, resolveCharacterPort } = context;
-	const text = LsdeUtils.getLocalizedText(dialogueText);
-
-	console.log(`\n💬 DIALOG  ${block.label}`);
-	console.log(
-		`   🎭 ${character?.name} ${character?.id} [${character?.emotion ?? ""}]`,
-	);
-	console.log(`   📝 "${text ?? "—"}"`);
-
-	if (block.nativeProperties?.portPerCharacter && character) {
-		console.log(`   🔀 resolveCharacterPort: ${character.uuid}`);
-		resolveCharacterPort(character.uuid);
-	}
 	next();
+} );
 
-	return () => console.log(`   🧹 cleanup: ${block.label}`);
-});
+engine.onChoice( ( { block, context, next } ) => {
+	console.log( `\n❓ ${ block.id }` );
 
-engine.onChoice(({ block, context, next, }) => {
-	const { choices, selectChoice } = context;
-
-	// choices are tagged with .visible by the engine (onResolveCondition installed above)
-	const visible = choices.filter((c) => c.visible !== false);
-	const timeout = block.nativeProperties?.timeout;
-	// le moteur de jeux decidera quel visible choix est actif par default
-	const active = (() => visible[0])();
-
-	console.log(
-		`\n❓ CHOICE  ${block.label} — ${visible.length}/${choices.length} choices visible`,
-	);
-	for (const choice of visible) {
-		const text = LsdeUtils.getLocalizedText(choice.dialogueText);
-		const isActive = choice === active;
-		console.log(
-			`   👉 ${choice.label ?? choice.uuid.slice(0, 8)}: "${text ?? "—"}"${isActive ? " (active)" : ""}`,
-		);
+	// Every option comes tagged. Filtering is the game's call — greying a locked answer out is a
+	// perfectly good use of the ones that are not visible.
+	const offered = context.options.filter( o => o.visible !== false );
+	for ( const option of context.options ) {
+		const text = LsdeUtils.getLocalizedText( option.text );
+		console.log( `   ${ option.visible === false ? "🔒" : "▸" } ${ option.id }  ${ text ?? "" }` );
 	}
 
-	// le resolver si on decide de prendre en charge les timeout
-	const resolve = (choice: RuntimeChoiceItem | undefined) => {
-		// Simulate player picking the first choice on the 2nd choice block, otherwise no choice
-		//ui.showChoices(visible, activeIndex, (picked) => resolve(picked));
-		console.log(
-			`   ✅ selecting: ${choice?.label ?? choice?.uuid.slice(0, 8)}`,
-		);
-		if (timer) clearTimeout(timer);
-		if (choice) selectChoice(choice.uuid);
+	const picked = offered[0];
+	if ( !picked ) {
+		console.log( `   (nothing to pick — the flow stops here)` );
 		next();
-	};
-
-	// Auto-select si timeout
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	if (timeout) {
-		console.log("💌timeout:", timeout);
-		timer = setTimeout(() => {
-			resolve(active); // auto-select le choix actif
-		}, timeout);
-	} else {
-		// si pas de timeout, on va utiliser un waitinput dans le game engine
-		resolve(active);
+		return;
 	}
 
-	return () => {
-		if (timer) clearTimeout(timer);
-		console.log(`   🧹 cleanup: ${block.label}`);
-	};
-});
-
-
-// no need LSDEDE runtime solve this , but this is juste example for manual hack (very rare case, onResolveCondition should cover 99% of use cases)
-engine.onCondition(({ block, context, next }) => {
-	const { conditionGroups } = context;
-	const { nativeProperties } = block;
-	const isDispatcher = !!nativeProperties?.enableDispatcher;
-
-	for (const [i, g] of conditionGroups.entries()) {
-		for (const cond of g.conditions) {
-			console.log(`   [case ${i}] ${g.portIndex} key:${cond.key} ${cond.operator} ${cond.value} → ${g.result}`);
-		}
-	}
-
-	// Derive result from pre-evaluated groups
-	const matched = conditionGroups
-		.filter((c) => c.result)
-		.map((c) => c.portIndex);
-
-	const result = isDispatcher
-		? matched
-		: matched.at(0) ?? -1;
-
-	console.log(
-		`\n🔀 CONDITION  ${block.label} — ${conditionGroups.length} groups${isDispatcher ? " [DISPATCHER]" : ""
-		} → ${JSON.stringify(result)}`,
-	);
-	context.resolve(result);
+	console.log( `   → picking ${ picked.id }` );
+	context.selectChoice( picked.id );
 	next();
+} );
 
-});
+engine.onCondition( ( { block, context, next } ) => {
+	// Optional: with a resolver installed the engine already picked the port. This is where a game
+	// logs what matched, or overrides it with context.resolve( 'K2' ).
+	const matched = context.cases.filter( c => c.result ).map( c => c.port );
+	console.log( `\n🔀 ${ block.id }  cases: ${ context.cases.map( c => `${ c.port }=${ c.result }` ).join( " " ) }` );
+	console.log( `   matched: ${ matched.join( ", " ) || "none → default" }` );
 
-engine.onAction(({ block, context, next }) => {
-	const { actions = [] } = block;
-	console.log(`\n⚡ ACTION  ${block.label} — ${actions.length} actions`);
-	for (const { actionId, params } of actions) {
-		console.log(`   🎯 ${actionId}(${params.join(", ")})`);
-		// dev will probabli use switch case for better handling and mapping to game functions
+	next();
+} );
+
+engine.onAction( ( { block, context, next } ) => {
+	console.log( `\n⚙️  ${ block.id }` );
+	for ( const call of context.calls ) {
+		// `fn` is empty when the writer has not picked a function yet. That is a draft, not an error.
+		console.log( `   ${ call.fn || "«no function picked»" }(`, call.args, `)` );
 	}
+
 	context.resolve();
-	// context.reject();
 	next();
+} );
 
-	return () => console.log(`   🧹 cleanup: ${block.label}`);
-});
+// ─── Lifecycle ──────────────────────────────────────────────────────────────
 
-// ─── Optional Handlers ──────────────────────────────────────────────────────
+engine.onSceneEnter( () => console.log( `\n▶️  scene entered` ) );
+engine.onSceneExit( () => console.log( `\n⏹️  scene exited` ) );
 
-engine.onBeforeBlock(({ block, resolve }) => {
-	const delay = block.nativeProperties?.delay;
-	if (delay) console.log(`   ⏳ before: ${block.label} delay=${delay}s`);
-	resolve();
-});
+// ─── Play ───────────────────────────────────────────────────────────────────
+//
+// A scene opens by its path OR by the id that survives a rename. Store the id anywhere outside the
+// payload — a Unity asset, a save file — because the path changes the day someone renames it.
 
-engine.onSceneEnter(({ scene }) => {
-	console.log(`\n🟢 ━━━ Scene Enter ━━━  running=${scene.isRunning()}`);
-});
+const scene = engine.scene( "reactor_breach" );
+scene.start();
 
-engine.onSceneExit(() => {
-	console.log(`🔴 ━━━ Scene Exit ━━━\n`);
-});
-
-engine.onValidateNextBlock(({ nextBlock, fromBlock, nextContext }) => {
-	if (fromBlock)
-		console.log(`   ✔️  validate: ${fromBlock.label} → ${nextBlock.label} (char: ${nextContext.character?.name ?? 'none'})`);
-	return { valid: true };
-});
-
-engine.onInvalidateBlock(({ scene, reason }) => {
-	console.log(`   ❌ INVALIDATED: ${reason}`);
-	scene.cancel();
-});
-
-// ─── Run ────────────────────────────────────────────────────────────────────
-
-const sceneId = testData.scenes[0]?.uuid ?? "";
-const sceneName = testData.scenes[0]?.label ?? sceneId;
-console.log(`\n🚀 Launching scene: ${sceneName}`);
-
-const handle = engine.scene(sceneId);
-handle.start();
-
-handle.onExit(() => {
-	const visited = Array.from(handle.getVisitedBlocks()).map((uuid) => {
-		for (const { blocks } of testData.scenes) {
-			const b = blocks.find((bl) => bl.uuid === uuid);
-			if (b) return b.label ?? uuid.slice(0, 8);
-		}
-		return uuid.slice(0, 8);
-	});
-	console.log(`\n📋 Visited: ${visited.join(", ")}`);
-	console.log(
-		`📊 Choice History:`,
-		Object.fromEntries(handle.getChoiceHistory()),
-	);
-	console.log(`🏁 Engine running: ${engine.isRunning()}`);
-});
+console.log( `\n📜 choice history:`, Object.fromEntries( scene.getChoiceHistory() ) );
+console.log( `🧭 visited ${ scene.getVisitedBlocks().size } blocks` );
+console.log( `🔗 wires in the scene:`, engine.getSceneConnections( "reactor_breach" ).length );

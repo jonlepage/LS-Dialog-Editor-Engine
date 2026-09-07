@@ -12,7 +12,7 @@ engine.OnResolveCondition(cond => {
 });
 ```
 ```cpp [C++]
-engine.onResolveCondition([](const ExportCondition& cond) {
+engine.onResolveCondition([](const ConditionTest& cond) {
     return gameState.check(cond.key, cond.op, cond.value);
 });
 ```

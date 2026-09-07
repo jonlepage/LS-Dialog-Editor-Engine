@@ -12,10 +12,10 @@ import type {
 	BeforeBlockHandler,
 	BlueprintBlock,
 	BlueprintConnection,
-	BlockCharacter,
-	ExportCondition,
+	Card,
+	ConditionTest,
 } from "./types.js";
-import { validateBlueprint } from "./validator.js";
+import { validateBlueprint, mergePayloads } from "./validator.js";
 import { BlueprintGraph } from "./graph.js";
 import { HandlerRegistry } from "./handler-registry.js";
 import { SceneHandleImpl } from "./scene-handle.js";
@@ -27,22 +27,43 @@ export class DialogueEngine implements IDialogueEngine {
 	private graph: BlueprintGraph | null = null;
 	/** Tier 1 (global) handler registry — stores all engine-level handlers. */
 	private readonly globalRegistry = new HandlerRegistry();
-	/** Active locale code passed to scene handles for text resolution. */
+	/**
+	 * The locale the game picked. The engine keeps it for `LsdeUtils`, and never reads a text
+	 * with it: it dispatches structure and hands blocks over whole.
+	 */
 	private locale = "";
-	/** Currently running scenes keyed by scene UUID. Entries are added/removed by scene lifecycle callbacks. */
+	/** Running scenes, keyed by whatever reference `scene()` was called with. */
 	private readonly activeScenes = new Map<string, SceneHandleImpl>();
 	/** Guard preventing scene creation before init() succeeds. */
 	private initialized = false;
-	/** Character resolution callback. Default: first character in the list. */
-	private _resolveCharacter: ( characters: BlockCharacter[] ) => BlockCharacter | undefined = ( chars ) => chars[0];
-	/** Unified condition evaluator for choice visibility and condition block pre-evaluation. */
-	private _conditionResolver: ( ( condition: ExportCondition ) => boolean ) | null = null;
+	/**
+	 * Which actor of a block is the one speaking. Defaults to the first.
+	 *
+	 * LSDE deliberately refuses to say what the order of `actors` means — whether it is who
+	 * speaks or who is present is a decision each game makes. The default picks the first because
+	 * a default has to pick something, not because the format says so.
+	 */
+	private _resolveCharacter: ( actors: Card[] ) => Card | undefined = ( actors ) => actors[0];
+	/** The single game-state evaluator, used for option visibility and for condition cases. */
+	private _conditionResolver: ( ( test: ConditionTest ) => boolean ) | null = null;
 
+	/**
+	 * Load a payload and report what is wrong with it.
+	 *
+	 * Takes one export, or the several files of a per-scene one — each of those carries the whole
+	 * header, so they are folded into a single payload after checking they come from one export.
+	 *
+	 * The engine is initialized only when there are no errors: a payload it cannot read leaves it
+	 * unusable rather than half-loaded.
+	 */
 	init( options: InitOptions ): DiagnosticReport {
 		const report = validateBlueprint( options );
 
 		if ( report.errors.length === 0 ) {
-			this.graph = new BlueprintGraph( options.data );
+			const payload = Array.isArray( options.data )
+				? mergePayloads( options.data ).data!
+				: options.data;
+			this.graph = new BlueprintGraph( payload );
 			this.initialized = true;
 		}
 
@@ -62,16 +83,11 @@ export class DialogueEngine implements IDialogueEngine {
 		LsdeUtils.locale = locale;
 	}
 
-	onResolveCharacter( fn: ( characters: BlockCharacter[] ) => BlockCharacter | undefined ): void {
+	onResolveCharacter( fn: ( actors: Card[] ) => Card | undefined ): void {
 		this._resolveCharacter = fn;
 	}
 
-	onResolveCondition( evaluator: ( condition: ExportCondition ) => boolean ): void {
-		this._conditionResolver = evaluator;
-	}
-
-	/** @deprecated Use onResolveCondition() instead. */
-	setChoiceFilter( evaluator: ( condition: ExportCondition ) => boolean ): void {
+	onResolveCondition( evaluator: ( test: ConditionTest ) => boolean ): void {
 		this._conditionResolver = evaluator;
 	}
 
@@ -111,22 +127,40 @@ export class DialogueEngine implements IDialogueEngine {
 		this.globalRegistry.sceneExitHandler = handler;
 	}
 
-	scene( sceneId: string ): SceneHandle {
+	/**
+	 * Open a scene by its path (`reactor_breach`) or by its stable id (`sc_u0vqg2g8`).
+	 *
+	 * Take the id wherever the reference is stored OUTSIDE the payload — a Unity asset, a save
+	 * file, a database row. The path is what a writer reads and what builds the i18n keys, but it
+	 * changes the day someone renames the scene, and a serialized path then stops resolving with
+	 * no compiler to catch it. The id survives a rename; show the path as its label.
+	 */
+	scene( sceneRef: string ): SceneHandle {
 		if ( !this.initialized || !this.graph ) {
 			throw new Error( 'Engine not initialized. Call init() first.' );
 		}
 
-		const sceneGraph = this.graph.getSceneGraph( sceneId );
+		const graph = this.graph;
+		const sceneGraph = graph.getSceneGraph( sceneRef );
 		if ( !sceneGraph ) {
-			throw new Error( `Scene "${ sceneId }" not found.` );
+			throw new Error( `Scene "${ sceneRef }" not found.` );
 		}
 
 		const handle = new SceneHandleImpl( sceneGraph, this.globalRegistry, {
-			onSceneStarted: ( h ) => this.activeScenes.set( sceneId, h ),
-			onSceneEnded: () => this.activeScenes.delete( sceneId ),
+			onSceneStarted: ( h ) => this.activeScenes.set( sceneRef, h ),
+			// Only if the entry still points at the handle that is ending. Nothing stops a game
+			// from opening the same scene twice — a hub revisited while a first pass is parked on
+			// a handler — and a blind delete then dropped the LIVE one from the registry: the
+			// engine reported itself idle while a scene was still running, and `stop()` no longer
+			// reached it.
+			onSceneEnded: ( h ) => {
+				if ( this.activeScenes.get( sceneRef ) === h ) {
+					this.activeScenes.delete( sceneRef );
+				}
+			},
 			getResolveCharacter: () => this._resolveCharacter,
 			getConditionResolver: () => this._conditionResolver,
-			getLocale: () => this.locale,
+			getCard: ( cardId ) => graph.getCard( cardId ),
 		} );
 
 		return handle;
@@ -155,8 +189,15 @@ export class DialogueEngine implements IDialogueEngine {
 		return blocks;
 	}
 
-	getSceneConnections( sceneId: string ): BlueprintConnection[] {
+	/**
+	 * Every wire INSIDE a scene, flattened so each carries the block it leaves.
+	 *
+	 * Graph inspection, for a debug view that wants to see the wiring without playing it. It has
+	 * never had anything to do with going from one scene to another: a wire has never crossed a
+	 * scene in any version of the format, and chaining two scenes is the game's own business.
+	 */
+	getSceneConnections( sceneRef: string ): BlueprintConnection[] {
 		if ( !this.graph ) return [];
-		return this.graph.getSceneConnections( sceneId );
+		return this.graph.getSceneConnections( sceneRef );
 	}
 }

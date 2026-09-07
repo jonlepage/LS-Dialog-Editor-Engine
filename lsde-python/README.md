@@ -4,7 +4,7 @@
 
 ## Coming Soon
 
-This runtime is on our roadmap and will be available in a future release. It will be validated against the same 42 cross-language test specifications that power our existing runtimes.
+This runtime is on our roadmap and will be available in a future release. It will be validated against the same cross-language test specifications that power our existing runtimes.
 
 In the meantime, check out the available implementations:
 

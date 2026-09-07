@@ -1,9 +1,9 @@
 ::: code-group
 ```ts [TypeScript]
 engine.onDialog(({ block, context, next }) => {
-  const { dialogueText, nativeProperties } = block;
+  const { text, props } = block;
   const { character, resolveCharacterPort } = context;
-  const text = game.getLocalizedText(dialogueText);
+  const text = game.getLocalizedText(text);
   const emotion = game.getCharacterEmotion(character);
 
   character && resolveCharacterPort(character.uuid);
@@ -12,7 +12,7 @@ engine.onDialog(({ block, context, next }) => {
   game.animateCharacter(character, emotion);
 
   const dialog = game.createDialog(text, character, emotion);
-  const shouldWaitInput = game.shouldWaitPlayerInputForDialog(nativeProperties);
+  const shouldWaitInput = game.shouldWaitPlayerInputForDialog(props);
 
   // next() tells the engine this block is done — call it when the player
   // dismisses the dialog or when the text animation finishes on its own
@@ -20,7 +20,7 @@ engine.onDialog(({ block, context, next }) => {
     dialog.onInput(() => next(), { once: true });
   } else {
     dialog.then(() =>
-      game.wait(nativeProperties?.timeout ?? 0).then(() => next()),
+      game.wait(props?.timeout ?? 0).then(() => next()),
     );
   }
 
@@ -35,7 +35,7 @@ engine.onDialog(({ block, context, next }) => {
 engine.OnDialog(args => {
     var (scene, block, context, next) = args;
     var (text, ch, emotion) = (
-        Game.GetLocalizedText(block.DialogueText),
+        Game.GetLocalizedText(block.Text),
         context.Character,
         Game.GetCharacterEmotion(context.Character)
     );
@@ -66,7 +66,7 @@ engine.OnDialog(args => {
 ```cpp [C++]
 engine.onDialog([&game](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn {
     auto* ch = ctx->character();
-    auto text = game.getLocalizedText(block->dialogueText);
+    auto text = game.getLocalizedText(block->text);
     auto emotion = game.getCharacterEmotion(ch);
 
     if (ch) ctx->resolveCharacterPort(ch->uuid);
@@ -75,7 +75,7 @@ engine.onDialog([&game](auto* scene, auto* block, auto* ctx, auto next) -> Clean
     game.animateCharacter(ch, emotion);
 
     auto* dialog = game.createDialog(text, ch, emotion);
-    auto shouldWaitInput = game.shouldWaitPlayerInputForDialog(block->nativeProperties);
+    auto shouldWaitInput = game.shouldWaitPlayerInputForDialog(block->props);
 
     // next() tells the engine this block is done — call it when the player
     // dismisses the dialog or when the text animation finishes on its own
@@ -83,7 +83,7 @@ engine.onDialog([&game](auto* scene, auto* block, auto* ctx, auto next) -> Clean
         dialog->onInput([next]() { next(); });
     } else {
         dialog->then([&game, next, block]() {
-            game.wait(block->nativeProperties ? block->nativeProperties->timeout.value_or(0) : 0)
+            game.wait(block->props ? block->props->timeout.value_or(0) : 0)
                 .then([next]() { next(); });
         });
     }
@@ -101,7 +101,7 @@ engine.on_dialog(func(args):
     var ctx = args["context"]
     var next_fn = args["next"]
     var ch = ctx.character
-    var text = game.get_localized_text(block.get("dialogueText"))
+    var text = game.get_localized_text(block.get("text"))
     var emotion = game.get_character_emotion(ch)
 
     if ch:
@@ -111,7 +111,7 @@ engine.on_dialog(func(args):
     game.animate_character(ch, emotion)
 
     var dialog = game.create_dialog(text, ch, emotion)
-    var should_wait = game.should_wait_player_input(block.get("nativeProperties"))
+    var should_wait = game.should_wait_player_input(block.get("props"))
 
     # next_fn.call() tells the engine this block is done — call it when the player
     # dismisses the dialog or when the text animation finishes on its own
@@ -119,7 +119,7 @@ engine.on_dialog(func(args):
         dialog.on_input(func(): next_fn.call(), true)
     else:
         await dialog.wait()
-        await game.wait(block.get("nativeProperties", {}).get("timeout", 0))
+        await game.wait(block.get("props", {}).get("timeout", 0))
         next_fn.call()
 
     # cleanup: runs when the engine moves to the next block

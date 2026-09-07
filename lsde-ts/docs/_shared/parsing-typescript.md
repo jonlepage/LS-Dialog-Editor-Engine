@@ -1,11 +1,11 @@
 ::: code-group
 ```ts [JSON — import (bundler)]
 // Bundlers (Vite, Webpack, esbuild) auto-parse .json imports.
-import blueprintJson from './blueprint.json';
+import blueprintJson from './blueprints.json';
 engine.init({ data: blueprintJson });
 ```
 ```ts [JSON — manual]
-const json = fs.readFileSync('./blueprint.json', 'utf-8');
+const json = fs.readFileSync('./blueprints.json', 'utf-8');
 engine.init({ data: JSON.parse(json) });
 // No polymorphism issues — JS objects are dynamically typed.
 ```

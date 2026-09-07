@@ -24,385 +24,342 @@ class IChoiceContext;
 class IConditionContext;
 class IActionContext;
 
-/// Condition evaluation result — supports legacy boolean, switch (int), and dispatcher (vector<int>) modes.
-using ConditionResult = std::variant<bool, int, std::vector<int>>;
+// ─── The payload contract ────────────────────────────────────────────────────
+//
+// These mirror the C++ header LSDE generates beside its JSON. The core stays stdlib-only, so the
+// payload is plain structs and the game brings its own parser (nlohmann/json in the tests and the
+// playground only).
+//
+// Block ids repeat between scenes. The counter restarts at 1 in every scene, so DIALOG-001
+// legitimately exists in two of them: a block is identified by the pair (scene, id).
 
-// ─── Blueprint Data Types ────────────────────────────────────────────────────
+/// What a block is. Decides which optional fields it carries. LOWERCASE in v2.
+namespace BlockType {
+    inline constexpr const char* Dialog = "dialog";
+    inline constexpr const char* Choice = "choice";
+    inline constexpr const char* Condition = "condition";
+    inline constexpr const char* Action = "action";
+    inline constexpr const char* Note = "note";
+}
 
-/// All possible block types in a blueprint.
-enum class BlockType { Dialog, Choice, Condition, Action, Note };
+/// How a condition compares a dictionary entry to its value.
+namespace ConditionOperator {
+    inline constexpr const char* Equals = "equals";
+    inline constexpr const char* NotEquals = "notEquals";
+    inline constexpr const char* LessThan = "lessThan";
+    inline constexpr const char* LessOrEqual = "lessOrEqual";
+    inline constexpr const char* GreaterThan = "greaterThan";
+    inline constexpr const char* GreaterOrEqual = "greaterOrEqual";
+}
 
-/// Mixed value type for properties and action params.
-using PropertyValue = std::variant<std::string, double, bool>;
+/// How a comparison links to the one ABOVE it. The list is flat: precedence is yours.
+namespace ConditionJoin {
+    inline constexpr const char* And = "and";
+    inline constexpr const char* Or = "or";
+}
 
-/// Directed connection between two blocks in the blueprint.
-/// Connections define the dialogue flow by linking output ports of source blocks
-/// to input ports of target blocks.
-struct BlueprintConnection {
-    /// Unique identifier for this connection.
+/// What a card is used for in the editor.
+namespace CardRole {
+    inline constexpr const char* None = "none";
+    inline constexpr const char* Characters = "characters";
+    inline constexpr const char* Emotions = "emotions";
+    inline constexpr const char* Places = "places";
+}
+
+/// The ports every runtime must know. Option, case and actor ports are named by the project.
+namespace Ports {
+    /// The single entry port of every block.
+    inline constexpr const char* In = "in";
+    /// The default exit of a dialog, and the true exit of an if-style condition.
+    inline constexpr const char* Out = "out";
+    /// The exit of an action block once its calls succeeded.
+    inline constexpr const char* Then = "then";
+    /// The exit of an action block when a call failed.
+    inline constexpr const char* Catch = "catch";
+    /// The fallback exit of a condition block: no case matched.
+    inline constexpr const char* Default = "default";
+    /// NOT a port: the reserved ConditionTest::dict that reads past answers of THIS scene.
+    /// `entry` is a CHOICE block id, `value` an Option::id of that block. The engine answers it
+    /// from what it recorded while the scene played; no project dictionary may take this id.
+    inline constexpr const char* Choice = "choice";
+}
+
+/// What a property, an argument or a condition value can hold.
+using PropertyValue = std::variant<std::string, double, bool, std::vector<std::string>>;
+
+/// Named property values, keyed by the ids the project declared.
+using PropertyBag = std::unordered_map<std::string, PropertyValue>;
+
+/// A text by locale code, e.g. { "en": "Hello", "fr": "Bonjour" }.
+using TextByLocale = std::unordered_map<std::string, std::string>;
+
+/// Which software wrote the file, to trace a delivered payload back to its version.
+struct Generator {
+    /// Always LSDE.
+    std::string app;
+    /// The software version, e.g. 2.0.3 — not the format version.
+    std::string version;
+};
+
+/// A dictionary the game maintains, as declared in the project. Conditions cite it by id.
+struct DictionaryDefinition {
+    /// The dictionary id, as ConditionTest::dict cites it.
     std::string id;
-    /// UUID of the source block.
-    std::string fromId;
-    /// UUID of the target block.
-    std::string toId;
-    /// Output port identifier on the source block.
-    /// For CHOICE blocks: the selected choice UUID. For ACTION blocks: "then" or "catch".
-    std::string fromPort;
-    /// Input port identifier on the target block.
-    std::string toPort;
-    /// Zero-based index of the output port.
-    /// For CONDITION blocks: 0 = true, 1 = false. For DIALOG with portPerCharacter: index of the character.
-    std::optional<int> fromPortIndex;
+    /// What its entries are compared to: boolean, string or number.
+    std::string valueType;
+    /// The entry keys, in declaration order.
+    std::vector<std::string> entries;
 };
 
-/// Generic key-value property attached to a block.
-struct BlockProperty {
-    /// Property name or identifier.
-    std::string key;
-    /// Property value.
+/// One parameter of an engine function.
+struct FunctionParameter {
+    /// The argument name, as ActionCall::args keys it.
+    std::string name;
+    /// What the argument holds.
+    std::string type;
+    /// Only when type is dictionaryKey: where the value is picked.
+    std::optional<std::string> dictionary;
+};
+
+/// A function the game implements, as ActionCall::fn names it.
+struct FunctionDefinition {
+    /// The function id.
+    std::string id;
+    /// Its parameters, in declaration order.
+    std::vector<FunctionParameter> params;
+};
+
+/// A card cited by blocks: the other end of BlueprintBlock::actors and ::emotion.
+struct Card {
+    /// The stable editor id (var3) that blocks reference.
+    std::string id;
+    /// The name the game gives this card, never the editor label.
+    std::string name;
+    /// What the card is used for: characters, emotions, places or none.
+    std::string role;
+};
+
+/// An outgoing wire, seen from the block that carries it.
+struct Link {
+    /// The exit port: a fixed port (see Ports), an option id, a case port or a card id.
+    std::string port;
+    /// The target block id, relative to the SAME scene. A wire never crosses one.
+    std::string to;
+    /// The target's entry port, always "in" today.
+    std::string toPort = "in";
+};
+
+/// A wire seen from OUTSIDE the block that carries it.
+///
+/// In the payload a wire is a Link listed in `next`, so it only knows where it goes. Graph
+/// inspection needs both ends, so the engine flattens every `next` into this shape. Nothing in the
+/// file has it; it exists only in memory.
+struct BlueprintConnection {
+    /// The id of the block this wire leaves, within its scene.
+    std::string from;
+    /// The exit port it leaves by.
+    std::string port;
+    /// The block it goes to, in the same scene.
+    std::string to;
+    /// The target's entry port.
+    std::string toPort = "in";
+};
+
+/// What an action block asks the game to run.
+struct ActionCall {
+    /// The function id. May be empty when the writer has not picked one yet.
+    std::string fn;
+    /// The arguments BY NAME, as declared in FunctionDefinition::params.
+    PropertyBag args;
+};
+
+/// One comparison: a dictionary entry against a value.
+///
+/// The reserved dict id "choice" is the exception — it reads the answers the player already gave
+/// IN THIS SCENE, which the engine tracks on its own.
+struct ConditionTest {
+    /// The dictionary id. "choice" is reserved: see Ports::Choice.
+    std::string dict;
+    /// The entry read in that dictionary. With dict "choice", a CHOICE block id.
+    std::string entry;
+    /// The comparison. See ConditionOperator.
+    std::string op;
+    /// The right-hand side; its type follows the dictionary's valueType.
     PropertyValue value;
+    /// Link with the comparison ABOVE. Absent on the first one; absent means AND.
+    std::optional<std::string> join;
 };
 
-/// Condition evaluated to control dialogue flow or choice visibility.
-///
-/// Conditions are evaluated left-to-right with no operator precedence. The `chain` field
-/// on each condition determines how it combines with the accumulated result:
-/// - Empty vector -> true (no conditions = pass)
-/// - First condition -> its raw boolean result (chain is ignored)
-/// - chain = '&' or absent -> AND with the accumulated result
-/// - chain = '|' -> OR with the accumulated result
-///
-/// This means A AND B OR C evaluates as (A AND B) OR C, not A AND (B OR C).
-///
-/// The developer is responsible for interpreting key, operator, and value against
-/// the game state via the onCondition handler — the engine only handles the chaining logic.
-struct ExportCondition {
-    /// Unique identifier for this condition instance.
-    std::string uuid;
-    /// State key to evaluate (e.g. "has_item", "player_level").
-    /// Interpreted by the onCondition handler.
+/// One case of a condition block: the exit port, and what must hold for it.
+struct ConditionCase {
+    /// The exit port of this case (K1…), or the block's `out` when cases share one exit.
+    std::string port;
+    /// Absent = always true. Such a case makes every following case unreachable.
+    std::optional<std::vector<ConditionTest>> when;
+};
+
+/// One answer of a choice block, a translated key in its own right.
+struct Option {
+    /// The option id, which is ALSO its exit port (C1…).
+    std::string id;
+    /// The full i18n key of its text.
     std::string key;
-    /// Logical chaining with the previous condition: "|" (OR) or "&" (AND).
-    /// Defaults to AND if omitted. Ignored on the first condition in a chain.
-    std::optional<std::string> chain; // "|" or "&"
-    /// Comparison operator (e.g. "==", "!=", ">", "<", ">=", "<=").
-    /// Interpretation is up to the onCondition handler.
-    std::string op;                   // operator (reserved keyword in C++)
-    /// Value to compare against. Always a string — the developer is responsible for type coercion.
-    std::string value;
+    /// Its text by locale, when texts are exported inside the payload.
+    TextByLocale text;
+    /// Absent = always offered.
+    std::optional<std::vector<ConditionTest>> when;
 };
 
-/// Action triggered during block execution.
-struct ExportAction {
-    /// Unique identifier for this action instance.
-    std::string uuid;
-    /// UUID of the ActionSignature this action references.
-    std::optional<std::string> signatureUuid;
-    /// Action type identifier matching an ActionSignature.id (e.g. "set_flag", "play_sound").
-    /// The dev maps this to game-side functions.
-    std::string actionId;
-    /// Ordered parameter values for the action, as defined by the matching ActionSignature.params.
-    std::vector<PropertyValue> params;
-};
-
-/// Player choice option within a choice block.
-struct ChoiceItem {
-    /// Unique identifier for this choice.
-    std::string uuid;
-    /// Hierarchical key for localization lookup.
-    std::string structureKey;
-    /// Display label for editor reference.
-    std::optional<std::string> label;
-    /// Localized text map: { locale -> text }.
-    std::unordered_map<std::string, std::string> dialogueText;
-    /// Conditions controlling whether this choice is visible.
-    /// If all pass (or none set), the choice is shown.
-    std::vector<ExportCondition> visibilityConditions;
-};
-
-/// Choice item with runtime visibility tag, set by the engine when setChoiceFilter() is configured.
-/// Use `visible != false` (i.e. `!visible.has_value() || visible.value()`) to get visible choices.
-struct RuntimeChoiceItem : ChoiceItem {
-    /// true = visible, false = hidden, nullopt = no filter installed (treat as visible).
+/// An option tagged with what onResolveCondition said about its `when`.
+///
+/// The engine hands over EVERY option, tagged — never a shortened list. Filter on
+/// `visible != false`, or keep the rest to show them locked.
+struct RuntimeChoiceItem : Option {
+    /// true = offered, false = hidden, nullopt = no resolver installed (treat as offered).
     std::optional<bool> visible;
 };
 
-/// LSDE native execution properties controlling how a block is dispatched by the engine.
+/// A condition case with its pre-evaluated result.
 ///
-/// These properties affect the engine's execution flow, not the block's content:
+/// The case carries its own exit port, so there is no index to map back to anything — that is the
+/// v1 shape and it is gone. Pass the port to resolve() to override the routing.
+struct RuntimeConditionCase {
+    /// The exit port of this case: K1… with portPerCase, otherwise the block's `out`.
+    std::string port;
+    /// Its comparisons, chained left to right with no precedence. Absent = always true.
+    std::optional<std::vector<ConditionTest>> when;
+    /// true if the case holds, false if not, nullopt if no resolver is installed.
+    std::optional<bool> result;
+};
+
+/// The block properties the ENGINE acts on, read out of BlueprintBlock::props.
 ///
-/// - Async tracks: When isAsync = true, the block runs on a parallel track independent
-///   of the main flow. Async tracks call onBeforeBlock, can spawn sub-tracks, and are
-///   automatically cancelled when the scene ends.
+/// In v2 there is no separate bag: natives and the writer's own properties share `props`, keyed by
+/// bare id. Ids cannot collide — LSDE refuses a project property that takes a native name — so
+/// telling them apart is a lookup against NATIVE_PROPERTY_IDS, not a guess.
 ///
-/// - waitForBlocks: Defers block progression until all listed block UUIDs have been visited.
-///   If set on the start block of an async track, the entire track waits before beginning.
+/// Most are inert: delay, timeout, debug, waitInput, portPerCharacter and skipIfMissingActor are
+/// passed through untouched. Two are not: isAsync spawns a parallel track, and waitForBlocks parks
+/// one until its blocks are seen.
 ///
-/// - delay: Consumed by onBeforeBlock — the engine does not enforce it automatically.
-///   Your onBeforeBlock handler should read block.nativeProperties.delay and call
-///   resolve() after the delay.
-///
-/// - portPerCharacter: Creates one output port per character in metadata.characters.
-///   The DIALOG handler must call context.resolveCharacterPort(character.uuid) to pick which port
-///   to follow.
+/// **delay and timeout are MILLISECONDS in v2.** They were seconds in v1, and nothing reports the
+/// difference at runtime: a migrated project turns a 3-second pause into 3 ms.
 struct NativeProperties {
-    /// Execute this block on a separate async track running in parallel with the main flow.
+    /// Run this block on a parallel track instead of the main flow.
     std::optional<bool> isAsync;
-    /// Delay in seconds before the block is executed. Applied by the onBeforeBlock handler.
+    /// MILLISECONDS to wait before the block runs. Applied by onBeforeBlock, not by the engine.
     std::optional<double> delay;
-    /// Timeout in seconds for block execution.
+    /// MILLISECONDS the block may take. Passed through — the engine enforces nothing.
     std::optional<double> timeout;
-    /// Enable debug mode for this block (editor use).
-    std::optional<bool> debug;
-    /// One output port per character in metadata.characters.
-    /// The handler calls resolveCharacterPort() to pick which port to follow.
-    std::optional<bool> portPerCharacter;
-    /// Skip this block entirely if the assigned actor/character is missing at runtime.
-    std::optional<bool> skipIfMissingActor;
-    /// UUIDs of blocks that must have been visited before this block can progress.
-    /// Enables precise synchronization of parallel async branches.
-    std::optional<std::vector<std::string>> waitForBlocks;
-    /// Passive flag indicating this block should wait for explicit player input.
-    /// The engine does NOT interpret this flag — it is exposed as-is to game handlers.
+    /// Wait for player input or a game signal. Passed through, never interpreted.
     std::optional<bool> waitInput;
-    /// When true, all matching condition groups fire as independent async tracks (dispatcher mode).
-    /// When false/absent, only the first matching group routes (switch mode).
-    std::optional<bool> enableDispatcher;
+    /// Editor debug flag. Passed through.
+    std::optional<bool> debug;
+    /// One exit port per actor CARD ID, with `out` as the fallback.
+    std::optional<bool> portPerCharacter;
+    /// Skip the block when its actor is absent at runtime. Passed through.
+    std::optional<bool> skipIfMissingActor;
+    /// Condition blocks: each case exits by its own port instead of sharing `out`.
+    std::optional<bool> portPerCase;
+    /// Block ids OF THIS SCENE that must have been visited before this block may advance.
+    std::vector<std::string> waitForBlocks;
 };
 
-/// Character (actor) assigned to a block.
-struct BlockCharacter {
-    /// Internal UUID used by the dialog engine.
-    std::string uuid;
-    /// Game-side character identifier. Use this to look up the character in your game engine.
-    std::string id;
-    /// Display name for debugging and editor preview. Not intended for in-game display.
-    std::string name;
-    /// Emotion label for the character in this block (e.g. "happy", "angry", "sad").
-    std::optional<std::string> emotion;
-    /// Emotion intensity (e.g. 0 = neutral, higher = stronger).
-    std::optional<double> emotionIntensity;
-};
+/// The nine ids of NativeProperties, to sort a props bag into natives and the writer's own
+/// properties. Anything not in here belongs to the game.
+inline const std::vector<std::string>& nativePropertyIds() {
+    static const std::vector<std::string> ids = {
+        "isAsync", "delay", "timeout", "waitInput", "debug",
+        "portPerCharacter", "skipIfMissingActor", "portPerCase", "waitForBlocks",
+    };
+    return ids;
+}
 
-/// Screenshot or image captured from the editor for documentation.
-struct BlockScreenshot {
-    /// Image source as a data URL (base64) or file path.
-    std::string src;
-    /// Optional caption or description.
-    std::optional<std::string> note;
-};
-
-/// Non-logic metadata for display and organization. Should not affect game logic.
-struct BlockMetadata {
-    /// Visual color coding (hex) assigned by the designer.
-    std::optional<std::string> color;
-    /// Free-form designer notes. Not displayed to players.
-    std::optional<std::string> comments;
-    /// Contextual tags for categorization and filtering.
-    std::vector<std::string> tags;
-    /// Screenshots captured from the editor for this block.
-    std::vector<BlockScreenshot> screenShots;
-    /// Characters (actors) assigned to this block.
-    std::vector<BlockCharacter> characters;
-    // others: preserved as-is, not used by engine
-};
-
-/// Common properties shared by all block types.
-///
-/// All five block types (DialogBlock, ChoiceBlock, ConditionBlock, ActionBlock, NoteBlock)
-/// extend this base. Use the `type` field to determine the concrete block type and
-/// dynamic_cast to access block-specific data.
-///
-/// The `properties` array contains designer-defined key-value pairs from the editor's block
-/// configuration panel. `userProperties` is a free-form dictionary for narrative-designer data
-/// that doesn't fit the structured property model.
+/// A node of the graph. `type` decides which optional fields are present.
 struct BlueprintBlock {
-    virtual ~BlueprintBlock() = default;
-
-    /// Unique block identifier.
-    std::string uuid;
-    /// Block type determining behavior and rendering.
-    BlockType type = BlockType::Dialog;
-    /// Display label assigned in the editor.
-    std::optional<std::string> label;
-    /// Hierarchy of parent folder labels providing structural context.
-    std::vector<std::string> parentLabels;
-    /// Custom key-value properties defined by block configuration.
-    std::vector<BlockProperty> properties;
-    /// User-defined custom properties dictionary set by the narrative designer.
-    std::unordered_map<std::string, PropertyValue> userProperties;
-    /// LSDE native execution properties (async, delay, portPerCharacter, etc.).
-    std::optional<NativeProperties> nativeProperties;
-    /// Non-logic metadata for display and organization.
-    std::optional<BlockMetadata> metadata;
-    /// When true, this block is the entry point of the scene. Only one per scene.
-    std::optional<bool> isStartBlock;
-};
-
-/// Dialog block — displays text spoken by a character.
-///
-/// The character is resolved by the onResolveCharacter callback and exposed as
-/// context->character() in the handler.
-/// When nativeProperties.portPerCharacter is enabled, each character gets a dedicated output port
-/// and the handler must call context->resolveCharacterPort(character.uuid) to select which port to follow.
-struct DialogBlock : BlueprintBlock {
-    /// Hierarchical key for tree navigation and localization lookup.
-    std::optional<std::string> structureKey;
-    /// Raw text content in the primary language.
-    std::optional<std::string> content;
-    /// Localized text map: { locale -> text }.
-    std::unordered_map<std::string, std::string> dialogueText;
-};
-
-/// Choice block — presents selectable options to the player.
-///
-/// context->choices() returns ALL choices — none are filtered out.
-/// When setChoiceFilter() is configured, the engine evaluates each choice's
-/// visibilityConditions and tags every RuntimeChoiceItem with visible = true/false.
-/// Filter with: choices where visible != false.
-/// Without a filter, visible is nullopt and all choices pass.
-///
-/// The handler must call context->selectChoice(uuid) to pick a choice. The engine then follows
-/// the connection whose fromPort matches the selected choice UUID.
-struct ChoiceBlock : BlueprintBlock {
-    /// Available player choices. Visibility is tagged at runtime via visibilityConditions.
-    std::vector<ChoiceItem> choices;
-    /// Designer note. Not displayed to players.
-    std::optional<std::string> note;
-};
-
-/// Condition block — evaluates logic to branch the dialogue flow.
-///
-/// The developer MUST handle evaluation in the onCondition handler. Conditions are chained
-/// left-to-right with no operator precedence: '&' = AND, '|' = OR. An empty array
-/// evaluates to true.
-///
-/// The result maps to output ports: true follows port index 0, false follows port index 1.
-/// Call context->resolve(result) to set the branch direction.
-struct ConditionBlock : BlueprintBlock {
-    /// Condition groups (2D). Each inner vector is a "case" evaluated as an AND/OR chain.
-    /// Switch mode: first matching group wins. Dispatcher mode: all matching groups fire.
-    std::vector<std::vector<ExportCondition>> conditions;
-    /// Designer note. Not displayed to players.
-    std::optional<std::string> note;
-};
-
-/// Action block — triggers game state changes.
-///
-/// The developer MUST handle execution in the onAction handler.
-///
-/// The block has two output ports: "then" (success) and "catch" (failure).
-/// Call context->resolve() for success or context->reject(error) for failure.
-/// If no "catch" connection exists, rejection falls back to the "then" port.
-struct ActionBlock : BlueprintBlock {
-    /// Actions to execute. Each references an ActionSignature via actionId.
-    std::vector<ExportAction> actions;
-    /// Designer note. Not displayed to players.
-    std::optional<std::string> note;
-};
-
-/// Note block — designer documentation, never executed at runtime. Skipped during traversal.
-struct NoteBlock : BlueprintBlock {};
-
-/// A scene — an independent dialogue subgraph with its own entry point.
-///
-/// A scene is the unit of execution in the engine. Call engine.scene(uuid) to obtain an
-/// ISceneHandle, then handle->start() to begin traversing from the entry block.
-///
-/// The blocks vector contains all blocks in this scene. The connections vector defines the
-/// directed edges between blocks (output port -> input port). Together they form a directed
-/// graph that the engine traverses at runtime.
-///
-/// Multiple scenes can run concurrently — each gets its own ISceneHandle with independent
-/// state, visited blocks, and async tracks.
-struct BlueprintScene {
-    /// Unique scene identifier.
-    std::string uuid;
-    /// Scene name assigned by the designer.
-    std::string label;
-    /// Scene-level designer notes.
-    std::optional<std::string> note;
-    /// UUID of the entry block for this scene.
-    std::optional<std::string> entryBlockId;
-    /// Scene creation or last modification date.
-    std::string date;
-    /// All blocks contained within this scene.
-    std::vector<std::shared_ptr<BlueprintBlock>> blocks;
-    /// All connections defining the dialogue flow in this scene.
-    std::vector<BlueprintConnection> connections;
-};
-
-/// A single entry in a dictionary group.
-struct DictionaryRow {
-    /// Key identifier referenced in conditions and action parameters.
+    /// Identity RELATIVE to its scene (DIALOG-002): what links and BlueprintScene::start reference.
+    std::string id;
+    /// The full i18n key, as localization files carry it.
     std::string key;
-};
-
-/// Dictionary group defining reusable key-value pairs for conditions and actions.
-struct LsdeDictionary {
-    /// Unique identifier for this dictionary group.
-    std::string uuid;
-    /// Identifier used as prefix in condition keys (e.g. "groupId.rowKey").
-    std::string id;
-    /// All entries in this dictionary group.
-    std::vector<DictionaryRow> rows;
-};
-
-/// Enum option for a signature parameter.
-struct EnumOption {
-    /// Option identifier.
-    std::string id;
-    /// Display label for this option.
+    /// The readable name, when the writer wrote one. There is no mandatory block name.
     std::optional<std::string> label;
+    /// Readable names above the block, root first. Empty ones are skipped.
+    std::vector<std::string> parentLabels;
+    /// What the block is. See BlockType — lowercase in v2.
+    std::string type;
+    /// Card ids of who speaks. Resolve them through the export's cards table.
+    ///
+    /// The ORDER is significant, but its meaning does not belong to the engine: LSDE deliberately
+    /// refuses to say whether it is "who speaks" or "who is present". The game decides, through
+    /// onResolveCharacter.
+    std::vector<std::string> actors;
+    /// Card id of the emotion — the tone of the LINE, not of a speaker.
+    std::optional<std::string> emotion;
+    /// Only with emotion.
+    std::optional<double> intensity;
+    /// The line by locale, dialogs only, when texts are exported inside the payload.
+    ///
+    /// The engine never reads what is INSIDE this string. Markers like {{@a1}} are the game's own,
+    /// in the game's own keys, filled by the game's own system.
+    TextByLocale text;
+    /// The body of a note block: never translated, only when notes are exported.
+    std::optional<std::string> body;
+    /// The team note on the block, only when notes are exported.
+    std::optional<std::string> note;
+    /// Properties SET on the block, native and project-declared alike, by bare id.
+    PropertyBag props;
+    /// Action blocks: what to run, in order.
+    std::vector<ActionCall> calls;
+    /// Condition blocks: the cases, in evaluation order.
+    std::vector<ConditionCase> cases;
+    /// Choice blocks: the answers, in display order.
+    std::vector<Option> options;
+    /// Outgoing wires. Empty when nothing leaves the block.
+    std::vector<Link> next;
 };
 
-/// Parameter definition for an action signature.
-struct SignatureParam {
-    /// Display label for this parameter.
-    std::optional<std::string> label;
-    /// Data type of this parameter.
-    std::string type = "string";
-    /// UUID of the dictionary group this parameter references. Only when type is "dictionary".
-    std::optional<std::string> dictionaryGroupUuid;
-    /// Available options when type is "enum".
-    std::vector<EnumOption> enumOptions;
-};
-
-/// Action signature defining a reusable action type. Map id to your engine's action handlers.
-struct ActionSignature {
-    /// Unique identifier for this signature.
-    std::string uuid;
-    /// Short action type identifier (e.g. "set_flag"). Referenced by ExportAction.actionId.
+/// One scene: its blocks, and where it starts.
+struct BlueprintScene {
+    /// The scene path without the reserved namespace (acte1, chap1.acte1).
+    std::string scene;
+    /// The scene identity that SURVIVES A RENAME (sc_ then eight chars).
+    ///
+    /// `scene` is what a writer reads and what builds the i18n keys, but it changes the day someone
+    /// renames the scene — so an asset that stored it stops resolving, silently, with no compiler
+    /// to catch it. Store THIS one wherever a scene is referenced from outside the payload.
     std::string id;
-    /// Parameter definitions describing the expected inputs.
-    std::vector<SignatureParam> params;
+    /// The readable name of the scene, when written.
+    std::optional<std::string> label;
+    /// The entry block id. Empty = the scene has no entry and cannot play.
+    std::optional<std::string> start;
+    /// Every exported block of the scene.
+    std::vector<BlueprintBlock> blocks;
 };
 
-/// Root container for exported blueprint data.
-///
-/// This is the top-level JSON structure exported by the LS-Dialog editor. Pass it to
-/// engine.init({ data }) to load and validate the blueprint. The engine indexes all scenes,
-/// blocks, and connections internally — the original object is not mutated.
-///
-/// The locales vector lists all available languages. Call engine.setLocale(code) to store
-/// the active locale — your handlers are responsible for reading the appropriate key from
-/// DialogBlock.dialogueText and ChoiceItem.dialogueText.
+/// The whole file. One scene per file or all of them: the only difference between the two split
+/// modes.
 struct BlueprintExport {
-    /// Schema version of this export format.
-    std::string version;
-    /// ISO 8601 timestamp of when this export was generated.
-    std::string exportDate;
-    /// Name of the LSDE project.
-    std::optional<std::string> projectName;
-    /// Primary language locale code (e.g. "fr", "en").
-    std::optional<std::string> primaryLanguage;
-    /// All language locale codes included in this export.
+    /// Always "lsde-blueprints". Anything else is refused outright.
+    std::string format;
+    /// The FORMAT version. Bumps only when the payload contract changes.
+    int version = 0;
+    /// Which software wrote the file.
+    Generator generator;
+    /// ISO 8601 instant of the export.
+    std::string exportedAt;
+    /// The project name.
+    std::string project;
+    /// Every locale of the project.
     std::vector<std::string> locales;
-    /// Dictionary groups for conditions and action parameters.
-    std::vector<LsdeDictionary> dictionaries;
-    /// Action signature definitions describing available action types.
-    std::vector<ActionSignature> signatures;
-    /// All exported scenes.
+    /// The locale that is written first. Empty when the project declares none.
+    std::string referenceLocale;
+    /// The declared vocabulary, whole, never trimmed to the exported scenes.
+    std::vector<DictionaryDefinition> dictionaries;
+    /// The declared engine functions.
+    std::vector<FunctionDefinition> functions;
+    /// The cards that blocks may cite.
+    std::vector<Card> cards;
+    /// The scenes carried by this file.
     std::vector<BlueprintScene> scenes;
 };
 
@@ -438,18 +395,24 @@ struct DiagnosticReport {
 /// When provided, the engine warns about blueprint references that don't match
 /// your game's known capabilities.
 struct CheckOptions {
-    /// Known action signature IDs in your game. Blueprint actions referencing unknown IDs will produce warnings.
-    std::vector<std::string> signatures;
-    /// Known dictionary groups and their row keys. Blueprint references to unknown groups/keys will produce warnings.
+    /// Function ids your game implements. A blueprint function outside this list warns.
+    std::vector<std::string> functions;
+    /// Dictionary ids and their entry keys, as your game holds them.
     std::unordered_map<std::string, std::vector<std::string>> dictionaries;
-    /// Known character names in your game. Blueprint blocks referencing unknown characters will produce warnings.
-    std::vector<std::string> characters;
+    /// Card NAMES your game knows — Card::name, never the editor id (var1).
+    std::vector<std::string> cards;
 };
 
 /// Options passed to engine.init().
 struct InitOptions {
     /// The blueprint data to load and validate.
     BlueprintExport data;
+    /// The several files of a per-scene export, instead of `data`.
+    ///
+    /// Each file of that mode is self-contained — it carries the whole header, so a scene loads and
+    /// plays on its own. Pass the list and the engine stacks the scenes behind one header, after
+    /// checking `project` and `exportedAt` match across the files.
+    std::vector<BlueprintExport> files;
     /// Optional cross-validation options.
     std::optional<CheckOptions> check;
 };
@@ -471,49 +434,81 @@ using CleanupFn = std::function<void()>;
 
 // ─── Context Types ───────────────────────────────────────────────────────────
 
-/// Base context available to all block handlers.
+/// What every block handler gets, whatever the block type.
 class IBaseBlockContext {
 public:
     virtual ~IBaseBlockContext() = default;
-    /// Character resolved by the onResolveCharacter callback for this block, or nullptr if none.
-    virtual const BlockCharacter* character() const = 0;
-    /// Prevent the global (Tier 1) handler from executing after this scene handler.
+
+    /// The actor onResolveCharacter picked for this block, or nullptr.
+    ///
+    /// A block lists a CAST in `actors` — card ids, in an order LSDE deliberately refuses to give a
+    /// meaning to. The engine hands the whole list to onResolveCharacter and keeps whatever comes
+    /// back; it does not elect a first one, the way v1 did.
+    virtual const Card* character() const = 0;
+
+    /// Every card the block cites, resolved through the export's cards table, in file order.
+    virtual const std::vector<Card>& actors() const = 0;
+
+    /// The emotion of the BLOCK, resolved through cards — the tone of the line, not of a speaker.
+    /// In v1 each character carried its own, which meant writing the same feeling twice for two
+    /// actors saying one sentence.
+    virtual const Card* emotion() const = 0;
+
+    /// How strongly, when the writer set an emotion. Passed through untouched.
+    virtual std::optional<double> intensity() const = 0;
+
+    /// Stop the global (Tier 1) handler from running after this scene handler.
     virtual void preventGlobalHandler() = 0;
 };
 
-/// Context for DIALOG block handlers.
-class IDialogContext : public IBaseBlockContext {
+/// What a DIALOG handler gets.
+class IDialogContext : public virtual IBaseBlockContext {
 public:
-    /// When portPerCharacter is enabled, specify which character port to follow.
-    /// Matches by character UUID first, then by name as fallback.
-    virtual void resolveCharacterPort(const std::string& characterUuid) = 0;
+    /// With portPerCharacter, name the actor whose port the flow should take.
+    ///
+    /// Takes a CARD ID (var1) — the same id BlueprintBlock::actors lists and the same one the port
+    /// is named after. A card the block does not cite falls back to `out`.
+    virtual void resolveCharacterPort(const std::string& cardId) = 0;
 };
 
-/// Context for CHOICE block handlers.
-class IChoiceContext : public IBaseBlockContext {
+/// What a CHOICE handler gets.
+class IChoiceContext : public virtual IBaseBlockContext {
 public:
-    /// All choices with optional visibility tags. When engine.setChoiceFilter() is configured,
-    /// each choice is tagged visible = true/false. Filter with: choices where visible != false.
-    /// Without a filter, visible is nullopt and all choices pass.
-    virtual const std::vector<RuntimeChoiceItem>& choices() const = 0;
-    /// Select a choice by UUID. The engine follows the matching port.
-    virtual void selectChoice(const std::string& choiceUuid) = 0;
+    /// EVERY option of the block, tagged. Not a shortened list.
+    ///
+    /// With onResolveCondition installed each carries visible = true/false; without one it is
+    /// nullopt — unknown, not hidden. Show the offered ones by filtering on `visible != false`, or
+    /// keep the rest to grey them out.
+    virtual const std::vector<RuntimeChoiceItem>& options() const = 0;
+
+    /// Pick an option by its id (C1). That id is also the port the flow leaves by.
+    virtual void selectChoice(const std::string& optionId) = 0;
 };
 
-/// Context for CONDITION block handlers.
-class IConditionContext : public IBaseBlockContext {
+/// What a CONDITION handler gets.
+class IConditionContext : public virtual IBaseBlockContext {
 public:
-    /// Resolve the condition. Accepts bool (legacy), int (switch), or vector<int> (dispatcher).
-    virtual void resolve(const ConditionResult& result) = 0;
+    /// Override the exit port. Takes a PORT NAME: "out", "default", or a case port (K1).
+    ///
+    /// v1 took bool | int | vector<int> — three shapes for one method, the third being the
+    /// dispatcher. Both are gone: a condition picks one path.
+    virtual void resolve(const std::string& port) = 0;
+
+    /// The block's cases, each with its port and its pre-evaluated result.
+    virtual const std::vector<RuntimeConditionCase>& cases() const = 0;
 };
 
-/// Context for ACTION block handlers.
-class IActionContext : public IBaseBlockContext {
+/// What an ACTION handler gets.
+class IActionContext : public virtual IBaseBlockContext {
 public:
-    /// Mark action as succeeded. Engine follows the "then" port.
+    /// The calls the block asks the game to run, in order, with their arguments BY NAME.
+    virtual const std::vector<ActionCall>& calls() const = 0;
+
+    /// The calls went through. The flow leaves by "then".
     virtual void resolve() = 0;
-    /// Mark action as failed. Engine follows the "catch" port (fallback "then" if no catch port exists).
-    virtual void reject(const std::string& error = "") = 0;
+
+    /// A call failed. The flow leaves by "catch", or by "then" when no error branch was drawn.
+    virtual void reject(const std::string& error) = 0;
 };
 
 /// Context passed to onBeforeBlock handler.
@@ -538,7 +533,7 @@ using InternalBlockHandler = std::function<CleanupFn(
 )>;
 
 /// Typed handler for a specific block + context type pair.
-/// TBlock: the concrete block type (DialogBlock, ChoiceBlock, etc.)
+/// TBlock: BlueprintBlock — v2 has one block type, narrowed by its `type` field.
 /// TContext: the matching context interface (IDialogContext, IChoiceContext, etc.)
 template<typename TBlock, typename TContext>
 using TypedBlockHandler = std::function<CleanupFn(
@@ -548,14 +543,20 @@ using TypedBlockHandler = std::function<CleanupFn(
     std::function<void()> next
 )>;
 
-/// Wrap a typed handler into the internal non-generic type via static_cast.
+/// Wrap a typed handler into the internal non-generic type.
+///
+/// The cast to the concrete context is a dynamic_cast, not a static one: the per-type contexts
+/// inherit IBaseBlockContext VIRTUALLY (an InternalDialogContext is both an InternalBlockContext
+/// and an IDialogContext, and there must be one IBaseBlockContext, not two), and a static_cast
+/// down from a virtual base is not allowed. A block whose context does not match its handler
+/// yields nullptr, which is the same as a block with no handler: it advances.
 template<typename TBlock, typename TContext>
 InternalBlockHandler wrapHandler(TypedBlockHandler<TBlock, TContext> handler) {
     return [h = std::move(handler)](
         ISceneHandle* scene, const BlueprintBlock* block,
         IBaseBlockContext* ctx, std::function<void()> next
     ) -> CleanupFn {
-        return h(scene, static_cast<const TBlock*>(block), static_cast<TContext*>(ctx), std::move(next));
+        return h(scene, block, dynamic_cast<TContext*>(ctx), std::move(next));
     };
 }
 
@@ -564,7 +565,7 @@ InternalBlockHandler wrapHandler(TypedBlockHandler<TBlock, TContext> handler) {
 /// the validation handler is invoked.
 struct ValidateNextBlockContext {
     /// Character resolved for this block, or nullptr if none.
-    const BlockCharacter* character = nullptr;
+    const Card* character = nullptr;
 };
 
 /// Arguments for the onValidateNextBlock handler.
@@ -671,23 +672,23 @@ public:
     virtual void onExit(SceneLifecycleHandler handler) = 0;
 
     /// Override a specific block by UUID. Takes highest priority over type handlers.
-    virtual void onBlock(const std::string& blockUuid, InternalBlockHandler handler) = 0;
+    virtual void onBlock(const std::string& blockId, InternalBlockHandler handler) = 0;
     /// Override a specific DIALOG block by UUID (type-safe).
-    virtual void onDialogId(const std::string& blockUuid, TypedBlockHandler<DialogBlock, IDialogContext> handler) = 0;
+    virtual void onDialogId(const std::string& blockId, TypedBlockHandler<BlueprintBlock, IDialogContext> handler) = 0;
     /// Override a specific CHOICE block by UUID (type-safe).
-    virtual void onChoiceId(const std::string& blockUuid, TypedBlockHandler<ChoiceBlock, IChoiceContext> handler) = 0;
+    virtual void onChoiceId(const std::string& blockId, TypedBlockHandler<BlueprintBlock, IChoiceContext> handler) = 0;
     /// Override a specific CONDITION block by UUID (type-safe).
-    virtual void onConditionId(const std::string& blockUuid, TypedBlockHandler<ConditionBlock, IConditionContext> handler) = 0;
+    virtual void onConditionId(const std::string& blockId, TypedBlockHandler<BlueprintBlock, IConditionContext> handler) = 0;
     /// Override a specific ACTION block by UUID (type-safe).
-    virtual void onActionId(const std::string& blockUuid, TypedBlockHandler<ActionBlock, IActionContext> handler) = 0;
+    virtual void onActionId(const std::string& blockId, TypedBlockHandler<BlueprintBlock, IActionContext> handler) = 0;
     /// Override all DIALOG blocks for this scene (Tier 2).
-    virtual void onDialog(TypedBlockHandler<DialogBlock, IDialogContext> handler) = 0;
+    virtual void onDialog(TypedBlockHandler<BlueprintBlock, IDialogContext> handler) = 0;
     /// Override all CHOICE blocks for this scene (Tier 2).
-    virtual void onChoice(TypedBlockHandler<ChoiceBlock, IChoiceContext> handler) = 0;
+    virtual void onChoice(TypedBlockHandler<BlueprintBlock, IChoiceContext> handler) = 0;
     /// Override all CONDITION blocks for this scene (Tier 2).
-    virtual void onCondition(TypedBlockHandler<ConditionBlock, IConditionContext> handler) = 0;
+    virtual void onCondition(TypedBlockHandler<BlueprintBlock, IConditionContext> handler) = 0;
     /// Override all ACTION blocks for this scene (Tier 2).
-    virtual void onAction(TypedBlockHandler<ActionBlock, IActionContext> handler) = 0;
+    virtual void onAction(TypedBlockHandler<BlueprintBlock, IActionContext> handler) = 0;
 
     /// Get the block currently being executed, or nullptr if scene is not running.
     virtual const BlueprintBlock* getCurrentBlock() const = 0;
@@ -704,41 +705,39 @@ public:
     /// Keys are block UUIDs, values are arrays of selected choice UUIDs.
     virtual const std::unordered_map<std::string, std::vector<std::string>>& getChoiceHistory() const = 0;
     /// Get the choice(s) selected at a specific block. Returns nullptr if block never visited as choice.
-    virtual const std::vector<std::string>* getChoice(const std::string& blockUuid) const = 0;
+    virtual const std::vector<std::string>* getChoice(const std::string& blockId) const = 0;
 
     /// Evaluate a condition. Handles choice: conditions via internal choice history.
     /// Returns false for non-choice conditions (the engine cannot evaluate game state).
-    virtual bool evaluateCondition(const ExportCondition& condition) = 0;
+    /// Answer one comparison. A test on the reserved "choice" dictionary is answered from this
+    /// scene's own history; anything else goes to the game's resolver, and is false when none is
+    /// installed.
+    virtual bool evaluateCondition(const ConditionTest& test) = 0;
     /// Override character resolution for this scene. Defaults to engine-level resolver.
-    virtual void onResolveCharacter(std::function<const BlockCharacter*(const std::vector<BlockCharacter>&)> fn) = 0;
+    virtual void onResolveCharacter(std::function<const Card*(const std::vector<Card>&)> fn) = 0;
 };
 
 // ─── Port Resolution Types ──────────────────────────────────────────────────
 
-/// Input data for port resolution. The block's type determines the routing rules:
-/// - DIALOG: characterPortIndex selects the character port, fallback to "out"
-/// - CHOICE: selectedChoiceUuid matches connection.fromPort
-/// - CONDITION: conditionResult — bool (legacy), int (switch), vector<int> (dispatcher)
-/// - ACTION: actionRejected=true tries "catch" port, fallback "then"; otherwise "then"
-/// - NOTE: returns all connections
+/// What resolvePort() needs to pick the wires to follow.
 struct PortResolutionInput {
-    /// The block whose output port is being resolved.
+    /// The block being left. Its `type` picks the routing rule.
     const BlueprintBlock* block = nullptr;
-    /// All outgoing connections from this block.
-    const std::vector<BlueprintConnection>* connections = nullptr;
-    /// CHOICE blocks only — UUID of the selected choice. Matches connection.fromPort.
-    std::optional<std::string> selectedChoiceUuid;
-    /// CONDITION blocks only — evaluation result. Supports bool, int (switch), vector<int> (dispatcher).
-    std::optional<ConditionResult> conditionResult;
-    /// ACTION blocks only — if true, the resolver looks for a "catch" port before falling back to "then".
+    /// The wires it carries — block->next, straight off the block.
+    std::vector<Link> links;
+    /// CHOICE only: the option the player picked. Its id IS its port (C1…).
+    std::optional<std::string> selectedOptionId;
+    /// CONDITION only: the port its cases picked — "out", "default", or K1….
+    std::optional<std::string> conditionPort;
+    /// ACTION only: true when a call failed, so "catch" is tried before "then".
     std::optional<bool> actionRejected;
-    /// DIALOG blocks with portPerCharacter — character index to match against connection.fromPortIndex.
-    std::optional<int> characterPortIndex;
+    /// DIALOG with portPerCharacter: the CARD ID of the speaking actor, never an index.
+    std::optional<std::string> actorPort;
 };
 
-/// Result of port resolution — all matching connections.
+/// The wires to follow. The traversal decides which is the main track.
 struct PortResolutionResult {
-    std::vector<const BlueprintConnection*> connections;
+    std::vector<Link> links;
 };
 
 } // namespace lsde

@@ -1,38 +1,75 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DialogueEngine } from './engine.js';
-import type { BlueprintExport, BlueprintScene, BlueprintBlock } from './types.js';
+import type { Scene, Blueprints, Block, Link, Card } from './types.js';
+import {
+	blueprint, scene as buildScene, dialog as buildDialog, choice, condition, action,
+	link, option, card, whenCase,
+} from './test-builders.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function makeExport( scenes: BlueprintScene[] ): BlueprintExport {
-	return { version: '1.0.0', exportDate: '2025-01-01', locales: ['en'], scenes };
+const CARDS: Card[] = [card( 'var1', 'kael' ), card( 'var2', 'nora' ), card( 'var3', 'oracle' )];
+
+function makeExport( scenes: Scene[] ): Blueprints {
+	return blueprint( scenes, { cards: CARDS } );
 }
 
-function dialog( uuid: string, opts: { start?: boolean; async?: boolean; waitFor?: string[]; text?: string; chars?: string[] } = {} ): BlueprintBlock {
-	return {
-		uuid, type: 'DIALOG', properties: [],
-		isStartBlock: opts.start,
-		nativeProperties: opts.async ? { isAsync: true, waitForBlocks: opts.waitFor } : undefined,
-		dialogueText: opts.text ? { en: opts.text } : undefined,
-		metadata: opts.chars ? { characters: opts.chars.map( name => ( { uuid: `${ name }-uuid`, id: name.toLowerCase(), name } ) ) } : undefined,
-	} as BlueprintBlock;
+/**
+ * A dialog block. `async` marks the TARGET as a parallel track — in v2 that flag lives in `props`
+ * alongside the designer's own properties, keyed by bare id.
+ */
+function dialog(
+	id: string,
+	opts: { start?: boolean; async?: boolean; waitFor?: string[]; text?: string; chars?: string[]; next?: Link[]; perChar?: boolean } = {},
+): Block {
+	const props: Record<string, unknown> = {};
+	if ( opts.async ) props.isAsync = true;
+	if ( opts.waitFor ) props.waitForBlocks = opts.waitFor;
+	if ( opts.perChar ) props.portPerCharacter = true;
+
+	return buildDialog( id, {
+		next: opts.next,
+		props: Object.keys( props ).length > 0 ? props as never : undefined,
+		text: opts.text ? { en: opts.text } : undefined,
+		actors: opts.chars,
+	} );
 }
 
-function conn( fromId: string, toId: string, fromPort = 'out', fromPortIndex?: number ) {
-	return { id: `${ fromId }-${ toId }`, fromId, toId, fromPort, toPort: 'in', fromPortIndex };
+/**
+ * A scene, written as blocks plus a list of wires.
+ *
+ * In the payload a wire is carried by the block it leaves (`block.next`), which is right for a
+ * format but unreadable in a test: the shape of the graph gets scattered across the blocks. So
+ * these suites keep writing the wires as a list, and this helper distributes them.
+ */
+function makeScene( spec: { blocks: Block[]; connections?: Wire[]; start?: string } ): Scene {
+	const byId = new Map( spec.blocks.map( b => [b.id, b] ) );
+	for ( const wire of spec.connections ?? [] ) {
+		const from = byId.get( wire.fromId );
+		if ( !from ) continue;
+		from.next = [...( from.next ?? [] ), { port: wire.fromPort, to: wire.toId, toPort: 'in' }];
+	}
+	return buildScene( spec.blocks, spec.start ? { start: spec.start } : {} );
+}
+
+interface Wire { fromId: string; toId: string; fromPort: string }
+
+/** One wire, seen from outside. `port` is a name: `out`, `then`, `C1`, `K1`, or a card id. */
+function conn( fromId: string, toId: string, fromPort = 'out' ): Wire {
+	return { fromId, toId, fromPort };
 }
 
 function registerAllHandlers( engine: DialogueEngine ) {
 	engine.onDialog( ( { next } ) => { next(); } );
 	engine.onChoice( ( { context, next } ) => {
-		if ( context.choices.length > 0 ) context.selectChoice( context.choices[0]!.uuid );
+		if ( context.options.length > 0 ) context.selectChoice( context.options[0]!.id );
 		next();
 	} );
-	engine.onCondition( ( { context, next } ) => { context.resolve( true ); next(); } );
+	engine.onCondition( ( { next } ) => { next(); } );
 	engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
 }
 
-function setupEngine( scene: BlueprintScene ) {
+function setupEngine( scene: Scene ) {
 	const engine = new DialogueEngine();
 	engine.init( { data: makeExport( [scene] ) } );
 	registerAllHandlers( engine );
@@ -45,10 +82,9 @@ describe( 'multitrack — self-driven async', () => {
 
 	it( 'main + 1 async: both tracks execute all their blocks', () => {
 		const calls: string[] = [];
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const scene = makeScene( {
 			blocks: [
-				dialog( 'main1', { start: true, text: 'Hero speaks' } ),
+				dialog( 'main1', { text: 'Hero speaks' } ),
 				dialog( 'main2', { text: 'Hero continues' } ),
 				dialog( 'bg1', { async: true, text: 'NPC mumbles' } ),
 				dialog( 'bg2', { text: 'NPC done' } ),
@@ -58,10 +94,10 @@ describe( 'multitrack — self-driven async', () => {
 				conn( 'main1', 'bg1' ),
 				conn( 'bg1', 'bg2' ),
 			],
-		};
+		} );
 
 		const engine = setupEngine( scene );
-		engine.onDialog( ( { block, next } ) => { calls.push( block.uuid ); next(); } );
+		engine.onDialog( ( { block, next } ) => { calls.push( block.id ); next(); } );
 		engine.scene( 's1' ).start();
 
 		expect( calls ).toContain( 'main1' );
@@ -72,10 +108,9 @@ describe( 'multitrack — self-driven async', () => {
 
 	it( 'main + 3 async tracks: all fire independently', () => {
 		const calls: string[] = [];
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const scene = makeScene( {
 			blocks: [
-				dialog( 'hero', { start: true, text: 'Hero' } ),
+				dialog( 'hero', { text: 'Hero' } ),
 				dialog( 'npc1', { async: true, text: 'NPC1 reacts' } ),
 				dialog( 'npc2', { async: true, text: 'NPC2 reacts' } ),
 				dialog( 'npc3', { async: true, text: 'NPC3 reacts' } ),
@@ -87,10 +122,10 @@ describe( 'multitrack — self-driven async', () => {
 				conn( 'hero', 'npc2' ),
 				conn( 'hero', 'npc3' ),
 			],
-		};
+		} );
 
 		const engine = setupEngine( scene );
-		engine.onDialog( ( { block, next } ) => { calls.push( block.uuid ); next(); } );
+		engine.onDialog( ( { block, next } ) => { calls.push( block.id ); next(); } );
 		engine.scene( 's1' ).start();
 
 		expect( calls ).toContain( 'hero' );
@@ -102,10 +137,9 @@ describe( 'multitrack — self-driven async', () => {
 
 	it( 'async track that does not call next() stays alive until scene ends', () => {
 		const cleanupSpy = vi.fn();
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const scene = makeScene( {
 			blocks: [
-				dialog( 'main1', { start: true } ),
+				dialog( 'main1' ),
 				dialog( 'main2' ),
 				dialog( 'stuck', { async: true } ),
 			],
@@ -113,11 +147,11 @@ describe( 'multitrack — self-driven async', () => {
 				conn( 'main1', 'main2' ),
 				conn( 'main1', 'stuck' ),
 			],
-		};
+		} );
 
 		const engine = setupEngine( scene );
 		engine.onDialog( ( { block, next } ) => {
-			if ( block.uuid === 'stuck' ) {
+			if ( block.id === 'stuck' ) {
 				return cleanupSpy; // don't call next — stay alive
 			}
 			next();
@@ -133,10 +167,9 @@ describe( 'multitrack — self-driven async', () => {
 
 	it( 'async track with multi-block chain completes on its own', () => {
 		const calls: string[] = [];
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const scene = makeScene( {
 			blocks: [
-				dialog( 'main1', { start: true } ),
+				dialog( 'main1' ),
 				dialog( 'a1', { async: true } ),
 				dialog( 'a2' ),
 				dialog( 'a3' ),
@@ -146,10 +179,10 @@ describe( 'multitrack — self-driven async', () => {
 				conn( 'a1', 'a2' ),
 				conn( 'a2', 'a3' ),
 			],
-		};
+		} );
 
 		const engine = setupEngine( scene );
-		engine.onDialog( ( { block, next } ) => { calls.push( block.uuid ); next(); } );
+		engine.onDialog( ( { block, next } ) => { calls.push( block.id ); next(); } );
 
 		// main1 has only async target → main has no continuation → endScene
 		// BUT: async track spawns first, then main tries to continue and finds nothing
@@ -168,10 +201,9 @@ describe( 'multitrack — cancel & cleanup', () => {
 
 	it( 'scene.cancel() stops main + all async tracks, all cleanups fire', () => {
 		const cleanups: string[] = [];
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const scene = makeScene( {
 			blocks: [
-				dialog( 'main1', { start: true } ),
+				dialog( 'main1' ),
 				dialog( 'main2' ),
 				dialog( 'bg1', { async: true } ),
 				dialog( 'bg2', { async: true } ),
@@ -181,15 +213,15 @@ describe( 'multitrack — cancel & cleanup', () => {
 				conn( 'main1', 'bg1' ),
 				conn( 'main1', 'bg2' ),
 			],
-		};
+		} );
 
 		const engine = setupEngine( scene );
 		engine.onDialog( ( { block, next } ) => {
-			if ( block.uuid === 'bg1' || block.uuid === 'bg2' ) {
+			if ( block.id === 'bg1' || block.id === 'bg2' ) {
 				// Stay alive — don't call next
-				return () => cleanups.push( block.uuid );
+				return () => cleanups.push( block.id );
 			}
-			if ( block.uuid === 'main2' ) {
+			if ( block.id === 'main2' ) {
 				// Don't call next — stay alive
 				return () => cleanups.push( 'main2' );
 			}
@@ -212,10 +244,9 @@ describe( 'multitrack — cancel & cleanup', () => {
 
 	it( 'engine.stop() cancels all scenes including their async tracks', () => {
 		const cleanups: string[] = [];
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const scene = makeScene( {
 			blocks: [
-				dialog( 'main1', { start: true } ),
+				dialog( 'main1' ),
 				dialog( 'main2' ),
 				dialog( 'bg1', { async: true } ),
 			],
@@ -223,16 +254,16 @@ describe( 'multitrack — cancel & cleanup', () => {
 				conn( 'main1', 'main2' ),
 				conn( 'main1', 'bg1' ),
 			],
-		};
+		} );
 
 		const engine = setupEngine( scene );
 		engine.onDialog( ( { block, next } ) => {
-			if ( block.uuid === 'main1' ) {
+			if ( block.id === 'main1' ) {
 				next(); // advance → forks to main2 + bg1
 				return;
 			}
 			// main2 and bg1 stay alive
-			return () => cleanups.push( block.uuid );
+			return () => cleanups.push( block.id );
 		} );
 
 		engine.scene( 's1' ).start();
@@ -253,28 +284,25 @@ describe( 'multitrack — mixed scenarios', () => {
 
 	it( 'portPerCharacter fork with async background bubbles', () => {
 		const calls: string[] = [];
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const scene = makeScene( {
 			blocks: [
-				{
-					uuid: 'multi', type: 'DIALOG', properties: [], isStartBlock: true,
-					nativeProperties: { portPerCharacter: true },
-					metadata: { characters: [{ uuid: 'hero-uuid', id: 'hero', name: 'Hero' }, { uuid: 'sidekick-uuid', id: 'sidekick', name: 'Sidekick' }] },
-				} as BlueprintBlock,
+				dialog( 'multi', { perChar: true, chars: ['var1', 'var2'] } ),
 				dialog( 'hero-line', { text: 'Hero talks' } ),
-				dialog( 'sidekick-bg', { async: true, text: 'Sidekick whispers', chars: ['Sidekick'] } ),
+				dialog( 'sidekick-bg', { async: true, text: 'Sidekick whispers', chars: ['var2'] } ),
 			],
 			connections: [
-				conn( 'multi', 'hero-line', 'hero-uuid', 0 ),
-				conn( 'multi', 'sidekick-bg', 'sidekick-uuid', 0 ), // same portIndex — multi-track!
+				// The port of an actor IS its card id. Two wires on ONE port: the first non-async
+				// target is the main flow, the other becomes a parallel track.
+				conn( 'multi', 'hero-line', 'var1' ),
+				conn( 'multi', 'sidekick-bg', 'var1' ),
 			],
-		};
+		} );
 
 		const engine = setupEngine( scene );
 		engine.onDialog( ( { block, context, next } ) => {
-			calls.push( block.uuid );
-			if ( block.uuid === 'multi' && 'resolveCharacterPort' in context ) {
-				context.resolveCharacterPort( 'hero-uuid' ); // portIndex 0
+			calls.push( block.id );
+			if ( block.id === 'multi' && 'resolveCharacterPort' in context ) {
+				context.resolveCharacterPort( 'var1' );
 			}
 			next();
 		} );
@@ -289,31 +317,27 @@ describe( 'multitrack — mixed scenarios', () => {
 	it( 'async track traverses CONDITION and ACTION blocks', () => {
 		const executed: string[] = [];
 		const calls: string[] = [];
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const scene = makeScene( {
 			blocks: [
-				dialog( 'main1', { start: true } ),
-				{ uuid: 'bg-cond', type: 'CONDITION', properties: [],
-					nativeProperties: { isAsync: true },
-					conditions: [[{ uuid: 'c1', key: 'flag', operator: '=', value: 'true' }]],
-				} as BlueprintBlock,
-				{ uuid: 'bg-act', type: 'ACTION', properties: [],
-					actions: [{ uuid: 'a1', actionId: 'bg_effect', params: [] }],
-				} as BlueprintBlock,
+				dialog( 'main1' ),
+				condition( 'bg-cond', [whenCase( 'out', [{ dict: 'switches', entry: 'flag', op: 'equals', value: true }] )],
+					{ props: { isAsync: true } } ),
+				action( 'bg-act', [{ fn: 'bg_effect', args: {} }] ),
 				dialog( 'bg-end', { text: 'BG done' } ),
 			],
 			connections: [
 				conn( 'main1', 'bg-cond' ),
-				{ id: 'c-true', fromId: 'bg-cond', toId: 'bg-act', fromPort: 'true', toPort: 'in', fromPortIndex: 0 },
+				// The true exit of an if-style condition is `out`. v1 called it `true`.
+				conn( 'bg-cond', 'bg-act', 'out' ),
 				conn( 'bg-act', 'bg-end', 'then' ),
 			],
-		};
+		} );
 
 		const engine = setupEngine( scene );
-		engine.onDialog( ( { block, next } ) => { calls.push( block.uuid ); next(); } );
-		engine.onCondition( ( { context, next } ) => { context.resolve( true ); next(); } );
-		engine.onAction( ( { block, context, next } ) => {
-			for ( const a of block.actions ?? [] ) executed.push( a.actionId );
+		engine.onDialog( ( { block, next } ) => { calls.push( block.id ); next(); } );
+		engine.onResolveCondition( () => true );
+		engine.onAction( ( { context, next } ) => {
+			for ( const c of context.calls ) executed.push( c.fn );
 			context.resolve();
 			next();
 		} );
@@ -328,10 +352,9 @@ describe( 'multitrack — mixed scenarios', () => {
 
 	it( 'getActiveTracks during mid-flow', () => {
 		let tracksAtMain2 = -1;
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const scene = makeScene( {
 			blocks: [
-				dialog( 'main1', { start: true } ),
+				dialog( 'main1' ),
 				dialog( 'main2' ),
 				dialog( 'bg1', { async: true } ),
 				dialog( 'bg2', { async: true } ),
@@ -341,14 +364,14 @@ describe( 'multitrack — mixed scenarios', () => {
 				conn( 'main1', 'bg1' ),
 				conn( 'main1', 'bg2' ),
 			],
-		};
+		} );
 
 		const engine = setupEngine( scene );
 		const handle = engine.scene( 's1' );
 
 		engine.onDialog( ( { block, next } ) => {
-			if ( block.uuid === 'bg1' || block.uuid === 'bg2' ) return; // stay alive
-			if ( block.uuid === 'main2' ) tracksAtMain2 = handle.getActiveTracks();
+			if ( block.id === 'bg1' || block.id === 'bg2' ) return; // stay alive
+			if ( block.id === 'main2' ) tracksAtMain2 = handle.getActiveTracks();
 			next();
 		} );
 
@@ -365,10 +388,9 @@ describe( 'multitrack — sub-track spawning', () => {
 
 	it( 'async track with outgoing async connection spawns sub-track', () => {
 		const calls: string[] = [];
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const scene = makeScene( {
 			blocks: [
-				dialog( 'main1', { start: true } ),
+				dialog( 'main1' ),
 				dialog( 'main2' ),
 				dialog( 'async1', { async: true } ),   // spawned by main
 				dialog( 'async1b' ),                     // continuation of async1
@@ -382,10 +404,10 @@ describe( 'multitrack — sub-track spawning', () => {
 				conn( 'async1', 'sub1' ),       // sub-track fork
 				conn( 'sub1', 'sub1b' ),
 			],
-		};
+		} );
 
 		const engine = setupEngine( scene );
-		engine.onDialog( ( { block, next } ) => { calls.push( block.uuid ); next(); } );
+		engine.onDialog( ( { block, next } ) => { calls.push( block.id ); next(); } );
 		engine.scene( 's1' ).start();
 
 		expect( calls ).toContain( 'main1' );
@@ -398,10 +420,9 @@ describe( 'multitrack — sub-track spawning', () => {
 
 	it( 'sub-track spawns sub-sub-track (depth 2)', () => {
 		const calls: string[] = [];
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const scene = makeScene( {
 			blocks: [
-				dialog( 'main1', { start: true } ),
+				dialog( 'main1' ),
 				dialog( 'a1', { async: true } ),
 				dialog( 'b1', { async: true } ),   // sub-track of a1
 				dialog( 'c1', { async: true } ),   // sub-sub-track of b1
@@ -411,10 +432,10 @@ describe( 'multitrack — sub-track spawning', () => {
 				conn( 'a1', 'b1' ),
 				conn( 'b1', 'c1' ),
 			],
-		};
+		} );
 
 		const engine = setupEngine( scene );
-		engine.onDialog( ( { block, next } ) => { calls.push( block.uuid ); next(); } );
+		engine.onDialog( ( { block, next } ) => { calls.push( block.id ); next(); } );
 		engine.scene( 's1' ).start();
 
 		expect( calls ).toContain( 'a1' );
@@ -424,10 +445,9 @@ describe( 'multitrack — sub-track spawning', () => {
 
 	it( 'getActiveTracks includes sub-tracks', () => {
 		let countDuringMain2 = -1;
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const scene = makeScene( {
 			blocks: [
-				dialog( 'main1', { start: true } ),
+				dialog( 'main1' ),
 				dialog( 'main2' ),
 				dialog( 'a1', { async: true } ),
 				dialog( 'a1b' ),                      // non-async continuation of a1
@@ -439,13 +459,13 @@ describe( 'multitrack — sub-track spawning', () => {
 				conn( 'a1', 'a1b' ),     // main continuation
 				conn( 'a1', 'sub1' ),    // async sub-track fork
 			],
-		};
+		} );
 
 		const engine = setupEngine( scene );
 		const handle = engine.scene( 's1' );
 		engine.onDialog( ( { block, next } ) => {
-			if ( block.uuid === 'a1b' || block.uuid === 'sub1' ) return; // stay alive
-			if ( block.uuid === 'main2' ) countDuringMain2 = handle.getActiveTracks();
+			if ( block.id === 'a1b' || block.id === 'sub1' ) return; // stay alive
+			if ( block.id === 'main2' ) countDuringMain2 = handle.getActiveTracks();
 			next();
 		} );
 		handle.start();
@@ -463,10 +483,9 @@ describe( 'multitrack — cancel cascade', () => {
 	it( 'explicit cancel() cascades to child sub-tracks', () => {
 		const parentCleanup = vi.fn();
 		const childCleanup = vi.fn();
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const scene = makeScene( {
 			blocks: [
-				dialog( 'main1', { start: true } ),
+				dialog( 'main1' ),
 				dialog( 'main2' ),
 				dialog( 'a1', { async: true } ),
 				dialog( 'a1b' ),                     // non-async continuation
@@ -478,12 +497,12 @@ describe( 'multitrack — cancel cascade', () => {
 				conn( 'a1', 'a1b' ),
 				conn( 'a1', 'sub1' ),
 			],
-		};
+		} );
 
 		const engine = setupEngine( scene );
 		engine.onDialog( ( { block, next } ) => {
-			if ( block.uuid === 'a1b' ) return parentCleanup; // stay alive
-			if ( block.uuid === 'sub1' ) return childCleanup; // stay alive
+			if ( block.id === 'a1b' ) return parentCleanup; // stay alive
+			if ( block.id === 'sub1' ) return childCleanup; // stay alive
 			next();
 		} );
 
@@ -497,10 +516,9 @@ describe( 'multitrack — cancel cascade', () => {
 
 	it( 'natural endTrack does NOT cascade — child tracks survive', () => {
 		const calls: string[] = [];
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const scene = makeScene( {
 			blocks: [
-				dialog( 'main1', { start: true } ),
+				dialog( 'main1' ),
 				dialog( 'main2' ),
 				dialog( 'a1', { async: true } ),
 				// a1 has no non-async continuation → will endTrack naturally after spawning sub1
@@ -513,10 +531,10 @@ describe( 'multitrack — cancel cascade', () => {
 				conn( 'a1', 'sub1' ),
 				conn( 'sub1', 'sub1b' ),
 			],
-		};
+		} );
 
 		const engine = setupEngine( scene );
-		engine.onDialog( ( { block, next } ) => { calls.push( block.uuid ); next(); } );
+		engine.onDialog( ( { block, next } ) => { calls.push( block.id ); next(); } );
 		engine.scene( 's1' ).start();
 
 		// a1 advances → spawns sub1, no main continuation → endTrack (natural)
@@ -527,10 +545,9 @@ describe( 'multitrack — cancel cascade', () => {
 
 	it( 'handle.cancel() clears everything including sub-tracks', () => {
 		const subCleanup = vi.fn();
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const scene = makeScene( {
 			blocks: [
-				dialog( 'main1', { start: true } ),
+				dialog( 'main1' ),
 				dialog( 'a1', { async: true } ),
 				dialog( 'sub1', { async: true } ),
 			],
@@ -538,12 +555,12 @@ describe( 'multitrack — cancel cascade', () => {
 				conn( 'main1', 'a1' ),
 				conn( 'a1', 'sub1' ),
 			],
-		};
+		} );
 
 		const engine = setupEngine( scene );
 		engine.onDialog( ( { block, next } ) => {
-			if ( block.uuid === 'sub1' ) return subCleanup;
-			if ( block.uuid === 'a1' ) { next(); return; }
+			if ( block.id === 'sub1' ) return subCleanup;
+			if ( block.id === 'a1' ) { next(); return; }
 			next();
 		} );
 
@@ -562,10 +579,9 @@ describe( 'multitrack — TrackInfo', () => {
 
 	it( 'getTrackInfos returns correct data for running tracks', () => {
 		let infos: readonly import('./types.js').TrackInfo[] = [];
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const scene = makeScene( {
 			blocks: [
-				dialog( 'main1', { start: true } ),
+				dialog( 'main1' ),
 				dialog( 'main2' ),
 				dialog( 'a1', { async: true } ),
 				dialog( 'a2', { async: true } ),
@@ -575,13 +591,13 @@ describe( 'multitrack — TrackInfo', () => {
 				conn( 'main1', 'a1' ),
 				conn( 'main1', 'a2' ),
 			],
-		};
+		} );
 
 		const engine = setupEngine( scene );
 		const handle = engine.scene( 's1' );
 		engine.onDialog( ( { block, next } ) => {
-			if ( block.uuid === 'a1' || block.uuid === 'a2' ) return; // stay alive
-			if ( block.uuid === 'main2' ) infos = handle.getTrackInfos();
+			if ( block.id === 'a1' || block.id === 'a2' ) return; // stay alive
+			if ( block.id === 'main2' ) infos = handle.getTrackInfos();
 			next();
 		} );
 		handle.start();
@@ -595,10 +611,9 @@ describe( 'multitrack — TrackInfo', () => {
 
 	it( 'sub-track parentTrackId matches parent track id', () => {
 		let infos: readonly import('./types.js').TrackInfo[] = [];
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const scene = makeScene( {
 			blocks: [
-				dialog( 'main1', { start: true } ),
+				dialog( 'main1' ),
 				dialog( 'main2' ),
 				dialog( 'a1', { async: true } ),
 				dialog( 'a1b' ),                      // non-async continuation
@@ -610,13 +625,13 @@ describe( 'multitrack — TrackInfo', () => {
 				conn( 'a1', 'a1b' ),      // main continuation
 				conn( 'a1', 'sub1' ),     // sub-track fork
 			],
-		};
+		} );
 
 		const engine = setupEngine( scene );
 		const handle = engine.scene( 's1' );
 		engine.onDialog( ( { block, next } ) => {
-			if ( block.uuid === 'a1b' || block.uuid === 'sub1' ) return; // stay alive
-			if ( block.uuid === 'main2' ) infos = handle.getTrackInfos();
+			if ( block.id === 'a1b' || block.id === 'sub1' ) return; // stay alive
+			if ( block.id === 'main2' ) infos = handle.getTrackInfos();
 			next();
 		} );
 		handle.start();
@@ -630,10 +645,9 @@ describe( 'multitrack — TrackInfo', () => {
 
 	it( 'ended track does not appear in getTrackInfos', () => {
 		let infosAfterEnd: readonly import('./types.js').TrackInfo[] = [];
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const scene = makeScene( {
 			blocks: [
-				dialog( 'main1', { start: true } ),
+				dialog( 'main1' ),
 				dialog( 'main2' ),
 				dialog( 'a1', { async: true } ), // will end immediately (no continuation)
 			],
@@ -641,12 +655,12 @@ describe( 'multitrack — TrackInfo', () => {
 				conn( 'main1', 'main2' ),
 				conn( 'main1', 'a1' ),
 			],
-		};
+		} );
 
 		const engine = setupEngine( scene );
 		const handle = engine.scene( 's1' );
 		engine.onDialog( ( { block, next } ) => {
-			if ( block.uuid === 'main2' ) infosAfterEnd = handle.getTrackInfos();
+			if ( block.id === 'main2' ) infosAfterEnd = handle.getTrackInfos();
 			next();
 		} );
 		handle.start();
@@ -657,10 +671,9 @@ describe( 'multitrack — TrackInfo', () => {
 
 	it( 'track IDs are monotonically increasing', () => {
 		let infos: readonly import('./types.js').TrackInfo[] = [];
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const scene = makeScene( {
 			blocks: [
-				dialog( 'main1', { start: true } ),
+				dialog( 'main1' ),
 				dialog( 'main2' ),
 				dialog( 'a1', { async: true } ),
 				dialog( 'a2', { async: true } ),
@@ -672,13 +685,13 @@ describe( 'multitrack — TrackInfo', () => {
 				conn( 'main1', 'a2' ),
 				conn( 'main1', 'a3' ),
 			],
-		};
+		} );
 
 		const engine = setupEngine( scene );
 		const handle = engine.scene( 's1' );
 		engine.onDialog( ( { block, next } ) => {
-			if ( block.uuid.startsWith( 'a' ) ) return; // stay alive
-			if ( block.uuid === 'main2' ) infos = handle.getTrackInfos();
+			if ( block.id.startsWith( 'a' ) ) return; // stay alive
+			if ( block.id === 'main2' ) infos = handle.getTrackInfos();
 			next();
 		} );
 		handle.start();
@@ -695,10 +708,9 @@ describe( 'multitrack — waitForBlocks', () => {
 
 	it( 'block with waitForBlocks defers until target is visited', () => {
 		const calls: string[] = [];
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const scene = makeScene( {
 			blocks: [
-				dialog( 'main1', { start: true } ),
+				dialog( 'main1' ),
 				dialog( 'main2' ),
 				dialog( 'a1', { async: true, waitFor: ['main2'] } ),
 				dialog( 'a2' ),   // continuation after a1 advances
@@ -708,10 +720,10 @@ describe( 'multitrack — waitForBlocks', () => {
 				conn( 'main1', 'a1' ),
 				conn( 'a1', 'a2' ),
 			],
-		};
+		} );
 
 		const engine = setupEngine( scene );
-		engine.onDialog( ( { block, next } ) => { calls.push( block.uuid ); next(); } );
+		engine.onDialog( ( { block, next } ) => { calls.push( block.id ); next(); } );
 		engine.scene( 's1' ).start();
 
 		// a1 calls next() but main2 not yet visited → defers
@@ -724,10 +736,9 @@ describe( 'multitrack — waitForBlocks', () => {
 	it( 'waitForBlocks already satisfied advances immediately', () => {
 		const calls: string[] = [];
 		// a1 waits for main1, but main1 is the start block → already visited when a1 runs
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const scene = makeScene( {
 			blocks: [
-				dialog( 'main1', { start: true } ),
+				dialog( 'main1' ),
 				dialog( 'a1', { async: true, waitFor: ['main1'] } ),
 				dialog( 'a2' ),
 			],
@@ -735,10 +746,10 @@ describe( 'multitrack — waitForBlocks', () => {
 				conn( 'main1', 'a1' ),
 				conn( 'a1', 'a2' ),
 			],
-		};
+		} );
 
 		const engine = setupEngine( scene );
-		engine.onDialog( ( { block, next } ) => { calls.push( block.uuid ); next(); } );
+		engine.onDialog( ( { block, next } ) => { calls.push( block.id ); next(); } );
 		engine.scene( 's1' ).start();
 
 		expect( calls ).toContain( 'a1' );
@@ -747,10 +758,9 @@ describe( 'multitrack — waitForBlocks', () => {
 
 	it( 'waitForBlocks with multiple UUIDs waits for ALL', () => {
 		const calls: string[] = [];
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const scene = makeScene( {
 			blocks: [
-				dialog( 'main1', { start: true } ),
+				dialog( 'main1' ),
 				dialog( 'main2' ),
 				dialog( 'main3' ),
 				dialog( 'a1', { async: true, waitFor: ['main2', 'main3'] } ),
@@ -762,10 +772,10 @@ describe( 'multitrack — waitForBlocks', () => {
 				conn( 'main1', 'a1' ),
 				conn( 'a1', 'a2' ),
 			],
-		};
+		} );
 
 		const engine = setupEngine( scene );
-		engine.onDialog( ( { block, next } ) => { calls.push( block.uuid ); next(); } );
+		engine.onDialog( ( { block, next } ) => { calls.push( block.id ); next(); } );
 		engine.scene( 's1' ).start();
 
 		// a1 waits for both main2 AND main3
@@ -775,10 +785,9 @@ describe( 'multitrack — waitForBlocks', () => {
 
 	it( 'scene cancel clears pending waitForBlocks without leak', () => {
 		const calls: string[] = [];
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const scene = makeScene( {
 			blocks: [
-				dialog( 'main1', { start: true } ),
+				dialog( 'main1' ),
 				dialog( 'main2' ),
 				dialog( 'a1', { async: true, waitFor: ['never-visited'] } ),
 			],
@@ -786,10 +795,10 @@ describe( 'multitrack — waitForBlocks', () => {
 				conn( 'main1', 'main2' ),
 				conn( 'main1', 'a1' ),
 			],
-		};
+		} );
 
 		const engine = setupEngine( scene );
-		engine.onDialog( ( { block, next } ) => { calls.push( block.uuid ); next(); } );
+		engine.onDialog( ( { block, next } ) => { calls.push( block.id ); next(); } );
 
 		const handle = engine.scene( 's1' );
 		handle.start();
@@ -803,10 +812,9 @@ describe( 'multitrack — waitForBlocks', () => {
 
 	it( 'waitForBlocks on sub-track waits for main track block', () => {
 		const calls: string[] = [];
-		const scene: BlueprintScene = {
-			uuid: 's1', label: 'S1', date: '2025-01-01',
+		const scene = makeScene( {
 			blocks: [
-				dialog( 'main1', { start: true } ),
+				dialog( 'main1' ),
 				dialog( 'main2' ),
 				dialog( 'main3' ),
 				dialog( 'a1', { async: true } ),
@@ -820,10 +828,10 @@ describe( 'multitrack — waitForBlocks', () => {
 				conn( 'a1', 'sub1' ),      // sub-track fork (a1 endTrack naturally, sub1 survives)
 				conn( 'sub1', 'sub2' ),
 			],
-		};
+		} );
 
 		const engine = setupEngine( scene );
-		engine.onDialog( ( { block, next } ) => { calls.push( block.uuid ); next(); } );
+		engine.onDialog( ( { block, next } ) => { calls.push( block.id ); next(); } );
 		engine.scene( 's1' ).start();
 
 		// a1 ends naturally → sub1 survives (philosophy B)

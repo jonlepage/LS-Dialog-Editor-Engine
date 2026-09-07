@@ -1,373 +1,393 @@
-// LSDE Dialog Engine — Integration tests for onResolveCondition (C++ port of engine.test.ts §onResolveCondition)
+// LSDE Dialog Engine — the condition resolver end to end, plus the chain algorithm (C++ port).
+//
+// onResolveCondition is the SINGLE game-state evaluator: it answers option visibility and it
+// pre-evaluates the cases of a condition block. Once it is installed the engine already knows
+// which port a condition leaves by, which is what makes onCondition optional.
 
 #include <gtest/gtest.h>
 #include <lsde/engine.h>
+#include <lsde/scene_handle.h>
 #include <lsde/condition_evaluator.h>
-#include <algorithm>
-#include <memory>
+#include <lsde/utils.h>
 #include <string>
 #include <vector>
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+using namespace lsde;
 
-static lsde::BlueprintExport makeExport(std::vector<lsde::BlueprintScene> scenes) {
-    lsde::BlueprintExport bp;
-    bp.version = "1.0.0";
-    bp.exportDate = "2025-01-01";
+namespace {
+
+// ─── Builders ────────────────────────────────────────────────────────────────
+
+BlueprintBlock block(const std::string& id, const std::string& type) {
+    BlueprintBlock b;
+    b.id = id;
+    b.key = "__blueprints__.s1." + id;
+    b.type = type;
+    return b;
+}
+
+BlueprintBlock dialog(const std::string& id) { return block(id, BlockType::Dialog); }
+
+BlueprintBlock& wire(BlueprintBlock& b, const std::string& to, const std::string& port = Ports::Out) {
+    b.next.push_back(Link{port, to, "in"});
+    return b;
+}
+
+ConditionTest test(const std::string& entry, const std::string& join = "") {
+    ConditionTest t;
+    t.dict = "switches";
+    t.entry = entry;
+    t.op = ConditionOperator::Equals;
+    t.value = true;
+    if (!join.empty()) t.join = join;
+    return t;
+}
+
+ConditionCase whenCase(const std::string& port, std::vector<ConditionTest> tests = {}) {
+    ConditionCase c;
+    c.port = port;
+    if (!tests.empty()) c.when = std::move(tests);
+    return c;
+}
+
+BlueprintExport oneScene(std::vector<BlueprintBlock> blocks) {
+    BlueprintScene scene;
+    scene.scene = "s1";
+    scene.id = "sc_test0001";
+    if (!blocks.empty()) scene.start = blocks[0].id;
+    scene.blocks = std::move(blocks);
+
+    BlueprintExport bp;
+    bp.format = "lsde-blueprints";
+    bp.version = 1;
+    bp.generator = Generator{"LSDE", "2.0.3"};
+    bp.exportedAt = "2026-09-07T00:00:00.000Z";
+    bp.project = "Test";
     bp.locales = {"en"};
-    bp.scenes = std::move(scenes);
+    bp.referenceLocale = "en";
+    bp.scenes.push_back(std::move(scene));
     return bp;
 }
 
-static lsde::ExportCondition makeCond(const std::string& key) {
-    return {"c1", key, std::nullopt, "=", "true"};
+/// Answers by what the test asks for, so the chain logic is what is under test.
+bool answer(const ConditionTest& t) { return !t.entry.empty() && t.entry[0] == 'T'; }
+
+/// A condition in if mode: out when it holds, default when it does not.
+BlueprintExport branching() {
+    auto cond = block("k1", BlockType::Condition);
+    cond.cases.push_back(whenCase(Ports::Out, {test("flag")}));
+    wire(cond, "yes", Ports::Out);
+    wire(cond, "no", Ports::Default);
+    return oneScene({cond, dialog("yes"), dialog("no")});
 }
 
-/// Registers the 4 mandatory handlers with minimal pass-through behavior.
-static void registerAllHandlers(lsde::DialogueEngine& engine) {
-    engine.onDialog([](lsde::ISceneHandle*, const lsde::DialogBlock*, lsde::IDialogContext*, auto next) -> lsde::CleanupFn {
-        next(); return nullptr;
+void registerBase(DialogueEngine& engine, bool withCondition = true) {
+    engine.onDialog([](ISceneHandle*, const BlueprintBlock*, IDialogContext*, std::function<void()> next) -> CleanupFn {
+        next(); return {};
     });
-    engine.onChoice([](lsde::ISceneHandle*, const lsde::ChoiceBlock*, lsde::IChoiceContext* ctx, auto next) -> lsde::CleanupFn {
-        if (!ctx->choices().empty()) ctx->selectChoice(ctx->choices()[0].uuid);
-        next(); return nullptr;
+    engine.onChoice([](ISceneHandle*, const BlueprintBlock*, IChoiceContext*, std::function<void()> next) -> CleanupFn {
+        next(); return {};
     });
-    engine.onCondition([](lsde::ISceneHandle*, const lsde::ConditionBlock*, lsde::IConditionContext* ctx, auto next) -> lsde::CleanupFn {
-        ctx->resolve(true); next(); return nullptr;
+    engine.onAction([](ISceneHandle*, const BlueprintBlock*, IActionContext* ctx, std::function<void()> next) -> CleanupFn {
+        ctx->resolve(); next(); return {};
     });
-    engine.onAction([](lsde::ISceneHandle*, const lsde::ActionBlock*, lsde::IActionContext* ctx, auto next) -> lsde::CleanupFn {
-        ctx->resolve(); next(); return nullptr;
-    });
+    if (withCondition) {
+        engine.onCondition([](ISceneHandle*, const BlueprintBlock*, IConditionContext*, std::function<void()> next) -> CleanupFn {
+            next(); return {};
+        });
+    }
 }
 
-// ─── Shared Blueprint Factories ──────────────────────────────────────────────
-
-/// Single-group condition scene: COND → yes (portIndex 0) / no (portIndex 1).
-static lsde::BlueprintScene condScene() {
-    lsde::BlueprintScene scene;
-    scene.uuid = "scene-rc";
-    scene.label = "ResolveCondition";
-    scene.date = "2025-01-01";
-
-    auto cond = std::make_shared<lsde::ConditionBlock>();
-    cond->uuid = "cond1"; cond->type = lsde::BlockType::Condition; cond->isStartBlock = true;
-    cond->conditions = {{makeCond("flag")}};
-
-    auto yes = std::make_shared<lsde::DialogBlock>();
-    yes->uuid = "yes"; yes->type = lsde::BlockType::Dialog;
-
-    auto no = std::make_shared<lsde::DialogBlock>();
-    no->uuid = "no"; no->type = lsde::BlockType::Dialog;
-
-    scene.blocks = {cond, yes, no};
-    scene.connections = {
-        {"ct", "cond1", "yes", "true", "in", 0},
-        {"cf", "cond1", "no", "false", "in", 1},
-    };
-    return scene;
-}
-
-/// Multi-group switch scene: COND(2 groups) → case0 / case1 / default.
-static lsde::BlueprintScene switchScene(const std::string& uuid = "scene-sw") {
-    lsde::BlueprintScene scene;
-    scene.uuid = uuid;
-    scene.label = "Switch";
-    scene.date = "2025-01-01";
-
-    auto cond = std::make_shared<lsde::ConditionBlock>();
-    cond->uuid = "cond"; cond->type = lsde::BlockType::Condition; cond->isStartBlock = true;
-    cond->conditions = {
-        {{"c1", "x", std::nullopt, "=", "1"}},
-        {{"c2", "y", std::nullopt, "=", "2"}},
-    };
-
-    auto case0 = std::make_shared<lsde::DialogBlock>();
-    case0->uuid = "case0"; case0->type = lsde::BlockType::Dialog;
-    auto case1 = std::make_shared<lsde::DialogBlock>();
-    case1->uuid = "case1"; case1->type = lsde::BlockType::Dialog;
-    auto def = std::make_shared<lsde::DialogBlock>();
-    def->uuid = "default"; def->type = lsde::BlockType::Dialog;
-
-    scene.blocks = {cond, case0, case1, def};
-    scene.connections = {
-        {"s0", "cond", "case0", "case_0", "in", 0},
-        {"s1", "cond", "case1", "case_1", "in", 1},
-        {"sd", "cond", "default", "default", "in", 2},
-    };
-    return scene;
-}
-
-/// Dispatcher scene: enableDispatcher=true, targets isAsync=true.
-static lsde::BlueprintScene dispatchScene() {
-    lsde::BlueprintScene scene;
-    scene.uuid = "scene-disp";
-    scene.label = "Dispatch";
-    scene.date = "2025-01-01";
-
-    auto cond = std::make_shared<lsde::ConditionBlock>();
-    cond->uuid = "cond"; cond->type = lsde::BlockType::Condition; cond->isStartBlock = true;
-    lsde::NativeProperties np; np.enableDispatcher = true;
-    cond->nativeProperties = np;
-    cond->conditions = {
-        {{"c1", "a", std::nullopt, "=", "1"}},
-        {{"c2", "b", std::nullopt, "=", "2"}},
-    };
-
-    auto async0 = std::make_shared<lsde::DialogBlock>();
-    async0->uuid = "async0"; async0->type = lsde::BlockType::Dialog;
-    lsde::NativeProperties npAsync; npAsync.isAsync = true;
-    async0->nativeProperties = npAsync;
-
-    auto async1 = std::make_shared<lsde::DialogBlock>();
-    async1->uuid = "async1"; async1->type = lsde::BlockType::Dialog;
-    async1->nativeProperties = npAsync;
-
-    auto main = std::make_shared<lsde::DialogBlock>();
-    main->uuid = "main"; main->type = lsde::BlockType::Dialog;
-
-    scene.blocks = {cond, async0, async1, main};
-    scene.connections = {
-        {"d0", "cond", "async0", "case_0", "in", 0},
-        {"d1", "cond", "async1", "case_1", "in", 1},
-        {"dd", "cond", "main", "default", "in", 2},
-    };
-    return scene;
-}
-
-// ─── P0: onCondition optionnel quand resolver installe ──────────────────────
-
-TEST(OnResolveConditionTest, Start_DoesNotThrow_WhenOnConditionOmittedButResolverInstalled) {
-    lsde::DialogueEngine engine;
-    engine.init({makeExport({condScene()})});
-    engine.onResolveCondition([](const lsde::ExportCondition&) { return true; });
-    engine.onDialog([](lsde::ISceneHandle*, const lsde::DialogBlock*, lsde::IDialogContext*, auto next) -> lsde::CleanupFn {
-        next(); return nullptr;
-    });
-    engine.onChoice([](lsde::ISceneHandle*, const lsde::ChoiceBlock*, lsde::IChoiceContext*, auto next) -> lsde::CleanupFn {
-        next(); return nullptr;
-    });
-    // NO engine.onCondition()
-    engine.onAction([](lsde::ISceneHandle*, const lsde::ActionBlock*, lsde::IActionContext* ctx, auto next) -> lsde::CleanupFn {
-        ctx->resolve(); next(); return nullptr;
-    });
-    ASSERT_NO_THROW(engine.scene("scene-rc")->start());
-}
-
-TEST(OnResolveConditionTest, Start_Throws_WhenNeitherOnConditionNorResolverInstalled) {
-    lsde::DialogueEngine engine;
-    engine.init({makeExport({condScene()})});
-    engine.onDialog([](lsde::ISceneHandle*, const lsde::DialogBlock*, lsde::IDialogContext*, auto next) -> lsde::CleanupFn {
-        next(); return nullptr;
-    });
-    engine.onChoice([](lsde::ISceneHandle*, const lsde::ChoiceBlock*, lsde::IChoiceContext*, auto next) -> lsde::CleanupFn {
-        next(); return nullptr;
-    });
-    engine.onAction([](lsde::ISceneHandle*, const lsde::ActionBlock*, lsde::IActionContext* ctx, auto next) -> lsde::CleanupFn {
-        ctx->resolve(); next(); return nullptr;
-    });
-    ASSERT_THROW(engine.scene("scene-rc")->start(), std::runtime_error);
-}
-
-// ─── P0: Auto-resolve sans resolve() ────────────────────────────────────────
-
-TEST(OnResolveConditionTest, AutoResolves_WhenHandlerDoesNotCallResolve) {
-    std::vector<std::string> visited;
-    lsde::DialogueEngine engine;
-    engine.init({makeExport({condScene()})});
-    engine.onResolveCondition([](const lsde::ExportCondition&) { return true; });
-    engine.onCondition([](lsde::ISceneHandle*, const lsde::ConditionBlock*, lsde::IConditionContext*, auto next) -> lsde::CleanupFn {
-        next(); return nullptr; // no resolve() call
-    });
-    engine.onDialog([&visited](lsde::ISceneHandle*, const lsde::DialogBlock* block, lsde::IDialogContext*, auto next) -> lsde::CleanupFn {
-        visited.push_back(block->uuid); next(); return nullptr;
-    });
-    engine.onChoice([](lsde::ISceneHandle*, const lsde::ChoiceBlock*, lsde::IChoiceContext*, auto next) -> lsde::CleanupFn {
-        next(); return nullptr;
-    });
-    engine.onAction([](lsde::ISceneHandle*, const lsde::ActionBlock*, lsde::IActionContext* ctx, auto next) -> lsde::CleanupFn {
-        ctx->resolve(); next(); return nullptr;
-    });
-    engine.scene("scene-rc")->start();
-    ASSERT_EQ(visited, std::vector<std::string>{"yes"});
-}
-
-TEST(OnResolveConditionTest, AutoResolves_ToDefaultWhenNoGroupMatches) {
-    std::vector<std::string> visited;
-    lsde::DialogueEngine engine;
-    engine.init({makeExport({condScene()})});
-    engine.onResolveCondition([](const lsde::ExportCondition&) { return false; });
-    engine.onCondition([](lsde::ISceneHandle*, const lsde::ConditionBlock*, lsde::IConditionContext*, auto next) -> lsde::CleanupFn {
-        next(); return nullptr;
-    });
-    engine.onDialog([&visited](lsde::ISceneHandle*, const lsde::DialogBlock* block, lsde::IDialogContext*, auto next) -> lsde::CleanupFn {
-        visited.push_back(block->uuid); next(); return nullptr;
-    });
-    engine.onChoice([](lsde::ISceneHandle*, const lsde::ChoiceBlock*, lsde::IChoiceContext*, auto next) -> lsde::CleanupFn {
-        next(); return nullptr;
-    });
-    engine.onAction([](lsde::ISceneHandle*, const lsde::ActionBlock*, lsde::IActionContext* ctx, auto next) -> lsde::CleanupFn {
-        ctx->resolve(); next(); return nullptr;
-    });
-    engine.scene("scene-rc")->start();
-    ASSERT_EQ(visited, std::vector<std::string>{"no"});
-}
-
-TEST(OnResolveConditionTest, AutoResolves_WithoutOnConditionHandlerAtAll) {
-    std::vector<std::string> visited;
-    lsde::DialogueEngine engine;
-    engine.init({makeExport({condScene()})});
-    engine.onResolveCondition([](const lsde::ExportCondition&) { return true; });
-    // No onCondition registered — engine routes automatically
-    engine.onDialog([&visited](lsde::ISceneHandle*, const lsde::DialogBlock* block, lsde::IDialogContext*, auto next) -> lsde::CleanupFn {
-        visited.push_back(block->uuid); next(); return nullptr;
-    });
-    engine.onChoice([](lsde::ISceneHandle*, const lsde::ChoiceBlock*, lsde::IChoiceContext*, auto next) -> lsde::CleanupFn {
-        next(); return nullptr;
-    });
-    engine.onAction([](lsde::ISceneHandle*, const lsde::ActionBlock*, lsde::IActionContext* ctx, auto next) -> lsde::CleanupFn {
-        ctx->resolve(); next(); return nullptr;
-    });
-    engine.scene("scene-rc")->start();
-    ASSERT_EQ(visited, std::vector<std::string>{"yes"});
-}
-
-// ─── P0: Handler can override auto-resolve ──────────────────────────────────
-
-TEST(OnResolveConditionTest, Handler_CanOverrideAutoResolveWithExplicitResolve) {
-    std::vector<std::string> visited;
-    lsde::DialogueEngine engine;
-    engine.init({makeExport({condScene()})});
-    engine.onResolveCondition([](const lsde::ExportCondition&) { return true; }); // would auto-route to 'yes'
-    engine.onCondition([](lsde::ISceneHandle*, const lsde::ConditionBlock*, lsde::IConditionContext* ctx, auto next) -> lsde::CleanupFn {
-        ctx->resolve(false); // override → route to 'no' instead
-        next(); return nullptr;
-    });
-    engine.onDialog([&visited](lsde::ISceneHandle*, const lsde::DialogBlock* block, lsde::IDialogContext*, auto next) -> lsde::CleanupFn {
-        visited.push_back(block->uuid); next(); return nullptr;
-    });
-    engine.onChoice([](lsde::ISceneHandle*, const lsde::ChoiceBlock*, lsde::IChoiceContext*, auto next) -> lsde::CleanupFn {
-        next(); return nullptr;
-    });
-    engine.onAction([](lsde::ISceneHandle*, const lsde::ActionBlock*, lsde::IActionContext* ctx, auto next) -> lsde::CleanupFn {
-        ctx->resolve(); next(); return nullptr;
-    });
-    engine.scene("scene-rc")->start();
-    ASSERT_EQ(visited, std::vector<std::string>{"no"});
-}
-
-// ─── P1: Switch mode integration ────────────────────────────────────────────
-
-TEST(OnResolveConditionTest, SwitchMode_RoutesToMatchingCasePort) {
-    std::vector<std::string> visited;
-    lsde::DialogueEngine engine;
-    engine.init({makeExport({switchScene()})});
-    // x != 1 (false), y == 2 (true) → case_1 matches
-    engine.onResolveCondition([](const lsde::ExportCondition& c) { return c.key == "y"; });
-    engine.onDialog([&visited](lsde::ISceneHandle*, const lsde::DialogBlock* block, lsde::IDialogContext*, auto next) -> lsde::CleanupFn {
-        visited.push_back(block->uuid); next(); return nullptr;
-    });
-    engine.onChoice([](lsde::ISceneHandle*, const lsde::ChoiceBlock*, lsde::IChoiceContext*, auto next) -> lsde::CleanupFn {
-        next(); return nullptr;
-    });
-    engine.onAction([](lsde::ISceneHandle*, const lsde::ActionBlock*, lsde::IActionContext* ctx, auto next) -> lsde::CleanupFn {
-        ctx->resolve(); next(); return nullptr;
-    });
-    engine.scene("scene-sw")->start();
-    ASSERT_EQ(visited, std::vector<std::string>{"case1"});
-}
-
-TEST(OnResolveConditionTest, SwitchMode_RoutesToDefaultWhenNoCaseMatches) {
-    std::vector<std::string> visited;
-    lsde::DialogueEngine engine;
-    engine.init({makeExport({switchScene("scene-sw2")})});
-    engine.onResolveCondition([](const lsde::ExportCondition&) { return false; });
-    engine.onDialog([&visited](lsde::ISceneHandle*, const lsde::DialogBlock* block, lsde::IDialogContext*, auto next) -> lsde::CleanupFn {
-        visited.push_back(block->uuid); next(); return nullptr;
-    });
-    engine.onChoice([](lsde::ISceneHandle*, const lsde::ChoiceBlock*, lsde::IChoiceContext*, auto next) -> lsde::CleanupFn {
-        next(); return nullptr;
-    });
-    engine.onAction([](lsde::ISceneHandle*, const lsde::ActionBlock*, lsde::IActionContext* ctx, auto next) -> lsde::CleanupFn {
-        ctx->resolve(); next(); return nullptr;
-    });
-    engine.scene("scene-sw2")->start();
-    ASSERT_EQ(visited, std::vector<std::string>{"default"});
-}
-
-// ─── P1: Dispatcher mode integration ────────────────────────────────────────
-
-TEST(OnResolveConditionTest, DispatcherMode_SpawnsAsyncTracksForMatchedCases) {
-    std::vector<std::string> visited;
-    lsde::DialogueEngine engine;
-    engine.init({makeExport({dispatchScene()})});
-    engine.onResolveCondition([](const lsde::ExportCondition&) { return true; }); // both match
-    engine.onDialog([&visited](lsde::ISceneHandle*, const lsde::DialogBlock* block, lsde::IDialogContext*, auto next) -> lsde::CleanupFn {
-        visited.push_back(block->uuid); next(); return nullptr;
-    });
-    engine.onChoice([](lsde::ISceneHandle*, const lsde::ChoiceBlock*, lsde::IChoiceContext*, auto next) -> lsde::CleanupFn {
-        next(); return nullptr;
-    });
-    engine.onAction([](lsde::ISceneHandle*, const lsde::ActionBlock*, lsde::IActionContext* ctx, auto next) -> lsde::CleanupFn {
-        ctx->resolve(); next(); return nullptr;
-    });
-    engine.scene("scene-disp")->start();
-    std::sort(visited.begin(), visited.end());
-    ASSERT_EQ(visited, (std::vector<std::string>{"async0", "async1", "main"}));
-}
-
-// ─── P1: evaluateCondition() uses resolver ──────────────────────────────────
-
-TEST(OnResolveConditionTest, EvaluateCondition_UsesResolverForNonChoiceConditions) {
-    lsde::DialogueEngine engine;
-    engine.init({makeExport({condScene()})});
-    engine.onResolveCondition([](const lsde::ExportCondition& c) { return c.key == "flag"; });
-    registerAllHandlers(engine);
-
-    auto handle = engine.scene("scene-rc");
-    bool evalResult = false;
-    handle->onCondition([&evalResult](lsde::ISceneHandle* scene, const lsde::ConditionBlock*, lsde::IConditionContext*, auto next) -> lsde::CleanupFn {
-        evalResult = scene->evaluateCondition({"t", "flag", std::nullopt, "=", ""});
+std::vector<std::string> play(DialogueEngine& engine, std::vector<std::string>& visited) {
+    engine.onDialog([&visited](ISceneHandle*, const BlueprintBlock* b, IDialogContext*, std::function<void()> next) -> CleanupFn {
+        visited.push_back(b->id);
         next();
-        return nullptr;
+        return {};
     });
-    handle->start();
-    ASSERT_TRUE(evalResult);
+    engine.scene("s1")->start();
+    return visited;
 }
 
-TEST(OnResolveConditionTest, EvaluateCondition_ReturnsFalseWithoutResolver) {
-    lsde::DialogueEngine engine;
-    engine.init({makeExport({condScene()})});
-    registerAllHandlers(engine);
+} // namespace
 
-    auto handle = engine.scene("scene-rc");
-    bool evalResult = true; // init to true, expect false
-    handle->onCondition([&evalResult](lsde::ISceneHandle* scene, const lsde::ConditionBlock*, lsde::IConditionContext* ctx, auto next) -> lsde::CleanupFn {
-        evalResult = scene->evaluateCondition({"t", "flag", std::nullopt, "=", ""});
-        ctx->resolve(true);
-        next();
-        return nullptr;
-    });
-    handle->start();
-    ASSERT_FALSE(evalResult);
+// ─── Chaining tests inside a case ────────────────────────────────────────────
+
+TEST(ConditionChain, NoTestsAtAllIsTrue) {
+    // This is how "always" is written in v2 — by the ABSENCE of `when`.
+    EXPECT_TRUE(evaluateConditionChain(std::optional<std::vector<ConditionTest>>{}, answer));
+    EXPECT_TRUE(evaluateConditionChain(std::vector<ConditionTest>{}, answer));
 }
 
-// ─── P1: setChoiceFilter backward compat alias ──────────────────────────────
+TEST(ConditionChain, ASingleTestStandsOnItsOwn) {
+    EXPECT_TRUE(evaluateConditionChain(std::vector<ConditionTest>{test("T1")}, answer));
+    EXPECT_FALSE(evaluateConditionChain(std::vector<ConditionTest>{test("F1")}, answer));
+}
 
-TEST(OnResolveConditionTest, SetChoiceFilter_StillWorksAsAliasForOnResolveCondition) {
+TEST(ConditionChain, JoinsWithAndByDefault) {
+    EXPECT_TRUE(evaluateConditionChain(std::vector<ConditionTest>{test("T1"), test("T2")}, answer));
+    EXPECT_FALSE(evaluateConditionChain(std::vector<ConditionTest>{test("T1"), test("F1")}, answer));
+}
+
+TEST(ConditionChain, JoinsWithOrWhenTheJoinSaysSo) {
+    EXPECT_TRUE(evaluateConditionChain(
+        std::vector<ConditionTest>{test("F1"), test("T1", ConditionJoin::Or)}, answer));
+    EXPECT_FALSE(evaluateConditionChain(
+        std::vector<ConditionTest>{test("F1"), test("F2", ConditionJoin::Or)}, answer));
+}
+
+TEST(ConditionChain, ReadsLeftToRightWithNoPrecedence) {
+    // F AND T OR T → (F AND T) OR T = true.
+    // With AND binding tighter it would be F AND (T OR T) = false. It does not.
+    EXPECT_TRUE(evaluateConditionChain(std::vector<ConditionTest>{
+        test("F1"), test("T1", ConditionJoin::And), test("T2", ConditionJoin::Or)}, answer));
+
+    // T OR F AND F → (T OR F) AND F = false.
+    EXPECT_FALSE(evaluateConditionChain(std::vector<ConditionTest>{
+        test("T1"), test("F1", ConditionJoin::Or), test("F2", ConditionJoin::And)}, answer));
+}
+
+TEST(ConditionChain, EvaluatesEveryTestEvenOnceTheAnswerIsSettled) {
+    // No short-circuit: the game's evaluator is also where a project logs and counts.
+    int calls = 0;
+    auto counting = [&calls](const ConditionTest& t) { calls++; return answer(t); };
+
+    evaluateConditionChain(std::vector<ConditionTest>{
+        test("F1"), test("T1", ConditionJoin::And), test("T2", ConditionJoin::And)}, counting);
+
+    EXPECT_EQ(calls, 3);
+}
+
+// ─── Picking a port ──────────────────────────────────────────────────────────
+
+TEST(ConditionCases, IfModeRequiresEveryCaseToHold) {
+    std::vector<ConditionCase> all{whenCase(Ports::Out, {test("T1")}), whenCase(Ports::Out, {test("T2")})};
+    EXPECT_EQ(evaluateConditionCases(all, false, answer), Ports::Out);
+
+    std::vector<ConditionCase> one{whenCase(Ports::Out, {test("T1")}), whenCase(Ports::Out, {test("F1")})};
+    EXPECT_EQ(evaluateConditionCases(one, false, answer), Ports::Default);
+}
+
+TEST(ConditionCases, NoCasesAtAllLeavesByOut) {
+    EXPECT_EQ(evaluateConditionCases({}, false, answer), Ports::Out);
+    EXPECT_EQ(evaluateConditionCases({}, true, answer), Ports::Out);
+}
+
+TEST(ConditionCases, SwitchModeTakesTheFirstCaseThatHolds) {
+    std::vector<ConditionCase> cases{
+        whenCase("K1", {test("F1")}),
+        whenCase("K2", {test("T1")}),
+        whenCase("K3", {test("T2")}),
+    };
+    EXPECT_EQ(evaluateConditionCases(cases, true, answer), "K2");
+}
+
+TEST(ConditionCases, SwitchModeTakesDefaultWhenNoneHolds) {
+    std::vector<ConditionCase> cases{whenCase("K1", {test("F1")}), whenCase("K2", {test("F2")})};
+    EXPECT_EQ(evaluateConditionCases(cases, true, answer), Ports::Default);
+}
+
+TEST(ConditionCases, ACatchAllShadowsEverythingBelowIt) {
+    // The reference export does exactly this: COND-001 K3 has no comparison at all.
+    std::vector<ConditionCase> cases{
+        whenCase("K1", {test("F1")}),
+        whenCase("K2"),
+        whenCase("K3", {test("T1")}),
+    };
+    EXPECT_EQ(evaluateConditionCases(cases, true, answer), "K2");
+}
+
+TEST(ConditionCases, SwitchModeStopsAskingOnceACaseHolds) {
+    // Unlike the chain inside a case, cases DO short-circuit.
+    int calls = 0;
+    auto counting = [&calls](const ConditionTest& t) { calls++; return answer(t); };
+
+    std::vector<ConditionCase> cases{
+        whenCase("K1", {test("F1")}),
+        whenCase("K2", {test("T1")}),
+        whenCase("K3", {test("T2")}),
+    };
+    evaluateConditionCases(cases, true, counting);
+
+    EXPECT_EQ(calls, 2);
+}
+
+TEST(ConditionCases, TheDispatcherIsGone) {
+    // v1 had a third mode firing EVERY matching case at once. Nothing here can produce it.
+    std::vector<ConditionCase> allTrue{
+        whenCase("K1", {test("T1")}), whenCase("K2", {test("T2")}), whenCase("K3", {test("T3")})};
+    EXPECT_EQ(evaluateConditionCases(allTrue, true, answer), "K1");
+
+    // The need it served is covered: read the results, then use isAsync where it shows.
+    std::vector<ConditionCase> cases{
+        whenCase("K1", {test("T1")}), whenCase("K2", {test("F1")}), whenCase("K3")};
+    EXPECT_EQ(evaluateEachCase(cases, answer), std::vector<bool>({true, false, true}));
+}
+
+// ─── Tagging options ─────────────────────────────────────────────────────────
+
+TEST(OptionVisibility, HandsBackEveryOptionTagged) {
+    Option always;
+    always.id = "C1";
+    always.key = "k1";
+    Option gated;
+    gated.id = "C2";
+    gated.key = "k2";
+    gated.when = std::vector<ConditionTest>{test("F1")};
+
+    ConditionEvaluatorFn evaluator = answer;
+    auto tagged = tagOptionVisibility({always, gated}, &evaluator);
+
+    ASSERT_EQ(tagged.size(), 2u);
+    EXPECT_TRUE(tagged[0].visible.value_or(false));
+    EXPECT_FALSE(tagged[1].visible.value_or(true));
+}
+
+TEST(OptionVisibility, LeavesVisibleUnsetWithNoEvaluator) {
+    // Unknown, not hidden. Saying false about a question nobody could answer would HIDE an answer.
+    Option gated;
+    gated.id = "C1";
+    gated.key = "k1";
+    gated.when = std::vector<ConditionTest>{test("T1")};
+
+    auto tagged = tagOptionVisibility({gated}, nullptr);
+
+    ASSERT_EQ(tagged.size(), 1u);
+    EXPECT_FALSE(tagged[0].visible.has_value());
+}
+
+// ─── The reserved choice dictionary ──────────────────────────────────────────
+
+TEST(ChoiceDictionary, RecognisesATestThatReadsAPastAnswer) {
+    ConditionTest choiceTest;
+    choiceTest.dict = Ports::Choice;
+    choiceTest.entry = "CHOICE-001";
+    choiceTest.op = ConditionOperator::Equals;
+    choiceTest.value = std::string("C1");
+
+    EXPECT_TRUE(isChoiceTest(choiceTest));
+    EXPECT_FALSE(isChoiceTest(test("T1")));
+}
+
+// ─── onResolveCondition, end to end ──────────────────────────────────────────
+
+TEST(OnResolveCondition, StartDoesNotThrowWhenOnConditionOmittedButResolverInstalled) {
+    DialogueEngine engine;
+    ASSERT_TRUE(engine.init({branching()}).errors.empty());
+    registerBase(engine, false);
+    engine.onResolveCondition([](const ConditionTest&) { return true; });
+
+    auto handle = engine.scene("s1");
+    EXPECT_NO_THROW(handle->start());
+}
+
+TEST(OnResolveCondition, StartThrowsWhenNeitherIsInstalled) {
+    DialogueEngine engine;
+    ASSERT_TRUE(engine.init({branching()}).errors.empty());
+    registerBase(engine, false);
+
+    auto handle = engine.scene("s1");
+    EXPECT_THROW(handle->start(), std::runtime_error);
+}
+
+TEST(OnResolveCondition, RoutesOnItsOwnWhenTheHandlerOnlyCallsNext) {
+    DialogueEngine engine;
+    ASSERT_TRUE(engine.init({branching()}).errors.empty());
+    registerBase(engine);
+    engine.onResolveCondition([](const ConditionTest&) { return true; });
+
     std::vector<std::string> visited;
-    lsde::DialogueEngine engine;
-    engine.init({makeExport({condScene()})});
-    engine.setChoiceFilter([](const lsde::ExportCondition&) { return true; }); // alias
-    engine.onDialog([&visited](lsde::ISceneHandle*, const lsde::DialogBlock* block, lsde::IDialogContext*, auto next) -> lsde::CleanupFn {
-        visited.push_back(block->uuid); next(); return nullptr;
+    EXPECT_EQ(play(engine, visited), std::vector<std::string>({"yes"}));
+}
+
+TEST(OnResolveCondition, RoutesToDefaultWhenTheCaseDoesNotHold) {
+    DialogueEngine engine;
+    ASSERT_TRUE(engine.init({branching()}).errors.empty());
+    registerBase(engine);
+    engine.onResolveCondition([](const ConditionTest&) { return false; });
+
+    std::vector<std::string> visited;
+    EXPECT_EQ(play(engine, visited), std::vector<std::string>({"no"}));
+}
+
+TEST(OnResolveCondition, RoutesWithNoOnConditionHandlerAtAll) {
+    DialogueEngine engine;
+    ASSERT_TRUE(engine.init({branching()}).errors.empty());
+    registerBase(engine, false);
+    engine.onResolveCondition([](const ConditionTest&) { return true; });
+
+    std::vector<std::string> visited;
+    EXPECT_EQ(play(engine, visited), std::vector<std::string>({"yes"}));
+}
+
+TEST(OnResolveCondition, HandsTheHandlerEachCaseWithItsPortAndResult) {
+    DialogueEngine engine;
+    ASSERT_TRUE(engine.init({branching()}).errors.empty());
+    registerBase(engine);
+    engine.onResolveCondition([](const ConditionTest&) { return true; });
+
+    std::vector<std::pair<std::string, bool>> seen;
+    engine.onCondition([&seen](ISceneHandle*, const BlueprintBlock*, IConditionContext* ctx, std::function<void()> next) -> CleanupFn {
+        for (const auto& c : ctx->cases()) seen.emplace_back(c.port, c.result.value_or(false));
+        next();
+        return {};
     });
-    engine.onChoice([](lsde::ISceneHandle*, const lsde::ChoiceBlock*, lsde::IChoiceContext*, auto next) -> lsde::CleanupFn {
-        next(); return nullptr;
+
+    std::vector<std::string> visited;
+    play(engine, visited);
+
+    ASSERT_EQ(seen.size(), 1u);
+    EXPECT_EQ(seen[0].first, Ports::Out);
+    EXPECT_TRUE(seen[0].second);
+}
+
+TEST(OnResolveCondition, TheHandlerCanOverrideThePortItPicked) {
+    DialogueEngine engine;
+    ASSERT_TRUE(engine.init({branching()}).errors.empty());
+    registerBase(engine);
+    engine.onResolveCondition([](const ConditionTest&) { return true; });
+    engine.onCondition([](ISceneHandle*, const BlueprintBlock*, IConditionContext* ctx, std::function<void()> next) -> CleanupFn {
+        ctx->resolve(Ports::Default);
+        next();
+        return {};
     });
-    // No onCondition — should auto-resolve via setChoiceFilter alias
-    engine.onAction([](lsde::ISceneHandle*, const lsde::ActionBlock*, lsde::IActionContext* ctx, auto next) -> lsde::CleanupFn {
-        ctx->resolve(); next(); return nullptr;
-    });
-    engine.scene("scene-rc")->start();
-    ASSERT_EQ(visited, std::vector<std::string>{"yes"});
+
+    std::vector<std::string> visited;
+    EXPECT_EQ(play(engine, visited), std::vector<std::string>({"no"}));
+}
+
+TEST(OnResolveCondition, RoutesToTheCasePortWithPortPerCase) {
+    auto cond = block("k1", BlockType::Condition);
+    cond.cases.push_back(whenCase("K1", {test("a")}));
+    cond.cases.push_back(whenCase("K2", {test("b")}));
+    cond.props["portPerCase"] = true;
+    wire(cond, "first", "K1");
+    wire(cond, "second", "K2");
+    wire(cond, "none", Ports::Default);
+
+    DialogueEngine engine;
+    ASSERT_TRUE(engine.init({oneScene({cond, dialog("first"), dialog("second"), dialog("none")})}).errors.empty());
+    registerBase(engine);
+    engine.onResolveCondition([](const ConditionTest& t) { return t.entry == "b"; });
+
+    std::vector<std::string> visited;
+    EXPECT_EQ(play(engine, visited), std::vector<std::string>({"second"}));
+}
+
+TEST(OnResolveCondition, EvaluateConditionAnswersThroughTheSceneHandle) {
+    DialogueEngine engine;
+    ASSERT_TRUE(engine.init({branching()}).errors.empty());
+    registerBase(engine);
+    engine.onResolveCondition([](const ConditionTest& t) { return t.entry == "flag"; });
+
+    auto handle = engine.scene("s1");
+    EXPECT_TRUE(handle->evaluateCondition(test("flag")));
+    EXPECT_FALSE(handle->evaluateCondition(test("other")));
+}
+
+TEST(OnResolveCondition, EvaluateConditionIsFalseWithNoResolver) {
+    DialogueEngine engine;
+    ASSERT_TRUE(engine.init({branching()}).errors.empty());
+    registerBase(engine);
+
+    EXPECT_FALSE(engine.scene("s1")->evaluateCondition(test("flag")));
 }

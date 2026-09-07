@@ -22,7 +22,7 @@ namespace lsde {
 ///   engine.onChoice([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn { next(); return {}; });
 ///   engine.onCondition([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn { ctx->resolve(true); next(); return {}; });
 ///   engine.onAction([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn { ctx->resolve(); next(); return {}; });
-///   auto handle = engine.scene(sceneId);
+///   auto handle = engine.scene(sceneRef);
 ///   handle->start();
 class DialogueEngine {
 public:
@@ -40,17 +40,14 @@ public:
 
     /// Register a global character resolver. Called for every block with metadata.characters.
     /// Default: returns the first character in the list.
-    void onResolveCharacter(std::function<const BlockCharacter*(const std::vector<BlockCharacter>&)> fn);
+    void onResolveCharacter(std::function<const Card*(const std::vector<Card>&)> fn);
 
     // ─── Condition resolution ────────────────────────────────────────
 
     /// Install a unified condition evaluator for both choice visibility and condition block pre-evaluation.
     /// The engine handles choice: conditions internally via choice history — this callback evaluates
     /// game-state conditions only.
-    void onResolveCondition(std::function<bool(const ExportCondition&)> evaluator);
-
-    /// @deprecated Use onResolveCondition() instead.
-    void setChoiceFilter(std::function<bool(const ExportCondition&)> evaluator);
+    void onResolveCondition(std::function<bool(const ConditionTest&)> evaluator);
 
     // ─── Validation ──────────────────────────────────────────────────
 
@@ -67,13 +64,13 @@ public:
     // ─── Type handlers (Tier 1 — global) ─────────────────────────────
 
     /// Register a global handler for DIALOG blocks. May return a cleanup function.
-    void onDialog(TypedBlockHandler<DialogBlock, IDialogContext> handler);
+    void onDialog(TypedBlockHandler<BlueprintBlock, IDialogContext> handler);
     /// Register a global handler for CHOICE blocks.
-    void onChoice(TypedBlockHandler<ChoiceBlock, IChoiceContext> handler);
+    void onChoice(TypedBlockHandler<BlueprintBlock, IChoiceContext> handler);
     /// Register a global handler for CONDITION blocks.
-    void onCondition(TypedBlockHandler<ConditionBlock, IConditionContext> handler);
+    void onCondition(TypedBlockHandler<BlueprintBlock, IConditionContext> handler);
     /// Register a global handler for ACTION blocks.
-    void onAction(TypedBlockHandler<ActionBlock, IActionContext> handler);
+    void onAction(TypedBlockHandler<BlueprintBlock, IActionContext> handler);
 
     // ─── Scene lifecycle ─────────────────────────────────────────────
 
@@ -85,7 +82,7 @@ public:
     // ─── Scene handles ───────────────────────────────────────────────
 
     /// Create a scene handle. Does NOT start the flow — call handle->start().
-    std::unique_ptr<ISceneHandle> scene(const std::string& sceneId);
+    std::unique_ptr<ISceneHandle> scene(const std::string& sceneRef);
 
     // ─── Engine control ──────────────────────────────────────────────
 
@@ -98,7 +95,7 @@ public:
     /// Get the current block of every active scene.
     std::vector<const BlueprintBlock*> getCurrentBlocks() const;
     /// Get connections for a scene (for inter-scene navigation).
-    std::vector<const BlueprintConnection*> getSceneConnections(const std::string& sceneId) const;
+    std::vector<BlueprintConnection> getSceneConnections(const std::string& sceneRef) const;
 
 private:
     std::unique_ptr<BlueprintGraph> _graph;
@@ -107,10 +104,10 @@ private:
     std::unordered_map<std::string, ISceneHandle*> _activeScenes;
     bool _initialized = false;
     /// Character resolution callback. Default: first character in the list.
-    std::function<const BlockCharacter*(const std::vector<BlockCharacter>&)> _resolveCharacter =
-        [](const std::vector<BlockCharacter>& chars) -> const BlockCharacter* { return chars.empty() ? nullptr : &chars[0]; };
+    std::function<const Card*(const std::vector<Card>&)> _resolveCharacter =
+        [](const std::vector<Card>& actors) -> const Card* { return actors.empty() ? nullptr : &actors[0]; };
     /// Unified condition resolver for choice visibility and condition block pre-evaluation.
-    std::function<bool(const ExportCondition&)> _conditionResolver;
+    std::function<bool(const ConditionTest&)> _conditionResolver;
 };
 
 } // namespace lsde

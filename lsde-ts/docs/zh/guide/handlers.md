@@ -24,7 +24,7 @@ engine 公开以下 handler：
 | [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | 按 UUID 覆盖特定 CONDITION block（类型安全） |
 | [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | 按 UUID 覆盖特定 ACTION block（类型安全） |
 | [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) | global | 统一 condition 解析器（choice 可见性 + condition 预评估） |
-| ~~[`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter)~~ | global | _已弃用 — 请使用 `onResolveCondition` 代替_ |
+| ~~[`onResolveCondition`](/api-ref/classes/DialogueEngine#setchoicefilter)~~ | global | _已弃用 — 请使用 `onResolveCondition` 代替_ |
 
 `onDialog`、`onChoice` 和 `onAction` 是**必需的** — `start()` 调用时 engine 验证它们是否存在，缺失时抛出描述性错误。当安装了 `onResolveCondition` 时，`onCondition` 是**可选的** — engine 从预评估的 condition 组中自动路由。
 
@@ -48,7 +48,7 @@ engine 在两个层级上解析 handler：
 
 ## Character Resolution
 
-角色解析是可选的。通过注册 `onResolveCharacter` callback，engine 会在每个 `metadata.characters` 中包含角色的 block 之前调用它。callback 接收分配给 block 的角色列表，返回应该激活的角色 — 如果没有可用角色则返回 `undefined`。解析后的角色可通过所有 handler 中的 `context.character` 访问。
+角色解析是可选的。通过注册 `onResolveCharacter` callback，engine 会在每个 `actors` 中包含角色的 block 之前调用它。callback 接收分配给 block 的角色列表，返回应该激活的角色 — 如果没有可用角色则返回 `undefined`。解析后的角色可通过所有 handler 中的 `context.character` 访问。
 
 这是查询游戏状态的理想集成点：检查角色是否在场景中、是否存活、是否在镜头范围内等。返回 `undefined` 可以触发多种策略：通过 [`skipIfMissingActor`](/api-ref/interfaces/NativeProperties#skipifmissingactor) 跳过 block、通过 `handle.cancel()` 取消 scene、或直接在 handler 中处理。
 

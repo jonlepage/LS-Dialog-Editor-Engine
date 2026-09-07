@@ -11,10 +11,10 @@ namespace LsdeDialogEngine
     /// <summary>Stores global (Tier 1) handlers. Last-write-wins per slot.</summary>
     internal class HandlerRegistry
     {
-        internal BlockHandler<DialogBlock, IDialogContext>? DialogHandler;
-        internal BlockHandler<ChoiceBlock, IChoiceContext>? ChoiceHandler;
-        internal BlockHandler<ConditionBlock, IConditionContext>? ConditionHandler;
-        internal BlockHandler<ActionBlock, IActionContext>? ActionHandler;
+        internal BlockHandler<BlueprintBlock, IDialogContext>? DialogHandler;
+        internal BlockHandler<BlueprintBlock, IChoiceContext>? ChoiceHandler;
+        internal BlockHandler<BlueprintBlock, IConditionContext>? ConditionHandler;
+        internal BlockHandler<BlueprintBlock, IActionContext>? ActionHandler;
 
         internal SceneLifecycleHandler? SceneEnterHandler;
         internal SceneLifecycleHandler? SceneExitHandler;
@@ -23,21 +23,20 @@ namespace LsdeDialogEngine
         internal InvalidateBlockHandler? InvalidateBlockHandler;
         internal BeforeBlockHandler? BeforeBlockHandler;
 
-        internal InternalBlockHandler? GetTypeHandler(BlockType type)
+        internal InternalBlockHandler? GetTypeHandler(string type)
         {
             switch (type)
             {
-                case BlockType.DIALOG:
+                case BlockType.Dialog:
                     return DialogHandler != null ? WrapHandler(DialogHandler) : null;
-                case BlockType.CHOICE:
+                case BlockType.Choice:
                     return ChoiceHandler != null ? WrapHandler(ChoiceHandler) : null;
-                case BlockType.CONDITION:
+                case BlockType.Condition:
                     return ConditionHandler != null ? WrapHandler(ConditionHandler) : null;
-                case BlockType.ACTION:
+                case BlockType.Action:
                     return ActionHandler != null ? WrapHandler(ActionHandler) : null;
-                case BlockType.NOTE:
-                    return null;
                 default:
+                    // A note is never dispatched, and a type this engine does not know is not either.
                     return null;
             }
         }
@@ -56,39 +55,38 @@ namespace LsdeDialogEngine
     {
         private readonly Dictionary<string, InternalBlockHandler> _blockHandlers = new Dictionary<string, InternalBlockHandler>();
 
-        internal BlockHandler<DialogBlock, IDialogContext>? DialogHandler;
-        internal BlockHandler<ChoiceBlock, IChoiceContext>? ChoiceHandler;
-        internal BlockHandler<ConditionBlock, IConditionContext>? ConditionHandler;
-        internal BlockHandler<ActionBlock, IActionContext>? ActionHandler;
+        internal BlockHandler<BlueprintBlock, IDialogContext>? DialogHandler;
+        internal BlockHandler<BlueprintBlock, IChoiceContext>? ChoiceHandler;
+        internal BlockHandler<BlueprintBlock, IConditionContext>? ConditionHandler;
+        internal BlockHandler<BlueprintBlock, IActionContext>? ActionHandler;
 
         internal SceneLifecycleHandler? EnterHandler;
         internal SceneLifecycleHandler? ExitHandler;
 
-        internal void SetBlockHandler(string blockUuid, InternalBlockHandler handler)
+        internal void SetBlockHandler(string blockId, InternalBlockHandler handler)
         {
-            _blockHandlers[blockUuid] = handler;
+            _blockHandlers[blockId] = handler;
         }
 
-        internal InternalBlockHandler? GetBlockHandler(string blockUuid)
+        internal InternalBlockHandler? GetBlockHandler(string blockId)
         {
-            return _blockHandlers.TryGetValue(blockUuid, out var handler) ? handler : null;
+            return _blockHandlers.TryGetValue(blockId, out var handler) ? handler : null;
         }
 
-        internal InternalBlockHandler? GetTypeHandler(BlockType type)
+        internal InternalBlockHandler? GetTypeHandler(string type)
         {
             switch (type)
             {
-                case BlockType.DIALOG:
+                case BlockType.Dialog:
                     return DialogHandler != null ? WrapHandler(DialogHandler) : null;
-                case BlockType.CHOICE:
+                case BlockType.Choice:
                     return ChoiceHandler != null ? WrapHandler(ChoiceHandler) : null;
-                case BlockType.CONDITION:
+                case BlockType.Condition:
                     return ConditionHandler != null ? WrapHandler(ConditionHandler) : null;
-                case BlockType.ACTION:
+                case BlockType.Action:
                     return ActionHandler != null ? WrapHandler(ActionHandler) : null;
-                case BlockType.NOTE:
-                    return null;
                 default:
+                    // A note is never dispatched, and a type this engine does not know is not either.
                     return null;
             }
         }
@@ -116,8 +114,8 @@ namespace LsdeDialogEngine
         /// Priority: onBlock(uuid) > scene.onType > engine.onType
         /// </summary>
         internal static ResolvedHandlers ResolveHandler(
-            BlockType blockType,
-            string blockUuid,
+            string blockType,
+            string blockId,
             SceneHandlerRegistry? sceneRegistry,
             HandlerRegistry globalRegistry)
         {
@@ -129,7 +127,7 @@ namespace LsdeDialogEngine
             }
 
             // Most specific: onBlock(uuid)
-            var blockOverride = sceneRegistry.GetBlockHandler(blockUuid);
+            var blockOverride = sceneRegistry.GetBlockHandler(blockId);
             if (blockOverride != null)
             {
                 return new ResolvedHandlers { SceneHandler = blockOverride, GlobalHandler = globalHandler };

@@ -1,0 +1,14 @@
+# Normalise line endings in the repository.
+#
+# The generated specs in tests/ are written with LF by tests/generate-specs.py. Without this file,
+# a Windows checkout with core.autocrlf=true hands them back as CRLF, the CI job that regenerates
+# and diffs them sees every line as changed, and the failure reads as "someone edited the JSON by
+# hand" when nobody did.
+
+* text=auto eol=lf
+
+# Binary, never touched.
+*.png binary
+*.jpg binary
+*.mp3 binary
+*.lsde binary

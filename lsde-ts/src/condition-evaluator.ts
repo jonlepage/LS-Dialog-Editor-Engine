@@ -1,29 +1,57 @@
-// LSDE Dialog Engine — Condition chain evaluation (AND/OR)
+// LSDE Dialog Engine — Condition evaluation
+//
+// The engine never compares anything itself. It does not read a dictionary, does not know what
+// `credits` holds, does not implement `greaterOrEqual`. It hands each test to the game's
+// `onResolveCondition()` and only assembles the answers — which is why the v2 operator set going
+// from a free string to six closed values changed nothing here.
+//
+// What this file owns is the assembling: how tests chain inside a case, and which port a block
+// of cases comes out of.
+//
+// v2 replaced the 2D `ExportCondition[][]` with a flat list of cases that each carry their own
+// port, so there is no index to derive any more — a case says where it exits. It also dropped the
+// dispatcher mode entirely (see problem 4): a switch picks ONE path, a dispatcher took them all,
+// and having both behind a checkbox on the same block meant a designer read three wires leaving a
+// condition as a choice when it was three simultaneous launches. `isAsync` already covers that
+// need, on any block, visibly.
 
-import type { ExportCondition, ChoiceItem } from './types.js';
+import type { ConditionTest, ConditionCase, Option, RuntimeChoiceItem } from './types.js';
+import { ConditionJoin, Ports } from './types.js';
+
+/** What the game answers for one comparison. */
+export type ConditionEvaluator = ( test: ConditionTest ) => boolean;
 
 /**
- * Evaluate a chain of conditions left-to-right with no operator precedence.
- * - Empty array → true (no conditions = pass)
- * - First condition: standalone result
- * - Subsequent conditions: '&' = AND, '|' = OR with accumulated result
+ * Evaluate a chain of tests left to right, **with no operator precedence**.
+ *
+ * `a AND b OR c` reads as `(a AND b) OR c`, never as `a AND (b OR c)`. That is deliberate: the
+ * editor draws a flat list, so the engine evaluates a flat list. A writer who needs grouping uses
+ * two condition blocks in a row, which is also what the reader of the graph sees.
+ *
+ * `join` links a test to the one ABOVE it and is absent on the first. Missing means AND.
+ *
+ * **Every test is evaluated, even once the answer is settled.** No short-circuit: the game's
+ * evaluator is also where a project logs, counts or displays what was asked, and skipping calls
+ * would make that log depend on the order the writer happened to use.
+ *
+ * No tests at all = true. That is how "always" is written in v2 — by the ABSENCE of `when`,
+ * never by an empty list.
  */
 export function evaluateConditionChain(
-	conditions: ExportCondition[],
-	evaluator: ( condition: ExportCondition ) => boolean,
+	tests: ConditionTest[] | undefined,
+	evaluator: ConditionEvaluator,
 ): boolean {
-	if ( conditions.length === 0 ) return true;
+	if ( !tests || tests.length === 0 ) return true;
 
-	let result = evaluator( conditions[0]! );
+	let result = evaluator( tests[0]! );
 
-	for ( let i = 1; i < conditions.length; i++ ) {
-		const cond = conditions[i]!;
-		const current = evaluator( cond );
+	for ( let i = 1; i < tests.length; i++ ) {
+		const test = tests[i]!;
+		const current = evaluator( test );
 
-		if ( cond.chain === '|' ) {
+		if ( test.join === ConditionJoin.Or ) {
 			result = result || current;
 		} else {
-			// '&' or undefined — default to AND
 			result = result && current;
 		}
 	}
@@ -32,59 +60,124 @@ export function evaluateConditionChain(
 }
 
 /**
- * Evaluate condition groups (2D array) for switch or dispatcher mode.
- * Each inner array is a "case" evaluated via `evaluateConditionChain`.
+ * Pick the exit port of a condition block. There are two modes and only two.
  *
- * - **Switch mode** (`dispatcher = false`): evaluates groups in order, returns the index
- *   of the first matching group, or `-1` if none match (→ default port).
- * - **Dispatcher mode** (`dispatcher = true`): evaluates ALL groups, returns an array
- *   of all matching indices (may be empty → default port only).
+ * | `portPerCase` | rule | exit |
+ * |---|---|---|
+ * | absent | every case must hold | `out` if they all do, `default` otherwise |
+ * | `true` | the first case that holds, in order | its own port (`K1`…), `default` if none |
+ *
+ * A case with no `when` is always true — and makes every case below it unreachable in
+ * `portPerCase` mode. That is the writer's drawing, not an error to report.
+ *
+ * A block with no cases at all leaves by `out`: nothing was asked, so nothing failed.
  */
-export function evaluateConditionGroups(
-	groups: ExportCondition[][],
-	evaluator: ( condition: ExportCondition ) => boolean,
-	dispatcher?: boolean,
-): number | number[] {
-	if ( dispatcher ) {
-		const matched: number[] = [];
-		for ( let i = 0; i < groups.length; i++ ) {
-			if ( evaluateConditionChain( groups[i]!, evaluator ) ) {
-				matched.push( i );
+export function evaluateConditionCases(
+	cases: ConditionCase[] | undefined,
+	portPerCase: boolean,
+	evaluator: ConditionEvaluator,
+): string {
+	if ( !cases || cases.length === 0 ) return Ports.Out;
+
+	if ( portPerCase ) {
+		for ( const conditionCase of cases ) {
+			if ( evaluateConditionChain( conditionCase.when, evaluator ) ) {
+				return conditionCase.port;
 			}
 		}
-		return matched;
+		return Ports.Default;
 	}
-	// Switch mode: break at first match
-	for ( let i = 0; i < groups.length; i++ ) {
-		if ( evaluateConditionChain( groups[i]!, evaluator ) ) {
-			return i;
+
+	// if mode: the cases share one exit, so they all have to hold to take it.
+	for ( const conditionCase of cases ) {
+		if ( !evaluateConditionChain( conditionCase.when, evaluator ) ) {
+			return Ports.Default;
 		}
 	}
-	return -1; // no match → default port
+	return Ports.Out;
 }
 
 /**
- * Filter choices by their visibilityConditions.
- * Choices with no conditions or passing conditions are kept.
+ * Pick the exit port from case results that were ALREADY computed.
  *
- * When `scene` is provided, `choice:` conditions are resolved automatically
- * via the scene's internal choice history — the developer never sees them.
- * Non-choice conditions are delegated to the `evaluator` callback.
+ * Same rules as {@link evaluateConditionCases}, same answer — it just does not ask again.
+ *
+ * The engine needs both halves for every condition block: a result per case, so the handler is
+ * handed answers rather than questions, and the port to leave by. Calling the two functions in a
+ * row asked the game's evaluator about the same test twice, and how many times depended on the
+ * mode and on which case matched — which broke the one promise this file makes, that a project can
+ * count and log what it was asked.
+ *
+ * {@link evaluateConditionCases} keeps its short-circuit: a game calling it on its own really does
+ * stop at the first case that holds. That saves nothing HERE, because filling `result` for every
+ * case has already asked about all of them.
  */
-export function filterVisibleChoices(
-	choices: ChoiceItem[],
-	evaluator: ( condition: ExportCondition ) => boolean,
-	scene?: { evaluateCondition( condition: ExportCondition ): boolean },
-): ChoiceItem[] {
-	return choices.filter( choice => {
-		if ( !choice.visibilityConditions || choice.visibilityConditions.length === 0 ) {
-			return true;
+export function pickPortFromResults(
+	cases: ConditionCase[] | undefined,
+	portPerCase: boolean,
+	results: boolean[],
+): string {
+	if ( !cases || cases.length === 0 ) return Ports.Out;
+
+	if ( portPerCase ) {
+		for ( let i = 0; i < cases.length; i++ ) {
+			if ( results[i] ) return cases[i]!.port;
 		}
-		return evaluateConditionChain( choice.visibilityConditions, ( cond ) => {
-			if ( scene && cond.key.startsWith( 'choice:' ) ) {
-				return scene.evaluateCondition( cond );
-			}
-			return evaluator( cond );
-		} );
-	} );
+		return Ports.Default;
+	}
+
+	// if mode: the cases share one exit, so they all have to hold to take it.
+	for ( let i = 0; i < cases.length; i++ ) {
+		if ( !results[i] ) return Ports.Default;
+	}
+	return Ports.Out;
+}
+
+/**
+ * Evaluate every case on its own, without picking a port.
+ *
+ * This is what fills `context.conditionCases[i].result` before the handler runs, so a game can
+ * show what matched, override the routing, or log it. Routing itself still goes through
+ * {@link evaluateConditionCases} — reading a result here never decides an exit.
+ */
+export function evaluateEachCase(
+	cases: ConditionCase[] | undefined,
+	evaluator: ConditionEvaluator,
+): boolean[] {
+	if ( !cases ) return [];
+	return cases.map( c => evaluateConditionChain( c.when, evaluator ) );
+}
+
+/**
+ * Tag every option of a choice with whether its `when` holds.
+ *
+ * The engine hands over **all** the options, tagged — never a shortened list. A game that wants
+ * only the offered ones writes `options.filter( o => o.visible !== false )`; a game that wants to
+ * grey out the others, or show "[locked]", still has them. Filtering here would take that away.
+ *
+ * `visible` is left `undefined` when no evaluator is installed: unknown, not hidden.
+ */
+export function tagOptionVisibility(
+	options: Option[] | undefined,
+	evaluator: ConditionEvaluator | undefined,
+): RuntimeChoiceItem[] {
+	if ( !options ) return [];
+	if ( !evaluator ) return options.map( option => ( { ...option } ) );
+
+	return options.map( option => ( {
+		...option,
+		visible: evaluateConditionChain( option.when, evaluator ),
+	} ) );
+}
+
+/**
+ * Is this test about what the player already answered, rather than about game state?
+ *
+ * `choice` is a reserved dictionary id — no project dictionary may take it. `entry` is a CHOICE
+ * block id of this scene and `value` an option id of that block. The engine answers these from
+ * the history it kept during the scene, so they never reach the game's evaluator: a game does not
+ * have to remember what it already told the engine.
+ */
+export function isChoiceTest( test: ConditionTest ): boolean {
+	return test.dict === Ports.Choice;
 }

@@ -27,7 +27,7 @@ public:
     InvalidateBlockHandler invalidateBlockHandler;
     BeforeBlockHandler beforeBlockHandler;
 
-    InternalBlockHandler getTypeHandler(BlockType type) const;
+    InternalBlockHandler getTypeHandler(const std::string& type) const;
 };
 
 /// Stores per-scene (Tier 2) handlers.
@@ -41,9 +41,9 @@ public:
     SceneLifecycleHandler enterHandler;
     SceneLifecycleHandler exitHandler;
 
-    void setBlockHandler(const std::string& blockUuid, InternalBlockHandler handler);
-    InternalBlockHandler getBlockHandler(const std::string& blockUuid) const;
-    InternalBlockHandler getTypeHandler(BlockType type) const;
+    void setBlockHandler(const std::string& blockId, InternalBlockHandler handler);
+    InternalBlockHandler getBlockHandler(const std::string& blockId) const;
+    InternalBlockHandler getTypeHandler(const std::string& type) const;
 
 private:
     std::unordered_map<std::string, InternalBlockHandler> _blockHandlers;
@@ -51,8 +51,8 @@ private:
 
 /// Resolve which handlers to call. Priority: onBlock(uuid) > scene.onType > engine.onType.
 ResolvedHandlers resolveHandler(
-    BlockType blockType,
-    const std::string& blockUuid,
+    const std::string& blockType,
+    const std::string& blockId,
     const SceneHandlerRegistry* sceneRegistry,
     const HandlerRegistry& globalRegistry);
 

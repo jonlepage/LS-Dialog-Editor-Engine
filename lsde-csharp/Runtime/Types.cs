@@ -6,453 +6,453 @@ using System.Collections.Generic;
 
 namespace LsdeDialogEngine
 {
-    // ─── Blueprint Data Types (mirrors LSDE export) ─────────────────────────────
+    // ─── The payload contract ───────────────────────────────────────────────────
+    //
+    // These mirror the C# header LSDE generates beside its JSON, in the engine's own casing:
+    // PascalCase properties fed by a camelCase naming policy (LsdeJson wires that up), which is
+    // idiomatic C# and is exactly why the engine reads camelCase JSON only — a deserializer
+    // already does that conversion, so renaming keys inside the payload would buy nothing and
+    // would corrupt the three bags whose KEYS are the game's own data: Text, Props and Args.
+    //
+    // Block ids repeat between scenes. The counter restarts at 1 in every scene, so DIALOG-001
+    // legitimately exists in two of them: a block is identified by the pair (scene, id).
 
-    /// <summary>All possible block types in a blueprint.</summary>
-    public enum BlockType
+    /// <summary>What a block is. Decides which optional fields it carries.</summary>
+    public static class BlockType
     {
-        DIALOG,
-        CHOICE,
-        CONDITION,
-        ACTION,
-        NOTE,
+        public const string Dialog = "dialog";
+        public const string Choice = "choice";
+        public const string Condition = "condition";
+        public const string Action = "action";
+        public const string Note = "note";
     }
 
-    /// <summary>Directed connection between two blocks in the blueprint.
-    /// Connections define the dialogue flow by linking output ports of source blocks
-    /// to input ports of target blocks.</summary>
-    public class BlueprintConnection
+    /// <summary>How a condition compares a dictionary entry to its value.</summary>
+    public static class ConditionOperator
     {
-        /// <summary>Unique identifier for this connection.</summary>
+        public new const string Equals = "equals";
+        public const string NotEquals = "notEquals";
+        public const string LessThan = "lessThan";
+        public const string LessOrEqual = "lessOrEqual";
+        public const string GreaterThan = "greaterThan";
+        public const string GreaterOrEqual = "greaterOrEqual";
+    }
+
+    /// <summary>How a comparison links to the one ABOVE it. The list is flat: precedence is yours.</summary>
+    public static class ConditionJoin
+    {
+        public const string And = "and";
+        public const string Or = "or";
+    }
+
+    /// <summary>What a function parameter accepts: a literal, or a key picked in a dictionary.</summary>
+    public static class ValueType
+    {
+        public const string Boolean = "boolean";
+        public const string String = "string";
+        public const string Number = "number";
+        public const string DictionaryKey = "dictionaryKey";
+    }
+
+    /// <summary>What a card is used for in the editor.</summary>
+    public static class CardRole
+    {
+        public const string None = "none";
+        public const string Characters = "characters";
+        public const string Emotions = "emotions";
+        public const string Places = "places";
+    }
+
+    /// <summary>The ports every runtime must know. Option, case and actor ports are named by the project.</summary>
+    public static class Ports
+    {
+        /// <summary>The single entry port of every block.</summary>
+        public const string In = "in";
+
+        /// <summary>The default exit of a dialog, and the true exit of an if-style condition.</summary>
+        public const string Out = "out";
+
+        /// <summary>The exit of an action block once its calls succeeded.</summary>
+        public const string Then = "then";
+
+        /// <summary>The exit of an action block when a call failed.</summary>
+        public const string Catch = "catch";
+
+        /// <summary>The fallback exit of a condition block: no case matched.</summary>
+        public const string Default = "default";
+
+        /// <summary>NOT a port: the reserved ConditionTest.Dict that reads past answers of THIS scene.
+        /// Entry is a CHOICE block id, Value an Option.Id of that block. The engine answers it from
+        /// what it recorded while the scene played; no project dictionary may take this id.</summary>
+        public const string Choice = "choice";
+    }
+
+    /// <summary>Which software wrote the file, to trace a delivered payload back to its version.</summary>
+    public class Generator
+    {
+        /// <summary>Always LSDE.</summary>
+        public string App { get; set; } = "";
+
+        /// <summary>The software version, e.g. 2.0.3 — not the format version.</summary>
+        public string Version { get; set; } = "";
+    }
+
+    /// <summary>A dictionary the game maintains, as declared in the project. Conditions cite it by id.</summary>
+    public class DictionaryDefinition
+    {
+        /// <summary>The dictionary id, as ConditionTest.Dict cites it.</summary>
         public string Id { get; set; } = "";
 
-        /// <summary>UUID of the source block.</summary>
-        public string FromId { get; set; } = "";
+        /// <summary>What its entries are compared to: boolean, string or number.</summary>
+        public string ValueType { get; set; } = "";
 
-        /// <summary>UUID of the target block.</summary>
-        public string ToId { get; set; } = "";
-
-        /// <summary>Output port identifier on the source block.
-        /// For CHOICE blocks: the selected choice UUID. For ACTION blocks: "then" or "catch".</summary>
-        public string FromPort { get; set; } = "";
-
-        /// <summary>Input port identifier on the target block.</summary>
-        public string ToPort { get; set; } = "";
-
-        /// <summary>Zero-based index of the output port.
-        /// For CONDITION blocks: 0 = true, 1 = false. For DIALOG with portPerCharacter: index of the character.</summary>
-        public int? FromPortIndex { get; set; }
+        /// <summary>The entry keys, in declaration order.</summary>
+        public List<string> Entries { get; set; } = new List<string>();
     }
 
-    /// <summary>Generic key-value property attached to a block.</summary>
-    public class BlockProperty
+    /// <summary>One parameter of an engine function.</summary>
+    public class FunctionParameter
     {
-        /// <summary>Property name or identifier.</summary>
+        /// <summary>The argument name, as ActionCall.Args keys it.</summary>
+        public string Name { get; set; } = "";
+
+        /// <summary>What the argument holds.</summary>
+        public string Type { get; set; } = "";
+
+        /// <summary>Only when Type is dictionaryKey: where the value is picked.</summary>
+        public string? Dictionary { get; set; }
+    }
+
+    /// <summary>A function the game implements, as ActionCall.Fn names it.</summary>
+    public class FunctionDefinition
+    {
+        /// <summary>The function id.</summary>
+        public string Id { get; set; } = "";
+
+        /// <summary>Its parameters, in declaration order.</summary>
+        public List<FunctionParameter> Params { get; set; } = new List<FunctionParameter>();
+    }
+
+    /// <summary>A card cited by blocks: the other end of Block.Actors and Block.Emotion.</summary>
+    public class Card
+    {
+        /// <summary>The stable editor id (var3) that blocks reference.</summary>
+        public string Id { get; set; } = "";
+
+        /// <summary>The name the game gives this card, never the editor label.</summary>
+        public string Name { get; set; } = "";
+
+        /// <summary>What the card is used for: characters, emotions, places or none.</summary>
+        public string Role { get; set; } = "";
+    }
+
+    /// <summary>An outgoing wire, seen from the block that carries it.</summary>
+    public class Link
+    {
+        /// <summary>The exit port: a fixed port (see Ports), an option id, a case port or a card id.</summary>
+        public string Port { get; set; } = "";
+
+        /// <summary>The target block id, relative to the SAME scene. A wire never crosses one.</summary>
+        public string To { get; set; } = "";
+
+        /// <summary>The target's entry port, always "in" today.</summary>
+        public string ToPort { get; set; } = "in";
+    }
+
+    /// <summary>A wire seen from OUTSIDE the block that carries it.
+    /// <para>In the payload a wire is a Link listed in Block.Next, so it only knows where it goes.
+    /// Graph inspection needs both ends, so the engine flattens every Next into this shape.
+    /// Nothing in the file has it; it exists only in memory.</para></summary>
+    public class BlueprintConnection
+    {
+        /// <summary>The id of the block this wire leaves, within its scene.</summary>
+        public string From { get; set; } = "";
+
+        /// <summary>The exit port it leaves by.</summary>
+        public string Port { get; set; } = "";
+
+        /// <summary>The block it goes to, in the same scene.</summary>
+        public string To { get; set; } = "";
+
+        /// <summary>The target's entry port.</summary>
+        public string ToPort { get; set; } = "in";
+    }
+
+    /// <summary>What an action block asks the game to run.</summary>
+    public class ActionCall
+    {
+        /// <summary>The function id. May be empty when the writer has not picked one yet.</summary>
+        public string Fn { get; set; } = "";
+
+        /// <summary>The arguments BY NAME, as declared in FunctionDefinition.Params.</summary>
+        public Dictionary<string, object> Args { get; set; } = new Dictionary<string, object>();
+    }
+
+    /// <summary>One comparison: a dictionary entry against a value.
+    /// <para>The reserved dict id "choice" is the exception — it reads the answers the player
+    /// already gave IN THIS SCENE, which the engine tracks on its own.</para></summary>
+    public class ConditionTest
+    {
+        /// <summary>The dictionary id. "choice" is reserved: see Ports.Choice.</summary>
+        public string Dict { get; set; } = "";
+
+        /// <summary>The entry read in that dictionary. With dict "choice", a CHOICE block id.</summary>
+        public string Entry { get; set; } = "";
+
+        /// <summary>The comparison. See ConditionOperator.</summary>
+        public string Op { get; set; } = ConditionOperator.Equals;
+
+        /// <summary>The right-hand side; its type follows the dictionary's ValueType.</summary>
+        public object? Value { get; set; }
+
+        /// <summary>Link with the comparison ABOVE. Absent on the first one; absent means AND.</summary>
+        public string? Join { get; set; }
+    }
+
+    /// <summary>One case of a condition block: the exit port, and what must hold for it.</summary>
+    public class ConditionCase
+    {
+        /// <summary>The exit port of this case (K1…), or the block's Out when cases share one exit.</summary>
+        public string Port { get; set; } = "";
+
+        /// <summary>Absent = always true. Such a case makes every following case unreachable.</summary>
+        public List<ConditionTest>? When { get; set; }
+    }
+
+    /// <summary>One answer of a choice block, a translated key in its own right.</summary>
+    public class Option
+    {
+        /// <summary>The option id, which is ALSO its exit port (C1…).</summary>
+        public string Id { get; set; } = "";
+
+        /// <summary>The full i18n key of its text.</summary>
         public string Key { get; set; } = "";
 
-        /// <summary>Property value.</summary>
-        public object Value { get; set; } = "";
+        /// <summary>Its text by locale, when texts are exported inside the payload.</summary>
+        public Dictionary<string, string>? Text { get; set; }
+
+        /// <summary>Absent = always offered.</summary>
+        public List<ConditionTest>? When { get; set; }
     }
 
-    /// <summary>Condition evaluated to control dialogue flow or choice visibility.
-    /// <para>Conditions are evaluated left-to-right with no operator precedence. The Chain field
-    /// on each condition determines how it combines with the accumulated result:
-    /// empty list → true; first condition → raw result (Chain ignored);
-    /// Chain = "&amp;" or absent → AND; Chain = "|" → OR.</para>
-    /// <para>The developer is responsible for interpreting Key, Operator, and Value against
-    /// the game state via the OnCondition handler — the engine only handles the chaining logic.</para></summary>
-    public class ExportCondition
+    /// <summary>An option tagged with what OnResolveCondition said about its When.
+    /// <para>The engine hands over EVERY option, tagged — never a shortened list. Filter with
+    /// <c>options.Where(o =&gt; o.Visible != false)</c>, or keep the rest to show them locked.</para></summary>
+    public class RuntimeChoiceItem : Option
     {
-        /// <summary>Unique identifier for this condition instance.</summary>
-        public string Uuid { get; set; } = "";
-
-        /// <summary>State key to evaluate (e.g. "has_item", "player_level"). Interpreted by the OnCondition handler.</summary>
-        public string Key { get; set; } = "";
-
-        /// <summary>Logical chaining with the previous condition: "|" (OR) or "&amp;" (AND). Defaults to AND if omitted.</summary>
-        public string? Chain { get; set; }
-
-        /// <summary>Comparison operator (e.g. "==", "!=", ">"). Interpretation is up to the OnCondition handler.</summary>
-        public string Operator { get; set; } = "";
-
-        /// <summary>Value to compare against. Always a string — the developer is responsible for type coercion.</summary>
-        public string Value { get; set; } = "";
-    }
-
-    /// <summary>Action triggered during block execution.</summary>
-    public class ExportAction
-    {
-        /// <summary>Unique identifier for this action instance.</summary>
-        public string Uuid { get; set; } = "";
-
-        /// <summary>Action type identifier matching an ActionSignature.Id (e.g. "set_flag", "play_sound").</summary>
-        public string ActionId { get; set; } = "";
-
-        /// <summary>UUID of the ActionSignature this action references.</summary>
-        public string? SignatureUuid { get; set; }
-
-        /// <summary>Ordered parameter values for the action, as defined by the matching ActionSignature.Params.</summary>
-        public List<object> Params { get; set; } = new List<object>();
-    }
-
-    /// <summary>Player choice option within a choice block.</summary>
-    public class ChoiceItem
-    {
-        /// <summary>Unique identifier for this choice.</summary>
-        public string Uuid { get; set; } = "";
-
-        /// <summary>Hierarchical key for localization lookup.</summary>
-        public string StructureKey { get; set; } = "";
-
-        /// <summary>Display label for editor reference.</summary>
-        public string? Label { get; set; }
-
-        /// <summary>Localized text map: { locale → text }.</summary>
-        public Dictionary<string, string>? DialogueText { get; set; }
-
-        /// <summary>Conditions controlling whether this choice is visible. If all pass (or none set), the choice is shown.</summary>
-        public List<ExportCondition>? VisibilityConditions { get; set; }
-    }
-
-    /// <summary>Choice item with runtime visibility tag. Set by the engine when SetChoiceFilter() is configured.
-    /// Use <c>Visible != false</c> to get visible choices (null = no filter installed = treat as visible).</summary>
-    public class RuntimeChoiceItem : ChoiceItem
-    {
-        /// <summary>true = visible, false = hidden, null = no filter installed (treat as visible).</summary>
+        /// <summary>true = offered, false = hidden, null = no resolver installed (treat as offered).</summary>
         public bool? Visible { get; set; }
     }
 
-    /// <summary>Runtime condition group with pre-evaluated result. Symmetric with RuntimeChoiceItem.Visible.</summary>
-    public class RuntimeConditionGroup
+    /// <summary>A condition case with its pre-evaluated result.
+    /// <para>The case carries its own exit port, so there is no index to map back to anything —
+    /// that is the v1 shape and it is gone. Pass the Port to Resolve() to override the routing.</para></summary>
+    public class RuntimeConditionCase
     {
-        /// <summary>Conditions in this group (AND/OR chain).</summary>
-        public List<ExportCondition> Conditions { get; set; } = new List<ExportCondition>();
+        /// <summary>The exit port of this case: K1… with PortPerCase, otherwise the block's Out.</summary>
+        public string Port { get; set; } = "";
 
-        /// <summary>Port index for this group (0-based).</summary>
-        public int PortIndex { get; set; }
+        /// <summary>Its comparisons, chained left to right with no precedence. Absent = always true.</summary>
+        public List<ConditionTest>? When { get; set; }
 
-        /// <summary>Pre-evaluated result (when resolver is installed). null = no resolver.</summary>
+        /// <summary>true if the case holds, false if not, null if no resolver is installed.</summary>
         public bool? Result { get; set; }
     }
 
-    /// <summary>LSDE native execution properties controlling how a block is dispatched by the engine.
-    /// <para>These properties affect the engine's execution flow, not the block's content:</para>
-    /// <para>- <b>IsAsync</b>: Block runs on a parallel track. Async tracks call OnBeforeBlock, can spawn sub-tracks, auto-cancel on scene end.</para>
-    /// <para>- <b>WaitForBlocks</b>: Defers block progression until all listed block UUIDs have been visited.</para>
-    /// <para>- <b>Delay</b>: Consumed by OnBeforeBlock — the engine does not enforce it automatically.</para>
-    /// <para>- <b>PortPerCharacter</b>: One output port per character. The DIALOG handler must call ResolveCharacterPort().</para></summary>
+    /// <summary>The block properties the ENGINE acts on, read out of Block.Props.
+    /// <para>In v2 there is no separate bag: natives and the writer's own properties share Props,
+    /// keyed by bare id. Ids cannot collide — LSDE refuses a project property that takes a native
+    /// name — so telling them apart is a lookup against NativePropertyIds, not a guess.</para>
+    /// <para>Most are inert: Delay, Timeout, Debug, WaitInput, PortPerCharacter and
+    /// SkipIfMissingActor are passed through untouched. Two are not: IsAsync spawns a parallel
+    /// track, and WaitForBlocks parks one until its blocks are seen.</para>
+    /// <para><b>Delay and Timeout are MILLISECONDS in v2.</b> They were seconds in v1, and nothing
+    /// reports the difference at runtime: a migrated project turns a 3-second pause into 3 ms.</para></summary>
     public class NativeProperties
     {
-        /// <summary>Execute this block on a separate async track running in parallel with the main flow.</summary>
+        /// <summary>Run this block on a parallel track instead of the main flow.</summary>
         public bool? IsAsync { get; set; }
 
-        /// <summary>Delay in seconds before the block is executed. Applied by the OnBeforeBlock handler.</summary>
+        /// <summary>MILLISECONDS to wait before the block runs. Applied by OnBeforeBlock, not by the engine.</summary>
         public double? Delay { get; set; }
 
-        /// <summary>Timeout in seconds for block execution.</summary>
+        /// <summary>MILLISECONDS the block may take. Passed through — the engine enforces nothing.</summary>
         public double? Timeout { get; set; }
 
-        /// <summary>Enable debug mode for this block (editor use).</summary>
-        public bool? Debug { get; set; }
-
-        /// <summary>One output port per character in Metadata.Characters. Handler calls ResolveCharacterPort() to pick which port to follow.</summary>
-        public bool? PortPerCharacter { get; set; }
-
-        /// <summary>Skip this block entirely if the assigned actor/character is missing at runtime.</summary>
-        public bool? SkipIfMissingActor { get; set; }
-
-        /// <summary>UUIDs of blocks that must have been visited before this block can progress.
-        /// Enables precise synchronization of parallel async branches.</summary>
-        public List<string>? WaitForBlocks { get; set; }
-
-        /// <summary>Passive flag indicating this block should wait for explicit player input.
-        /// The engine does NOT interpret this flag — it is exposed as-is to game handlers.</summary>
+        /// <summary>Wait for player input or a game signal. Passed through, never interpreted.</summary>
         public bool? WaitInput { get; set; }
 
-        /// <summary>When true, all matching condition groups fire as independent async tracks (dispatcher mode).
-        /// When false/absent, only the first matching group routes (switch mode).</summary>
-        public bool? EnableDispatcher { get; set; }
+        /// <summary>Editor debug flag. Passed through.</summary>
+        public bool? Debug { get; set; }
+
+        /// <summary>One exit port per actor CARD ID, with Out as the fallback.</summary>
+        public bool? PortPerCharacter { get; set; }
+
+        /// <summary>Skip the block when its actor is absent at runtime. Passed through.</summary>
+        public bool? SkipIfMissingActor { get; set; }
+
+        /// <summary>Condition blocks: each case exits by its own port instead of sharing Out.</summary>
+        public bool? PortPerCase { get; set; }
+
+        /// <summary>Block ids OF THIS SCENE that must have been visited before this block may advance.</summary>
+        public List<string>? WaitForBlocks { get; set; }
     }
 
-    /// <summary>Read-only snapshot of an async track's state.
-    /// Returned by ISceneHandle.GetTrackInfos() for debug, rendering, and validation.</summary>
-    public class TrackInfo
+    /// <summary>The nine ids of NativeProperties, to sort a Props bag into natives and the writer's
+    /// own properties. Anything not in here belongs to the game.</summary>
+    public static class NativePropertyIds
     {
-        /// <summary>Unique auto-incremented identifier for this track within the scene. Main track is implicit (id 0).</summary>
-        public int Id { get; set; }
+        public static readonly string[] All =
+        {
+            "isAsync", "delay", "timeout", "waitInput", "debug",
+            "portPerCharacter", "skipIfMissingActor", "portPerCase", "waitForBlocks",
+        };
 
-        /// <summary>ID of the track that spawned this one. Null means spawned directly by the main track.</summary>
-        public int? ParentTrackId { get; set; }
-
-        /// <summary>UUID of the first block that started this track's execution.</summary>
-        public string StartBlockUuid { get; set; } = "";
-
-        /// <summary>UUID of the block currently being processed, or null if the track has not yet started.</summary>
-        public string? CurrentBlockUuid { get; set; }
-
-        /// <summary>Whether this track is still actively executing.</summary>
-        public bool Running { get; set; }
+        public static bool Contains(string id)
+        {
+            foreach (var known in All)
+            {
+                if (known == id) return true;
+            }
+            return false;
+        }
     }
 
-    /// <summary>Character (actor) assigned to a block.</summary>
-    public class BlockCharacter
+    /// <summary>A node of the graph. Type decides which optional fields are present.</summary>
+    public class BlueprintBlock
     {
-        /// <summary>Internal UUID used by the dialog engine.</summary>
-        public string Uuid { get; set; } = "";
-
-        /// <summary>Game-side character identifier. Use this to look up the character in your game engine.</summary>
+        /// <summary>Identity RELATIVE to its scene (DIALOG-002): what links and Scene.Start reference.</summary>
         public string Id { get; set; } = "";
 
-        /// <summary>Display name for debugging and editor preview. Not intended for in-game display.</summary>
-        public string Name { get; set; } = "";
+        /// <summary>The full i18n key, as localization files carry it.</summary>
+        public string Key { get; set; } = "";
 
-        /// <summary>Emotion label (e.g. "happy", "angry", "sad").</summary>
-        public string? Emotion { get; set; }
-
-        /// <summary>Emotion intensity (e.g. 0 = neutral, higher = stronger).</summary>
-        public double? EmotionIntensity { get; set; }
-    }
-
-    /// <summary>Screenshot or image captured from the editor for documentation.</summary>
-    public class BlockScreenshot
-    {
-        /// <summary>Image source as a data URL (base64) or file path.</summary>
-        public string Src { get; set; } = "";
-
-        /// <summary>Optional caption or description.</summary>
-        public string? Note { get; set; }
-    }
-
-    /// <summary>Non-logic metadata for display and organization. Should not affect game logic.</summary>
-    public class BlockMetadata
-    {
-        /// <summary>Visual color coding (hex) assigned by the designer.</summary>
-        public string? Color { get; set; }
-
-        /// <summary>Free-form designer notes. Not displayed to players.</summary>
-        public string? Comments { get; set; }
-
-        /// <summary>Contextual tags for categorization and filtering.</summary>
-        public List<string>? Tags { get; set; }
-
-        /// <summary>Screenshots captured from the editor for this block.</summary>
-        public List<BlockScreenshot>? ScreenShots { get; set; }
-
-        /// <summary>Characters (actors) assigned to this block.</summary>
-        public List<BlockCharacter>? Characters { get; set; }
-
-        /// <summary>Additional designer-defined metadata key-value pairs.</summary>
-        public Dictionary<string, object>? Others { get; set; }
-    }
-
-    /// <summary>Common properties shared by all block types.
-    /// <para>All five block types (DialogBlock, ChoiceBlock, ConditionBlock, ActionBlock, NoteBlock)
-    /// extend this base. Use the Type field to determine the concrete type, or use pattern matching.</para></summary>
-    public abstract class BlueprintBlock
-    {
-        /// <summary>Unique block identifier.</summary>
-        public string Uuid { get; set; } = "";
-
-        /// <summary>Block type determining behavior and rendering.</summary>
-        public BlockType Type { get; set; }
-
-        /// <summary>Display label assigned in the editor.</summary>
+        /// <summary>The readable name, when the writer wrote one. There is no mandatory block name.</summary>
         public string? Label { get; set; }
 
-        /// <summary>Hierarchy of parent folder labels providing structural context.</summary>
+        /// <summary>Readable names above the block, root first. Empty ones are skipped.</summary>
         public List<string>? ParentLabels { get; set; }
 
-        /// <summary>Custom key-value properties defined by block configuration.</summary>
-        public List<BlockProperty> Properties { get; set; } = new List<BlockProperty>();
+        /// <summary>What the block is. See BlockType — lowercase in v2.</summary>
+        public string Type { get; set; } = "";
 
-        /// <summary>User-defined custom properties dictionary set by the narrative designer.</summary>
-        public Dictionary<string, object>? UserProperties { get; set; }
+        /// <summary>Card ids of who speaks. Resolve them through the export's Cards table.
+        /// <para>The ORDER is significant, but its meaning does not belong to the engine: LSDE
+        /// deliberately refuses to say whether it is "who speaks" or "who is present". The game
+        /// decides, through OnResolveCharacter.</para></summary>
+        public List<string>? Actors { get; set; }
 
-        /// <summary>LSDE native execution properties (async, delay, portPerCharacter, etc.).</summary>
-        public NativeProperties? NativeProperties { get; set; }
+        /// <summary>Card id of the emotion — the tone of the LINE, not of a speaker.</summary>
+        public string? Emotion { get; set; }
 
-        /// <summary>Non-logic metadata for display and organization.</summary>
-        public BlockMetadata? Metadata { get; set; }
+        /// <summary>Only with Emotion.</summary>
+        public double? Intensity { get; set; }
 
-        /// <summary>When true, this block is the entry point of the scene. Only one per scene.</summary>
-        public bool? IsStartBlock { get; set; }
-    }
+        /// <summary>The line by locale, dialogs only, when texts are exported inside the payload.
+        /// <para>The engine never reads what is INSIDE this string. Markers like {{@a1}} are the
+        /// game's own, in the game's own keys, filled by the game's own system.</para></summary>
+        public Dictionary<string, string>? Text { get; set; }
 
-    /// <summary>Dialog block — displays text spoken by a character.
-    /// <para>The character is resolved by OnResolveCharacter and exposed as Context.Character.
-    /// When PortPerCharacter is enabled, the handler must call Context.ResolveCharacterPort(character.Uuid).</para></summary>
-    public class DialogBlock : BlueprintBlock
-    {
-        /// <summary>Hierarchical key for tree navigation and localization lookup.</summary>
-        public string? StructureKey { get; set; }
+        /// <summary>The body of a note block: never translated, only when notes are exported.</summary>
+        public string? Body { get; set; }
 
-        /// <summary>Raw text content in the primary language.</summary>
-        public string? Content { get; set; }
-
-        /// <summary>Localized text map: { locale → text }.</summary>
-        public Dictionary<string, string>? DialogueText { get; set; }
-    }
-
-    /// <summary>Choice block — presents selectable options to the player.
-    /// <para>Context.Choices returns ALL choices — none are filtered out.
-    /// When OnResolveCondition() is configured, the engine tags each RuntimeChoiceItem with
-    /// Visible = true/false. Filter with <c>choices.Where(c => c.Visible != false)</c>.
-    /// Without a filter, Visible is null and all choices pass.</para>
-    /// <para>The handler must call Context.SelectChoice(uuid) to pick a choice.</para></summary>
-    public class ChoiceBlock : BlueprintBlock
-    {
-        /// <summary>Available player choices. Visibility is tagged at runtime via VisibilityConditions.</summary>
-        public List<ChoiceItem>? Choices { get; set; }
-
-        /// <summary>Designer note. Not displayed to players.</summary>
+        /// <summary>The team note on the block, only when notes are exported.</summary>
         public string? Note { get; set; }
+
+        /// <summary>Properties SET on the block, native and project-declared alike, by bare id.</summary>
+        public Dictionary<string, object>? Props { get; set; }
+
+        /// <summary>Action blocks: what to run, in order.</summary>
+        public List<ActionCall>? Calls { get; set; }
+
+        /// <summary>Condition blocks: the cases, in evaluation order.</summary>
+        public List<ConditionCase>? Cases { get; set; }
+
+        /// <summary>Choice blocks: the answers, in display order.</summary>
+        public List<Option>? Options { get; set; }
+
+        /// <summary>Outgoing wires. Absent when nothing leaves the block.</summary>
+        public List<Link>? Next { get; set; }
     }
 
-    /// <summary>Condition block — evaluates logic to branch the dialogue flow.
-    /// <para>Conditions are grouped (2D): each inner list is a "case" evaluated as an AND/OR chain.
-    /// Switch mode: first matching group wins. Dispatcher mode: all matching groups fire.</para></summary>
-    public class ConditionBlock : BlueprintBlock
-    {
-        /// <summary>Condition groups (2D). Each inner list is a "case" evaluated as an AND/OR chain.</summary>
-        public List<List<ExportCondition>>? Conditions { get; set; }
-
-        /// <summary>Designer note. Not displayed to players.</summary>
-        public string? Note { get; set; }
-    }
-
-    /// <summary>Action block — triggers game state changes.
-    /// <para>The developer MUST handle execution in the OnAction handler.
-    /// Two output ports: "then" (success) and "catch" (failure).
-    /// Call Context.Resolve() for success or Context.Reject(error) for failure.
-    /// If no "catch" connection exists, rejection falls back to "then".</para></summary>
-    public class ActionBlock : BlueprintBlock
-    {
-        /// <summary>Actions to execute. Each references an ActionSignature via ActionId.</summary>
-        public List<ExportAction>? Actions { get; set; }
-
-        /// <summary>Designer note. Not displayed to players.</summary>
-        public string? Note { get; set; }
-    }
-
-    /// <summary>Note block — designer documentation, never executed at runtime. Skipped during traversal.</summary>
-    public class NoteBlock : BlueprintBlock { }
-
-    /// <summary>A scene — an independent dialogue subgraph with its own entry point.
-    /// <para>A scene is the unit of execution. Call engine.Scene(uuid) to get an ISceneHandle,
-    /// then handle.Start() to begin traversal. Multiple scenes can run concurrently.</para></summary>
+    /// <summary>One scene: its blocks, and where it starts.</summary>
     public class BlueprintScene
     {
-        /// <summary>Unique scene identifier.</summary>
-        public string Uuid { get; set; } = "";
+        /// <summary>The scene path without the reserved namespace (acte1, chap1.acte1).</summary>
+        public string Scene { get; set; } = "";
 
-        /// <summary>Scene name assigned by the designer.</summary>
-        public string Label { get; set; } = "";
+        /// <summary>The scene identity that SURVIVES A RENAME (sc_ then eight chars).
+        /// <para>Scene is what a writer reads and what builds the i18n keys, but it changes the day
+        /// someone renames the scene — so an asset that stored it stops resolving, silently, with
+        /// no compiler to catch it. Store THIS one wherever a scene is referenced from outside the
+        /// payload, and show Scene as its label.</para></summary>
+        public string Id { get; set; } = "";
 
-        /// <summary>Scene-level designer notes.</summary>
-        public string? Note { get; set; }
+        /// <summary>The readable name of the scene, when written.</summary>
+        public string? Label { get; set; }
 
-        /// <summary>UUID of the entry block for this scene.</summary>
-        public string? EntryBlockId { get; set; }
+        /// <summary>The entry block id. Absent = the scene has no entry and cannot play.</summary>
+        public string? Start { get; set; }
 
-        /// <summary>Scene creation or last modification date.</summary>
-        public string Date { get; set; } = "";
-
-        /// <summary>All blocks contained within this scene.</summary>
+        /// <summary>Every exported block of the scene.</summary>
         public List<BlueprintBlock> Blocks { get; set; } = new List<BlueprintBlock>();
-
-        /// <summary>All connections defining the dialogue flow in this scene.</summary>
-        public List<BlueprintConnection> Connections { get; set; } =
-            new List<BlueprintConnection>();
     }
 
-    /// <summary>A single entry in a dictionary group.</summary>
-    public class DictionaryRow
-    {
-        /// <summary>Key identifier referenced in conditions and action parameters.</summary>
-        public string Key { get; set; } = "";
-    }
-
-    /// <summary>Dictionary group defining reusable key-value pairs for conditions and actions.</summary>
-    public class LsdeDictionary
-    {
-        /// <summary>Unique identifier for this dictionary group.</summary>
-        public string Uuid { get; set; } = "";
-
-        /// <summary>Short stable identifier used as prefix in condition keys (e.g. "groupId.rowKey").</summary>
-        public string Id { get; set; } = "";
-
-        /// <summary>All entries in this dictionary group.</summary>
-        public List<DictionaryRow> Rows { get; set; } = new List<DictionaryRow>();
-    }
-
-    /// <summary>Enum option for a signature parameter.</summary>
-    public class EnumOption
-    {
-        /// <summary>Option identifier.</summary>
-        public string Id { get; set; } = "";
-
-        /// <summary>Display label for this option.</summary>
-        public string? Label { get; set; }
-    }
-
-    /// <summary>Parameter definition for an action signature.</summary>
-    public class SignatureParam
-    {
-        /// <summary>Display label for this parameter.</summary>
-        public string? Label { get; set; }
-
-        /// <summary>Data type of this parameter.</summary>
-        public string Type { get; set; } = "string";
-
-        /// <summary>UUID of the dictionary group this parameter references. Only when Type is "dictionary".</summary>
-        public string? DictionaryGroupUuid { get; set; }
-
-        /// <summary>Available options when Type is "enum".</summary>
-        public List<EnumOption>? EnumOptions { get; set; }
-    }
-
-    /// <summary>Action signature defining a reusable action type. Map Id to your engine's action handlers.</summary>
-    public class ActionSignature
-    {
-        /// <summary>Unique identifier for this signature.</summary>
-        public string Uuid { get; set; } = "";
-
-        /// <summary>Short action type identifier (e.g. "set_flag"). Referenced by ExportAction.ActionId.</summary>
-        public string Id { get; set; } = "";
-
-        /// <summary>Parameter definitions describing the expected inputs.</summary>
-        public List<SignatureParam> Params { get; set; } = new List<SignatureParam>();
-    }
-
-    /// <summary>Root container for exported blueprint data.
-    /// <para>Top-level JSON structure exported by the LS-Dialog editor. Pass it to
-    /// engine.Init(options) to load and validate. The Locales list contains all available languages.
-    /// Call engine.SetLocale(code) to set the active locale.</para></summary>
+    /// <summary>The whole file. One scene per file or all of them: the only difference between
+    /// the two split modes.</summary>
     public class BlueprintExport
     {
-        /// <summary>Schema version of this export format.</summary>
-        public string Version { get; set; } = "";
+        /// <summary>Always "lsde-blueprints". Anything else is refused outright.</summary>
+        public string Format { get; set; } = "";
 
-        /// <summary>ISO 8601 timestamp of when this export was generated.</summary>
-        public string ExportDate { get; set; } = "";
+        /// <summary>The FORMAT version. Bumps only when the payload contract changes.</summary>
+        public int Version { get; set; }
 
-        /// <summary>Name of the LSDE project.</summary>
-        public string? ProjectName { get; set; }
+        /// <summary>Which software wrote the file.</summary>
+        public Generator? Generator { get; set; }
 
-        /// <summary>Primary language locale code (e.g. "fr", "en").</summary>
-        public string? PrimaryLanguage { get; set; }
+        /// <summary>ISO 8601 instant of the export.</summary>
+        public string ExportedAt { get; set; } = "";
 
-        /// <summary>All language locale codes included in this export.</summary>
+        /// <summary>The project name.</summary>
+        public string Project { get; set; } = "";
+
+        /// <summary>Every locale of the project.</summary>
         public List<string> Locales { get; set; } = new List<string>();
 
-        /// <summary>Dictionary groups for conditions and action parameters.</summary>
-        public List<LsdeDictionary>? Dictionaries { get; set; }
+        /// <summary>The locale that is written first. Empty when the project declares none.</summary>
+        public string ReferenceLocale { get; set; } = "";
 
-        /// <summary>Action signature definitions describing available action types.</summary>
-        public List<ActionSignature>? Signatures { get; set; }
+        /// <summary>The declared vocabulary, whole, never trimmed to the exported scenes.</summary>
+        public List<DictionaryDefinition> Dictionaries { get; set; } = new List<DictionaryDefinition>();
 
-        /// <summary>All exported scenes.</summary>
+        /// <summary>The declared engine functions.</summary>
+        public List<FunctionDefinition> Functions { get; set; } = new List<FunctionDefinition>();
+
+        /// <summary>The cards that blocks may cite.</summary>
+        public List<Card> Cards { get; set; } = new List<Card>();
+
+        /// <summary>The scenes carried by this file.</summary>
         public List<BlueprintScene> Scenes { get; set; } = new List<BlueprintScene>();
+    }
+
+    /// <summary>A read-only snapshot of one parallel track, for debug and rendering.</summary>
+    public class TrackInfo
+    {
+        /// <summary>Unique id of this track within the scene.</summary>
+        public int Id { get; set; }
+
+        /// <summary>Id of the track that spawned this one, or null when the main flow did.</summary>
+        public int? ParentTrackId { get; set; }
+
+        /// <summary>The block this track started on.</summary>
+        public string StartBlockUuid { get; set; } = "";
+
+        /// <summary>The block it is on now, or null when it has ended.</summary>
+        public string? CurrentBlockUuid { get; set; }
+
+        /// <summary>Whether it is still running.</summary>
+        public bool Running { get; set; }
     }
 
     // ─── Engine Types ────────────────────────────────────────────────────────────
@@ -493,14 +493,14 @@ namespace LsdeDialogEngine
     /// When provided, the engine warns about references that don't match your game.</summary>
     public class CheckOptions
     {
-        /// <summary>Known action signature IDs in your game.</summary>
-        public List<string>? Signatures { get; set; }
+        /// <summary>Function ids your game implements. A blueprint function outside this list warns.</summary>
+        public List<string>? Functions { get; set; }
 
-        /// <summary>Known dictionary groups and their row keys.</summary>
+        /// <summary>Dictionary ids and their entry keys, as your game holds them.</summary>
         public Dictionary<string, List<string>>? Dictionaries { get; set; }
 
-        /// <summary>Known character names in your game.</summary>
-        public List<string>? Characters { get; set; }
+        /// <summary>Card NAMES your game knows — Card.Name, never the editor id (var1).</summary>
+        public List<string>? Cards { get; set; }
     }
 
     /// <summary>Options passed to engine.Init().</summary>
@@ -508,6 +508,12 @@ namespace LsdeDialogEngine
     {
         /// <summary>The blueprint data to load and validate.</summary>
         public BlueprintExport Data { get; set; } = new BlueprintExport();
+
+        /// <summary>The several files of a per-scene export, instead of Data.
+        /// <para>Each file of that mode is self-contained — it carries the whole header, so a scene
+        /// loads and plays on its own. Pass the list and the engine stacks the scenes behind one
+        /// header, after checking Project and ExportedAt match across the files.</para></summary>
+        public List<BlueprintExport>? Files { get; set; }
 
         /// <summary>Optional cross-validation options.</summary>
         public CheckOptions? Check { get; set; }
@@ -530,53 +536,74 @@ namespace LsdeDialogEngine
 
     // ─── Context Types ───────────────────────────────────────────────────────────
 
-    /// <summary>Base context available to all block handlers.</summary>
+    /// <summary>What every block handler gets, whatever the block type.</summary>
     public interface IBaseBlockContext
     {
-        /// <summary>Character resolved by OnResolveCharacter for this block, or null if none.</summary>
-        BlockCharacter? Character { get; }
+        /// <summary>The actor OnResolveCharacter picked for this block, or null.
+        /// <para>A block lists a CAST in Actors — card ids, in an order LSDE deliberately refuses
+        /// to give a meaning to. The engine hands the whole list to OnResolveCharacter and keeps
+        /// whatever comes back; it does not elect a first one, the way v1 did.</para></summary>
+        Card? Character { get; }
 
-        /// <summary>Prevent the global (Tier 1) handler from executing after this scene handler.</summary>
+        /// <summary>Every card the block cites, resolved through the export's Cards table, in file order.</summary>
+        IReadOnlyList<Card> Actors { get; }
+
+        /// <summary>The emotion of the BLOCK, resolved through Cards — the tone of the line, not of
+        /// a speaker. In v1 each character carried its own, which meant writing the same feeling
+        /// twice for two actors saying one sentence.</summary>
+        Card? Emotion { get; }
+
+        /// <summary>How strongly, when the writer set an emotion. Passed through untouched.</summary>
+        double? Intensity { get; }
+
+        /// <summary>Stop the global (Tier 1) handler from running after this scene handler.</summary>
         void PreventGlobalHandler();
     }
 
-    /// <summary>Context for DIALOG block handlers.</summary>
+    /// <summary>What a DIALOG handler gets.</summary>
     public interface IDialogContext : IBaseBlockContext
     {
-        /// <summary>When PortPerCharacter is enabled, specify which character port to follow.
-        /// Matches by character UUID first, then by name as fallback.</summary>
-        void ResolveCharacterPort(string characterUuid);
+        /// <summary>With PortPerCharacter, name the actor whose port the flow should take.
+        /// <para>Takes a CARD ID (var1) — the same id Block.Actors lists and the same one the port
+        /// is named after. A card the block does not cite falls back to Out.</para></summary>
+        void ResolveCharacterPort(string cardId);
     }
 
-    /// <summary>Context for CHOICE block handlers.</summary>
+    /// <summary>What a CHOICE handler gets.</summary>
     public interface IChoiceContext : IBaseBlockContext
     {
-        /// <summary>All choices with optional visibility tags. When OnResolveCondition() is configured,
-        /// each choice is tagged Visible = true/false. Filter with <c>choices.Where(c => c.Visible != false)</c>.
-        /// Without a filter, Visible is null and all choices pass.</summary>
-        IReadOnlyList<RuntimeChoiceItem> Choices { get; }
+        /// <summary>EVERY option of the block, tagged. Not a shortened list.
+        /// <para>With OnResolveCondition installed each carries Visible = true/false; without one it
+        /// is null — unknown, not hidden. Show the offered ones with
+        /// <c>options.Where(o =&gt; o.Visible != false)</c>, or keep the rest to grey them out.</para></summary>
+        IReadOnlyList<RuntimeChoiceItem> Options { get; }
 
-        /// <summary>Select a choice by UUID. The engine follows the matching port.</summary>
-        void SelectChoice(string choiceUuid);
+        /// <summary>Pick an option by its id (C1). That id is also the port the flow leaves by.</summary>
+        void SelectChoice(string optionId);
     }
 
-    /// <summary>Context for CONDITION block handlers.</summary>
+    /// <summary>What a CONDITION handler gets.</summary>
     public interface IConditionContext : IBaseBlockContext
     {
-        /// <summary>Resolve the condition. Accepts bool (legacy), int (switch), or List&lt;int&gt; (dispatcher).</summary>
-        void Resolve(object result);
+        /// <summary>Override the exit port. Takes a PORT NAME: "out", "default", or a case port (K1).
+        /// <para>v1 took bool | int | List&lt;int&gt; — three shapes for one method, the third being
+        /// the dispatcher. Both are gone: a condition picks one path.</para></summary>
+        void Resolve(string port);
 
-        /// <summary>Pre-evaluated condition groups with PortIndex and Result (when resolver is installed).</summary>
-        IReadOnlyList<RuntimeConditionGroup>? ConditionGroups { get; }
+        /// <summary>The block's cases, each with its port and its pre-evaluated Result.</summary>
+        IReadOnlyList<RuntimeConditionCase> Cases { get; }
     }
 
-    /// <summary>Context for ACTION block handlers.</summary>
+    /// <summary>What an ACTION handler gets.</summary>
     public interface IActionContext : IBaseBlockContext
     {
-        /// <summary>Mark action as succeeded. Engine follows the "then" port.</summary>
+        /// <summary>The calls the block asks the game to run, in order, with their arguments BY NAME.</summary>
+        IReadOnlyList<ActionCall> Calls { get; }
+
+        /// <summary>The calls went through. The flow leaves by "then".</summary>
         void Resolve();
 
-        /// <summary>Mark action as failed. Engine follows the "catch" port (fallback "then" if no catch port exists).</summary>
+        /// <summary>A call failed. The flow leaves by "catch", or by "then" when no error branch was drawn.</summary>
         void Reject(object? error);
     }
 
@@ -640,7 +667,7 @@ namespace LsdeDialogEngine
     public class ValidateNextBlockContext
     {
         /// <summary>Character resolved for this block, or null if none.</summary>
-        public BlockCharacter? Character { get; set; }
+        public Card? Character { get; set; }
     }
 
     /// <summary>Arguments for OnValidateNextBlock handler.
@@ -738,34 +765,34 @@ namespace LsdeDialogEngine
         /// <summary>Override the global OnSceneExit for this scene.</summary>
         void OnExit(SceneLifecycleHandler handler);
 
-        /// <summary>Override a specific block by UUID. Takes highest priority over type handlers.</summary>
-        void OnBlock(string blockUuid, BlockHandler<BlueprintBlock, IBaseBlockContext> handler);
+        /// <summary>Override a specific block by id. Takes highest priority over type handlers.</summary>
+        void OnBlock(string blockId, BlockHandler<BlueprintBlock, IBaseBlockContext> handler);
 
-        /// <summary>Override a specific DIALOG block by UUID (type-safe).</summary>
-        void OnDialogId(string blockUuid, BlockHandler<DialogBlock, IDialogContext> handler);
-        /// <summary>Override a specific CHOICE block by UUID (type-safe).</summary>
-        void OnChoiceId(string blockUuid, BlockHandler<ChoiceBlock, IChoiceContext> handler);
-        /// <summary>Override a specific CONDITION block by UUID (type-safe).</summary>
-        void OnConditionId(string blockUuid, BlockHandler<ConditionBlock, IConditionContext> handler);
-        /// <summary>Override a specific ACTION block by UUID (type-safe).</summary>
-        void OnActionId(string blockUuid, BlockHandler<ActionBlock, IActionContext> handler);
+        /// <summary>Override a specific DIALOG block by id (type-safe).</summary>
+        void OnDialogId(string blockId, BlockHandler<BlueprintBlock, IDialogContext> handler);
+        /// <summary>Override a specific CHOICE block by id (type-safe).</summary>
+        void OnChoiceId(string blockId, BlockHandler<BlueprintBlock, IChoiceContext> handler);
+        /// <summary>Override a specific CONDITION block by id (type-safe).</summary>
+        void OnConditionId(string blockId, BlockHandler<BlueprintBlock, IConditionContext> handler);
+        /// <summary>Override a specific ACTION block by id (type-safe).</summary>
+        void OnActionId(string blockId, BlockHandler<BlueprintBlock, IActionContext> handler);
 
         /// <summary>Override all DIALOG blocks for this scene (Tier 2).</summary>
-        void OnDialog(BlockHandler<DialogBlock, IDialogContext> handler);
+        void OnDialog(BlockHandler<BlueprintBlock, IDialogContext> handler);
 
         /// <summary>Override all CHOICE blocks for this scene (Tier 2).</summary>
-        void OnChoice(BlockHandler<ChoiceBlock, IChoiceContext> handler);
+        void OnChoice(BlockHandler<BlueprintBlock, IChoiceContext> handler);
 
         /// <summary>Override all CONDITION blocks for this scene (Tier 2).</summary>
-        void OnCondition(BlockHandler<ConditionBlock, IConditionContext> handler);
+        void OnCondition(BlockHandler<BlueprintBlock, IConditionContext> handler);
 
         /// <summary>Override all ACTION blocks for this scene (Tier 2).</summary>
-        void OnAction(BlockHandler<ActionBlock, IActionContext> handler);
+        void OnAction(BlockHandler<BlueprintBlock, IActionContext> handler);
 
         /// <summary>Get the block currently being executed, or null if scene is not running.</summary>
         BlueprintBlock? GetCurrentBlock();
 
-        /// <summary>Get UUIDs of all blocks visited so far, in order.</summary>
+        /// <summary>Ids of every block visited so far, in order.</summary>
         IReadOnlyCollection<string> GetVisitedBlocks();
 
         /// <summary>Check if the scene flow is currently active.</summary>
@@ -777,17 +804,19 @@ namespace LsdeDialogEngine
         /// <summary>Get detailed info for all currently running async tracks.</summary>
         IReadOnlyList<TrackInfo> GetTrackInfos();
 
-        /// <summary>Get the full choice history. Keys are block UUIDs, values are arrays of selected choice UUIDs.</summary>
+        /// <summary>Get the full choice history. Keys are block ids, values are the option ids picked there.</summary>
         IReadOnlyDictionary<string, IReadOnlyList<string>> GetChoiceHistory();
 
-        /// <summary>Get the choice(s) selected at a specific block. Returns null if block never visited as choice.</summary>
-        IReadOnlyList<string>? GetChoice(string blockUuid);
+        /// <summary>Get the choice(s) selected at a specific block. Null when that block was never reached.</summary>
+        IReadOnlyList<string>? GetChoice(string blockId);
 
-        /// <summary>Evaluate a condition. Handles choice: conditions via internal choice history. Returns false for non-choice conditions.</summary>
-        bool EvaluateCondition(ExportCondition condition);
+        /// <summary>Answer one comparison. A test on the reserved "choice" dictionary is answered
+        /// from this scene's own history; anything else goes to the game's resolver, and is false
+        /// when none is installed.</summary>
+        bool EvaluateCondition(ConditionTest test);
 
         /// <summary>Override character resolution for this scene. Defaults to engine-level resolver.</summary>
-        void OnResolveCharacter(Func<List<BlockCharacter>, BlockCharacter?> resolver);
+        void OnResolveCharacter(Func<List<Card>, Card?> resolver);
     }
 
     // ─── Dialogue Engine Interface ─────────────────────────────────────────────
@@ -804,14 +833,12 @@ namespace LsdeDialogEngine
 
         /// <summary>Install a unified condition evaluator for both choice visibility and condition block pre-evaluation.
         /// The engine handles choice: conditions internally via choice history — this callback evaluates game-state conditions only.</summary>
-        void OnResolveCondition(Func<ExportCondition, bool> evaluator);
+        void OnResolveCondition(Func<ConditionTest, bool> evaluator);
 
-        /// <summary>Install a condition evaluator for choice visibility tagging.</summary>
-        [Obsolete("Use OnResolveCondition() instead.")]
-        void SetChoiceFilter(Func<ExportCondition, bool> evaluator);
-
-        /// <summary>Register a global character resolver. Called for every block with Metadata.Characters. Default: first character.</summary>
-        void OnResolveCharacter(Func<List<BlockCharacter>, BlockCharacter?> resolver);
+        /// <summary>Which actor of a block is the one speaking. Called for every block that cites
+        /// actors; the whole cast is passed, in file order. Defaults to the first — because a
+        /// default has to pick something, not because the format says the first one speaks.</summary>
+        void OnResolveCharacter(Func<List<Card>, Card?> resolver);
 
         /// <summary>Register a handler called before each block to validate it.</summary>
         void OnValidateNextBlock(ValidateNextBlockHandler handler);
@@ -823,16 +850,17 @@ namespace LsdeDialogEngine
         void OnBeforeBlock(BeforeBlockHandler handler);
 
         /// <summary>Register a global handler for DIALOG blocks. May return a cleanup function.</summary>
-        void OnDialog(BlockHandler<DialogBlock, IDialogContext> handler);
+        void OnDialog(BlockHandler<BlueprintBlock, IDialogContext> handler);
 
-        /// <summary>Register a global handler for CHOICE blocks. Choices are tagged with Visible when SetChoiceFilter() is configured.</summary>
-        void OnChoice(BlockHandler<ChoiceBlock, IChoiceContext> handler);
+        /// <summary>Register a global handler for CHOICE blocks. Every option is handed over, tagged with Visible when OnResolveCondition is installed.</summary>
+        void OnChoice(BlockHandler<BlueprintBlock, IChoiceContext> handler);
 
-        /// <summary>Register a global handler for CONDITION blocks. The developer MUST handle evaluation.</summary>
-        void OnCondition(BlockHandler<ConditionBlock, IConditionContext> handler);
+        /// <summary>Register a global handler for CONDITION blocks. Optional once OnResolveCondition
+        /// is installed: the engine already knows the exit port, so this becomes a log or override hook.</summary>
+        void OnCondition(BlockHandler<BlueprintBlock, IConditionContext> handler);
 
         /// <summary>Register a global handler for ACTION blocks. The developer MUST handle execution.</summary>
-        void OnAction(BlockHandler<ActionBlock, IActionContext> handler);
+        void OnAction(BlockHandler<BlueprintBlock, IActionContext> handler);
 
         /// <summary>Register a handler called when any scene starts.</summary>
         void OnSceneEnter(SceneLifecycleHandler handler);
@@ -840,8 +868,11 @@ namespace LsdeDialogEngine
         /// <summary>Register a handler called when any scene ends (natural or cancelled).</summary>
         void OnSceneExit(SceneLifecycleHandler handler);
 
-        /// <summary>Create a scene handle. Does NOT start the flow — call handle.Start().</summary>
-        ISceneHandle Scene(string sceneId);
+        /// <summary>Open a scene by its PATH (reactor_breach) or by the id that survives a rename
+        /// (sc_u0vqg2g8). Does NOT start the flow — call handle.Start().
+        /// <para>Take the id wherever the reference is stored outside the payload: a Unity asset, a
+        /// save file, a database row. The path changes the day someone renames the scene.</para></summary>
+        ISceneHandle Scene(string sceneRef);
 
         /// <summary>Stop all active scenes.</summary>
         void Stop();
@@ -855,48 +886,46 @@ namespace LsdeDialogEngine
         /// <summary>Get the current block of every active scene.</summary>
         List<BlueprintBlock> GetCurrentBlocks();
 
-        /// <summary>Get connections for a scene.</summary>
-        List<BlueprintConnection> GetSceneConnections(string sceneId);
+        /// <summary>Every wire INSIDE a scene, flattened so each carries the block it leaves.
+        /// <para>Graph inspection only. It has never had anything to do with going from one scene
+        /// to another: a wire has never crossed a scene in any version of the format.</para></summary>
+        List<BlueprintConnection> GetSceneConnections(string sceneRef);
     }
 
     // ─── Port Resolution Types ──────────────────────────────────────────────────
 
-    /// <summary>Input data for port resolution. The block's Type determines the routing rules.</summary>
+    /// <summary>What ResolvePort needs to pick the wires to follow.</summary>
     public class PortResolutionInput
     {
-        /// <summary>The block whose output port is being resolved.</summary>
-        public BlueprintBlock Block { get; set; } = null!;
+        /// <summary>The block being left. Its Type picks the routing rule.</summary>
+        public BlueprintBlock Block { get; set; } = new BlueprintBlock();
 
-        /// <summary>All outgoing connections from this block.</summary>
-        public List<BlueprintConnection> Connections { get; set; } =
-            new List<BlueprintConnection>();
+        /// <summary>The wires it carries — Block.Next, straight off the block.</summary>
+        public List<Link> Links { get; set; } = new List<Link>();
 
-        /// <summary>CHOICE blocks only — UUID of the selected choice.</summary>
-        public string? SelectedChoiceUuid { get; set; }
+        /// <summary>CHOICE only: the option the player picked. Its id IS its port (C1…).</summary>
+        public string? SelectedOptionId { get; set; }
 
-        /// <summary>CONDITION blocks only — bool (legacy), int (switch), or List&lt;int&gt; (dispatcher).</summary>
-        public object? ConditionResult { get; set; }
+        /// <summary>CONDITION only: the port its cases picked — "out", "default", or K1….</summary>
+        public string? ConditionPort { get; set; }
 
-        /// <summary>ACTION blocks only — if true, resolver looks for "catch" port first.</summary>
+        /// <summary>ACTION only: true when a call failed, so "catch" is tried before "then".</summary>
         public bool? ActionRejected { get; set; }
 
-        /// <summary>DIALOG blocks with PortPerCharacter — character index.</summary>
-        public int? CharacterPortIndex { get; set; }
+        /// <summary>DIALOG with PortPerCharacter: the CARD ID of the speaking actor, never an index.</summary>
+        public string? ActorPort { get; set; }
     }
 
-    /// <summary>Result of port resolution — all matching connections.</summary>
+    /// <summary>The wires to follow. The traversal decides which is the main track.</summary>
     public class PortResolutionResult
     {
-        public List<BlueprintConnection> Connections { get; }
+        public List<Link> Links { get; }
 
-        public PortResolutionResult(List<BlueprintConnection> connections)
+        public PortResolutionResult(List<Link> links)
         {
-            Connections = connections;
+            Links = links;
         }
 
-        private static readonly PortResolutionResult _none = new PortResolutionResult(
-            new List<BlueprintConnection>()
-        );
-        public static PortResolutionResult None => _none;
+        public static readonly PortResolutionResult None = new PortResolutionResult(new List<Link>());
     }
 }

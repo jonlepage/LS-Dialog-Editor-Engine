@@ -28,5 +28,5 @@ handler の詳細な実装については、[Block Types](./block-types) と [Ha
 
 - **`next()` はリモコンです。** 高速ダイアログのために即座に呼び出すか、アニメーションが完了するまで保持します。engine は待機します — 時間の概念を持ちません。
 - **クリーンアップ関数が後片付けします。** どの handler からでも関数を返せば、engine が次の block に移る時に呼び出します。UI の非表示、オーディオの停止、ノードの解放に最適です。
-- **`onBeforeBlock` が delay を処理します。** engine は `nativeProperties.delay` を強制しません — `onBeforeBlock` がそれを読み取り、タイマー後に `resolve()` を呼び出します。完全な制御権があります。
+- **`onBeforeBlock` が delay を処理します。** engine は `props.delay` を強制しません — `onBeforeBlock` がそれを読み取り、タイマー後に `resolve()` を呼び出します。完全な制御権があります。
 - **async track は並列フローです。** カットシーンでダイアログとカメラ移動を同時に行う場合、エディタで `isAsync` マークされた block は独立した track で実行されます。

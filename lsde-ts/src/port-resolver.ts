@@ -1,124 +1,119 @@
 // LSDE Dialog Engine — Port resolution (critical algorithm)
-// Must be identical across all runtimes.
+//
+// This function decides where the flow goes next, and it is the one piece of the engine that must
+// behave identically in all four runtimes — a divergence here does not crash, it sends a player
+// down the wrong branch.
+//
+// It routes on PORT NAMES. In v1 it routed on `fromPortIndex`, a position in a list, and that is
+// the single change that broke the loudest: a v1 engine on a v2 payload found no connection at all
+// on a dialog with per-character ports, on the true branch of a condition, on every switch case.
+// The scene stopped where the player expected a branch, and nothing was logged.
+//
+// The ports, per block type:
+//
+//   dialog     `out`, or one port per actor CARD ID with portPerCharacter — `out` is the fallback
+//   choice     the picked option's id (C1…) — there is no `out` on a choice
+//   condition  `out` (true) and `default` (false), or K1… per case with portPerCase
+//   action     `then`, and `catch` when a call failed
+//   note       never dispatched; the traversal steps over it
+//
+// The block decides WHICH port; this file only finds the wires on it. A port the designer left
+// unwired resolves to nothing, and nothing is a legitimate end of flow — `default` is the fallback
+// for "no case matched", not for "that exit has no wire".
 
-import type { PortResolutionInput, PortResolutionResult, BlueprintConnection } from './types.js';
+import type { PortResolutionInput, PortResolutionResult, Link } from './types.js';
+import { BlockType, Ports } from './types.js';
 
-const NONE: PortResolutionResult = { connections: [] };
+const NONE: PortResolutionResult = { links: [] };
 
 /**
- * Determine which outgoing connections to follow based on block type and context.
- * Returns ALL matching connections — the caller decides which are main vs async tracks.
+ * Pick the outgoing links to follow, given a block and what happened while it ran.
+ *
+ * Returns **every** matching link. Deciding which one is the main track and which run in parallel
+ * belongs to the traversal, not here — this function is pure and knows nothing about tracks.
  */
 export function resolvePort( input: PortResolutionInput ): PortResolutionResult {
-	const { block, connections } = input;
+	const { block, links } = input;
 
 	switch ( block.type ) {
 
-		case 'DIALOG':
-			return resolveDialogPort( connections, input.characterPortIndex );
+		case BlockType.Dialog:
+			return resolveDialogPort( links, input.actorPort );
 
-		case 'CHOICE':
-			return resolveChoicePort( connections, input.selectedChoiceUuid );
+		case BlockType.Choice:
+			return resolveChoicePort( links, input.selectedOptionId );
 
-		case 'CONDITION':
-			return resolveConditionPort( connections, input.conditionResult );
+		case BlockType.Condition:
+			return resolveConditionPort( links, input.conditionPort );
 
-		case 'ACTION':
-			return resolveActionPort( connections, input.actionRejected );
+		case BlockType.Action:
+			return resolveActionPort( links, input.actionRejected );
 
-		case 'NOTE':
-			return { connections };
+		case BlockType.Note:
+			return { links };
+
+		default:
+			return NONE;
 	}
 }
 
 /**
- * DIALOG port resolution:
- * - Without portPerCharacter: all connections with `fromPort === 'out'`.
- * - With portPerCharacter: all connections with `fromPortIndex === characterIndex`.
- *   Fallback to `fromPort === 'out'` ("Else / Undefined").
+ * A dialog leaves by `out`.
+ *
+ * With `portPerCharacter`, it grows one port per actor instead, named by the actor's CARD ID
+ * (`var1`, `var2`) — the same id `block.actors` lists. `out` stays as the "else" exit: a dialog
+ * whose actor has no port of its own still goes somewhere.
  */
-function resolveDialogPort(
-	connections: BlueprintConnection[],
-	characterPortIndex: number | undefined,
-): PortResolutionResult {
-	if ( characterPortIndex !== undefined ) {
-		const matches = connections.filter( c => c.fromPortIndex === characterPortIndex );
-		if ( matches.length > 0 ) return { connections: matches };
-		// Fallback to 'out' when character port index not found
+function resolveDialogPort( links: Link[], actorPort: string | undefined ): PortResolutionResult {
+	if ( actorPort !== undefined ) {
+		const matches = onPort( links, actorPort );
+		if ( matches.length > 0 ) return { links: matches };
+		// The actor has no port of its own — fall through to `out`.
 	}
-	return filterByFromPort( connections, 'out' );
-}
-
-function resolveChoicePort(
-	connections: BlueprintConnection[],
-	selectedChoiceUuid: string | undefined,
-): PortResolutionResult {
-	if ( !selectedChoiceUuid ) return NONE;
-	return filterByFromPort( connections, selectedChoiceUuid );
+	return { links: onPort( links, Ports.Out ) };
 }
 
 /**
- * CONDITION port resolution:
- * - `boolean` (legacy): true → fromPortIndex 0, false → fromPortIndex 1.
- * - `number[]` (dispatcher): default/false port + all matching case ports by fromPortIndex.
- * - `number >= 0` (switch match): single case port by fromPortIndex.
- * - `number < 0` (switch no-match): default/false port by fromPort name.
+ * A choice leaves by the id of the option the player picked — `C1`, `C2`. That id IS the port.
+ *
+ * There is no `out` and no fallback: until an option is picked there is nowhere to go, and an
+ * option the designer left unwired ends the flow. Both are the drawing, not an error.
  */
-function resolveConditionPort(
-	connections: BlueprintConnection[],
-	conditionResult: boolean | number | number[] | undefined,
-): PortResolutionResult {
-	if ( conditionResult === undefined ) return NONE;
-
-	// boolean legacy: true → index 0, false → index 1
-	if ( typeof conditionResult === 'boolean' ) {
-		const idx = conditionResult ? 0 : 1;
-		return { connections: connections.filter( c => c.fromPortIndex === idx ) };
-	}
-
-	// number[]: dispatcher — all matched case ports + default
-	if ( Array.isArray( conditionResult ) ) {
-		const indices = new Set( conditionResult );
-		const defaultConns = connections.filter( c =>
-			c.fromPort === 'default' || c.fromPort === 'false',
-		);
-		const matchedConns = connections.filter( c =>
-			c.fromPortIndex !== undefined && indices.has( c.fromPortIndex ),
-		);
-		// default FIRST → becomes mainConnection (non-async) in advanceToNextBlock
-		// matched after → become asyncConnections
-		return { connections: [ ...defaultConns, ...matchedConns ] };
-	}
-
-	// number >= 0: switch mode — single case match
-	if ( conditionResult >= 0 ) {
-		return { connections: connections.filter( c => c.fromPortIndex === conditionResult ) };
-	}
-
-	// number < 0 (-1): no match → default/false port
-	return { connections: connections.filter( c =>
-		c.fromPort === 'default' || c.fromPort === 'false',
-	) };
+function resolveChoicePort( links: Link[], selectedOptionId: string | undefined ): PortResolutionResult {
+	if ( !selectedOptionId ) return NONE;
+	return { links: onPort( links, selectedOptionId ) };
 }
 
 /**
- * ACTION port resolution:
- * - Success: all connections with `fromPort === 'then'`
- * - Reject: `fromPort === 'catch'`, fallback to `then`
+ * A condition leaves by the port its cases picked — `out` or `default` in if mode, `K1`… or
+ * `default` with `portPerCase`.
+ *
+ * Which port that is was decided before we got here, by the condition evaluator: it is the only
+ * thing that knows the two modes and the game's answers. This function does not re-derive it.
+ * `undefined` means nothing was decided — no resolver installed, no handler call — so nowhere
+ * to go.
  */
-function resolveActionPort(
-	connections: BlueprintConnection[],
-	actionRejected: boolean | undefined,
-): PortResolutionResult {
+function resolveConditionPort( links: Link[], conditionPort: string | undefined ): PortResolutionResult {
+	if ( conditionPort === undefined ) return NONE;
+	return { links: onPort( links, conditionPort ) };
+}
+
+/**
+ * An action leaves by `then` once its calls went through, and by `catch` when one failed.
+ *
+ * A failure with no `catch` wired falls back to `then`: the designer who drew no error branch
+ * meant the flow to carry on, and stopping the scene on an unhandled failure would strand the
+ * player mid-dialogue.
+ */
+function resolveActionPort( links: Link[], actionRejected: boolean | undefined ): PortResolutionResult {
 	if ( actionRejected ) {
-		const catchPorts = connections.filter( c => c.fromPort === 'catch' );
-		if ( catchPorts.length > 0 ) return { connections: catchPorts };
-		// Fallback to 'then' on reject when no catch port
+		const caught = onPort( links, Ports.Catch );
+		if ( caught.length > 0 ) return { links: caught };
+		// No error branch drawn — carry on through `then`.
 	}
-	return filterByFromPort( connections, 'then' );
+	return { links: onPort( links, Ports.Then ) };
 }
 
-function filterByFromPort( connections: BlueprintConnection[], port: string ): PortResolutionResult {
-	const matches = connections.filter( c => c.fromPort === port );
-	return { connections: matches };
+function onPort( links: Link[], port: string ): Link[] {
+	return links.filter( link => link.port === port );
 }

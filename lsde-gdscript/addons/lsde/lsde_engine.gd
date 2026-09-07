@@ -10,19 +10,34 @@ var _global_registry: LsdeHandlerRegistry = LsdeHandlerRegistry.new()
 var _locale: String = ""
 var _active_scenes: Dictionary = {}
 var _initialized: bool = false
-## Character resolution callback. Default: first character in the list.
-var _resolve_character: Callable = func(characters: Array) -> Variant:
-	return characters[0] if characters.size() > 0 else null
+## Which actor of a block is the one speaking. Defaults to the first.
+##
+## LSDE deliberately refuses to say what the order of `actors` means — whether it is who speaks or
+## who is present is a decision each game makes. The default picks the first because a default has
+## to pick something, not because the format says so.
+var _resolve_character: Callable = func(actors: Array) -> Variant:
+	return actors[0] if actors.size() > 0 else null
 ## Unified condition resolver for choice visibility and condition block pre-evaluation.
 var _condition_resolver: Callable
 
 # ─── Initialization ───────────────────────────────────────────────────────
 
-## Validate blueprint data, build internal graph, return diagnostic report.
+## Load a payload and report what is wrong with it.
+##
+## Takes one export in `data`, or the several files of a per-scene one in `files` — each of those
+## carries the whole header, so they are folded into a single payload after checking they come from
+## one export.
+##
+## The engine is initialized only when there are no errors: a payload it cannot read leaves it
+## unusable rather than half-loaded.
 func init(options: Dictionary) -> Dictionary:
 	var report: Dictionary = LsdeValidator.validate_blueprint(options)
 	if report["errors"].size() == 0:
-		_graph = LsdeGraph.new(options["data"])
+		var payload: Variant = options.get("data")
+		var files: Variant = options.get("files")
+		if files is Array and not files.is_empty():
+			payload = LsdeValidator.merge_payloads(files)["data"]
+		_graph = LsdeGraph.new(payload)
 		_initialized = true
 	return report
 
@@ -38,8 +53,8 @@ func set_locale(locale: String) -> void:
 
 # ─── Character resolution ────────────────────────────────────────────────
 
-## Register a global character resolver. Called for every block with metadata.characters.
-## Default: returns the first character in the list.
+## Which actor of a block is the one speaking. Called for every block that cites actors; the whole
+## cast is passed, in file order, already resolved through the export's cards table.
 func on_resolve_character(resolver: Callable) -> void:
 	_resolve_character = resolver
 
@@ -51,9 +66,6 @@ func on_resolve_character(resolver: Callable) -> void:
 func on_resolve_condition(evaluator: Callable) -> void:
 	_condition_resolver = evaluator
 
-## @deprecated Use on_resolve_condition() instead.
-func set_choice_filter(evaluator: Callable) -> void:
-	_condition_resolver = evaluator
 
 # ─── Validation ───────────────────────────────────────────────────────────
 
@@ -78,7 +90,7 @@ func on_dialog(handler: Callable) -> void:
 	_global_registry.dialog_handler = handler
 
 ## Register a global handler for CHOICE blocks.
-## All choices are provided, tagged with visible when set_choice_filter() is configured.
+## Every option is handed over, tagged with visible when on_resolve_condition is installed.
 func on_choice(handler: Callable) -> void:
 	_global_registry.choice_handler = handler
 
@@ -102,18 +114,33 @@ func on_scene_exit(handler: Callable) -> void:
 
 # ─── Scene handles ────────────────────────────────────────────────────────
 
-## Create a scene handle. Does NOT start the flow — call handle.start().
-func scene(scene_id: String) -> LsdeSceneHandle:
+## Open a scene by its PATH (reactor_breach) or by the id that survives a rename (sc_u0vqg2g8).
+## Does NOT start the flow — call handle.start().
+##
+## Take the id wherever the reference is stored OUTSIDE the payload — a resource, a save file, a
+## database row. The path is what a writer reads and what builds the i18n keys, but it changes the
+## day someone renames the scene, and a stored path then resolves to nothing.
+func scene(scene_ref: String) -> LsdeSceneHandle:
 	assert(_initialized and _graph != null, "Engine not initialized. Call init() first.")
-	var scene_graph: Variant = _graph.get_scene_graph(scene_id)
-	assert(scene_graph != null, "Scene \"%s\" not found." % scene_id)
+	var scene_graph: Variant = _graph.get_scene_graph(scene_ref)
+	assert(scene_graph != null, "Scene \"%s\" not found." % scene_ref)
+
+	var graph := _graph
+
+	# Only erase if the entry still points at the handle that is ending. Nothing stops a game from
+	# opening the same scene twice - a hub revisited while a first pass is parked on a handler - and
+	# a blind erase then dropped the LIVE one from the registry: the engine reported itself idle
+	# while a scene was still running, and stop() no longer reached it.
+	var on_ended: Callable = func(h: Variant) -> void:
+		if _active_scenes.get(scene_ref) == h:
+			_active_scenes.erase(scene_ref)
 
 	var handle: LsdeSceneHandle = LsdeSceneHandle.new(scene_graph, _global_registry, {
-		"on_scene_started": func(h: Variant) -> void: _active_scenes[scene_id] = h,
-		"on_scene_ended": func(_h: Variant) -> void: _active_scenes.erase(scene_id),
+		"on_scene_started": func(h: Variant) -> void: _active_scenes[scene_ref] = h,
+		"on_scene_ended": on_ended,
 		"get_resolve_character": func() -> Callable: return _resolve_character,
 		"get_condition_resolver": func() -> Callable: return _condition_resolver,
-		"get_locale": func() -> String: return _locale,
+		"get_card": func(card_id: String) -> Variant: return graph.get_card(card_id),
 	})
 	return handle
 
@@ -142,8 +169,11 @@ func get_current_blocks() -> Array:
 			blocks.append(block)
 	return blocks
 
-## Get connections for a scene.
-func get_scene_connections(scene_id: String) -> Array:
+## Every wire INSIDE a scene, flattened so each carries the block it leaves.
+##
+## Graph inspection only. It has never had anything to do with going from one scene to another: a
+## wire has never crossed a scene in any version of the format.
+func get_scene_connections(scene_ref: String) -> Array:
 	if _graph == null:
 		return []
-	return _graph.get_scene_connections(scene_id)
+	return _graph.get_scene_connections(scene_ref)

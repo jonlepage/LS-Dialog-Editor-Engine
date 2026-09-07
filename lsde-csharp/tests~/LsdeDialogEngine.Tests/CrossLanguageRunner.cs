@@ -1,306 +1,196 @@
-// Cross-language test runner — reads JSON test specs and executes against the C# engine.
-// C# port of cross-language-runner.test.ts
+// Cross-language conformance runner — reads the shared JSON specs and drives the C# engine.
+//
+// tests/*.json is the contract: the same input, the same expected output, for all four runtimes.
+// The TypeScript runner is the reference this one is written against. A behaviour that only holds
+// in one runtime is a divergence waiting to be found by a player.
 
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Xunit;
+using LsdeDialogEngine.Json;
 
 namespace LsdeDialogEngine.Tests
 {
-    // ─── JSON Deserialization ─────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Polymorphic JSON converter for BlueprintBlock — reads the "type" field
-    /// and deserializes to the correct subclass (DialogBlock, ChoiceBlock, etc.).
-    /// </summary>
-    internal class BlueprintBlockConverter : JsonConverter<BlueprintBlock>
-    {
-        public override bool CanConvert(Type typeToConvert) => typeToConvert == typeof(BlueprintBlock);
-
-        public override BlueprintBlock Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        {
-            using var doc = JsonDocument.ParseValue(ref reader);
-            var root = doc.RootElement;
-
-            if (!root.TryGetProperty("type", out var typeProp))
-                throw new JsonException("BlueprintBlock missing 'type' field");
-
-            var typeStr = typeProp.GetString();
-            var json = root.GetRawText();
-            return typeStr switch
-            {
-                "DIALOG" => JsonSerializer.Deserialize<DialogBlock>(json, options)!,
-                "CHOICE" => JsonSerializer.Deserialize<ChoiceBlock>(json, options)!,
-                "CONDITION" => JsonSerializer.Deserialize<ConditionBlock>(json, options)!,
-                "ACTION" => JsonSerializer.Deserialize<ActionBlock>(json, options)!,
-                "NOTE" => JsonSerializer.Deserialize<NoteBlock>(json, options)!,
-                _ => throw new JsonException($"Unknown block type: {typeStr}")
-            };
-        }
-
-        public override void Write(Utf8JsonWriter writer, BlueprintBlock value, JsonSerializerOptions options)
-        {
-            JsonSerializer.Serialize(writer, value, value.GetType(), options);
-        }
-    }
-
     internal static class TestLoader
     {
-        private static readonly JsonSerializerOptions JsonOptions = new()
+        private static readonly JsonSerializerOptions JsonOptions = CreateOptions();
+
+        private static JsonSerializerOptions CreateOptions()
         {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            Converters = { new JsonStringEnumConverter(), new BlockPropertyValueConverter(), new BlueprintBlockConverter() }
-        };
+            var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+            options.Converters.Add(new LooseValueConverter());
+            // Same tolerance as the shipped loader: a v1 payload wrote "version": "1.0.0", and the
+            // parse has to survive long enough for the validator to refuse it BY NAME.
+            options.Converters.Add(new TolerantVersionConverter());
+            return options;
+        }
 
         internal static TestFile LoadTestFile(string filename)
         {
-            var dir = Path.Combine(AppContext.BaseDirectory, "TestData");
-            var path = Path.Combine(dir, filename);
-            var json = File.ReadAllText(path);
-            return JsonSerializer.Deserialize<TestFile>(json, JsonOptions)
-                   ?? throw new Exception($"Failed to deserialize {filename}");
+            var path = FindTestsDirectory();
+            var raw = File.ReadAllText(Path.Combine(path, filename));
+            return JsonSerializer.Deserialize<TestFile>(raw, JsonOptions)
+                   ?? throw new InvalidOperationException($"Failed to read {filename}");
         }
-    }
 
-    /// <summary>Handles BlockProperty.Value and ExportAction.Params which are string|number|boolean.</summary>
-    internal class BlockPropertyValueConverter : JsonConverter<object>
-    {
-        public override bool CanConvert(Type typeToConvert) => typeToConvert == typeof(object);
-
-        public override object? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        private static string FindTestsDirectory()
         {
-            switch (reader.TokenType)
+            var dir = AppContext.BaseDirectory;
+            for (int i = 0; i < 10; i++)
             {
-                case JsonTokenType.String:
-                    return reader.GetString();
-                case JsonTokenType.Number:
-                    if (reader.TryGetInt64(out var l)) return (double)l;
-                    return reader.GetDouble();
-                case JsonTokenType.True:
-                    return true;
-                case JsonTokenType.False:
-                    return false;
-                case JsonTokenType.Null:
-                    return null;
-                case JsonTokenType.StartArray:
-                    var list = new List<object?>();
-                    while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
-                    {
-                        list.Add(Read(ref reader, typeof(object), options));
-                    }
-                    return list;
-                case JsonTokenType.StartObject:
-                    var dict = new Dictionary<string, object?>();
-                    while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
-                    {
-                        var key = reader.GetString()!;
-                        reader.Read();
-                        dict[key] = Read(ref reader, typeof(object), options);
-                    }
-                    return dict;
-                default:
-                    throw new JsonException($"Unexpected token {reader.TokenType}");
+                var candidate = Path.Combine(dir, "tests", "test-cases.json");
+                if (File.Exists(candidate)) return Path.Combine(dir, "tests");
+                var parent = Directory.GetParent(dir);
+                if (parent == null) break;
+                dir = parent.FullName;
             }
-        }
-
-        public override void Write(Utf8JsonWriter writer, object value, JsonSerializerOptions options)
-        {
-            JsonSerializer.Serialize(writer, value, options);
+            throw new InvalidOperationException("Could not find the shared tests/ directory.");
         }
     }
 
-    // ─── TestStateBridge ─────────────────────────────────────────────────────────
-
-    // TestStateBridge removed — replaced by handler-based API.
-    // The runner now registers all 4 mandatory handlers directly.
-
-    // ─── Mutable test state wrapper (for lambda capture) ─────────────────────────
-
-    internal class TestState
+    /// <summary>Turns each suite of a spec file into one xUnit case.</summary>
+    public abstract class SpecRunner
     {
-        public int StepIndex;
-        public int CleanupCalls;
-    }
-
-    // ─── Flow Tests ──────────────────────────────────────────────────────────────
-
-    public class CrossLanguageFlowTests
-    {
-        public static IEnumerable<object[]> TestCasesData()
+        protected static IEnumerable<object[]> CasesOf(string filename)
         {
-            return LoadCases("test-cases.json");
-        }
-
-        public static IEnumerable<object[]> PortRoutingData()
-        {
-            return LoadCases("test-port-routing.json");
-        }
-
-        private static IEnumerable<object[]> LoadCases(string filename)
-        {
-            var testFile = TestLoader.LoadTestFile(filename);
-            foreach (var suite in testFile.Suites)
+            var spec = TestLoader.LoadTestFile(filename);
+            foreach (var suite in spec.Suites)
             {
-                foreach (var tc in suite.Cases)
+                foreach (var testCase in suite.Cases)
                 {
-                    yield return new object[] { suite, tc, $"{suite.Id}/{tc.Id}" };
+                    yield return new object[] { filename, suite.Id, testCase.Id };
                 }
             }
         }
 
-        [Theory]
-        [MemberData(nameof(TestCasesData))]
-        public void FlowTest_TestCases(TestSuite suite, TestCase tc, string displayName)
+        protected static (TestSuite, TestCase) Find(string filename, string suiteId, string caseId)
         {
-            RunFlowTest(suite, tc);
+            var spec = TestLoader.LoadTestFile(filename);
+            var suite = spec.Suites.First(s => s.Id == suiteId);
+            var testCase = suite.Cases.First(c => c.Id == caseId);
+            return (suite, testCase);
         }
 
-        [Theory]
-        [MemberData(nameof(PortRoutingData))]
-        public void FlowTest_PortRouting(TestSuite suite, TestCase tc, string displayName)
+        /// <summary>
+        /// The game's answer to one comparison, from the suite's stateBridge.
+        /// <para>A test on the reserved "choice" dictionary never gets here — the engine answers
+        /// those from the history it kept during the scene.</para>
+        /// </summary>
+        protected static Func<ConditionTest, bool> MakeResolver(TestSuite suite)
         {
-            RunFlowTest(suite, tc);
+            var answers = suite.StateBridge?.Conditions ?? new Dictionary<string, bool>();
+            return test =>
+            {
+                var key = $"{test.Dict}.{test.Entry}";
+                var answer = answers.TryGetValue(key, out var known) ? known : true;
+                return test.Op == ConditionOperator.NotEquals ? !answer : answer;
+            };
         }
+    }
 
-        private static void RunFlowTest(TestSuite suite, TestCase tc)
+    public class FlowSpecTests : SpecRunner
+    {
+        public static IEnumerable<object[]> FlowCases() => CasesOf("test-cases.json");
+        public static IEnumerable<object[]> RoutingCases() => CasesOf("test-port-routing.json");
+
+        [Theory]
+        [MemberData(nameof(FlowCases))]
+        public void PlaysTheScene(string filename, string suiteId, string caseId)
+            => RunFlow(filename, suiteId, caseId);
+
+        [Theory]
+        [MemberData(nameof(RoutingCases))]
+        public void RoutesTheFlow(string filename, string suiteId, string caseId)
+            => RunFlow(filename, suiteId, caseId);
+
+        private static void RunFlow(string filename, string suiteId, string caseId)
         {
+            var (suite, testCase) = Find(filename, suiteId, caseId);
+
             var engine = new DialogueEngine();
             var report = engine.Init(new InitOptions { Data = suite.Blueprint });
             Assert.Empty(report.Errors);
 
             engine.SetLocale(suite.Locale ?? "en");
+            engine.OnResolveCondition(MakeResolver(suite));
 
-            // Install choice filter if the suite has condition config
-            var bridgeConfig = suite.StateBridge;
-            if (bridgeConfig?.Conditions != null)
+            var steps = testCase.Steps ?? new List<TestStep>();
+            int stepIndex = 0;
+            int cleanupCalls = 0;
+
+            // One handler per block type, consuming the steps in order. A block that is not the
+            // next expected step still reaches here — an async track, or a block the spec does not
+            // assert on — and simply advances.
+            Action? Dispatch(string blockType, BlueprintBlock block, IBaseBlockContext context, Action next)
             {
-                engine.SetChoiceFilter(cond =>
+                var step = stepIndex < steps.Count ? steps[stepIndex] : null;
+                bool isExpected = step != null
+                    && step.Expect.Type == blockType
+                    && (string.IsNullOrEmpty(step.Expect.BlockId) || step.Expect.BlockId == block.Id);
+
+                if (!isExpected)
                 {
-                    if (bridgeConfig.Conditions.TryGetValue(cond.Key, out var val))
-                        return val;
-                    return true;
-                });
+                    // Conditions route themselves from the resolver; an action has to say it
+                    // succeeded before "then" is followed.
+                    if (context is IActionContext ac) ac.Resolve();
+                    next();
+                    return null;
+                }
+
+                if (step!.Expect.Text != null)
+                {
+                    Assert.NotNull(block.Text);
+                    Assert.Equal(step.Expect.Text, block.Text![suite.Locale ?? "en"]);
+                }
+
+                if (step.Expect.VisibleOptionCount != null && context is IChoiceContext cc)
+                {
+                    var offered = cc.Options.Where(o => o.Visible != false).ToList();
+                    Assert.Equal(step.Expect.VisibleOptionCount!.Value, offered.Count);
+                }
+
+                stepIndex++;
+                ExecuteAction(step, context, next);
+                return () => { cleanupCalls++; };
             }
 
-            var steps = tc.Steps ?? new List<TestStep>();
-            var state = new TestState();
-
-            // All 4 handlers are mandatory — register them all
-            engine.OnDialog(args =>
-            {
-                return HandleStep("DIALOG", args.Block, args.Context, args.Next, steps, state);
-            });
-
-            engine.OnChoice(args =>
-            {
-                var step = steps.Count > state.StepIndex ? steps[state.StepIndex] : null;
-                if (step != null && step.Expect.Type == "CHOICE"
-                    && (step.Expect.BlockUuid == null || step.Expect.BlockUuid == args.Block.Uuid))
-                {
-                    if (step.Expect.VisibleChoiceCount.HasValue)
-                    {
-                        var visibleCount = args.Context.Choices.Count(c => c.Visible != false);
-                        Assert.Equal(step.Expect.VisibleChoiceCount.Value, visibleCount);
-                    }
-                }
-                return HandleStep("CHOICE", args.Block, args.Context, args.Next, steps, state);
-            });
-
-            engine.OnCondition(args =>
-            {
-                return HandleStep("CONDITION", args.Block, args.Context, args.Next, steps, state, suite);
-            });
-
-            engine.OnAction(args =>
-            {
-                return HandleStep("ACTION", args.Block, args.Context, args.Next, steps, state);
-            });
+            engine.OnDialog(a => Dispatch(BlockType.Dialog, a.Block, a.Context, a.Next));
+            engine.OnChoice(a => Dispatch(BlockType.Choice, a.Block, a.Context, a.Next));
+            engine.OnCondition(a => Dispatch(BlockType.Condition, a.Block, a.Context, a.Next));
+            engine.OnAction(a => Dispatch(BlockType.Action, a.Block, a.Context, a.Next));
 
             var handle = engine.Scene(suite.SceneId!);
-
             handle.Start();
 
-            // Verify END_OF_SCENE
-            Assert.False(handle.IsRunning());
+            // Every step the spec described must have been reached.
+            Assert.Equal(steps.Count, stepIndex);
+            Assert.Equal(testCase.ExpectedRunning == true, handle.IsRunning());
 
-            // Verify visited blocks
-            if (tc.ExpectedVisited != null)
+            if (testCase.ExpectedVisited != null)
             {
-                var engineVisited = new List<string>(handle.GetVisitedBlocks());
-                if (tc.OrderIndependent == true)
+                var visited = handle.GetVisitedBlocks().ToList();
+                if (testCase.OrderIndependent == true)
                 {
-                    engineVisited.Sort();
-                    var expected = new List<string>(tc.ExpectedVisited);
-                    expected.Sort();
-                    Assert.Equal(expected, engineVisited);
+                    Assert.Equal(testCase.ExpectedVisited.OrderBy(x => x).ToList(), visited.OrderBy(x => x).ToList());
                 }
                 else
                 {
-                    Assert.Equal(tc.ExpectedVisited, engineVisited);
+                    Assert.Equal(testCase.ExpectedVisited, visited);
                 }
             }
 
-            // Verify cleanup calls
-            if (tc.ExpectedCleanupCalls.HasValue)
+            if (testCase.ExpectedCleanupCalls != null)
             {
-                Assert.Equal(tc.ExpectedCleanupCalls.Value, state.CleanupCalls);
+                Assert.Equal(testCase.ExpectedCleanupCalls!.Value, cleanupCalls);
             }
         }
 
-        private static Action? HandleStep(
-            string blockType,
-            BlueprintBlock block,
-            IBaseBlockContext context,
-            Action next,
-            List<TestStep> steps,
-            TestState state,
-            TestSuite? suite = null)
+        private static void ExecuteAction(TestStep step, IBaseBlockContext context, Action next)
         {
-            var step = steps.Count > state.StepIndex ? steps[state.StepIndex] : null;
-
-            if (step != null && step.Expect.Type == blockType
-                && (step.Expect.BlockUuid == null || step.Expect.BlockUuid == block.Uuid))
-            {
-                state.StepIndex++;
-                ExecuteAction(step.Action, context, next);
-                return () => { state.CleanupCalls++; };
-            }
-            else
-            {
-                // Not the expected step — auto-advance (async track or passthrough)
-                if (blockType == "CONDITION" && context is IConditionContext condCtx)
-                {
-                    // Evaluate 2D condition groups using suite bridge config
-                    var condBlock = block as ConditionBlock;
-                    var groups = condBlock?.Conditions ?? new List<List<ExportCondition>>();
-                    Func<ExportCondition, bool> evaluator = cond =>
-                    {
-                        if (suite?.StateBridge?.Conditions != null
-                            && suite.StateBridge.Conditions.TryGetValue(cond.Key, out var val))
-                            return val;
-                        return true;
-                    };
-                    var result = ConditionEvaluator.EvaluateConditionGroups(
-                        groups, evaluator,
-                        condBlock?.NativeProperties?.EnableDispatcher == true);
-                    condCtx.Resolve(result);
-                }
-                else if (blockType == "ACTION" && context is IActionContext actCtx)
-                {
-                    actCtx.Resolve();
-                }
-                next();
-                // No cleanup for auto-advanced blocks
-                return null;
-            }
-        }
-
-        private static void ExecuteAction(StepAction? action, IBaseBlockContext context, Action next)
-        {
+            var action = step.Action;
             if (action == null) return;
 
             switch (action.Type)
@@ -309,11 +199,11 @@ namespace LsdeDialogEngine.Tests
                     next();
                     break;
                 case "selectChoice":
-                    ((IChoiceContext)context).SelectChoice(action.ChoiceUuid!);
+                    ((IChoiceContext)context).SelectChoice(action.OptionId!);
                     next();
                     break;
-                case "resolve":
-                    ((IConditionContext)context).Resolve(action.Value ?? true);
+                case "resolveCondition":
+                    ((IConditionContext)context).Resolve(action.Port!);
                     next();
                     break;
                 case "resolveAction":
@@ -325,74 +215,55 @@ namespace LsdeDialogEngine.Tests
                     next();
                     break;
                 case "resolveCharacterPort":
-                    ((IDialogContext)context).ResolveCharacterPort(action.CharacterName ?? action.Name ?? "");
+                    ((IDialogContext)context).ResolveCharacterPort(action.CardId!);
                     next();
                     break;
             }
         }
     }
 
-    // ─── Validation Tests ────────────────────────────────────────────────────────
-
-    public class CrossLanguageValidationTests
+    public class ValidationSpecTests : SpecRunner
     {
-        public static IEnumerable<object[]> ValidationData()
-        {
-            var testFile = TestLoader.LoadTestFile("test-init-validation.json");
-            foreach (var suite in testFile.Suites)
-            {
-                foreach (var tc in suite.Cases)
-                {
-                    yield return new object[] { suite, tc, $"{suite.Id}/{tc.Id}" };
-                }
-            }
-        }
+        public static IEnumerable<object[]> ValidationCases() => CasesOf("test-init-validation.json");
 
         [Theory]
-        [MemberData(nameof(ValidationData))]
-        public void ValidationTest(TestSuite suite, TestCase tc, string displayName)
+        [MemberData(nameof(ValidationCases))]
+        public void ReportsWhatItShould(string filename, string suiteId, string caseId)
         {
-            var engine = new DialogueEngine();
-            var report = engine.Init(new InitOptions { Data = suite.Blueprint });
+            var (suite, testCase) = Find(filename, suiteId, caseId);
+            var report = new DialogueEngine().Init(new InitOptions { Data = suite.Blueprint });
 
-            // Verify expected errors
-            if (tc.ExpectedErrors != null)
+            if (testCase.ExpectedErrors != null)
             {
-                var errorCodes = new List<string>();
-                foreach (var e in report.Errors) errorCodes.Add(e.Code);
-
-                foreach (var code in tc.ExpectedErrors)
+                var codes = report.Errors.Select(e => e.Code).ToList();
+                if (testCase.ExpectedErrors.Count == 0)
                 {
-                    Assert.Contains(code, errorCodes);
+                    Assert.Empty(codes);
                 }
-                if (tc.ExpectedErrors.Count == 0)
+                else
                 {
-                    Assert.Empty(report.Errors);
+                    foreach (var code in testCase.ExpectedErrors) Assert.Contains(code, codes);
                 }
             }
 
-            // Verify expected warnings
-            if (tc.ExpectedWarnings != null)
+            if (testCase.ExpectedWarnings != null)
             {
-                var warningCodes = new List<string>();
-                foreach (var w in report.Warnings) warningCodes.Add(w.Code);
-
-                foreach (var code in tc.ExpectedWarnings)
+                var codes = report.Warnings.Select(w => w.Code).ToList();
+                if (testCase.ExpectedWarnings.Count == 0)
                 {
-                    Assert.Contains(code, warningCodes);
+                    Assert.Empty(codes);
                 }
-                if (tc.ExpectedWarnings.Count == 0)
+                else
                 {
-                    Assert.Empty(report.Warnings);
+                    foreach (var code in testCase.ExpectedWarnings) Assert.Contains(code, codes);
                 }
             }
 
-            // Verify stats
-            if (tc.ExpectedStats != null)
+            if (testCase.ExpectedStats != null)
             {
-                Assert.Equal(tc.ExpectedStats.SceneCount, report.Stats.SceneCount);
-                Assert.Equal(tc.ExpectedStats.BlockCount, report.Stats.BlockCount);
-                Assert.Equal(tc.ExpectedStats.ConnectionCount, report.Stats.ConnectionCount);
+                Assert.Equal(testCase.ExpectedStats.SceneCount, report.Stats.SceneCount);
+                Assert.Equal(testCase.ExpectedStats.BlockCount, report.Stats.BlockCount);
+                Assert.Equal(testCase.ExpectedStats.ConnectionCount, report.Stats.ConnectionCount);
             }
         }
     }

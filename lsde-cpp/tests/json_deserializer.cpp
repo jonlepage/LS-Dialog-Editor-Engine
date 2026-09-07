@@ -1,41 +1,49 @@
 // JSON deserialization for test-only types.
-// Engine types are now in the public header: <lsde/json_loader.h>
+// Engine types come from the public header: <lsde/json_loader.h>
 
 #include "json_deserializer.h"
 
 namespace lsde::tests {
 
+namespace {
+
+std::optional<std::string> optString(const nlohmann::json& j, const char* key) {
+    auto it = j.find(key);
+    if (it == j.end() || it->is_null()) return std::nullopt;
+    return it->get<std::string>();
+}
+
+} // namespace
+
 void from_json(const nlohmann::json& j, StateBridgeConfig& v) {
-    if (j.contains("conditions")) {
-        for (auto& [k, val] : j["conditions"].items()) v.conditions[k] = val.get<bool>();
-    }
-    if (j.contains("dictionaries")) {
-        for (auto& [k, val] : j["dictionaries"].items()) v.dictionaries[k] = val.get<std::string>();
-    }
-    if (j.contains("actions")) {
-        for (auto& [k, val] : j["actions"].items()) v.actions[k] = val.get<std::string>();
+    auto conditions = j.find("conditions");
+    if (conditions != j.end() && conditions->is_object()) {
+        for (auto entry = conditions->begin(); entry != conditions->end(); ++entry) {
+            v.conditions[entry.key()] = entry.value().get<bool>();
+        }
     }
 }
 
 void from_json(const nlohmann::json& j, StepExpect& v) {
     j.at("type").get_to(v.type);
-    if (j.contains("blockUuid") && !j["blockUuid"].is_null()) v.blockUuid = j["blockUuid"].get<std::string>();
-    if (j.contains("dialogueText") && !j["dialogueText"].is_null()) v.dialogueText = j["dialogueText"].get<std::string>();
-    if (j.contains("visibleChoiceCount") && !j["visibleChoiceCount"].is_null()) v.visibleChoiceCount = j["visibleChoiceCount"].get<int>();
+    v.blockId = optString(j, "blockId");
+    v.text = optString(j, "text");
+    auto count = j.find("visibleOptionCount");
+    if (count != j.end() && !count->is_null()) v.visibleOptionCount = count->get<int>();
 }
 
 void from_json(const nlohmann::json& j, StepAction& v) {
     j.at("type").get_to(v.type);
-    if (j.contains("choiceUuid") && !j["choiceUuid"].is_null()) v.choiceUuid = j["choiceUuid"].get<std::string>();
-    if (j.contains("value") && !j["value"].is_null()) v.value = j["value"].get<bool>();
-    if (j.contains("error") && !j["error"].is_null()) v.error = j["error"].get<std::string>();
-    if (j.contains("name") && !j["name"].is_null()) v.name = j["name"].get<std::string>();
-    if (j.contains("characterName") && !j["characterName"].is_null()) v.characterName = j["characterName"].get<std::string>();
+    v.optionId = optString(j, "optionId");
+    v.port = optString(j, "port");
+    v.cardId = optString(j, "cardId");
+    v.error = optString(j, "error");
 }
 
 void from_json(const nlohmann::json& j, TestStep& v) {
     v.expect = j.at("expect").get<StepExpect>();
-    if (j.contains("action") && !j["action"].is_null()) v.action = j["action"].get<StepAction>();
+    auto action = j.find("action");
+    if (action != j.end() && !action->is_null()) v.action = action->get<StepAction>();
 }
 
 void from_json(const nlohmann::json& j, ExpectedStats& v) {
@@ -46,28 +54,67 @@ void from_json(const nlohmann::json& j, ExpectedStats& v) {
 
 void from_json(const nlohmann::json& j, TestCase& v) {
     j.at("id").get_to(v.id);
-    if (j.contains("description") && !j["description"].is_null()) v.description = j["description"].get<std::string>();
-    if (j.contains("steps")) v.steps = j["steps"].get<std::vector<TestStep>>();
-    if (j.contains("expectedVisited")) v.expectedVisited = j["expectedVisited"].get<std::vector<std::string>>();
-    if (j.contains("expectedCleanupCalls") && !j["expectedCleanupCalls"].is_null()) v.expectedCleanupCalls = j["expectedCleanupCalls"].get<int>();
-    if (j.contains("orderIndependent") && !j["orderIndependent"].is_null()) v.orderIndependent = j["orderIndependent"].get<bool>();
-    if (j.contains("expectedErrors")) v.expectedErrors = j["expectedErrors"].get<std::vector<std::string>>();
-    if (j.contains("expectedWarnings")) v.expectedWarnings = j["expectedWarnings"].get<std::vector<std::string>>();
-    if (j.contains("expectedStats") && !j["expectedStats"].is_null()) v.expectedStats = j["expectedStats"].get<ExpectedStats>();
+    v.description = optString(j, "description");
+
+    auto steps = j.find("steps");
+    if (steps != j.end() && steps->is_array()) v.steps = steps->get<std::vector<TestStep>>();
+
+    // Absent and empty mean different things here: nullopt = the spec says nothing about it,
+    // an empty vector = expect none at all.
+    auto visited = j.find("expectedVisited");
+    if (visited != j.end() && visited->is_array()) {
+        v.expectedVisited = visited->get<std::vector<std::string>>();
+    }
+
+    auto cleanups = j.find("expectedCleanupCalls");
+    if (cleanups != j.end() && !cleanups->is_null()) v.expectedCleanupCalls = cleanups->get<int>();
+
+    auto running = j.find("expectedRunning");
+    if (running != j.end() && !running->is_null()) v.expectedRunning = running->get<bool>();
+
+    auto orderIndependent = j.find("orderIndependent");
+    if (orderIndependent != j.end() && !orderIndependent->is_null()) {
+        v.orderIndependent = orderIndependent->get<bool>();
+    }
+
+    auto errors = j.find("expectedErrors");
+    if (errors != j.end() && errors->is_array()) {
+        v.expectedErrors = errors->get<std::vector<std::string>>();
+    }
+
+    auto warnings = j.find("expectedWarnings");
+    if (warnings != j.end() && warnings->is_array()) {
+        v.expectedWarnings = warnings->get<std::vector<std::string>>();
+    }
+
+    auto stats = j.find("expectedStats");
+    if (stats != j.end() && !stats->is_null()) v.expectedStats = stats->get<ExpectedStats>();
 }
 
 void from_json(const nlohmann::json& j, TestSuite& v) {
     j.at("id").get_to(v.id);
-    if (j.contains("description")) j.at("description").get_to(v.description);
+    auto description = j.find("description");
+    if (description != j.end() && description->is_string()) description->get_to(v.description);
+
     v.blueprint = j.at("blueprint").get<lsde::BlueprintExport>();
-    if (j.contains("sceneId") && !j["sceneId"].is_null()) v.sceneId = j["sceneId"].get<std::string>();
-    if (j.contains("locale") && !j["locale"].is_null()) v.locale = j["locale"].get<std::string>();
-    if (j.contains("stateBridge") && !j["stateBridge"].is_null()) v.stateBridge = j["stateBridge"].get<StateBridgeConfig>();
+    v.sceneId = optString(j, "sceneId");
+    v.locale = optString(j, "locale");
+
+    auto stateBridge = j.find("stateBridge");
+    if (stateBridge != j.end() && !stateBridge->is_null()) {
+        v.stateBridge = stateBridge->get<StateBridgeConfig>();
+    }
+
     v.cases = j.at("cases").get<std::vector<TestCase>>();
 }
 
 void from_json(const nlohmann::json& j, TestFile& v) {
-    if (j.contains("version")) j.at("version").get_to(v.version);
+    auto version = j.find("version");
+    if (version != j.end() && version->is_string()) version->get_to(v.version);
+
+    auto description = j.find("description");
+    if (description != j.end() && description->is_string()) description->get_to(v.description);
+
     v.suites = j.at("suites").get<std::vector<TestSuite>>();
 }
 

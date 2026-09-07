@@ -1,135 +1,150 @@
 ## LSDE Dialog Engine — Context factory per block type
+##
+## A context is what a handler is handed alongside its block: the resolved cards, and the few
+## methods that let the game answer back. Everything the engine needs to hear from a handler comes
+## back through here, which is why each context keeps its answer in a field the traversal reads
+## once the handler returns.
+##
+## Two v1 habits are gone from this file:
+##
+## [b]Actors are card ids now.[/b] A block cites ["var1"], not a copy of the character. The ids are
+## resolved through the export's cards table before the context is built, and the WHOLE list is
+## handed over — the engine does not elect a first one, because LSDE deliberately refuses to say
+## whether the order means "who speaks" or "who is present". That belongs to the game.
+##
+## [b]The emotion belongs to the block.[/b] It used to sit on each character, so two actors saying
+## one sentence meant writing the same feeling twice, with nothing stopping them from drifting
+## apart.
 class_name LsdeBlockContext
 extends RefCounted
 
-## Context for DIALOG block handlers.
-## Exposes character resolution and port selection for portPerCharacter mode.
-class DialogContext extends RefCounted:
+## Look up a block's actors and emotion in the export's card table.
+##
+## An id with no card is dropped rather than reported: a payload citing a card that is not in its
+## own tables is an exporter bug, and the traversal is not where a game should learn about it —
+## init() is.
+##
+## Returns { actors: Array, emotion: Variant, character: Variant }.
+static func resolve_cards(block: Dictionary, lookup: Callable, pick_character: Variant) -> Dictionary:
+	var actors: Array = []
+	for id in block.get("actors", []):
+		var card: Variant = lookup.call(id)
+		if card != null:
+			actors.append(card)
+
+	var emotion: Variant = null
+	var emotion_id: Variant = block.get("emotion")
+	if emotion_id is String and emotion_id != "":
+		emotion = lookup.call(emotion_id)
+
+	var character: Variant = null
+	if pick_character is Callable and pick_character.is_valid():
+		character = pick_character.call(actors)
+
+	return {"actors": actors, "emotion": emotion, "character": character}
+
+## What every context carries, whatever the block type.
+class BaseContext extends RefCounted:
 	## When true, the global (Tier 1) handler will be skipped.
 	var global_prevented: bool = false
-	## Character port index selected via resolve_character_port(), or null if not set.
-	var character_port_index: Variant = null  # int or null
-	## Character resolved by on_resolve_character for this block, or null if none.
-	var character: Variant = null  # Dictionary or null
-	var _characters: Array = []
+	## The actor on_resolve_character picked for this block, or null.
+	var character: Variant = null
+	## Every card the block cites, resolved through the cards table, in file order.
+	var actors: Array = []
+	## The emotion of the BLOCK, resolved through cards — the tone of the line, not of a speaker.
+	var emotion: Variant = null
+	## How strongly, when the writer set an emotion. Passed through untouched.
+	var intensity: Variant = null
 
-	func _init(block: Dictionary, resolved_character: Variant) -> void:
-		character = resolved_character
-		var metadata: Variant = block.get("metadata")
-		if metadata is Dictionary:
-			_characters = metadata.get("characters", [])
+	func _init(block: Dictionary, cards: Dictionary) -> void:
+		character = cards.get("character")
+		actors = cards.get("actors", [])
+		emotion = cards.get("emotion")
+		intensity = block.get("intensity")
 
-	## Resolve which character port to follow. Matches by UUID first, then by name as fallback.
-	func resolve_character_port(character_uuid: String) -> void:
-		# Match by uuid first
-		for i in range(_characters.size()):
-			if _characters[i].get("uuid", "") == character_uuid:
-				character_port_index = i
-				return
-		# Fallback: match by name
-		for i in range(_characters.size()):
-			if _characters[i].get("name", "") == character_uuid:
-				character_port_index = i
-				return
-		character_port_index = null
-
-	## Prevent the global (Tier 1) handler from executing after this scene handler.
+	## Stop the global (Tier 1) handler from running after this scene handler.
 	func prevent_global_handler() -> void:
 		global_prevented = true
+
+## Context for DIALOG block handlers.
+class DialogContext extends BaseContext:
+	## The card id whose port to take, or null for "out".
+	var actor_port: Variant = null
+	var _cited: Array = []
+
+	func _init(block: Dictionary, cards: Dictionary) -> void:
+		super(block, cards)
+		# The port of an actor IS its card id — var1, the same string block.actors lists. Only an
+		# id the block actually cites can pick a port; anything else falls through to "out".
+		_cited = block.get("actors", [])
+
+	## With portPerCharacter, name the actor whose port the flow should take.
+	## Takes a CARD ID (var1), never an index.
+	func resolve_character_port(card_id: String) -> void:
+		actor_port = card_id if card_id in _cited else null
 
 ## Context for CHOICE block handlers.
-## Holds the tagged choices (with visible field) and tracks the player's selection.
-class ChoiceContext extends RefCounted:
-	## When true, the global (Tier 1) handler will be skipped.
-	var global_prevented: bool = false
-	## UUID of the selected choice, set by select_choice().
-	var selected_choice_uuid: Variant = null  # String or null
-	## All choices with optional visibility tags (each has a "visible" key when filter is installed).
-	var choices: Array = []
-	## Character resolved by on_resolve_character for this block, or null if none.
-	var character: Variant = null
-	var _block_uuid: String = ""
+class ChoiceContext extends BaseContext:
+	## The option id the player picked. It is also the port the flow leaves by.
+	var selected_option_id: Variant = null
+	## EVERY option of the block, tagged. Not a shortened list.
+	var options: Array = []
+	var _block_id: String = ""
 	var _on_choice_selected: Callable
 
-	func _init(tagged_choices: Array, resolved_character: Variant, block_uuid: String, on_choice_selected: Callable = Callable()) -> void:
-		choices = tagged_choices
-		character = resolved_character
-		_block_uuid = block_uuid
+	func _init(
+		block: Dictionary,
+		cards: Dictionary,
+		tagged_options: Array,
+		on_choice_selected: Callable = Callable()
+	) -> void:
+		super(block, cards)
+		options = tagged_options
+		_block_id = block.get("id", "")
 		_on_choice_selected = on_choice_selected
 
-	## Select a choice by UUID. Records in choice history for condition evaluation.
-	func select_choice(choice_uuid: String) -> void:
-		selected_choice_uuid = choice_uuid
+	## Pick an option by its id (C1). That id is also the port the flow leaves by.
+	func select_choice(option_id: String) -> void:
+		selected_option_id = option_id
+		# Recorded even for an option that does not exist: the history is what the reserved
+		# "choice" dictionary reads back, and silently dropping an answer would make a later
+		# condition lie about what the player did.
 		if _on_choice_selected.is_valid():
-			_on_choice_selected.call(_block_uuid, choice_uuid)
-
-	## Prevent the global (Tier 1) handler from executing after this scene handler.
-	func prevent_global_handler() -> void:
-		global_prevented = true
+			_on_choice_selected.call(_block_id, option_id)
 
 ## Context for CONDITION block handlers.
-## Stores the evaluation result set by resolve().
-class ConditionContext extends RefCounted:
-	## When true, the global (Tier 1) handler will be skipped.
-	var global_prevented: bool = false
-	## Condition result set by resolve(). bool (legacy), int (switch), or Array (dispatcher).
-	var condition_result: Variant = null
-	## Pre-evaluated condition groups with port_index and result fields (when resolver is installed).
-	var condition_groups: Array = []
-	## Character resolved by on_resolve_character for this block, or null if none.
-	var character: Variant = null
+class ConditionContext extends BaseContext:
+	## The exit port. Pre-filled from the cases; a handler may override it with resolve().
+	var condition_port: Variant = null
+	## The block's cases, each with its port and its pre-evaluated result.
+	var cases: Array = []
 
-	func _init(resolved_character: Variant = null, groups: Array = []) -> void:
-		character = resolved_character
-		condition_groups = groups
+	func _init(block: Dictionary, cards: Dictionary, runtime_cases: Array) -> void:
+		super(block, cards)
+		cases = runtime_cases
 
-	## Resolve the condition. Accepts bool (legacy), int (switch), or Array of int (dispatcher).
-	func resolve(result: Variant) -> void:
-		condition_result = result
-
-	## Prevent the global (Tier 1) handler from executing after this scene handler.
-	func prevent_global_handler() -> void:
-		global_prevented = true
+	## Override the exit port. Takes a PORT NAME: "out", "default", or a case port (K1).
+	##
+	## v1 took a bool, an int or an Array — three shapes for one method, the third being the
+	## dispatcher. Both are gone: a condition picks one path.
+	func resolve(port: String) -> void:
+		condition_port = port
 
 ## Context for ACTION block handlers.
-## Tracks whether the action was resolved (success) or rejected (failure).
-class ActionContext extends RefCounted:
-	## When true, the global (Tier 1) handler will be skipped.
-	var global_prevented: bool = false
+class ActionContext extends BaseContext:
 	## true if reject() was called, false if resolve() was called.
 	var action_rejected: bool = false
-	## Character resolved by on_resolve_character for this block, or null if none.
-	var character: Variant = null
+	## The calls the block asks the game to run, in order, with their arguments BY NAME.
+	var calls: Array = []
 
-	func _init(resolved_character: Variant = null) -> void:
-		character = resolved_character
+	func _init(block: Dictionary, cards: Dictionary) -> void:
+		super(block, cards)
+		calls = block.get("calls", [])
 
-	## Mark action as succeeded. Engine follows the "then" port.
+	## The calls went through. The flow leaves by "then".
 	func resolve() -> void:
 		action_rejected = false
 
-	## Mark action as failed. Engine follows the "catch" port (fallback "then" if no catch port exists).
-	func reject(_error: Variant = "") -> void:
+	## A call failed. The flow leaves by "catch", or by "then" when no error branch was drawn.
+	func reject(_error: Variant = null) -> void:
 		action_rejected = true
-
-	## Prevent the global (Tier 1) handler from executing after this scene handler.
-	func prevent_global_handler() -> void:
-		global_prevented = true
-
-# ─── Factory functions ───────────────────────────────────────────────────────
-
-## Create a dialog context with character resolution from block metadata.
-static func create_dialog_context(block: Dictionary, resolved_character: Variant) -> DialogContext:
-	return DialogContext.new(block, resolved_character)
-
-## Create a choice context with pre-tagged choices (from tag_choice_visibility).
-static func create_choice_context(block: Dictionary, tagged_choices: Array, resolved_character: Variant, on_choice_selected: Callable = Callable()) -> ChoiceContext:
-	return ChoiceContext.new(tagged_choices, resolved_character, block.get("uuid", ""), on_choice_selected)
-
-## Create a condition context with optional pre-evaluated groups.
-static func create_condition_context(resolved_character: Variant = null, groups: Array = []) -> ConditionContext:
-	return ConditionContext.new(resolved_character, groups)
-
-## Create an action context.
-static func create_action_context(resolved_character: Variant = null) -> ActionContext:
-	return ActionContext.new(resolved_character)
