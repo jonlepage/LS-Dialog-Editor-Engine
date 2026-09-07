@@ -23,6 +23,7 @@ add_executable(lsde_tests
     cross_language_runner.cpp
     json_loader_test.cpp
     condition_integration_test.cpp
+    robustness_test.cpp
 )
 
 target_link_libraries(lsde_tests PRIVATE

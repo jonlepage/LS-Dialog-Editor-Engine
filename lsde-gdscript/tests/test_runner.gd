@@ -23,6 +23,12 @@ func _init() -> void:
 	_failed += resolve_result["failed"]
 	_total += resolve_result["total"]
 
+	var robustness_tests := preload("res://tests/test_robustness.gd").new()
+	var robustness_result: Dictionary = robustness_tests.run()
+	_passed += robustness_result["passed"]
+	_failed += robustness_result["failed"]
+	_total += robustness_result["total"]
+
 	print("\n━━━ Results ━━━")
 	print("Total: %d | Passed: %d | Failed: %d" % [_total, _passed, _failed])
 	if _failed > 0:

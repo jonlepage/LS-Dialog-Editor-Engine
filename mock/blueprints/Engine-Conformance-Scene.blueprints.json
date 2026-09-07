@@ -1,0 +1,1045 @@
+{
+	"format": "lsde-blueprints",
+	"version": 1,
+	"generator": {
+		"app": "LSDE",
+		"version": "2.0.3"
+	},
+	"exportedAt": "2026-09-07T16:32:13.163Z",
+	"project": "Engine Conformance Scene",
+	"locales": [
+		"en",
+		"fr",
+		"es"
+	],
+	"referenceLocale": "en",
+	"dictionaries": [
+		{
+			"id": "switches",
+			"valueType": "boolean",
+			"entries": [
+				"door_unlocked",
+				"oracle_awake",
+				"reactor_stable",
+				"met_vesk",
+				"alarm_armed"
+			]
+		},
+		{
+			"id": "variables",
+			"valueType": "number",
+			"entries": [
+				"chapter",
+				"credits",
+				"trust_kael",
+				"alarm_level"
+			]
+		},
+		{
+			"id": "items",
+			"valueType": "number",
+			"entries": [
+				"plasma_cell",
+				"keycard",
+				"ration"
+			]
+		},
+		{
+			"id": "flags",
+			"valueType": "string",
+			"entries": [
+				"faction",
+				"last_port",
+				"player_callsign"
+			]
+		}
+	],
+	"functions": [
+		{
+			"id": "play_music",
+			"params": [
+				{
+					"name": "track",
+					"type": "string"
+				},
+				{
+					"name": "fadeMs",
+					"type": "number"
+				},
+				{
+					"name": "loop",
+					"type": "boolean"
+				}
+			]
+		},
+		{
+			"id": "set_switch",
+			"params": [
+				{
+					"name": "flag",
+					"type": "dictionaryKey",
+					"dictionary": "switches"
+				},
+				{
+					"name": "value",
+					"type": "boolean"
+				}
+			]
+		},
+		{
+			"id": "add_item",
+			"params": [
+				{
+					"name": "item",
+					"type": "dictionaryKey",
+					"dictionary": "items"
+				},
+				{
+					"name": "count",
+					"type": "number"
+				}
+			]
+		},
+		{
+			"id": "set_counter",
+			"params": [
+				{
+					"name": "counter",
+					"type": "dictionaryKey",
+					"dictionary": "variables"
+				},
+				{
+					"name": "value",
+					"type": "number"
+				}
+			]
+		},
+		{
+			"id": "write_flag",
+			"params": [
+				{
+					"name": "flag",
+					"type": "dictionaryKey",
+					"dictionary": "flags"
+				},
+				{
+					"name": "value",
+					"type": "string"
+				}
+			]
+		},
+		{
+			"id": "shake_camera",
+			"params": [
+				{
+					"name": "intensity",
+					"type": "number"
+				},
+				{
+					"name": "durationMs",
+					"type": "number"
+				}
+			]
+		},
+		{
+			"id": "unlock_achievement",
+			"params": [
+				{
+					"name": "id",
+					"type": "string"
+				}
+			]
+		},
+		{
+			"id": "close_bulkhead",
+			"params": []
+		}
+	],
+	"cards": [
+		{
+			"id": "var1",
+			"name": "kael",
+			"role": "characters"
+		},
+		{
+			"id": "var2",
+			"name": "nora",
+			"role": "characters"
+		},
+		{
+			"id": "var3",
+			"name": "oracle",
+			"role": "characters"
+		},
+		{
+			"id": "var4",
+			"name": "vesk",
+			"role": "characters"
+		},
+		{
+			"id": "var5",
+			"name": "neutral",
+			"role": "emotions"
+		},
+		{
+			"id": "var6",
+			"name": "angry",
+			"role": "emotions"
+		},
+		{
+			"id": "var7",
+			"name": "afraid",
+			"role": "emotions"
+		},
+		{
+			"id": "var8",
+			"name": "joy",
+			"role": "emotions"
+		},
+		{
+			"id": "var9",
+			"name": "suspicious",
+			"role": "emotions"
+		},
+		{
+			"id": "var10",
+			"name": "reactor_deck",
+			"role": "places"
+		},
+		{
+			"id": "var11",
+			"name": "docking_ring",
+			"role": "places"
+		},
+		{
+			"id": "var12",
+			"name": "plasma_cell",
+			"role": "none"
+		},
+		{
+			"id": "var13",
+			"name": "keycard",
+			"role": "none"
+		},
+		{
+			"id": "var14",
+			"name": "ration",
+			"role": "none"
+		}
+	],
+	"scenes": [
+		{
+			"scene": "reactor_breach",
+			"start": "ACTION-001",
+			"blocks": [
+				{
+					"id": "NOTE-001",
+					"key": "__blueprints__.reactor_breach.NOTE-001",
+					"type": "note",
+					"note": "Cette note n'a pas de port d'entrée : elle ne se joue jamais.",
+					"props": {
+						"journalEntry": "note de scène"
+					}
+				},
+				{
+					"id": "NOTE-002",
+					"key": "__blueprints__.reactor_breach.NOTE-002",
+					"type": "note",
+					"note": "Deuxième note, sans aucun fil : deux notes suffisent à montrer qu'elles ne comptent pas dans le flux."
+				},
+				{
+					"id": "ACTION-001",
+					"key": "__blueprints__.reactor_breach.ACTION-001",
+					"type": "action",
+					"note": "Le réacteur monte depuis vingt minutes et personne n'a coupé la musique du pont.",
+					"props": {
+						"focusSwitch": "alarm_armed",
+						"journalEntry": "ouverture de scène"
+					},
+					"calls": [
+						{
+							"fn": "play_music",
+							"args": {
+								"track": "reactor_theme",
+								"fadeMs": 1500,
+								"loop": true
+							}
+						},
+						{
+							"fn": "set_counter",
+							"args": {
+								"counter": "chapter",
+								"value": 3
+							}
+						},
+						{
+							"fn": "write_flag",
+							"args": {
+								"flag": "last_port",
+								"value": "reactor_deck"
+							}
+						}
+					],
+					"next": [
+						{
+							"port": "then",
+							"to": "DIALOG-002",
+							"toPort": "in"
+						},
+						{
+							"port": "catch",
+							"to": "DIALOG-001",
+							"toPort": "in"
+						}
+					]
+				},
+				{
+					"id": "DIALOG-001",
+					"key": "__blueprints__.reactor_breach.DIALOG-001",
+					"type": "dialog",
+					"actors": [
+						"var2"
+					],
+					"emotion": "var9",
+					"intensity": 45,
+					"text": {
+						"en": "No sound. Of course there is no sound.",
+						"fr": "Pas de son. Évidemment qu'il n'y a pas de son."
+					},
+					"note": "Nora encaisse la panne sans s'arrêter. Elle n'a pas dormi depuis deux jours.",
+					"props": {
+						"debug": true,
+						"boxShake": true
+					},
+					"next": [
+						{
+							"port": "out",
+							"to": "DIALOG-002",
+							"toPort": "in"
+						}
+					]
+				},
+				{
+					"id": "DIALOG-002",
+					"key": "__blueprints__.reactor_breach.DIALOG-002",
+					"type": "dialog",
+					"actors": [
+						"var2"
+					],
+					"emotion": "var5",
+					"intensity": 20,
+					"text": {
+						"en": "Reactor deck.{|} The floor is warm through my boots.",
+						"fr": "Pont réacteur.{|} Le sol est chaud à travers mes bottes.",
+						"es": "Cubierta del reactor.{|} El suelo quema a través de las botas."
+					},
+					"note": "Première réplique de la scène. Nora descend seule, avant que Kael la rattrape.",
+					"props": {
+						"delay": 300,
+						"portraitSide": "left",
+						"typewriterSpeed": 40,
+						"journalEntry": "arrivée au pont réacteur"
+					},
+					"next": [
+						{
+							"port": "out",
+							"to": "DIALOG-003",
+							"toPort": "in"
+						}
+					]
+				},
+				{
+					"id": "DIALOG-003",
+					"key": "__blueprints__.reactor_breach.DIALOG-003",
+					"type": "dialog",
+					"actors": [
+						"var1",
+						"var2"
+					],
+					"emotion": "var7",
+					"intensity": 60,
+					"text": {
+						"en": "Someone has been down here. Recently.",
+						"fr": "Quelqu'un est descendu ici. Récemment.",
+						"es": "Alguien ha bajado aquí. Hace poco."
+					},
+					"note": "Les deux le disent en même temps, et aucun des deux ne veut être celui qui a raison.",
+					"props": {
+						"portPerCharacter": true,
+						"typewriterSpeed": 25
+					},
+					"next": [
+						{
+							"port": "var2",
+							"to": "DIALOG-005",
+							"toPort": "in"
+						},
+						{
+							"port": "out",
+							"to": "CHOICE-001",
+							"toPort": "in"
+						},
+						{
+							"port": "var1",
+							"to": "DIALOG-011",
+							"toPort": "in"
+						}
+					]
+				},
+				{
+					"id": "DIALOG-005",
+					"key": "__blueprints__.reactor_breach.DIALOG-005",
+					"type": "dialog",
+					"actors": [
+						"var2"
+					],
+					"emotion": "var5",
+					"intensity": 35,
+					"text": {
+						"en": "Then tell me what I am looking at.",
+						"fr": "Alors dis-moi ce que je regarde.",
+						"es": "Entonces dime qué estoy mirando."
+					},
+					"note": "Elle ne hausse pas le ton. C'est ce qui inquiète Kael.",
+					"props": {
+						"portraitSide": "right"
+					},
+					"next": [
+						{
+							"port": "out",
+							"to": "DIALOG-012",
+							"toPort": "in"
+						}
+					]
+				},
+				{
+					"id": "DIALOG-007",
+					"key": "__blueprints__.reactor_breach.DIALOG-007",
+					"type": "dialog",
+					"actors": [
+						"var4"
+					],
+					"emotion": "var7",
+					"intensity": 100,
+					"text": {
+						"en": "Do not say my name out loud.",
+						"fr": "Ne dis pas mon nom à voix haute.",
+						"es": "No digas mi nombre en voz alta."
+					},
+					"note": "Vesk se cache derrière le réservoir. Il ne parle que si le joueur l'a déjà croisé ailleurs.",
+					"props": {
+						"skipIfMissingActor": true,
+						"portraitSide": "center"
+					},
+					"next": [
+						{
+							"port": "out",
+							"to": "DIALOG-008",
+							"toPort": "in"
+						}
+					]
+				},
+				{
+					"id": "DIALOG-008",
+					"key": "__blueprints__.reactor_breach.DIALOG-008",
+					"type": "dialog",
+					"actors": [
+						"var2"
+					],
+					"emotion": "var5",
+					"intensity": 25,
+					"text": {
+						"en": "Everyone done? The {{i2}} is still on the panel.",
+						"fr": "Tout le monde a fini ? La {{i2}} est encore sur le panneau.",
+						"es": "¿Todos han terminado? La {{i2}} sigue en el panel."
+					},
+					"note": "Nora attend que les deux autres se taisent avant de reprendre la main.",
+					"props": {
+						"waitInput": true,
+						"waitForBlocks": [
+							"DIALOG-007"
+						],
+						"journalEntry": "tout le monde est là"
+					},
+					"next": [
+						{
+							"port": "out",
+							"to": "CHOICE-001",
+							"toPort": "in"
+						}
+					]
+				},
+				{
+					"id": "CHOICE-001",
+					"key": "__blueprints__.reactor_breach.CHOICE-001",
+					"type": "choice",
+					"actors": [
+						"var2"
+					],
+					"emotion": "var5",
+					"intensity": 30,
+					"note": "Le choix qui porte toute la scène : les conditions plus bas relisent ce que le joueur répond ici.",
+					"props": {
+						"boxShake": true,
+						"typewriterSpeed": 60,
+						"choiceTimeoutSec": 15
+					},
+					"options": [
+						{
+							"id": "C1",
+							"key": "__blueprints__.reactor_breach.CHOICE-001.C1",
+							"text": {
+								"en": "What did you see on deck three, {{@a1}}?",
+								"fr": "Qu'est-ce que tu as vu au pont trois, {{@a1}} ?",
+								"es": "¿Qué viste en la cubierta tres, {{@a1}}?"
+							}
+						},
+						{
+							"id": "C2",
+							"key": "__blueprints__.reactor_breach.CHOICE-001.C2",
+							"text": {
+								"en": "I am not going any further.",
+								"fr": "Je ne descends pas plus bas.",
+								"es": "No bajo más."
+							}
+						},
+						{
+							"id": "C3",
+							"key": "__blueprints__.reactor_breach.CHOICE-001.C3",
+							"text": {
+								"en": "Name your price.",
+								"fr": "Ton prix.",
+								"es": "Di tu precio."
+							},
+							"when": [
+								{
+									"dict": "variables",
+									"entry": "credits",
+									"op": "greaterOrEqual",
+									"value": 50
+								}
+							]
+						},
+						{
+							"id": "C4",
+							"key": "__blueprints__.reactor_breach.CHOICE-001.C4",
+							"text": {
+								"en": "(Say nothing and watch him.)",
+								"fr": "(Ne rien dire et le regarder.)",
+								"es": "(No decir nada y mirarlo.)"
+							},
+							"when": [
+								{
+									"dict": "switches",
+									"entry": "met_vesk",
+									"op": "equals",
+									"value": true
+								},
+								{
+									"dict": "variables",
+									"entry": "trust_kael",
+									"op": "lessThan",
+									"value": 40,
+									"join": "and"
+								}
+							]
+						}
+					],
+					"next": [
+						{
+							"port": "C1",
+							"to": "COND-001",
+							"toPort": "in"
+						},
+						{
+							"port": "C2",
+							"to": "COND-001",
+							"toPort": "in"
+						},
+						{
+							"port": "C3",
+							"to": "ACTION-002",
+							"toPort": "in"
+						},
+						{
+							"port": "C4",
+							"to": "COND-002",
+							"toPort": "in"
+						}
+					]
+				},
+				{
+					"id": "COND-001",
+					"key": "__blueprints__.reactor_breach.COND-001",
+					"type": "condition",
+					"note": "Trois issues et un repli. Le troisième cas n'a aucune comparaison : il est toujours vrai.",
+					"props": {
+						"portPerCase": true,
+						"focusSwitch": "alarm_armed",
+						"journalEntry": "aiguillage principal"
+					},
+					"cases": [
+						{
+							"port": "K1",
+							"when": [
+								{
+									"dict": "switches",
+									"entry": "reactor_stable",
+									"op": "equals",
+									"value": false
+								}
+							]
+						},
+						{
+							"port": "K2",
+							"when": [
+								{
+									"dict": "variables",
+									"entry": "alarm_level",
+									"op": "greaterOrEqual",
+									"value": 2
+								},
+								{
+									"dict": "flags",
+									"entry": "faction",
+									"op": "equals",
+									"value": "salvage",
+									"join": "or"
+								}
+							]
+						},
+						{
+							"port": "K3"
+						}
+					],
+					"next": [
+						{
+							"port": "K1",
+							"to": "ACTION-002",
+							"toPort": "in"
+						},
+						{
+							"port": "K2",
+							"to": "COND-003",
+							"toPort": "in"
+						},
+						{
+							"port": "K3",
+							"to": "DIALOG-009",
+							"toPort": "in"
+						},
+						{
+							"port": "default",
+							"to": "COND-002",
+							"toPort": "in"
+						}
+					]
+				},
+				{
+					"id": "COND-002",
+					"key": "__blueprints__.reactor_breach.COND-002",
+					"type": "condition",
+					"note": "Deux issues seulement : vrai ou repli. Trois comparaisons liées par ET puis OU.",
+					"props": {
+						"focusSwitch": "door_unlocked"
+					},
+					"cases": [
+						{
+							"port": "K1",
+							"when": [
+								{
+									"dict": "switches",
+									"entry": "door_unlocked",
+									"op": "equals",
+									"value": true
+								},
+								{
+									"dict": "items",
+									"entry": "keycard",
+									"op": "greaterThan",
+									"value": 0,
+									"join": "and"
+								},
+								{
+									"dict": "flags",
+									"entry": "player_callsign",
+									"op": "notEquals",
+									"value": "",
+									"join": "or"
+								}
+							]
+						}
+					],
+					"next": [
+						{
+							"port": "default",
+							"to": "DIALOG-010",
+							"toPort": "in"
+						},
+						{
+							"port": "out",
+							"to": "COND-003",
+							"toPort": "in"
+						}
+					]
+				},
+				{
+					"id": "COND-003",
+					"key": "__blueprints__.reactor_breach.COND-003",
+					"type": "condition",
+					"note": "Relit ce que le joueur a répondu plus haut, sans qu'aucune variable n'ait été posée pour ça.",
+					"props": {
+						"journalEntry": "relecture du choix"
+					},
+					"cases": [
+						{
+							"port": "K1",
+							"when": [
+								{
+									"dict": "choice",
+									"entry": "c_first",
+									"op": "equals",
+									"value": "opt_ask"
+								},
+								{
+									"dict": "choice",
+									"entry": "c_first",
+									"op": "notEquals",
+									"value": "opt_refuse",
+									"join": "and"
+								}
+							]
+						}
+					],
+					"next": [
+						{
+							"port": "default",
+							"to": "DIALOG-009",
+							"toPort": "in"
+						},
+						{
+							"port": "out",
+							"to": "DIALOG-010",
+							"toPort": "in"
+						}
+					]
+				},
+				{
+					"id": "ACTION-002",
+					"key": "__blueprints__.reactor_breach.ACTION-002",
+					"type": "action",
+					"note": "Cinq appels d'affilée, dont un sans le moindre paramètre.",
+					"props": {
+						"focusSwitch": "door_unlocked",
+						"journalEntry": "ouverture de la cloison"
+					},
+					"calls": [
+						{
+							"fn": "set_switch",
+							"args": {
+								"flag": "door_unlocked",
+								"value": true
+							}
+						},
+						{
+							"fn": "add_item",
+							"args": {
+								"item": "plasma_cell",
+								"count": -1
+							}
+						},
+						{
+							"fn": "shake_camera",
+							"args": {
+								"intensity": 60,
+								"durationMs": 400
+							}
+						},
+						{
+							"fn": "close_bulkhead",
+							"args": {}
+						},
+						{
+							"fn": "unlock_achievement",
+							"args": {
+								"id": "reactor_reached"
+							}
+						}
+					],
+					"next": [
+						{
+							"port": "then",
+							"to": "COND-003",
+							"toPort": "in"
+						},
+						{
+							"port": "catch",
+							"to": "DIALOG-010",
+							"toPort": "in"
+						}
+					]
+				},
+				{
+					"id": "DIALOG-009",
+					"key": "__blueprints__.reactor_breach.DIALOG-009",
+					"type": "dialog",
+					"actors": [
+						"var1"
+					],
+					"emotion": "var6",
+					"intensity": 90,
+					"text": {
+						"en": "We are going back up. Now.",
+						"fr": "On remonte. Tout de suite.",
+						"es": "Subimos. Ahora."
+					},
+					"note": "Kael reprend le contrôle et renvoie tout le monde au début du pont.",
+					"props": {
+						"delay": 250,
+						"debug": true
+					},
+					"next": [
+						{
+							"port": "out",
+							"to": "DIALOG-002",
+							"toPort": "in"
+						}
+					]
+				},
+				{
+					"id": "DIALOG-010",
+					"key": "__blueprints__.reactor_breach.DIALOG-010",
+					"type": "dialog",
+					"actors": [
+						"var2"
+					],
+					"emotion": "var8",
+					"intensity": 15,
+					"text": {
+						"en": "{:a2}That is enough for one shift. Seal {{#ui.hud.airlock_label}}.",
+						"fr": "{:a2}Ça suffit pour aujourd'hui. Ferme le {{#ui.hud.airlock_label}}.",
+						"es": "{:a2}Ya basta por hoy. Cierra la {{#ui.hud.airlock_label}}."
+					},
+					"note": "Dernière réplique : aucun fil ne part d'ici.",
+					"props": {
+						"waitInput": true,
+						"typewriterSpeed": 0
+					}
+				},
+				{
+					"id": "DIALOG-011",
+					"key": "__blueprints__.reactor_breach.DIALOG-011",
+					"type": "dialog",
+					"actors": [
+						"var1"
+					],
+					"emotion": "var6",
+					"intensity": 80,
+					"text": {
+						"en": "Do not touch the coupling, {{@a2}}. I mean it.",
+						"fr": "Touche pas au couplage, {{@a2}}. Je suis sérieux.",
+						"es": "No toques el acoplamiento, {{@a2}}. Lo digo en serio."
+					},
+					"note": "Kael ment : il sait très bien ce qu'il y a derrière le couplage, il l'a vu au pont 3.",
+					"props": {
+						"boxShake": true,
+						"focusSwitch": "reactor_stable"
+					},
+					"next": [
+						{
+							"port": "out",
+							"to": "DIALOG-012",
+							"toPort": "in"
+						}
+					]
+				},
+				{
+					"id": "DIALOG-012",
+					"key": "__blueprints__.reactor_breach.DIALOG-012",
+					"type": "dialog",
+					"actors": [
+						"var3"
+					],
+					"emotion": "var5",
+					"intensity": 5,
+					"text": {
+						"en": "Good morning. Today is the fourteenth of a month I no longer hold.",
+						"fr": "Bonjour. Nous sommes le quatorze d'un mois que je ne retiens plus.",
+						"es": "Buenos días. Hoy es catorce de un mes que ya no conservo."
+					},
+					"note": "L'Oracle parle par-dessus les autres, sans attendre son tour.",
+					"props": {
+						"isAsync": true,
+						"delay": 1000,
+						"timeout": 5000,
+						"journalEntry": "l'Oracle répond enfin"
+					},
+					"next": [
+						{
+							"port": "out",
+							"to": "DIALOG-007",
+							"toPort": "in"
+						}
+					]
+				}
+			]
+		},
+		{
+			"scene": "docking_ring_brief",
+			"start": "DIALOG-001",
+			"blocks": [
+				{
+					"id": "DIALOG-001",
+					"key": "__blueprints__.docking_ring_brief.DIALOG-001",
+					"type": "dialog",
+					"actors": [
+						"var2"
+					],
+					"emotion": "var5",
+					"intensity": 10,
+					"text": {
+						"en": "{{#ui.hud.airlock_label}}.{|} Two minutes, {{@a1}}.",
+						"fr": "{{#ui.hud.airlock_label}}.{|} Deux minutes, {{@a1}}.",
+						"es": "{{#ui.hud.airlock_label}}.{|} Dos minutos, {{@a1}}."
+					},
+					"note": "Scène courte : elle existe surtout pour vérifier qu'un export séparé produit bien deux fichiers.",
+					"props": {
+						"portraitSide": "left",
+						"typewriterSpeed": 80
+					},
+					"next": [
+						{
+							"port": "out",
+							"to": "CHOICE-001",
+							"toPort": "in"
+						}
+					]
+				},
+				{
+					"id": "CHOICE-001",
+					"key": "__blueprints__.docking_ring_brief.CHOICE-001",
+					"type": "choice",
+					"actors": [
+						"var2"
+					],
+					"note": "Deux de ces réponses lisent leur texte dans une clé d'interface partagée, la troisième a la sienne.",
+					"props": {
+						"choiceTimeoutSec": 5
+					},
+					"options": [
+						{
+							"id": "C1",
+							"key": "ui.common.yes",
+							"text": {
+								"en": "Yes",
+								"fr": "Oui",
+								"es": "Sí"
+							}
+						},
+						{
+							"id": "C2",
+							"key": "ui.common.no",
+							"text": {
+								"en": "No",
+								"fr": "Non",
+								"es": "No"
+							}
+						},
+						{
+							"id": "C3",
+							"key": "__blueprints__.docking_ring_brief.CHOICE-001.C3",
+							"text": {
+								"en": "Give me one more minute.",
+								"fr": "Laisse-moi une minute de plus.",
+								"es": "Dame un minuto más."
+							},
+							"when": [
+								{
+									"dict": "switches",
+									"entry": "reactor_stable",
+									"op": "equals",
+									"value": true
+								}
+							]
+						}
+					],
+					"next": [
+						{
+							"port": "C1",
+							"to": "ACTION-001",
+							"toPort": "in"
+						},
+						{
+							"port": "C2",
+							"to": "DIALOG-002",
+							"toPort": "in"
+						},
+						{
+							"port": "C3",
+							"to": "DIALOG-001",
+							"toPort": "in"
+						}
+					]
+				},
+				{
+					"id": "ACTION-001",
+					"key": "__blueprints__.docking_ring_brief.ACTION-001",
+					"type": "action",
+					"note": "Kael a déjà lancé la séquence avant qu'elle réponde.",
+					"props": {
+						"journalEntry": "départ du sas"
+					},
+					"calls": [
+						{
+							"fn": "set_switch",
+							"args": {
+								"flag": "alarm_armed",
+								"value": false
+							}
+						},
+						{
+							"fn": "play_music",
+							"args": {
+								"track": "departure",
+								"fadeMs": 800,
+								"loop": false
+							}
+						}
+					],
+					"next": [
+						{
+							"port": "then",
+							"to": "DIALOG-002",
+							"toPort": "in"
+						},
+						{
+							"port": "catch",
+							"to": "DIALOG-002",
+							"toPort": "in"
+						}
+					]
+				},
+				{
+					"id": "DIALOG-002",
+					"key": "__blueprints__.docking_ring_brief.DIALOG-002",
+					"type": "dialog",
+					"actors": [
+						"var1"
+					],
+					"emotion": "var8",
+					"intensity": 55,
+					"text": {
+						"en": "Told you it would hold.",
+						"fr": "Je t'avais dit que ça tiendrait.",
+						"es": "Te dije que aguantaría."
+					},
+					"note": "Kael se donne raison alors qu'il n'en savait rien.",
+					"props": {
+						"delay": 200,
+						"waitInput": true
+					}
+				}
+			]
+		}
+	]
+}

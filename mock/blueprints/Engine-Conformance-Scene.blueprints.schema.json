@@ -1,0 +1,374 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"title": "LSDE blueprints export",
+	"type": "object",
+	"properties": {
+		"format": {
+			"const": "lsde-blueprints"
+		},
+		"version": {
+			"const": 1
+		},
+		"generator": {
+			"type": "object",
+			"properties": {
+				"app": {
+					"const": "LSDE"
+				},
+				"version": {
+					"type": "string"
+				}
+			}
+		},
+		"exportedAt": {
+			"type": "string",
+			"format": "date-time"
+		},
+		"project": {
+			"type": "string"
+		},
+		"locales": {
+			"type": "array",
+			"items": {
+				"type": "string"
+			}
+		},
+		"referenceLocale": {
+			"type": "string"
+		},
+		"dictionaries": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"valueType": {
+						"enum": [
+							"boolean",
+							"string",
+							"number"
+						]
+					},
+					"entries": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					}
+				},
+				"required": [
+					"id",
+					"valueType"
+				]
+			}
+		},
+		"functions": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"params": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"name": {
+									"type": "string"
+								},
+								"type": {
+									"enum": [
+										"boolean",
+										"string",
+										"number",
+										"dictionaryKey"
+									]
+								},
+								"dictionary": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				},
+				"required": [
+					"id"
+				]
+			}
+		},
+		"cards": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"role": {
+						"enum": [
+							"none",
+							"characters",
+							"emotions",
+							"places"
+						]
+					}
+				},
+				"required": [
+					"id",
+					"name"
+				]
+			}
+		},
+		"scenes": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"scene": {
+						"type": "string"
+					},
+					"label": {
+						"type": "string"
+					},
+					"start": {
+						"type": "string"
+					},
+					"blocks": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"key": {
+									"type": "string"
+								},
+								"label": {
+									"type": "string"
+								},
+								"parentLabels": {
+									"type": "array",
+									"items": {
+										"type": "string"
+									}
+								},
+								"type": {
+									"enum": [
+										"dialog",
+										"choice",
+										"condition",
+										"action",
+										"note"
+									]
+								},
+								"actors": {
+									"type": "array",
+									"items": {
+										"type": "string"
+									}
+								},
+								"emotion": {
+									"type": "string"
+								},
+								"intensity": {
+									"type": "number"
+								},
+								"text": {
+									"type": "object",
+									"description": "Le texte par code de langue.",
+									"additionalProperties": {
+										"type": "string"
+									}
+								},
+								"body": {
+									"type": "string"
+								},
+								"note": {
+									"type": "string"
+								},
+								"props": {
+									"type": "object"
+								},
+								"calls": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"properties": {
+											"fn": {
+												"type": "string"
+											},
+											"args": {
+												"type": "object"
+											}
+										}
+									}
+								},
+								"cases": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"properties": {
+											"port": {
+												"type": "string"
+											},
+											"when": {
+												"type": "array",
+												"items": {
+													"type": "object",
+													"properties": {
+														"dict": {
+															"type": "string"
+														},
+														"entry": {
+															"type": "string"
+														},
+														"op": {
+															"enum": [
+																"equals",
+																"notEquals",
+																"lessThan",
+																"lessOrEqual",
+																"greaterThan",
+																"greaterOrEqual"
+															]
+														},
+														"value": {},
+														"join": {
+															"enum": [
+																"and",
+																"or"
+															]
+														}
+													},
+													"required": [
+														"dict",
+														"entry",
+														"op",
+														"value"
+													]
+												}
+											}
+										},
+										"required": [
+											"port"
+										]
+									}
+								},
+								"options": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"properties": {
+											"id": {
+												"type": "string"
+											},
+											"key": {
+												"type": "string"
+											},
+											"text": {
+												"type": "object",
+												"description": "Le texte par code de langue.",
+												"additionalProperties": {
+													"type": "string"
+												}
+											},
+											"when": {
+												"type": "array",
+												"items": {
+													"type": "object",
+													"properties": {
+														"dict": {
+															"type": "string"
+														},
+														"entry": {
+															"type": "string"
+														},
+														"op": {
+															"enum": [
+																"equals",
+																"notEquals",
+																"lessThan",
+																"lessOrEqual",
+																"greaterThan",
+																"greaterOrEqual"
+															]
+														},
+														"value": {},
+														"join": {
+															"enum": [
+																"and",
+																"or"
+															]
+														}
+													},
+													"required": [
+														"dict",
+														"entry",
+														"op",
+														"value"
+													]
+												}
+											}
+										}
+									}
+								},
+								"next": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"properties": {
+											"port": {
+												"type": "string"
+											},
+											"to": {
+												"type": "string"
+											},
+											"toPort": {
+												"type": "string"
+											}
+										},
+										"required": [
+											"port",
+											"to",
+											"toPort"
+										]
+									}
+								}
+							},
+							"required": [
+								"id",
+								"key",
+								"type"
+							]
+						}
+					}
+				},
+				"required": [
+					"scene",
+					"blocks"
+				]
+			}
+		}
+	},
+	"required": [
+		"format",
+		"version",
+		"generator",
+		"exportedAt",
+		"project",
+		"locales",
+		"referenceLocale",
+		"dictionaries",
+		"functions",
+		"cards",
+		"scenes"
+	]
+}

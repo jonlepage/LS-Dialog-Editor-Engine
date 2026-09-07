@@ -13,7 +13,10 @@
   (TS, C#, C++, GDScript)
 
 ### Other
-- Add robustness test suites covering the three cases above (TS, C#)
+- Add robustness test suites covering the three cases above, on all four runtimes, each
+  proven by mutation against the previous commit: TypeScript raises `RangeError`, C# and
+  C++ take the whole process down with a stack overflow, GDScript reports three failures
+  and then dies
 - Pin the documented asymmetry between a throwing handler (swallowed) and a throwing
   cleanup function (propagates) with a test, so changing either is deliberate
 - README test counts were stale on all four runtimes
