@@ -136,9 +136,9 @@ export function pickPortFromResults(
 /**
  * Evaluate every case on its own, without picking a port.
  *
- * This is what fills `context.conditionCases[i].result` before the handler runs, so a game can
- * show what matched, override the routing, or log it. Routing itself still goes through
- * {@link evaluateConditionCases} — reading a result here never decides an exit.
+ * Handed to a game that wants to show what matched without changing where the flow goes. The
+ * engine fills `context.cases[i].result` with the same rule, then reads the exit port off those
+ * results with {@link pickPortFromResults} — never by calling this and deciding for itself.
  */
 export function evaluateEachCase(
 	cases: ConditionCase[] | undefined,

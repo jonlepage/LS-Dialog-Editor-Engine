@@ -55,6 +55,18 @@ class SceneHandleImpl : public ISceneHandle, public ITrackHost {
 public:
     SceneHandleImpl(const SceneGraph& sceneGraph, const HandlerRegistry& globalRegistry, SceneHandleCallbacks callbacks);
 
+    /// Closing the scene down is part of destroying it.
+    ///
+    /// scene() hands back a unique_ptr, so a scoped handle is ordinary C++ — and the engine keeps
+    /// a raw pointer to it. Without this, destroying a RUNNING handle left that pointer dangling:
+    /// isRunning() answered true for a scene that no longer existed, and stop() read freed memory.
+    /// The three garbage collected runtimes cannot have this, because the engine's own reference
+    /// keeps the scene alive there; here the handle has to hand itself back.
+    ///
+    /// Destroying a running scene therefore behaves like cancelling it: cleanups run, onSceneExit
+    /// fires, the engine deregisters. Nothing escapes — a destructor must not throw.
+    ~SceneHandleImpl() override;
+
     // ─── ISceneHandle public API ─────────────────────────────────────
     void start() override;
     void cancel() override;

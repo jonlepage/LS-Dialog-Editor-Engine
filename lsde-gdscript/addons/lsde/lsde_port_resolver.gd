@@ -67,7 +67,10 @@ static func _resolve_dialog_port(links: Array, actor_port: Variant) -> Array:
 ## There is no "out" and no fallback: until an option is picked there is nowhere to go, and an
 ## option the writer left unwired ends the flow. Both are the drawing, not an error.
 static func _resolve_choice_port(links: Array, selected_option_id: Variant) -> Array:
-	if selected_option_id == null:
+	# Empty counts as "nothing picked", like the reference implementation: an empty string is not
+	# an option id, and a game writing select_choice(picked_id if picked_id else "") must not send
+	# the flow looking for a port named "".
+	if selected_option_id == null or selected_option_id == "":
 		return []
 	return _on_port(links, selected_option_id)
 

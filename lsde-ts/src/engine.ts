@@ -20,6 +20,7 @@ import { BlueprintGraph } from "./graph.js";
 import { HandlerRegistry } from "./handler-registry.js";
 import { SceneHandleImpl } from "./scene-handle.js";
 import { LsdeUtils } from "./lsde-utils.js";
+import { runCleanup, type CleanupFault } from "./track.js";
 
 /** LSDE Dialog Engine — callback-driven graph dispatcher. */
 export class DialogueEngine implements IDialogueEngine {
@@ -32,8 +33,16 @@ export class DialogueEngine implements IDialogueEngine {
 	 * with it: it dispatches structure and hands blocks over whole.
 	 */
 	private locale = "";
-	/** Running scenes, keyed by whatever reference `scene()` was called with. */
-	private readonly activeScenes = new Map<string, SceneHandleImpl>();
+	/**
+	 * The scenes currently playing, in the order they started.
+	 *
+	 * Keyed by the HANDLE, not by the reference `scene()` was called with. Nothing stops a game
+	 * from opening the same scene twice — a hub revisited while a first pass is parked on a
+	 * handler — and keying by the reference meant the second one EVICTED the first: the engine
+	 * reported one scene when two were playing, and `stop()` could no longer reach the one it had
+	 * dropped, which then ran for the rest of the process.
+	 */
+	private readonly activeScenes = new Set<SceneHandleImpl>();
 	/** Guard preventing scene creation before init() succeeds. */
 	private initialized = false;
 	/**
@@ -147,17 +156,11 @@ export class DialogueEngine implements IDialogueEngine {
 		}
 
 		const handle = new SceneHandleImpl( sceneGraph, this.globalRegistry, {
-			onSceneStarted: ( h ) => this.activeScenes.set( sceneRef, h ),
-			// Only if the entry still points at the handle that is ending. Nothing stops a game
-			// from opening the same scene twice — a hub revisited while a first pass is parked on
-			// a handler — and a blind delete then dropped the LIVE one from the registry: the
-			// engine reported itself idle while a scene was still running, and `stop()` no longer
-			// reached it.
-			onSceneEnded: ( h ) => {
-				if ( this.activeScenes.get( sceneRef ) === h ) {
-					this.activeScenes.delete( sceneRef );
-				}
-			},
+			onSceneStarted: ( h ) => this.activeScenes.add( h ),
+			// The handle that ends is the handle that leaves. No identity check to write: a set of
+			// handles cannot confuse two runs of the same scene the way a map keyed by its name
+			// did.
+			onSceneEnded: ( h ) => this.activeScenes.delete( h ),
 			getResolveCharacter: () => this._resolveCharacter,
 			getConditionResolver: () => this._conditionResolver,
 			getCard: ( cardId ) => graph.getCard( cardId ),
@@ -166,10 +169,23 @@ export class DialogueEngine implements IDialogueEngine {
 		return handle;
 	}
 
+	/**
+	 * Cancel every running scene.
+	 *
+	 * Every one of them, even if a cleanup throws on the way. A scene left running after `stop()`
+	 * is a dialogue the game can no longer see or reach, and one handler's failure must not do
+	 * that to the scenes after it — the same rule a scene already applies to its own tracks. The
+	 * first fault surfaces once there is nothing left to close.
+	 */
 	stop(): void {
-		for ( const handle of Array.from( this.activeScenes.values() ) ) {
-			handle.cancel();
+		let fault: CleanupFault = null;
+		// A copy: cancelling a scene removes it from the set as it ends.
+		for ( const handle of Array.from( this.activeScenes ) ) {
+			// Evaluated FIRST, then kept — see the note in `SceneHandleImpl.shutdown()`.
+			const sceneFault = runCleanup( () => handle.cancel() );
+			fault = fault ?? sceneFault;
 		}
+		if ( fault ) throw fault.value;
 	}
 
 	isRunning(): boolean {
@@ -177,12 +193,12 @@ export class DialogueEngine implements IDialogueEngine {
 	}
 
 	getActiveScenes(): SceneHandle[] {
-		return Array.from( this.activeScenes.values() );
+		return Array.from( this.activeScenes );
 	}
 
 	getCurrentBlocks(): BlueprintBlock[] {
 		const blocks: BlueprintBlock[] = [];
-		for ( const handle of this.activeScenes.values() ) {
+		for ( const handle of this.activeScenes ) {
 			const block = handle.getCurrentBlock();
 			if ( block ) blocks.push( block );
 		}

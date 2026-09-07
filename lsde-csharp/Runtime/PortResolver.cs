@@ -86,7 +86,10 @@ namespace LsdeDialogEngine
         /// </summary>
         private static PortResolutionResult ResolveChoicePort(List<Link> links, string? selectedOptionId)
         {
-            if (selectedOptionId == null) return PortResolutionResult.None;
+            // Empty counts as "nothing picked", like the reference implementation: an empty
+            // string is not an option id, and a game writing SelectChoice(picked?.Id ?? "") must
+            // not send the flow looking for a port named "".
+            if (string.IsNullOrEmpty(selectedOptionId)) return PortResolutionResult.None;
             return new PortResolutionResult(OnPort(links, selectedOptionId));
         }
 

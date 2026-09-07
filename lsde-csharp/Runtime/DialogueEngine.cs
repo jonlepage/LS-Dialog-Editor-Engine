@@ -11,9 +11,14 @@ namespace LsdeDialogEngine
         private BlueprintGraph? _graph;
         private readonly HandlerRegistry _globalRegistry = new HandlerRegistry();
         private string _locale = "";
-        private readonly Dictionary<string, SceneHandleImpl> _activeScenes = new Dictionary<string, SceneHandleImpl>();
+        /// <summary>The scenes currently playing, in the order they started.</summary>
+        /// <remarks>Keyed by the HANDLE, not by the reference Scene() was called with. Nothing
+        /// stops a game from opening the same scene twice — a hub revisited while a first pass is
+        /// parked on a handler — and keying by the reference meant the second one EVICTED the
+        /// first: the engine reported one scene when two were playing, and Stop() could no longer
+        /// reach the one it had dropped, which then ran for the rest of the process.</remarks>
+        private readonly List<SceneHandleImpl> _activeScenes = new List<SceneHandleImpl>();
         private bool _initialized;
-        /// <summary>Character resolution callback. Default: first character in the list.</summary>
         /// <summary>
         /// Which actor of a block is the one speaking. Defaults to the first.
         /// <para>LSDE deliberately refuses to say what the order of Actors means — whether it is
@@ -198,19 +203,11 @@ namespace LsdeDialogEngine
 
             var handle = new SceneHandleImpl(sceneGraph, _globalRegistry, new SceneHandleCallbacks
             {
-                OnSceneStarted = h => _activeScenes[sceneRef] = h,
-                // Only if the entry still points at the handle that is ending. Nothing stops a
-                // game from opening the same scene twice — a hub revisited while a first pass is
-                // parked on a handler — and a blind remove then dropped the LIVE one from the
-                // registry: the engine reported itself idle while a scene was still running, and
-                // Stop() no longer reached it.
-                OnSceneEnded = h =>
-                {
-                    if (_activeScenes.TryGetValue(sceneRef, out var current) && ReferenceEquals(current, h))
-                    {
-                        _activeScenes.Remove(sceneRef);
-                    }
-                },
+                OnSceneStarted = h => _activeScenes.Add(h),
+                // The handle that ends is the handle that leaves. No identity check to write: a
+                // list of handles cannot confuse two runs of the same scene the way a dictionary
+                // keyed by its name did.
+                OnSceneEnded = h => _activeScenes.Remove(h),
                 GetResolveCharacter = () => _resolveCharacter,
                 GetConditionResolver = () => _conditionResolver,
                 GetCard = cardId => graph.GetCard(cardId),
@@ -221,14 +218,23 @@ namespace LsdeDialogEngine
 
         // ─── Engine control ──────────────────────────────────────────────
 
-        /// <summary>Stop all active scenes.</summary>
+        /// <summary>Cancel every running scene.</summary>
+        /// <remarks>Every one of them, even if a cleanup throws on the way. A scene left running
+        /// after Stop() is a dialogue the game can no longer see or reach, and one handler's
+        /// failure must not do that to the scenes after it — the same rule a scene already applies
+        /// to its own tracks. The first fault surfaces once there is nothing left to close.</remarks>
         public void Stop()
         {
-            var handles = new List<SceneHandleImpl>(_activeScenes.Values);
+            Exception? fault = null;
+            // A copy: cancelling a scene removes it from the list as it ends.
+            var handles = new List<SceneHandleImpl>(_activeScenes);
             foreach (var handle in handles)
             {
-                handle.Cancel();
+                // Evaluated FIRST, then kept — see the note in SceneHandleImpl.Shutdown().
+                var sceneFault = Cleanups.Run(handle.Cancel);
+                fault = fault ?? sceneFault;
             }
+            if (fault != null) throw fault;
         }
 
         /// <summary>True if at least one scene is active.</summary>
@@ -238,7 +244,7 @@ namespace LsdeDialogEngine
         public List<ISceneHandle> GetActiveScenes()
         {
             var result = new List<ISceneHandle>();
-            foreach (var handle in _activeScenes.Values)
+            foreach (var handle in _activeScenes)
             {
                 result.Add(handle);
             }
@@ -249,7 +255,7 @@ namespace LsdeDialogEngine
         public List<BlueprintBlock> GetCurrentBlocks()
         {
             var blocks = new List<BlueprintBlock>();
-            foreach (var handle in _activeScenes.Values)
+            foreach (var handle in _activeScenes)
             {
                 var block = handle.GetCurrentBlock();
                 if (block != null) blocks.Add(block);
@@ -257,7 +263,11 @@ namespace LsdeDialogEngine
             return blocks;
         }
 
-        /// <summary>Get connections for a scene (for inter-scene navigation).</summary>
+        /// <summary>Every wire INSIDE a scene, flattened so each carries the block it leaves.</summary>
+        /// <remarks>Graph inspection, for a debug view that wants to see the wiring without playing
+        /// it. It has never had anything to do with going from one scene to another: a wire has
+        /// never crossed a scene in any version of the format, and chaining two scenes is the
+        /// game's own business.</remarks>
         public List<BlueprintConnection> GetSceneConnections(string sceneRef)
         {
             if (_graph == null) return new List<BlueprintConnection>();

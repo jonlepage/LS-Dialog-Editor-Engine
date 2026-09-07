@@ -8,7 +8,14 @@ extends RefCounted
 var _graph: LsdeGraph = null
 var _global_registry: LsdeHandlerRegistry = LsdeHandlerRegistry.new()
 var _locale: String = ""
-var _active_scenes: Dictionary = {}
+## The scenes currently playing, in the order they started.
+##
+## Held by HANDLE, not keyed by the reference scene() was called with. Nothing stops a game from
+## opening the same scene twice — a hub revisited while a first pass is parked on a handler — and
+## keying by the reference meant the second one EVICTED the first: the engine reported one scene
+## when two were playing, and stop() could no longer reach the one it had dropped, which then ran
+## for the rest of the process.
+var _active_scenes: Array = []
 var _initialized: bool = false
 ## Which actor of a block is the one speaking. Defaults to the first.
 ##
@@ -127,16 +134,13 @@ func scene(scene_ref: String) -> LsdeSceneHandle:
 
 	var graph := _graph
 
-	# Only erase if the entry still points at the handle that is ending. Nothing stops a game from
-	# opening the same scene twice - a hub revisited while a first pass is parked on a handler - and
-	# a blind erase then dropped the LIVE one from the registry: the engine reported itself idle
-	# while a scene was still running, and stop() no longer reached it.
+	# The handle that ends is the handle that leaves. No identity check to write: a list of handles
+	# cannot confuse two runs of the same scene the way a dictionary keyed by its name did.
 	var on_ended: Callable = func(h: Variant) -> void:
-		if _active_scenes.get(scene_ref) == h:
-			_active_scenes.erase(scene_ref)
+		_active_scenes.erase(h)
 
 	var handle: LsdeSceneHandle = LsdeSceneHandle.new(scene_graph, _global_registry, {
-		"on_scene_started": func(h: Variant) -> void: _active_scenes[scene_ref] = h,
+		"on_scene_started": func(h: Variant) -> void: _active_scenes.append(h),
 		"on_scene_ended": on_ended,
 		"get_resolve_character": func() -> Callable: return _resolve_character,
 		"get_condition_resolver": func() -> Callable: return _condition_resolver,
@@ -148,7 +152,8 @@ func scene(scene_ref: String) -> LsdeSceneHandle:
 
 ## Stop all active scenes.
 func stop() -> void:
-	var handles: Array = _active_scenes.values().duplicate()
+	# A copy: cancelling a scene removes it from the list as it ends.
+	var handles: Array = _active_scenes.duplicate()
 	for handle in handles:
 		handle.cancel()
 
@@ -158,12 +163,12 @@ func is_running() -> bool:
 
 ## Get all currently active scene handles.
 func get_active_scenes() -> Array:
-	return _active_scenes.values()
+	return _active_scenes.duplicate()
 
 ## Get the current block of every active scene.
 func get_current_blocks() -> Array:
 	var blocks: Array = []
-	for handle in _active_scenes.values():
+	for handle in _active_scenes:
 		var block: Variant = handle.get_current_block()
 		if block != null:
 			blocks.append(block)

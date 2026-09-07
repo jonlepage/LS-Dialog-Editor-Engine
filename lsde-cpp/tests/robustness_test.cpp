@@ -13,6 +13,7 @@
 #include <gtest/gtest.h>
 #include <lsde/engine.h>
 #include <lsde/scene_handle.h>
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
@@ -357,4 +358,155 @@ TEST(Robustness, NextKeptForLaterSurvivesAnotherSceneOnTheSameStack) {
 
     EXPECT_EQ(dispatched.back(), "b2");
     EXPECT_FALSE(handle->isRunning());
+}
+
+// ─── A teardown must finish, whatever throws ─────────────────────────────────
+//
+// The C++ port already evaluated before keeping the fault; TypeScript and C# wrote
+// `fault = fault ?? cancel()`, which short-circuits, and stopped closing tracks at the first one
+// that threw. These two tests exist in all four runtimes so the ports cannot drift back.
+
+TEST(Robustness, CancellingASceneRunsEveryTrackCleanupEvenAfterOneThrows) {
+    std::vector<std::string> cleaned;
+
+    auto fork = dialog("FORK");
+    wire(fork, "MAIN");
+    wire(fork, "SIDE-1");
+    wire(fork, "SIDE-2");
+    auto side1 = dialog("SIDE-1");
+    side1.props["isAsync"] = true;
+    auto side2 = dialog("SIDE-2");
+    side2.props["isAsync"] = true;
+
+    DialogueEngine engine;
+    ASSERT_TRUE(engine.init({oneScene({fork, dialog("MAIN"), side1, side2})}).errors.empty());
+    registerAllHandlers(engine);
+
+    engine.onDialog([&cleaned](ISceneHandle*, const BlueprintBlock* b, IDialogContext*, std::function<void()> next) -> CleanupFn {
+        if (b->id == "FORK") { next(); return {}; }
+        std::string id = b->id;
+        return [&cleaned, id]() {
+            cleaned.push_back(id);
+            if (id == "MAIN") throw std::runtime_error("boom");
+        };
+    });
+
+    auto handle = engine.scene("s1");
+    handle->start();
+    ASSERT_EQ(handle->getActiveTracks(), 2);
+
+    EXPECT_THROW(handle->cancel(), std::runtime_error);
+
+    std::sort(cleaned.begin(), cleaned.end());
+    EXPECT_EQ(cleaned, std::vector<std::string>({"MAIN", "SIDE-1", "SIDE-2"}));
+}
+
+TEST(Robustness, StopCancelsEverySceneEvenAfterOneCleanupThrows) {
+    BlueprintScene sceneA;
+    sceneA.scene = "sA";
+    sceneA.id = "sc_a";
+    sceneA.start = "A";
+    sceneA.blocks = {dialog("A")};
+
+    BlueprintScene sceneB;
+    sceneB.scene = "sB";
+    sceneB.id = "sc_b";
+    sceneB.start = "B";
+    sceneB.blocks = {dialog("B")};
+
+    BlueprintExport bp;
+    bp.format = "lsde-blueprints";
+    bp.version = 1;
+    bp.generator = Generator{"LSDE", "2.0.3"};
+    bp.exportedAt = "2026-09-07T00:00:00.000Z";
+    bp.project = "Test";
+    bp.locales = {"en"};
+    bp.referenceLocale = "en";
+    bp.scenes.push_back(std::move(sceneA));
+    bp.scenes.push_back(std::move(sceneB));
+
+    DialogueEngine engine;
+    ASSERT_TRUE(engine.init({bp}).errors.empty());
+    registerAllHandlers(engine);
+    engine.onDialog([](ISceneHandle*, const BlueprintBlock* b, IDialogContext*, std::function<void()>) -> CleanupFn {
+        if (b->id == "A") return []() { throw std::runtime_error("boom"); };
+        return {};  // park, holding nothing
+    });
+
+    auto a = engine.scene("sA");
+    auto b = engine.scene("sB");
+    a->start();
+    b->start();
+
+    EXPECT_THROW(engine.stop(), std::runtime_error);
+
+    EXPECT_FALSE(a->isRunning());
+    EXPECT_FALSE(b->isRunning());
+    EXPECT_FALSE(engine.isRunning());
+}
+
+// ─── The same scene opened twice ─────────────────────────────────────────────
+//
+// The registry used to be keyed by the scene REFERENCE, so a second start evicted the first
+// handle and it then played on with nothing able to see or stop it.
+
+TEST(Robustness, TheSameSceneOpenedTwiceIsTrackedAndStoppedTwice) {
+    DialogueEngine engine;
+    ASSERT_TRUE(engine.init({oneScene({dialog("DIALOG-001")})}).errors.empty());
+    registerAllHandlers(engine);
+    engine.onDialog([](ISceneHandle*, const BlueprintBlock*, IDialogContext*, std::function<void()>) -> CleanupFn {
+        return {};  // both runs park on their first block
+    });
+
+    auto first = engine.scene("s1");
+    auto second = engine.scene("s1");
+    first->start();
+    second->start();
+
+    EXPECT_EQ(engine.getActiveScenes().size(), 2u);
+
+    engine.stop();
+
+    EXPECT_FALSE(first->isRunning());
+    EXPECT_FALSE(second->isRunning());
+    EXPECT_FALSE(engine.isRunning());
+}
+
+// ─── Destroying a running handle ─────────────────────────────────────────────
+//
+// scene() hands back a unique_ptr, so a scoped handle is ordinary C++:
+//
+//     { auto h = engine.scene("s1"); h->start(); }   // parks, waiting for the player
+//     engine.stop();                                 // ← the engine still points at it
+//
+// The engine kept a RAW pointer in its registry and the handle had no destructor, so the pointer
+// outlived the object: isRunning() answered true for a scene that no longer existed, and stop() or
+// getCurrentBlocks() read freed memory. The three garbage collected runtimes cannot have this —
+// the engine's own reference keeps the scene alive there. C++ has to say it.
+
+TEST(Robustness, DestroyingARunningHandleLeavesNothingBehind) {
+    std::vector<std::string> events;
+
+    DialogueEngine engine;
+    ASSERT_TRUE(engine.init({oneScene({dialog("b1")})}).errors.empty());
+    registerAllHandlers(engine);
+    engine.onSceneExit([&events](const SceneLifecycleArgs&) { events.push_back("exit"); });
+    engine.onDialog([&events](ISceneHandle*, const BlueprintBlock*, IDialogContext*, std::function<void()>) -> CleanupFn {
+        return [&events]() { events.push_back("cleanup"); };  // park, holding a cleanup
+    });
+
+    {
+        auto handle = engine.scene("s1");
+        handle->start();
+        EXPECT_TRUE(handle->isRunning());
+        EXPECT_TRUE(engine.isRunning());
+    }
+
+    // The handle is gone. The engine must know it, and the scene must have been closed properly.
+    EXPECT_FALSE(engine.isRunning());
+    EXPECT_TRUE(engine.getActiveScenes().empty());
+    EXPECT_EQ(events, std::vector<std::string>({"cleanup", "exit"}));
+
+    engine.stop();          // must not touch freed memory
+    engine.getCurrentBlocks();
 }

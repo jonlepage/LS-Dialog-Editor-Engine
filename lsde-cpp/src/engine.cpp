@@ -72,14 +72,12 @@ std::unique_ptr<ISceneHandle> DialogueEngine::scene(const std::string& sceneRef)
     }
 
     auto handle = std::make_unique<SceneHandleImpl>(*sg, _globalRegistry, SceneHandleCallbacks{
-        [this, sceneRef](ISceneHandle* h) { _activeScenes[sceneRef] = h; },
-        // Only if the entry still points at the handle that is ending. Nothing stops a game from
-        // opening the same scene twice - a hub revisited while a first pass is parked on a handler
-        // - and a blind erase then dropped the LIVE one from the registry: the engine reported
-        // itself idle while a scene was still running, and stop() no longer reached it.
-        [this, sceneRef](ISceneHandle* h) {
-            auto it = _activeScenes.find(sceneRef);
-            if (it != _activeScenes.end() && it->second == h) _activeScenes.erase(it);
+        [this](ISceneHandle* h) { _activeScenes.push_back(h); },
+        // The handle that ends is the handle that leaves. No identity check to write: a list of
+        // handles cannot confuse two runs of the same scene the way a map keyed by its name did.
+        [this](ISceneHandle* h) {
+            _activeScenes.erase(std::remove(_activeScenes.begin(), _activeScenes.end(), h),
+                                _activeScenes.end());
         },
         [this]() { return _resolveCharacter; },
         [this]() -> std::function<bool(const ConditionTest&)> { return _conditionResolver; },
@@ -90,23 +88,29 @@ std::unique_ptr<ISceneHandle> DialogueEngine::scene(const std::string& sceneRef)
 }
 
 void DialogueEngine::stop() {
-    // Copy keys to avoid modifying map during iteration
-    std::vector<ISceneHandle*> handles;
-    for (auto& [_, h] : _activeScenes) handles.push_back(h);
-    for (auto* h : handles) h->cancel();
+    std::exception_ptr fault = nullptr;
+    // A copy: cancelling a scene removes it from the list as it ends.
+    std::vector<ISceneHandle*> handles = _activeScenes;
+    for (auto* h : handles) {
+        // Evaluated FIRST, then kept - one scene's failing cleanup must not strand the scenes
+        // after it. See the note in SceneHandleImpl::shutdown().
+        auto sceneFault = runCleanup([h]() { h->cancel(); });
+        if (!fault) fault = sceneFault;
+    }
+    if (fault) std::rethrow_exception(fault);
 }
 
 bool DialogueEngine::isRunning() const { return !_activeScenes.empty(); }
 
 std::vector<ISceneHandle*> DialogueEngine::getActiveScenes() const {
     std::vector<ISceneHandle*> result;
-    for (const auto& [_, h] : _activeScenes) result.push_back(h);
+    for (auto* h : _activeScenes) result.push_back(h);
     return result;
 }
 
 std::vector<const BlueprintBlock*> DialogueEngine::getCurrentBlocks() const {
     std::vector<const BlueprintBlock*> blocks;
-    for (const auto& [_, h] : _activeScenes) {
+    for (auto* h : _activeScenes) {
         auto* block = h->getCurrentBlock();
         if (block) blocks.push_back(block);
     }

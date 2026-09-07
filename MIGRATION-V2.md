@@ -1526,3 +1526,126 @@ un `next()` différé. Les quatre le testent maintenant, avec le cas du double a
 
 Les quatre playgrounds impriment la même scène : 8 blocs visités, 27 fils, mêmes acteurs, même
 émotion, même branche, mêmes marqueurs bruts.
+
+---
+
+# Deuxième revue complète — les fermetures qui ne finissaient pas
+
+Relecture de tout le moteur, pas seulement des fichiers modifiés : les quatre runtimes, module par
+module, en comparant les portages côte à côte. Quatre défauts, tous prouvés par un test qui échoue
+avant le correctif, et tous de la même famille — **une fermeture qui promet d'aller au bout et
+s'arrête en chemin**.
+
+## 1. `fault ?? cancel()` court-circuite
+
+La ligne se lit comme un accumulateur et n'en est pas un : `??` (comme `?:` ou `||`) **n'évalue pas
+sa droite** quand la gauche est déjà remplie. Donc dès qu'un nettoyage levait, la boucle s'arrêtait,
+et toutes les pistes suivantes restaient vivantes avec leur nettoyage jamais exécuté — un panneau
+d'interface, une voix audio, un effet instancié, fuités pour le reste du processus.
+
+Le commentaire au-dessus de cette boucle promettait mot pour mot le contraire : « *every track is
+cancelled even if an earlier cleanup threw* ».
+
+Trois sites en TypeScript, deux en C#. **Le C++ et le GDScript étaient corrects** — le C++ écrit
+`auto f = cancel(); if (!fault) fault = f;`, et le GDScript n'a pas d'exceptions du tout. La
+référence était donc la fautive, et le mauvais comportement était celui des deux runtimes que le
+plus de gens lisent.
+
+La forme retenue partout : **évaluer d'abord, garder ensuite.**
+
+## 2. `engine.stop()` avait le même trou, un étage au-dessus
+
+Deux scènes en cours, la première avec un nettoyage qui lève : l'exception sortait de `stop()` et la
+seconde scène **restait en cours**. Le jeu croyait avoir tout arrêté ; `isRunning()` disait encore
+vrai ; plus rien ne pouvait l'atteindre.
+
+`stop()` applique désormais la règle que la scène applique déjà à ses propres pistes : tout est
+fermé, la première faute remonte à la fin.
+
+## 3. La même scène ouverte deux fois, la moitié manquante
+
+Le problème 7 de la première revue avait corrigé la moitié *effacement* : une scène qui se termine
+n'évince plus son homonyme vivante. La moitié *inscription* avait le même trou — le registre était
+une table indexée par la **référence de scène**, donc le second `start()` écrasait le premier
+handle, qui jouait ensuite indéfiniment sans que rien puisse le voir ni l'arrêter.
+
+Le registre est maintenant une **liste de handles**. Un nom ne peut plus entrer en collision avec
+lui-même, et le contrôle d'identité ajouté au problème 7 disparaît : il ne compensait que le choix
+de clé.
+
+## 4. C++ : détruire un handle en cours laissait un pointeur pendant
+
+`scene()` rend un `unique_ptr`, donc un handle de portée est du C++ ordinaire :
+
+```cpp
+{ auto h = engine.scene("s1"); h->start(); }   // se gare, attend le joueur
+engine.stop();                                  // ← le moteur pointe encore dessus
+```
+
+Le moteur gardait un pointeur **brut** dans son registre et `SceneHandleImpl` n'avait pas de
+destructeur. `isRunning()` répondait vrai pour une scène qui n'existait plus, et `stop()` ou
+`getCurrentBlocks()` lisaient de la mémoire libérée.
+
+`~SceneHandleImpl` ferme désormais la scène si elle tourne encore : les nettoyages s'exécutent,
+`onSceneExit` part, le moteur se désinscrit, et rien ne s'échappe — un destructeur ne doit pas
+lever. Détruire une scène en cours équivaut donc à l'annuler.
+
+**C'est une asymétrie assumée, pas une dérive.** Dans les trois runtimes à ramasse-miettes, lâcher
+sa référence ne détruit rien : le moteur garde la sienne et la scène continue. En C++ l'objet
+disparaît vraiment ; les seules options étaient la fuite ou la fermeture propre. La troisième —
+faire posséder les handles par le moteur via `shared_ptr` — casserait la signature publique de
+`scene()` pour les intégrations existantes.
+
+## Parité de la résolution de ports
+
+`CLAUDE.md` exige que `port-resolver` soit identique partout. Il ne l'était pas : sur un choix, le
+TypeScript traitait un id vide comme « rien de choisi », les trois portages cherchaient un port
+littéralement nommé `""`. Aucun export LSDE ne produit un tel fil, mais `selectChoice(picked?.id ??
+"")` est une ligne de jeu banale.
+
+Les trois portages suivent maintenant la référence. La règle est **épinglée dans la spec partagée**
+(`choice-empty-option-id-picks-nothing`), pas dans quatre tests séparés : vérifié, ce cas échoue
+sans le correctif et passe avec.
+
+## Le petit ménage
+
+- **Neuf `console.log`** de débogage laissés dans `review-regressions.test.ts` — restes des
+  démonstrations de la première revue. Un test affirme, il n'imprime pas.
+- **C# et C++** documentaient `getSceneConnections` comme « *for inter-scene navigation* » —
+  exactement l'erreur que `CLAUDE.md` signale comme ayant déjà coûté un correctif inutile dans
+  l'éditeur. Le TypeScript et le GDScript disaient juste.
+- **C#** : un `<summary>` orphelin, doublé, sur `_resolveCharacter`.
+- **TypeScript** : la docstring d'`evaluateEachCase` envoyait encore le routage vers
+  `evaluateConditionCases` alors qu'il passe par `pickPortFromResults` ; l'ordre de compilation en
+  tête d'`index.ts` avait perdu `track` ; `assertNever` était exporté et importé nulle part.
+
+## Ce que j'ai regardé et laissé tel quel, volontairement
+
+- **`evaluateConditionCases` et `evaluateEachCase` ne sont pas du code mort.** Je les ai d'abord
+  soupçonnés — le moteur ne les appelle pas — puis vérifié : ils sont exposés par `LsdeUtils`, qui
+  est dans le barrel public. Le doublon de règle avec `pickPortFromResults` est celui qu'on a déjà
+  tranché à la première revue (les deux contrats diffèrent : l'un interroge, l'autre lit des
+  résultats déjà calculés). Le rouvrir serait changer d'avis, pas corriger.
+- **`getTypeHandler` est écrit deux fois**, dans `HandlerRegistry` et `SceneHandlerRegistry` : six
+  lignes de `switch` sur un type fermé, dans quatre langages. Vraie duplication, mais sans le
+  ressort qui a fait mal au parcours — elle ne peut pas dériver en silence, parce qu'ajouter un
+  type de bloc casse la compilation aux deux endroits. Extraire une base commune coûterait une
+  hiérarchie de classes dans quatre langages pour un gain nul.
+- **Les quatre fabriques de contexte partagent cinq lignes** (`character`, `actors`, `emotion`,
+  `intensity`, `preventGlobalHandler`). Même raisonnement.
+- **Un bloc qui s'attend lui-même** dans `waitForBlocks` se gare pour toujours. Le validateur
+  pourrait le nommer, comme il nomme `UNKNOWN_WAIT_BLOCK`. C'est une fonctionnalité à décider, pas
+  un défaut à corriger : je ne l'ai pas ajoutée.
+
+## Compte final
+
+| | tests |
+|---|---|
+| TypeScript | 412 |
+| C# | 126 |
+| C++ | 58 |
+| GDScript | 136 |
+| **total** | **732** |
+
+`tsc` et les trois builds sans erreur. Les quatre playgrounds impriment la même scène : 8 blocs
+visités, 27 fils.

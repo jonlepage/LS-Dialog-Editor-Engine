@@ -753,6 +753,31 @@ routing_suites = [
         }],
     },
     {
+        "id": "choice-empty-option-id-picks-nothing",
+        "description": "An empty option id is not a pick: the flow ends, whatever ports exist.",
+        # The four runtimes read "nothing was picked" differently the moment the id is an empty
+        # string: TypeScript treats it as no pick, and the three ports used to look for a port
+        # literally named "". Nothing LSDE exports carries such a wire, but a game writing
+        # selectChoice(picked?.id ?? "") is ordinary, and port resolution is the one file that has
+        # to answer identically everywhere. So the rule is pinned here rather than left to chance.
+        "blueprint": header([scene("s1", [
+            block("CHOICE-001", "choice",
+                  options=[opt("C1", "Only")],
+                  next=[wire("", "DIALOG-002"), wire("C1", "DIALOG-001")]),
+            dlg("DIALOG-001", "Not reached either"),
+            dlg("DIALOG-002", "Must not be taken"),
+        ])]),
+        "sceneId": "s1",
+        "cases": [{
+            "id": "ends-instead-of-taking-the-empty-port",
+            "steps": [
+                {"expect": {"type": "choice", "blockId": "CHOICE-001"},
+                 "action": {"type": "selectChoice", "optionId": ""}},
+            ],
+            "expectedVisited": ["CHOICE-001"],
+        }],
+    },
+    {
         "id": "condition-unwired-case-port",
         "description": "default means no case matched, NOT that the chosen exit has no wire.",
         "blueprint": header([scene("s1", [

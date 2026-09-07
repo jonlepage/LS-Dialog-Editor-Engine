@@ -352,7 +352,11 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 		// if an earlier cleanup threw. Leaving live tracks behind on a closed scene is how a
 		// dialogue kept running after it ended.
 		for ( const track of [...this.tracks] ) {
-			fault = fault ?? track.cancel();
+			// Evaluated FIRST, then kept: `fault ?? track.cancel()` short-circuits, and the very
+			// thing this loop promises — every track closed, whatever threw — stopped happening
+			// at the first fault. The tracks after it stayed alive with their cleanups unrun.
+			const trackFault = track.cancel();
+			fault = fault ?? trackFault;
 		}
 		this.tracks.length = 0;
 

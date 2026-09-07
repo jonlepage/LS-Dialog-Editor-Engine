@@ -18,6 +18,16 @@ namespace lsde {
 SceneHandleImpl::SceneHandleImpl(const SceneGraph& sg, const HandlerRegistry& gr, SceneHandleCallbacks cb)
     : _sceneGraph(sg), _globalRegistry(gr), _callbacks(std::move(cb)) {}
 
+SceneHandleImpl::~SceneHandleImpl() {
+    if (!_running) return;
+    // Swallowed, not propagated: a fault thrown out of a destructor terminates the process, and
+    // there is no caller left to hand it to. The teardown itself still runs to the end.
+    try {
+        shutdown();
+    } catch (...) {
+    }
+}
+
 void SceneHandleImpl::start() {
     if (_running) return;
 

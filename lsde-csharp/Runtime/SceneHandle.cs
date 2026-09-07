@@ -453,7 +453,12 @@ namespace LsdeDialogEngine
             // how a dialogue kept running after it ended.
             foreach (var track in new List<Track>(_tracks))
             {
-                fault = fault ?? track.Cancel();
+                // Evaluated FIRST, then kept: `fault ?? track.Cancel()` short-circuits, and
+                // the very thing this loop promises — every track closed, whatever threw —
+                // stopped happening at the first fault. The tracks after it stayed alive with
+                // their cleanups unrun.
+                var trackFault = track.Cancel();
+                fault = fault ?? trackFault;
             }
             _tracks.Clear();
 

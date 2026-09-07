@@ -1,6 +1,6 @@
 // LSDE Dialog Engine — Public barrel export
 // Build order: types → validator → graph → condition-evaluator → port-resolver
-//              → handler-registry → block-context → scene-handle → engine
+//              → handler-registry → block-context → track → scene-handle → engine
 
 export { DialogueEngine } from './engine.js';
 export { LsdeUtils } from './lsde-utils.js';

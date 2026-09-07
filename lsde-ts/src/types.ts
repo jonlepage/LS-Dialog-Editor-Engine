@@ -649,7 +649,12 @@ export interface IDialogueEngine {
 
 	// ── Engine control ──────────────────────────────────────────────────
 
-	/** Stop all active scenes. */
+	/**
+	 * Cancel every running scene.
+	 *
+	 * Every one of them, even if a cleanup throws on the way — the first fault surfaces once
+	 * there is nothing left to close. A scene opened twice is two scenes here, and both stop.
+	 */
 	stop(): void;
 	/** True if at least one scene is active. */
 	isRunning(): boolean;

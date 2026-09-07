@@ -123,7 +123,7 @@ src/
 | `engine.init({ data })` | Validate blueprint, build graph. Returns `DiagnosticReport`. |
 | `engine.setLocale(locale)` | Set active locale for text resolution. |
 | `engine.scene(sceneRef)` | Create a scene handle (does not start). |
-| `engine.stop()` | Cancel all active scenes. |
+| `engine.stop()` | Cancel every running scene, even if a cleanup throws. |
 | `engine.isRunning()` | True if at least one scene is active. |
 | `engine.getActiveScenes()` | Get all running scene handles. |
 | `engine.getCurrentBlocks()` | Get current block of every active scene. |

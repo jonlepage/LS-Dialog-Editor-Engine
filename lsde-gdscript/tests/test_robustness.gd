@@ -245,6 +245,62 @@ func _test_a_kept_next_called_twice_is_ignored() -> void:
 
 	_assert_eq(seen, ["b1", "b2", "b3"], "the second call is ignored")
 
+# ─── A teardown must finish, whatever throws ──────────────────────────────
+#
+# GDScript has no exceptions, so this runtime never had the short-circuit that stopped TypeScript
+# and C# from cancelling the tracks after the first failing cleanup. The test is here so the port
+# cannot drift into it, and so the four runtimes assert the same contract.
+
+func _test_cancelling_a_scene_runs_every_track_cleanup() -> void:
+	var cleaned: Array = []
+	var side1 := _dialog("SIDE-1")
+	side1["props"] = {"isAsync": true}
+	var side2 := _dialog("SIDE-2")
+	side2["props"] = {"isAsync": true}
+	var engine := _ready_engine(_one_scene([
+		_dialog("FORK", [_link("MAIN"), _link("SIDE-1"), _link("SIDE-2")]),
+		_dialog("MAIN"),
+		side1,
+		side2,
+	]))
+	engine.on_dialog(func(args: Dictionary) -> Variant:
+		var block_id: String = args["block"]["id"]
+		if block_id == "FORK":
+			args["next"].call()
+			return null
+		return func() -> void: cleaned.append(block_id))
+
+	var handle: LsdeSceneHandle = engine.scene("s1")
+	handle.start()
+	_assert_eq(handle.get_active_tracks(), 2, "the fork opened two parallel tracks")
+
+	handle.cancel()
+
+	cleaned.sort()
+	_assert_eq(cleaned, ["MAIN", "SIDE-1", "SIDE-2"], "every track cleanup ran")
+
+# ─── The same scene opened twice ──────────────────────────────────────────
+#
+# The registry used to be keyed by the scene REFERENCE, so a second start evicted the first handle
+# and it then played on with nothing able to see or stop it.
+
+func _test_the_same_scene_opened_twice_is_tracked_twice() -> void:
+	var engine := _ready_engine(_one_scene([_dialog("DIALOG-001")]))
+	engine.on_dialog(func(_args: Dictionary) -> Variant: return null)
+
+	var first: LsdeSceneHandle = engine.scene("s1")
+	var second: LsdeSceneHandle = engine.scene("s1")
+	first.start()
+	second.start()
+
+	_assert_eq(engine.get_active_scenes().size(), 2, "both runs are tracked")
+
+	engine.stop()
+
+	_assert_eq(first.is_running(), false, "stop() reaches the first run")
+	_assert_eq(second.is_running(), false, "stop() reaches the second run")
+	_assert_eq(engine.is_running(), false, "the engine is idle")
+
 # ─── Entry point ──────────────────────────────────────────────────────────
 
 func run() -> Dictionary:
@@ -257,4 +313,6 @@ func run() -> Dictionary:
 	_test_note_chain_reaches_the_real_block()
 	_test_next_kept_for_later_still_advances()
 	_test_a_kept_next_called_twice_is_ignored()
+	_test_cancelling_a_scene_runs_every_track_cleanup()
+	_test_the_same_scene_opened_twice_is_tracked_twice()
 	return {"passed": _passed, "failed": _failed, "total": _total}

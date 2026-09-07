@@ -237,7 +237,9 @@ export class Track implements Waiter {
 		this.currentBlock = null;
 		this.pendingAdvance = null;
 		for ( const childId of this.childTrackIds ) {
-			fault = fault ?? this.host.cancelTrack( childId );
+			// Evaluated FIRST, then kept — see the note in `SceneHandleImpl.shutdown()`.
+			const childFault = this.host.cancelTrack( childId );
+			fault = fault ?? childFault;
 		}
 		this.childTrackIds.length = 0;
 		return fault;

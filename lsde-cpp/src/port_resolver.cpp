@@ -58,7 +58,10 @@ PortResolutionResult resolveDialogPort(
 PortResolutionResult resolveChoicePort(
     const std::vector<Link>& links,
     const std::optional<std::string>& selectedOptionId) {
-    if (!selectedOptionId.has_value()) return {};
+    // Empty counts as "nothing picked", like the reference implementation: an empty string is
+    // not an option id, and a game writing selectChoice(picked ? picked->id : "") must not send
+    // the flow looking for a port named "".
+    if (!selectedOptionId.has_value() || selectedOptionId->empty()) return {};
     return {onPort(links, *selectedOptionId)};
 }
 

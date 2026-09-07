@@ -87,6 +87,12 @@ public:
     // ─── Engine control ──────────────────────────────────────────────
 
     /// Stop all active scenes.
+    /// Cancel every running scene.
+    ///
+    /// Every one of them, even if a cleanup throws on the way. A scene left running after stop()
+    /// is a dialogue the game can no longer see or reach, and one handler's failure must not do
+    /// that to the scenes after it - the same rule a scene already applies to its own tracks. The
+    /// first fault surfaces once there is nothing left to close.
     void stop();
     /// True if at least one scene is active.
     bool isRunning() const;
@@ -94,14 +100,25 @@ public:
     std::vector<ISceneHandle*> getActiveScenes() const;
     /// Get the current block of every active scene.
     std::vector<const BlueprintBlock*> getCurrentBlocks() const;
-    /// Get connections for a scene (for inter-scene navigation).
+    /// Every wire INSIDE a scene, flattened so each carries the block it leaves.
+    ///
+    /// Graph inspection, for a debug view that wants to see the wiring without playing it. It has
+    /// never had anything to do with going from one scene to another: a wire has never crossed a
+    /// scene in any version of the format, and chaining two scenes is the game's own business.
     std::vector<BlueprintConnection> getSceneConnections(const std::string& sceneRef) const;
 
 private:
     std::unique_ptr<BlueprintGraph> _graph;
     HandlerRegistry _globalRegistry;
     std::string _locale;
-    std::unordered_map<std::string, ISceneHandle*> _activeScenes;
+    /// The scenes currently playing, in the order they started.
+    ///
+    /// Held by HANDLE, not keyed by the reference scene() was called with. Nothing stops a game
+    /// from opening the same scene twice - a hub revisited while a first pass is parked on a
+    /// handler - and keying by the reference meant the second one EVICTED the first: the engine
+    /// reported one scene when two were playing, and stop() could no longer reach the one it had
+    /// dropped, which then ran for the rest of the process.
+    std::vector<ISceneHandle*> _activeScenes;
     bool _initialized = false;
     /// Character resolution callback. Default: first character in the list.
     std::function<const Card*(const std::vector<Card>&)> _resolveCharacter =

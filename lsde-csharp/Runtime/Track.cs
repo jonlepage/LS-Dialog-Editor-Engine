@@ -220,7 +220,9 @@ namespace LsdeDialogEngine
             _pendingAdvance = null;
             foreach (var childId in _childTrackIds)
             {
-                fault = fault ?? _host.CancelTrack(childId);
+                // Evaluated FIRST, then kept — see the note in SceneHandleImpl.Shutdown().
+                var childFault = _host.CancelTrack(childId);
+                fault = fault ?? childFault;
             }
             _childTrackIds.Clear();
             return fault;

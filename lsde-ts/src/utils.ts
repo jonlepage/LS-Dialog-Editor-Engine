@@ -5,11 +5,6 @@ import type {
 } from './types.js';
 import { BlockType } from './types.js';
 
-/** Exhaustive switch helper — causes a compile error if a case is missing. */
-export function assertNever( x: never ): never {
-	throw new Error( `Unexpected value: ${ String( x ) }` );
-}
-
 // ─── Type Guards ─────────────────────────────────────────────────────────────
 
 export function isDialogBlock( block: BlueprintBlock ): block is DialogBlock {

@@ -272,5 +272,95 @@ namespace LsdeDialogEngine.Tests
 
             Assert.Equal(new List<string> { "b1", "b2", "b3" }, seen);
         }
+
+        // ─── A teardown must finish, whatever throws ─────────────────────────
+        //
+        // `fault = fault ?? track.Cancel()` reads like an accumulator and is not one: ?? does not
+        // evaluate its right side once the left is set. So the FIRST cleanup that threw ended the
+        // loop, and every track after it stayed alive with its cleanup unrun. C++ and GDScript had
+        // it right; C# and TypeScript did not.
+
+        [Fact]
+        public void CancellingASceneRunsEveryTrackCleanupEvenAfterOneThrows()
+        {
+            var cleaned = new List<string>();
+            var engine = Ready(Build.OneScene(
+                Build.Dialog("FORK").Wire("MAIN").Wire("SIDE-1").Wire("SIDE-2"),
+                Build.Dialog("MAIN"),
+                Build.Dialog("SIDE-1").Prop("isAsync", true),
+                Build.Dialog("SIDE-2").Prop("isAsync", true)));
+
+            engine.OnDialog(args =>
+            {
+                if (args.Block.Id == "FORK") { args.Next(); return null; }
+                var id = args.Block.Id;
+                return () =>
+                {
+                    cleaned.Add(id);
+                    if (id == "MAIN") throw new InvalidOperationException("boom");
+                };
+            });
+
+            var handle = engine.Scene("s1");
+            handle.Start();
+            Assert.Equal(2, handle.GetActiveTracks());
+
+            Assert.Throws<InvalidOperationException>(() => handle.Cancel());
+
+            cleaned.Sort();
+            Assert.Equal(new List<string> { "MAIN", "SIDE-1", "SIDE-2" }, cleaned);
+        }
+
+        [Fact]
+        public void StopCancelsEverySceneEvenAfterOneCleanupThrows()
+        {
+            var engine = new DialogueEngine();
+            var data = Build.Blueprint(
+                Build.Scene(new List<BlueprintBlock> { Build.Dialog("A") }, "sA"),
+                Build.Scene(new List<BlueprintBlock> { Build.Dialog("B") }, "sB"));
+            Assert.Empty(engine.Init(new InitOptions { Data = data }).Errors);
+            RegisterAllHandlers(engine);
+            engine.OnDialog(args =>
+            {
+                if (args.Block.Id == "A") return () => throw new InvalidOperationException("boom");
+                return null;  // park, holding nothing
+            });
+
+            var a = engine.Scene("sA");
+            var b = engine.Scene("sB");
+            a.Start();
+            b.Start();
+
+            Assert.Throws<InvalidOperationException>(() => engine.Stop());
+
+            Assert.False(a.IsRunning());
+            Assert.False(b.IsRunning());
+            Assert.False(engine.IsRunning());
+        }
+
+        // ─── The same scene opened twice ─────────────────────────────────────
+        //
+        // The registry used to be keyed by the scene REFERENCE, so a second start evicted the
+        // first handle and it then played on with nothing able to see or stop it.
+
+        [Fact]
+        public void TheSameSceneOpenedTwiceIsTrackedAndStoppedTwice()
+        {
+            var engine = Ready(Build.OneScene(Build.Dialog("DIALOG-001")));
+            engine.OnDialog(_ => null);  // both runs park on their first block
+
+            var first = engine.Scene("s1");
+            var second = engine.Scene("s1");
+            first.Start();
+            second.Start();
+
+            Assert.Equal(2, engine.GetActiveScenes().Count);
+
+            engine.Stop();
+
+            Assert.False(first.IsRunning());
+            Assert.False(second.IsRunning());
+            Assert.False(engine.IsRunning());
+        }
     }
 }
