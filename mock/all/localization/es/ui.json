@@ -1,0 +1,18 @@
+{
+  "common": {
+    "yes": "Sí",
+    "no": "No",
+    "continue": "Continuar"
+  },
+  "inventory": {
+    "cell": "{{count}} celdas de plasma",
+    "cell_one": "{{count}} celda de plasma",
+    "cell_many": "{{count}} celdas de plasma",
+    "cell_other": "{{count}} celdas de plasma"
+  },
+  "crew": {
+    "greeting": "Bienvenido a bordo.",
+    "greeting_male": "Bienvenido a bordo, señor.",
+    "greeting_female": "Bienvenida a bordo, señora."
+  }
+}

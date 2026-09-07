@@ -1,0 +1,21 @@
+{
+  "common": {
+    "yes": "Yes",
+    "no": "No",
+    "continue": "Continue"
+  },
+  "hud": {
+    "airlock_label": "Airlock 4"
+  },
+  "inventory": {
+    "cell": "{{count}} plasma cells",
+    "cell_one": "{{count}} plasma cell",
+    "cell_many": "{{count}} plasma cells",
+    "cell_other": "{{count}} plasma cells"
+  },
+  "crew": {
+    "greeting": "Welcome aboard.",
+    "greeting_male": "Welcome aboard, sir.",
+    "greeting_female": "Welcome aboard, ma'am."
+  }
+}

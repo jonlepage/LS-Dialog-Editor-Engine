@@ -1,0 +1,27 @@
+{
+  "reactor_breach": {
+    "CHOICE-001": {
+      "C1": "Qu'est-ce que tu as vu au pont trois, {{@a1}} ?",
+      "C2": "Je ne descends pas plus bas.",
+      "C3": "Ton prix.",
+      "C4": "(Ne rien dire et le regarder.)"
+    },
+    "DIALOG-001": "Pas de son. Évidemment qu'il n'y a pas de son.",
+    "DIALOG-002": "Pont réacteur.{|} Le sol est chaud à travers mes bottes.",
+    "DIALOG-003": "Quelqu'un est descendu ici. Récemment.",
+    "DIALOG-005": "Alors dis-moi ce que je regarde.",
+    "DIALOG-007": "Ne dis pas mon nom à voix haute.",
+    "DIALOG-008": "Tout le monde a fini ? La {{i2}} est encore sur le panneau.",
+    "DIALOG-009": "On remonte. Tout de suite.",
+    "DIALOG-010": "{:a2}Ça suffit pour aujourd'hui. Ferme le {{#ui.hud.airlock_label}}.",
+    "DIALOG-011": "Touche pas au couplage, {{@a2}}. Je suis sérieux.",
+    "DIALOG-012": "Bonjour. Nous sommes le quatorze d'un mois que je ne retiens plus."
+  },
+  "docking_ring_brief": {
+    "CHOICE-001": {
+      "C3": "Laisse-moi une minute de plus."
+    },
+    "DIALOG-001": "{{#ui.hud.airlock_label}}.{|} Deux minutes, {{@a1}}.",
+    "DIALOG-002": "Je t'avais dit que ça tiendrait."
+  }
+}

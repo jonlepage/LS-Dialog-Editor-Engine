@@ -1,0 +1,26 @@
+{
+  "reactor_breach": {
+    "CHOICE-001": {
+      "C1": "¿Qué viste en la cubierta tres, {{@a1}}?",
+      "C2": "No bajo más.",
+      "C3": "Di tu precio.",
+      "C4": "(No decir nada y mirarlo.)"
+    },
+    "DIALOG-002": "Cubierta del reactor.{|} El suelo quema a través de las botas.",
+    "DIALOG-003": "Alguien ha bajado aquí. Hace poco.",
+    "DIALOG-005": "Entonces dime qué estoy mirando.",
+    "DIALOG-007": "No digas mi nombre en voz alta.",
+    "DIALOG-008": "¿Todos han terminado? La {{i2}} sigue en el panel.",
+    "DIALOG-009": "Subimos. Ahora.",
+    "DIALOG-010": "{:a2}Ya basta por hoy. Cierra la {{#ui.hud.airlock_label}}.",
+    "DIALOG-011": "No toques el acoplamiento, {{@a2}}. Lo digo en serio.",
+    "DIALOG-012": "Buenos días. Hoy es catorce de un mes que ya no conservo."
+  },
+  "docking_ring_brief": {
+    "CHOICE-001": {
+      "C3": "Dame un minuto más."
+    },
+    "DIALOG-001": "{{#ui.hud.airlock_label}}.{|} Dos minutos, {{@a1}}.",
+    "DIALOG-002": "Te dije que aguantaría."
+  }
+}

@@ -1,0 +1,21 @@
+{
+	"version": 1,
+	"files": {
+		"en/ui.crew.greeting@kael{{0-0#0.mp3": {
+			"clip": "b75409b4b03377e11e71fb33344341af",
+			"bytes": 38078
+		},
+		"fr/ui.crew.greeting@kael{{0-0#0.mp3": {
+			"clip": "0552c8c436a1becc700b630a8662d50a",
+			"bytes": 39332
+		},
+		"es/ui.crew.greeting@kael{{0-0#0.mp3": {
+			"clip": "c6c6c216d114bbe0f75d23f0a0e0f3d5",
+			"bytes": 36824
+		},
+		"fr/ui.crew.greeting@nora{{0-0#0.mp3": {
+			"clip": "249cacc86098943910bfc91738616997",
+			"bytes": 26793
+		}
+	}
+}

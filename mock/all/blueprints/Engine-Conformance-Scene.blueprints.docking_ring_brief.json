@@ -1,0 +1,390 @@
+{
+	"format": "lsde-blueprints",
+	"version": 1,
+	"generator": {
+		"app": "LSDE",
+		"version": "2.0.3"
+	},
+	"exportedAt": "2026-09-07T18:22:48.283Z",
+	"project": "Engine Conformance Scene",
+	"locales": [
+		"en",
+		"fr",
+		"es"
+	],
+	"referenceLocale": "en",
+	"dictionaries": [
+		{
+			"id": "switches",
+			"valueType": "boolean",
+			"entries": [
+				"door_unlocked",
+				"oracle_awake",
+				"reactor_stable",
+				"met_vesk",
+				"alarm_armed"
+			]
+		},
+		{
+			"id": "variables",
+			"valueType": "number",
+			"entries": [
+				"chapter",
+				"credits",
+				"trust_kael",
+				"alarm_level"
+			]
+		},
+		{
+			"id": "items",
+			"valueType": "number",
+			"entries": [
+				"plasma_cell",
+				"keycard",
+				"ration"
+			]
+		},
+		{
+			"id": "flags",
+			"valueType": "string",
+			"entries": [
+				"faction",
+				"last_port",
+				"player_callsign"
+			]
+		}
+	],
+	"functions": [
+		{
+			"id": "play_music",
+			"params": [
+				{
+					"name": "track",
+					"type": "string"
+				},
+				{
+					"name": "fadeMs",
+					"type": "number"
+				},
+				{
+					"name": "loop",
+					"type": "boolean"
+				}
+			]
+		},
+		{
+			"id": "set_switch",
+			"params": [
+				{
+					"name": "flag",
+					"type": "dictionaryKey",
+					"dictionary": "switches"
+				},
+				{
+					"name": "value",
+					"type": "boolean"
+				}
+			]
+		},
+		{
+			"id": "add_item",
+			"params": [
+				{
+					"name": "item",
+					"type": "dictionaryKey",
+					"dictionary": "items"
+				},
+				{
+					"name": "count",
+					"type": "number"
+				}
+			]
+		},
+		{
+			"id": "set_counter",
+			"params": [
+				{
+					"name": "counter",
+					"type": "dictionaryKey",
+					"dictionary": "variables"
+				},
+				{
+					"name": "value",
+					"type": "number"
+				}
+			]
+		},
+		{
+			"id": "write_flag",
+			"params": [
+				{
+					"name": "flag",
+					"type": "dictionaryKey",
+					"dictionary": "flags"
+				},
+				{
+					"name": "value",
+					"type": "string"
+				}
+			]
+		},
+		{
+			"id": "shake_camera",
+			"params": [
+				{
+					"name": "intensity",
+					"type": "number"
+				},
+				{
+					"name": "durationMs",
+					"type": "number"
+				}
+			]
+		},
+		{
+			"id": "unlock_achievement",
+			"params": [
+				{
+					"name": "id",
+					"type": "string"
+				}
+			]
+		},
+		{
+			"id": "close_bulkhead",
+			"params": []
+		}
+	],
+	"cards": [
+		{
+			"id": "var1",
+			"name": "kael",
+			"role": "characters"
+		},
+		{
+			"id": "var2",
+			"name": "nora",
+			"role": "characters"
+		},
+		{
+			"id": "var3",
+			"name": "oracle",
+			"role": "characters"
+		},
+		{
+			"id": "var4",
+			"name": "vesk",
+			"role": "characters"
+		},
+		{
+			"id": "var5",
+			"name": "neutral",
+			"role": "emotions"
+		},
+		{
+			"id": "var6",
+			"name": "angry",
+			"role": "emotions"
+		},
+		{
+			"id": "var7",
+			"name": "afraid",
+			"role": "emotions"
+		},
+		{
+			"id": "var8",
+			"name": "joy",
+			"role": "emotions"
+		},
+		{
+			"id": "var9",
+			"name": "suspicious",
+			"role": "emotions"
+		},
+		{
+			"id": "var10",
+			"name": "reactor_deck",
+			"role": "places"
+		},
+		{
+			"id": "var11",
+			"name": "docking_ring",
+			"role": "places"
+		},
+		{
+			"id": "var12",
+			"name": "plasma_cell",
+			"role": "none"
+		},
+		{
+			"id": "var13",
+			"name": "keycard",
+			"role": "none"
+		},
+		{
+			"id": "var14",
+			"name": "ration",
+			"role": "none"
+		}
+	],
+	"scenes": [
+		{
+			"scene": "docking_ring_brief",
+			"id": "sc_xx7wop3t",
+			"start": "DIALOG-001",
+			"blocks": [
+				{
+					"id": "DIALOG-001",
+					"key": "__blueprints__.docking_ring_brief.DIALOG-001",
+					"type": "dialog",
+					"actors": [
+						"var2"
+					],
+					"emotion": "var5",
+					"intensity": 10,
+					"text": {
+						"en": "{{#ui.hud.airlock_label}}.{|} Two minutes, {{@a1}}.",
+						"fr": "{{#ui.hud.airlock_label}}.{|} Deux minutes, {{@a1}}.",
+						"es": "{{#ui.hud.airlock_label}}.{|} Dos minutos, {{@a1}}."
+					},
+					"note": "Scène courte : elle existe surtout pour vérifier qu'un export séparé produit bien deux fichiers.",
+					"props": {
+						"portraitSide": "left",
+						"typewriterSpeed": 80
+					},
+					"next": [
+						{
+							"port": "out",
+							"to": "CHOICE-001",
+							"toPort": "in"
+						}
+					]
+				},
+				{
+					"id": "CHOICE-001",
+					"key": "__blueprints__.docking_ring_brief.CHOICE-001",
+					"type": "choice",
+					"actors": [
+						"var2"
+					],
+					"note": "Deux de ces réponses lisent leur texte dans une clé d'interface partagée, la troisième a la sienne.",
+					"props": {
+						"choiceTimeoutSec": 5
+					},
+					"options": [
+						{
+							"id": "C1",
+							"key": "ui.common.yes",
+							"text": {
+								"en": "Yes",
+								"fr": "Oui",
+								"es": "Sí"
+							}
+						},
+						{
+							"id": "C2",
+							"key": "ui.common.no",
+							"text": {
+								"en": "No",
+								"fr": "Non",
+								"es": "No"
+							}
+						},
+						{
+							"id": "C3",
+							"key": "__blueprints__.docking_ring_brief.CHOICE-001.C3",
+							"text": {
+								"en": "Give me one more minute.",
+								"fr": "Laisse-moi une minute de plus.",
+								"es": "Dame un minuto más."
+							},
+							"when": [
+								{
+									"dict": "switches",
+									"entry": "reactor_stable",
+									"op": "equals",
+									"value": true
+								}
+							]
+						}
+					],
+					"next": [
+						{
+							"port": "C1",
+							"to": "ACTION-001",
+							"toPort": "in"
+						},
+						{
+							"port": "C2",
+							"to": "DIALOG-002",
+							"toPort": "in"
+						},
+						{
+							"port": "C3",
+							"to": "DIALOG-001",
+							"toPort": "in"
+						}
+					]
+				},
+				{
+					"id": "ACTION-001",
+					"key": "__blueprints__.docking_ring_brief.ACTION-001",
+					"type": "action",
+					"note": "Kael a déjà lancé la séquence avant qu'elle réponde.",
+					"props": {
+						"journalEntry": "départ du sas"
+					},
+					"calls": [
+						{
+							"fn": "set_switch",
+							"args": {
+								"flag": "alarm_armed",
+								"value": false
+							}
+						},
+						{
+							"fn": "play_music",
+							"args": {
+								"track": "departure",
+								"fadeMs": 800,
+								"loop": false
+							}
+						}
+					],
+					"next": [
+						{
+							"port": "then",
+							"to": "DIALOG-002",
+							"toPort": "in"
+						},
+						{
+							"port": "catch",
+							"to": "DIALOG-002",
+							"toPort": "in"
+						}
+					]
+				},
+				{
+					"id": "DIALOG-002",
+					"key": "__blueprints__.docking_ring_brief.DIALOG-002",
+					"type": "dialog",
+					"actors": [
+						"var1"
+					],
+					"emotion": "var8",
+					"intensity": 55,
+					"text": {
+						"en": "Told you it would hold.",
+						"fr": "Je t'avais dit que ça tiendrait.",
+						"es": "Te dije que aguantaría."
+					},
+					"note": "Kael se donne raison alors qu'il n'en savait rien.",
+					"props": {
+						"delay": 200,
+						"waitInput": true
+					}
+				}
+			]
+		}
+	]
+}

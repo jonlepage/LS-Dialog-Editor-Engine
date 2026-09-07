@@ -1,0 +1,27 @@
+{
+  "reactor_breach": {
+    "CHOICE-001": {
+      "C1": "What did you see on deck three, {{@a1}}?",
+      "C2": "I am not going any further.",
+      "C3": "Name your price.",
+      "C4": "(Say nothing and watch him.)"
+    },
+    "DIALOG-001": "No sound. Of course there is no sound.",
+    "DIALOG-002": "Reactor deck.{|} The floor is warm through my boots.",
+    "DIALOG-003": "Someone has been down here. Recently.",
+    "DIALOG-005": "Then tell me what I am looking at.",
+    "DIALOG-007": "Do not say my name out loud.",
+    "DIALOG-008": "Everyone done? The {{i2}} is still on the panel.",
+    "DIALOG-009": "We are going back up. Now.",
+    "DIALOG-010": "{:a2}That is enough for one shift. Seal {{#ui.hud.airlock_label}}.",
+    "DIALOG-011": "Do not touch the coupling, {{@a2}}. I mean it.",
+    "DIALOG-012": "Good morning. Today is the fourteenth of a month I no longer hold."
+  },
+  "docking_ring_brief": {
+    "CHOICE-001": {
+      "C3": "Give me one more minute."
+    },
+    "DIALOG-001": "{{#ui.hud.airlock_label}}.{|} Two minutes, {{@a1}}.",
+    "DIALOG-002": "Told you it would hold."
+  }
+}

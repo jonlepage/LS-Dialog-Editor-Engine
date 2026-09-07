@@ -1,0 +1,21 @@
+{
+  "common": {
+    "yes": "Oui",
+    "no": "Non",
+    "continue": "Continuer"
+  },
+  "hud": {
+    "airlock_label": "Sas 4"
+  },
+  "inventory": {
+    "cell": "{{count}} cellules plasma",
+    "cell_one": "{{count}} cellule plasma",
+    "cell_many": "{{count}} cellules plasma",
+    "cell_other": "{{count}} cellules plasma"
+  },
+  "crew": {
+    "greeting": "Bienvenue à bord.",
+    "greeting_male": "Bienvenue à bord, monsieur.",
+    "greeting_female": "Bienvenue à bord, madame."
+  }
+}
