@@ -537,15 +537,38 @@ dans un export, il passe devant — le champ est optionnel dans les types, on le
 
 ---
 
-## 18. Le texte peut vivre hors du blueprint
+## 18. Le texte est-il toujours dans le blueprint ?
 
-**À faire pendant la migration. Le moteur n'a aucune notion de table externe aujourd'hui.**
+**Une question à LSDE2, pas un chantier. Sa réponse décide s'il y a du travail ou zéro.**
 
-`Block.text` et `Option.text` sont documentés **« when texts are exported »**. Le client peut couper
-l'option : les blocs partent alors sans une ligne de dialogue, et les textes ne vivent plus que dans
-`localization/<locale>/__blueprints__.json`.
+### Comment le moteur trouve un texte aujourd'hui
 
-### La forme de la table
+Il le lit **sur le bloc**, et nulle part ailleurs :
+
+```json
+{ "id": "DIALOG-001", "text": { "fr": "Pas de son.", "en": "No sound." } }
+```
+
+[getLocalizedText](lsde-ts/src/playground.ts#L57) prend la langue active dans ce petit objet et rend
+la chaîne. C'est tout le mécanisme. Le moteur n'ouvre aucun fichier, ne connaît aucune table.
+
+### Ce qui m'a fait ouvrir le problème
+
+Dans les types générés, le champ est optionnel, avec ce commentaire :
+
+```ts
+/** The line by locale, dialogs only, when texts are exported. */
+text?: TextByLocale;
+```
+
+**« when texts are exported »** — la phrase sous-entend qu'un export peut ne PAS contenir les textes.
+Si c'est le cas, les blocs arrivent sans une ligne de dialogue, et le moteur n'a plus rien à rendre :
+`getLocalizedText()` retourne `undefined` sur tous les blocs de la scène.
+
+### Où seraient les textes dans ce cas
+
+Dans le dossier `localization/` livré à côté. Le fichier `__blueprints__.json` de chaque langue
+contient exactement les mêmes textes, indexés autrement :
 
 ```json
 { "reactor_breach": {
@@ -553,24 +576,34 @@ l'option : les blocs partent alors sans une ligne de dialogue, et les textes ne 
     "CHOICE-001": { "C1": "Qu'est-ce que tu as vu au pont trois ?", "C2": "..." } } }
 ```
 
-Indexée `scène → bloc`, et `scène → bloc → option` pour un choix. Chaque bloc porte déjà le chemin
-complet dans son champ `key` (`__blueprints__.reactor_breach.DIALOG-001`).
+`scène → bloc` pour un dialogue, `scène → bloc → option` pour un choix.
 
-### Ce que ça change pour le moteur
+### Ce que le relevé dit
 
-La v1 n'avait **rien** de tel : le texte était toujours dans le blueprint, et
-[getLocalizedText](lsde-ts/src/playground.ts#L57) le lisait sur le bloc. Il faut :
+Les **trois** exports du dépôt (`mock/all`, `mock/multi`, `mock/blueprints`) contiennent leurs textes
+**deux fois** : en ligne sur les blocs, ET dans `localization/`. 28 blocs parlants, 28 avec leur
+`text`. **Le cas « sans texte » n'a jamais été produit par LSDE2.**
 
-1. Une entrée pour fournir une table par langue — c'est le développeur qui charge le fichier, le
-   moteur ne fait pas d'IO.
-2. La résolution en deux temps : le `text` du bloc d'abord, la table ensuite.
-3. **Ne pas planter** quand aucun des deux ne répond. Un bloc sans texte reste un bloc valide qu'on
-   traverse — c'est au développeur d'afficher ce qu'il veut.
+Donc soit l'option existe et personne ne l'a cochée, soit le `?` du type est une simple prudence
+d'écriture et le champ est toujours là.
 
-### Ce qui reste hors sujet
+### La question à LSDE2
 
-`localization/<locale>/main.json` et `ui.json` sont les dictionnaires du **jeu**. Un texte qui cite
-`{{#ui.hud.airlock_label}}` les vise — le moteur passe la chaîne brute, il n'ouvre pas ces fichiers.
+**Existe-t-il un réglage d'export qui retire `text` des blocs ?**
+
+- **Non** → rien à faire. On note que `text` est toujours présent, et le moteur ne change pas.
+- **Oui** → le moteur doit accepter une table externe :
+  1. une entrée où le développeur dépose la table de sa langue — c'est lui qui charge le fichier,
+     le moteur ne fait pas d'IO ;
+  2. la résolution en deux temps : le `text` du bloc d'abord, la table ensuite ;
+  3. aucun plantage quand ni l'un ni l'autre ne répond — un bloc sans texte reste un bloc valide
+     qu'on traverse.
+
+### À ne pas confondre
+
+`localization/<locale>/ui.json` et `main.json` sont les dictionnaires **du jeu**, pas des blueprints.
+`DIALOG-010` écrit `Ferme le {{#ui.hud.airlock_label}}` et c'est `ui.json` qui contient `"Sas 4"` —
+mais **le moteur ne les ouvre pas et ne remplace rien**. Il rend la chaîne avec ses marqueurs intacts.
 Voir *Ce que le moteur ne fait jamais*.
 
 ---
@@ -593,7 +626,7 @@ Voir *Ce que le moteur ne fait jamais*.
 | 9, 10 | Convention de nommage, multi-fichiers | 1 |
 | 11 | Faire remonter les erreurs | — |
 | 16 | L'émotion sur le bloc | 1 |
-| 18 | Le texte hors du blueprint | 1 |
+| 18 | Le texte hors du blueprint | **réponse de LSDE2** — peut-être rien à faire |
 | 15 | Reconstruire `getSceneConnections` | 1 |
 | 17 | — *refermé, rien à faire* | — |
 | 14 | Monter le CI | **tout** — c'est la dernière étape |
@@ -715,7 +748,7 @@ Aucune action côté moteur. Consigné pour que personne ne le redécouvre comme
 
 ## Ce que la v2 ajoute et qu'il faudra savoir lire
 
-- **`text` peut être absent** — devenu le **problème 18**.
+- **`text` déclaré optionnel** — devenu le **problème 18**. Jamais observé absent.
 - **`cards`** — la table qui donne un `name` aux ids `var1`, `var2` (problème 5).
 - **`Block.body`** pour le corps d'une note. Non utilisé dans l'export : les deux notes portent leur
   texte dans `note`. À signaler à LSDE2, sans importance pour le moteur — il ignore les notes.
@@ -809,5 +842,6 @@ Le README annonçait 216 / 42 / **40-sur-42** / 42. Les quatre étaient faux.
   `getSceneConnections` rend les fils **de** la scène, et le seul blueprint v1 du dépôt n'a qu'une
   scène. Le 16 et le 17 sont des décisions de LSDE2 que la vérification confirme : un bloc a un ton,
   et `DIALOG-007` + sa `note` valent mieux qu'un nom qu'il faut maintenir.
-- **Problème 18 ouvert** : le texte peut vivre hors du blueprint. C'est le seul vrai manque du
-  moteur trouvé par cette passe.
+- **Problème 18 ouvert** : le type dit `text?` « when texts are exported », mais les trois exports
+  du dépôt portent leurs 28 textes en ligne. Une question à LSDE2 : ce réglage existe-t-il ? Si non,
+  zéro travail. C'est le seul point encore ouvert de toute la passe de couverture.
