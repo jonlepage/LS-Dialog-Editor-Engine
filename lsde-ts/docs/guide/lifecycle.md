@@ -80,8 +80,8 @@ Execution properties that control how a block is dispatched by the engine:
 | Field | Type | Description |
 |-------|------|-------------|
 | `isAsync` | `boolean?` | Execute on a parallel async track |
-| `delay` | `number?` | Delay before execution (consumed by `onBeforeBlock`) |
-| `timeout` | `number?` | Execution timeout |
+| `delay` | `number?` | **MILLISECONDS** before the block plays. Applied by `onBeforeBlock`, never by the engine |
+| `timeout` | `number?` | **MILLISECONDS**. Passed through — the engine enforces nothing |
 | `portPerCharacter` | `boolean?` | One output port per character in metadata |
 | `skipIfMissingActor` | `boolean?` | Skip block if referenced actor is absent |
 | `debug` | `boolean?` | Debug flag for editor use |
@@ -95,7 +95,7 @@ Execution properties that control how a block is dispatched by the engine:
 ```mermaid
 flowchart TD
     A["next() called"] --> B["cleanup previous block"]
-    B --> C[processBlock]
+    B --> C["the track enters the block"]
     C --> D{NOTE block?}
     D -- yes --> E[skip to next connection]
     D -- no --> F["onValidateNextBlock\n• nextContext.character\n• fromContext.character"]

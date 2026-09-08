@@ -2049,3 +2049,52 @@ TypeDoc les signalait à chaque génération du site :
 Le site de documentation se construit, `npm ci` valide le verrou, la régénération des specs
 partagées ne bouge pas d'un octet.
 
+## Ce que la question « es-tu certain ? » a encore trouvé
+
+Le doute était fondé : je venais de changer les chemins de build C# sans vérifier l'empaquetage.
+
+**Vérifié, et bon :** les trois paquets NuGet se construisent, et le `.xml` embarqué contient bien
+les 43 membres nouvellement documentés. Le `MiniRuntime` tourne encore. Les **quatre** playgrounds
+impriment la même chose — mêmes huit blocs, dans le même ordre, 8 visités, 27 fils, 2 scènes /
+22 blocs / 33 fils. Aucun `assert()` nulle part en C++ : le piège qui a coûté un défaut en GDScript
+n'existe pas là. Et le C++ passe **aussi en Release**, 64/64, sans un avertissement — ce qui n'avait
+jamais été essayé, le générateur Visual Studio ignorant `CMAKE_BUILD_TYPE`. `build:release` et
+`test:release` rendent ce chemin accessible.
+
+**Trouvé, et corrigé :** les quatre README décrivaient une architecture morte — `scene-handle` comme
+boucle de parcours plus une classe `AsyncTrack`, disparues toutes deux à la centralisation — et le
+diagramme du guide, dans les quatre langues, nommait `processBlock`, l'interne supprimé avec elles.
+Le README C# annonçait `src/`, `tests/`, `samples/` et `Utils.cs`, quatre chemins qui n'existent
+plus depuis la mise en forme Unity. Le `Makefile` et les guides `what-is-lsde` des quatre langues
+portaient encore le « 42 cas de test » que je venais de corriger dans les README.
+
+Le patron, une fois de plus : **j'avais corrigé les trois portages et oublié l'implémentation de
+référence.** La ligne `AsyncTrack` du README TypeScript a survécu à la passe où je corrigeais
+exactement cette ligne dans les trois autres.
+
+## Le guide français décrivait le comportement inverse
+
+En comparant les quatre langues section par section — ce que je n'avais jamais fait — une page
+sortait : `lifecycle.md` a neuf sections en anglais et huit dans les trois autres langues.
+
+La section manquante n'était pas manquante : l'anglais avait été restructuré et **réécrit**, les
+autres pas. Le résultat, dans « Error Boundaries » :
+
+> « L'erreur est **silencieuse** — elle n'est pas loguée ni re-throw. »
+
+C'est le comportement de la v1, celui que la revue a précisément renversé. Le moteur ferme
+maintenant la scène puis **re-throw** à l'appelant. Un studio francophone lisant cette page
+n'entourerait pas `start()` d'un `try/catch`, et prendrait l'exception en production.
+
+Le français est réaligné, section par section, avec la bonne description. Et les deux tableaux
+`NativeProperties` de `lifecycle.md` — anglais compris — ne disaient toujours pas que `delay` et
+`timeout` sont en **millisecondes** ; `block-types.md` le disait, pas celui-là.
+
+## Ce qui reste, chiffré
+
+Trois fichiers de guide sur onze sont en retard en japonais et en chinois : `block-types.md`,
+`blueprints.md` et `lifecycle.md`. Ce n'est pas seulement de la prose à rafraîchir — deux d'entre
+eux affirment des choses **fausses** : le mode dispatcher supprimé y est toujours documenté, et
+« Error Boundaries » y dit encore que les erreurs sont silencieuses. Ces trois-là doivent ouvrir la
+passe de traduction, pas la fermer.
+

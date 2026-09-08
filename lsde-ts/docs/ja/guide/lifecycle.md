@@ -82,7 +82,7 @@ engine が block をディスパッチする方法を制御する実行プロパ
 ```mermaid
 flowchart TD
     A["next() called"] --> B["cleanup previous block"]
-    B --> C[processBlock]
+    B --> C["the track enters the block"]
     C --> D{NOTE block?}
     D -- yes --> E[skip to next connection]
     D -- no --> F["onValidateNextBlock\n• nextContext.character\n• fromContext.character"]

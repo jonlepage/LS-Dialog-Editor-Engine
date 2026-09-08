@@ -13,7 +13,7 @@
 | **C++** | C++17 | Unreal Engine, 自定义引擎 | [lsde-cpp](https://github.com/jonlepage/LS-Dialog-Editor-Engine/tree/master/lsde-cpp) |
 | **GDScript** | GDScript | Godot 4 | [lsde-gdscript](https://github.com/jonlepage/LS-Dialog-Editor-Engine/tree/master/lsde-gdscript) |
 
-所有运行时共享相同的 blueprint 格式，并通过一套通用的跨语言测试套件（42 个测试用例）。
+所有运行时共享相同的 blueprint 格式，并通过一套通用的跨语言测试套件（52 个测试用例）。
 
 ## 架构
 

@@ -108,6 +108,19 @@ manager matches the number on the writer's screen.
   `evaluateEachCase` had no name a TypeScript game could write down
 - The Unity package no longer imports NuGet restore artifacts: build output was redirected out
   of `Runtime/` by properties an SDK-style project reads too late to matter
+- The four READMEs described an architecture that no longer exists — `scene-handle` as the
+  traversal loop plus an `AsyncTrack` class, both gone since the walk was written once in
+  `track` — and the guide's execution diagram named `processBlock`, an internal removed with
+  them. The C# README also named paths from before the Unity layout
+- C++ Release is reachable and verified: `npm run build:release` / `test:release`. Only Debug
+  had ever been built
+- The French `lifecycle` guide described the behaviour v2 reversed — "the error is silent, it
+  is neither logged nor re-thrown" — and was two sections behind the English rewrite. It is
+  realigned section by section. `delay` and `timeout` are now stated as MILLISECONDS in that
+  page's table too, English included
+- Three guide pages still lag in Japanese and Chinese — `block-types`, `blueprints`,
+  `lifecycle` — and two of them state things that are no longer true: the removed dispatcher
+  mode, and errors being swallowed. They lead the translation pass
 
 ## v0.3.0 (2026-04-01)
 

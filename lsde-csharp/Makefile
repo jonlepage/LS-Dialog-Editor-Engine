@@ -7,7 +7,7 @@
 build:
 	dotnet build
 
-## Run all 42 cross-language tests
+## Run the full suite (xUnit), the 52 shared cross-language cases included
 test:
 	dotnet test --verbosity normal
 

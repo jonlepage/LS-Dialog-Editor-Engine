@@ -152,10 +152,16 @@ See the [Integration Guide](https://jonlepage.github.io/LS-Dialog-Editor-Engine/
 | Command | Description |
 |---------|-------------|
 | `npm run configure` | Run CMake configure (once) |
-| `npm run build` | Build the project |
+| `npm run build` | Build the project (Debug) |
 | `npm run test` | Run the full suite (Google Test) |
+| `npm run build:release` | Build Release — what a shipping game links against |
+| `npm run test:release` | Run the full suite against the Release build |
 | `npm run playground` | Run playground against a real blueprint |
 | `npm run rebuild` | Configure + build |
+
+The Visual Studio generator picks its configuration at BUILD time, so it reports
+`CMAKE_BUILD_TYPE` as an unused variable at configure. The flag is kept because single-config
+generators — the Makefile generator CI uses — do need it.
 
 ---
 
@@ -165,13 +171,15 @@ See the [Integration Guide](https://jonlepage.github.io/LS-Dialog-Editor-Engine/
 include/lsde/             # Public headers (zero external deps)
 ├── types.h                # All structs, enums, abstract classes
 ├── engine.h               # Public facade
-├── scene_handle.h         # Traversal loop + AsyncTrack
+├── track.h                # THE traversal, written once. The main flow is a track, id 0
+├── scene_handle.h         # The scene: public API, and what its tracks share
 ├── handler_registry.h     # Two-tier handler resolution
 ├── port_resolver.h        # Output port routing
 ├── block_context.h        # Context factories
 ├── condition_evaluator.h  # AND/OR chain evaluation
 ├── graph.h                # Scene + Blueprint indexing
 ├── validator.h            # Blueprint validation
+├── json_loader.h          # Optional nlohmann/json loader — NOT part of the core
 └── utils.h                # Type checks, helpers (header-only)
 
 src/                       # Implementations

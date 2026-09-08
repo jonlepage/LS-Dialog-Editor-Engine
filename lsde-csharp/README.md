@@ -132,20 +132,26 @@ public void OnContinueClicked() {
 ## Project Structure
 
 ```
-src/LsdeDialogEngine/       # Engine library (netstandard2.1, zero dependencies)
-├── Types.cs                 # All types, interfaces, delegates
-├── DialogueEngine.cs        # Public facade
-├── SceneHandle.cs           # Traversal loop + AsyncTrack
-├── HandlerRegistry.cs       # Two-tier handler resolution
-├── PortResolver.cs          # Output port routing
+Runtime/                     # The Unity package. Engine library, netstandard2.1, zero dependencies
+├── Types.cs                  # All types, interfaces, delegates
+├── DialogueEngine.cs         # Public facade
+├── Track.cs                  # THE traversal, written once. The main flow is a track, id 0
+├── SceneHandle.cs            # The scene: public API, and what its tracks share
+├── HandlerRegistry.cs        # Two-tier handler resolution
+├── PortResolver.cs           # Output port routing
 ├── BlockContext.cs           # Context factories
-├── ConditionEvaluator.cs    # AND/OR chain evaluation
-├── Graph.cs                 # Scene + Blueprint indexing
-├── Validator.cs             # Blueprint validation
-└── Utils.cs                 # Type checks, helpers
+├── ConditionEvaluator.cs     # AND/OR chain evaluation
+├── Graph.cs                  # Scene + Blueprint indexing
+├── Validator.cs              # Blueprint validation
+├── LsdeUtils.cs              # Type checks, helpers
+└── Newtonsoft/               # Optional loader companion package
 
-tests/LsdeDialogEngine.Tests/  # xUnit test runner
-samples/MiniRuntime/            # Console playground
+src~/LsdeDialogEngine.SystemTextJson/  # Optional loader companion package
+tests~/                                # xUnit test runners
+samples~/MiniRuntime/                  # Console playground
+
+A `~` suffix is how a folder is kept OUT of a Unity package: everything but Runtime/ is source
+and tooling that a game must never import. Build output goes to build~/ for the same reason.
 ```
 
 ---

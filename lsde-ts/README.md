@@ -98,8 +98,10 @@ handle.start();
 
 ```
 src/
+├── index.ts              # Public barrel export — what a game imports
 ├── engine.ts             # Public facade — init, handlers, scene()
-├── scene-handle.ts       # Traversal loop + AsyncTrack (multi-track)
+├── track.ts              # THE traversal, written once. The main flow is a track, id 0
+├── scene-handle.ts       # The scene: public API, and what its tracks share
 ├── handler-registry.ts   # Two-tier handler resolution
 ├── port-resolver.ts      # Output port routing (critical algorithm)
 ├── block-context.ts      # Context factories per block type

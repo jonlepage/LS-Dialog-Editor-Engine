@@ -5,8 +5,10 @@
   "description": "Task runner for the C++ LSDE Dialog Engine (requires CMake + C++ compiler)",
   "scripts": {
     "configure": "scripts\\cmake.cmd -B build -DCMAKE_BUILD_TYPE=Debug",
-    "build": "scripts\\cmake.cmd --build build",
-    "test": "scripts\\ctest.cmd --test-dir build --output-on-failure",
+    "build": "scripts\\cmake.cmd --build build --config Debug",
+    "test": "scripts\\ctest.cmd --test-dir build --output-on-failure -C Debug",
+    "build:release": "scripts\\cmake.cmd --build build --config Release",
+    "test:release": "scripts\\ctest.cmd --test-dir build --output-on-failure -C Release",
     "playground": "build\\samples\\playground\\Debug\\lsde_playground.exe",
     "clean": "scripts\\cmake.cmd --build build --target clean",
     "rebuild": "npm run configure && npm run build"

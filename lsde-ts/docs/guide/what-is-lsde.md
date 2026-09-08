@@ -13,7 +13,7 @@
 | **C++** | C++17 | Unreal Engine, custom engines | [lsde-cpp](https://github.com/jonlepage/LS-Dialog-Editor-Engine/tree/master/lsde-cpp) |
 | **GDScript** | GDScript | Godot 4 | [lsde-gdscript](https://github.com/jonlepage/LS-Dialog-Editor-Engine/tree/master/lsde-gdscript) |
 
-All runtimes share the same blueprint format and pass a common cross-language test suite (42 test cases).
+All runtimes share the same blueprint format and pass a common cross-language test suite (52 test cases).
 
 ## Architecture
 

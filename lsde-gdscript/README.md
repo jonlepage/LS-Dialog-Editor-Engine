@@ -136,7 +136,8 @@ Requires Godot 4.6+ in PATH or the full path to the executable.
 ```
 addons/lsde/                      # Drop this into your Godot project
 ├── lsde_engine.gd                # Public facade (LsdeDialogueEngine)
-├── lsde_scene_handle.gd          # Traversal loop + AsyncTrack
+├── lsde_track.gd                 # THE traversal, written once. The main flow is a track, id 0
+├── lsde_scene_handle.gd          # The scene: public API, and what its tracks share
 ├── lsde_handler_registry.gd      # Two-tier handler resolution
 ├── lsde_port_resolver.gd         # Output port routing
 ├── lsde_block_context.gd         # Context factories
