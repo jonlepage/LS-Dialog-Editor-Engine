@@ -133,6 +133,14 @@ public:
     std::exception_ptr cancel();
 
     bool isRunning() const;
+
+    /// Parked on a `waitForBlocks` — alive, but unable to move on its own.
+    ///
+    /// It is waiting for ANOTHER track to visit a block, so it cannot be what keeps a scene open:
+    /// once every remaining track is parked like this, nothing will ever visit anything again.
+    /// That is the deadlock `SceneHandleImpl::trackEnded` closes the scene on.
+    bool isWaitingForBlocks() const;
+
     const BlueprintBlock* getCurrentBlock() const;
 
     /// Called once every block this track was waiting on has been visited.

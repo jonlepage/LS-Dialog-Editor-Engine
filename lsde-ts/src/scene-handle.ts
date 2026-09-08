@@ -269,16 +269,31 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 	}
 
 	/**
-	 * @internal — A track has nowhere left to go.
+	 * @internal — A track has nowhere left to go. Retire it, and close the scene once nothing is
+	 * left that could still move.
 	 *
-	 * This is the ONE thing that tells the main flow apart from a parallel branch: when the main
-	 * flow ends, the scene is over — every other track is cancelled and `onSceneExit` fires. When
-	 * a branch ends, it is simply retired and the scene plays on.
+	 * Every track is retired the same way, the main flow included. What ends the scene is the
+	 * pool running out of tracks able to advance, not the main flow reaching its end.
+	 *
+	 * It used to be the main flow: `trackEnded` on track 0 called `shutdown()`, which cancels
+	 * every live track. That contradicted the promise `Track.endFlow` makes — child tracks
+	 * survive, only an explicit `cancel()` cascades — for the one track that opens most of them,
+	 * and it made a whole port silently do nothing: a port whose targets are ALL `isAsync` leaves
+	 * the main flow no continuation, so it ends the instant it has spawned them, and shutdown
+	 * cancelled the branches born three lines earlier. They never got past `onBeforeBlock`.
+	 *
+	 * A track parked on a `waitForBlocks` does NOT count as able to advance: it is waiting for
+	 * another track to visit a block, so once every survivor is parked, nothing will ever visit
+	 * anything again. Keeping the scene open on those would turn an unreachable wait into a scene
+	 * that never closes.
+	 *
+	 * An explicit `cancel()` still tears the whole scene down at once — that is its job.
 	 */
 	trackEnded( track: Track ): CleanupFault {
-		if ( track.id === MAIN_TRACK_ID ) return this.shutdown();
 		this.removeTrack( track );
-		return null;
+		const canStillAdvance = this.tracks.some( t => t.isRunning() && !t.isWaitingForBlocks() );
+		if ( canStillAdvance ) return null;
+		return this.shutdown();
 	}
 
 	/**

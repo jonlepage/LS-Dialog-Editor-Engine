@@ -237,16 +237,30 @@ func _cancel_track(track_id: int) -> void:
 			track.cancel()
 			return
 
-## A track has nowhere left to go.
+## A track has nowhere left to go. Retire it, and close the scene once nothing is left that could
+## still move.
 ##
-## This is the ONE thing that tells the main flow apart from a parallel branch: when the main flow
-## ends the scene is over — every other track is cancelled and on_scene_exit fires. When a branch
-## ends it is simply retired and the scene plays on.
+## Every track is retired the same way, the main flow included. What ends the scene is the pool
+## running out of tracks able to advance, not the main flow reaching its end.
+##
+## It used to be the main flow: _track_ended on track 0 called _shutdown(), which cancels every live
+## track. That contradicted the promise LsdeTrack._end_flow makes — child tracks survive, only an
+## explicit cancel() cascades — for the one track that opens most of them, and it made a whole port
+## silently do nothing: a port whose targets are ALL isAsync leaves the main flow no continuation,
+## so it ends the instant it has spawned them, and shutdown cancelled the branches born three lines
+## earlier. They never got past on_before_block.
+##
+## A track parked on a waitForBlocks does NOT count as able to advance: it is waiting for another
+## track to visit a block, so once every survivor is parked, nothing will ever visit anything again.
+## Keeping the scene open on those would turn an unreachable wait into a scene that never closes.
+##
+## An explicit cancel() still tears the whole scene down at once — that is its job.
 func _track_ended(track: Variant) -> void:
-	if track.id == LsdeTrack.MAIN_TRACK_ID:
-		_shutdown()
-		return
 	_remove_track(track)
+	for other in _tracks:
+		if other.is_running() and not other.is_waiting_for_blocks():
+			return
+	_shutdown()
 
 ## Register a track as waiting for a set of block ids to be visited.
 ## Park a track - or the main flow - until every listed block has been visited.

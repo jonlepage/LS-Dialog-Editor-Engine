@@ -86,6 +86,15 @@ func is_running() -> bool:
 	return _running
 
 
+## Parked on a waitForBlocks — alive, but unable to move on its own.
+##
+## It is waiting for ANOTHER track to visit a block, so it cannot be what keeps a scene open: once
+## every remaining track is parked like this, nothing will ever visit anything again. That is the
+## deadlock LsdeSceneHandle._track_ended closes the scene on.
+func is_waiting_for_blocks() -> bool:
+	return _pending_advance.is_valid()
+
+
 func get_current_block() -> Variant:
 	return _current_block
 

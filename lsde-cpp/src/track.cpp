@@ -97,6 +97,8 @@ std::exception_ptr Track::cancel() {
 
 bool Track::isRunning() const { return _running; }
 
+bool Track::isWaitingForBlocks() const { return static_cast<bool>(_pendingAdvance); }
+
 const BlueprintBlock* Track::getCurrentBlock() const { return _currentBlock; }
 
 void Track::notifyWaitSatisfied() {

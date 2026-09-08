@@ -230,6 +230,13 @@ namespace LsdeDialogEngine
 
         internal bool IsRunning() => _running;
 
+        /// <summary>Parked on a waitForBlocks — alive, but unable to move on its own.</summary>
+        /// <remarks>It is waiting for ANOTHER track to visit a block, so it cannot be what keeps a
+        /// scene open: once every remaining track is parked like this, nothing will ever visit
+        /// anything again. That is the deadlock SceneHandleImpl.TrackEnded closes the scene
+        /// on.</remarks>
+        internal bool IsWaitingForBlocks() => _pendingAdvance != null;
+
         internal BlueprintBlock? GetCurrentBlock() => _currentBlock;
 
         /// <summary>Called once every block this track was waiting on has been visited.</summary>

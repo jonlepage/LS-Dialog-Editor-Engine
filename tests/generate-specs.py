@@ -912,6 +912,39 @@ flow_suites += [
             "orderIndependent": True,
         }],
     },
+    {
+        "id": "port-with-only-async-targets",
+        "description": "A port whose every target is isAsync: the branches play, and the main flow "
+                       "ending is not the scene ending.",
+        # The first non-async target continues the track and the rest fork. With no non-async
+        # target at all, the main flow has spawned every branch and has nothing left to walk - so
+        # it ends immediately. That used to close the SCENE, cancelling the branches born one line
+        # earlier: a real LSDE scene had three prayers on a delay behind such a port and not one of
+        # them was ever dispatched.
+        #
+        # DIALOG-003 is handed no action, so it stays parked on the game's next(). It is the game's
+        # turn, so the scene is still running - that is what `expectedRunning` pins here, and it is
+        # the one half of this rule a synchronous spec can express.
+        "blueprint": header([scene("s1", [
+            block("DIALOG-001", "dialog", text={"en": "forks, both async"},
+                  next=[wire("out", "DIALOG-002"), wire("out", "DIALOG-003")]),
+            block("DIALOG-002", "dialog", text={"en": "branch that answers"},
+                  props={"isAsync": True}),
+            block("DIALOG-003", "dialog", text={"en": "branch still holding its next()"},
+                  props={"isAsync": True}),
+        ])]),
+        "sceneId": "s1",
+        "cases": [{
+            "id": "every-branch-is-dispatched-and-the-scene-outlives-the-main-flow",
+            "steps": [
+                {"expect": {"type": "dialog", "blockId": "DIALOG-001"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-003"}},
+            ],
+            "expectedVisited": ["DIALOG-001", "DIALOG-002", "DIALOG-003"],
+            "expectedRunning": True,
+            "orderIndependent": True,
+        }],
+    },
 ]
 
 

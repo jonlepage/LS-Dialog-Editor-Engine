@@ -135,7 +135,7 @@ describe( 'multitrack — self-driven async', () => {
 		expect( calls ).toContain( 'npc3' );
 	} );
 
-	it( 'async track that does not call next() stays alive until scene ends', () => {
+	it( 'async track that does not call next() keeps the scene open after the main flow ends', () => {
 		const cleanupSpy = vi.fn();
 		const scene = makeScene( {
 			blocks: [
@@ -160,7 +160,15 @@ describe( 'multitrack — self-driven async', () => {
 		const handle = engine.scene( 's1' );
 		handle.start();
 
-		// main track finishes → endScene → async track cancelled → cleanup fires
+		// The main flow ran out of graph, but `stuck` is still waiting on the game's next(). It is
+		// the game's turn, so the scene is not over — it used to be cancelled from under the game
+		// here, which is what made a branch on a delay never show at all.
+		expect( handle.isRunning() ).toBe( true );
+		expect( handle.getActiveTracks() ).toBe( 1 );
+		expect( cleanupSpy ).not.toHaveBeenCalled();
+
+		// It is that last track ending that ends the scene.
+		handle.cancel();
 		expect( handle.isRunning() ).toBe( false );
 		expect( cleanupSpy ).toHaveBeenCalledOnce();
 	} );
@@ -191,6 +199,100 @@ describe( 'multitrack — self-driven async', () => {
 		expect( calls ).toContain( 'main1' );
 		// async track fires a1 → a2 → a3 before scene ends
 		expect( calls ).toContain( 'a1' );
+	} );
+
+} );
+
+// ─── A port whose targets are ALL async ──────────────────────────────────────
+//
+// The first non-async target continues the track and the rest fork. When there is no non-async
+// target at all, the track has spawned every branch and has nothing left to walk — so it ends.
+// On the MAIN flow that used to close the scene, cancelling the branches born one line earlier.
+//
+// It stayed invisible for as long as those branches ran synchronously: they were done before the
+// main flow reached its own end. A `delay` — anything that makes the game answer later — is what
+// exposes it, and a real LSDE scene had three of them.
+
+describe( 'multitrack — a port with only async targets', () => {
+
+	/** `main1`'s only port carries two targets, both async. */
+	function bothTargetsAsync(): Scene {
+		return makeScene( {
+			blocks: [
+				dialog( 'main1' ),
+				dialog( 'prayer', { async: true } ),
+				action( 'move', [], { props: { isAsync: true } as never } ),
+			],
+			connections: [
+				conn( 'main1', 'prayer' ),
+				conn( 'main1', 'move' ),
+			],
+		} );
+	}
+
+	it( 'dispatches every target when they answer immediately', () => {
+		const calls: string[] = [];
+		const engine = setupEngine( bothTargetsAsync() );
+		engine.onDialog( ( { block, next } ) => { calls.push( block.id ); next(); } );
+		engine.onAction( ( { block, context, next } ) => {
+			calls.push( block.id );
+			context.resolve();
+			next();
+		} );
+
+		engine.scene( 's1' ).start();
+
+		expect( calls ).toEqual( ['main1', 'prayer', 'move'] );
+	} );
+
+	it( 'dispatches every target when the game answers LATER', async () => {
+		// The scene that found this: both targets of the winning port are async, and a `delay`
+		// holds each one inside onBeforeBlock. The main flow ended first, shutdown cancelled both
+		// branches, and neither handler was ever called — no bubble, no movement, nothing at all.
+		const calls: string[] = [];
+		const engine = setupEngine( bothTargetsAsync() );
+		engine.onBeforeBlock( ( { block, resolve } ) => {
+			setTimeout( () => resolve(), block.id === 'main1' ? 0 : 10 );
+		} );
+		engine.onDialog( ( { block, next } ) => { calls.push( block.id ); next(); } );
+		engine.onAction( ( { block, context, next } ) => {
+			calls.push( block.id );
+			context.resolve();
+			next();
+		} );
+
+		const handle = engine.scene( 's1' );
+		handle.start();
+
+		await new Promise( r => setTimeout( r, 40 ) );
+
+		expect( calls ).toContain( 'prayer' );
+		expect( calls ).toContain( 'move' );
+		expect( handle.isRunning() ).toBe( false );
+	} );
+
+	it( 'fires onSceneExit once, when the last branch is done', async () => {
+		const exits: string[] = [];
+		const engine = setupEngine( bothTargetsAsync() );
+		engine.onBeforeBlock( ( { block, resolve } ) => {
+			setTimeout( () => resolve(), block.id === 'prayer' ? 30 : 0 );
+		} );
+		engine.onDialog( ( { next } ) => { next(); } );
+		engine.onAction( ( { context, next } ) => { context.resolve(); next(); } );
+
+		const handle = engine.scene( 's1' );
+		handle.onExit( () => { exits.push( 'exit' ); } );
+		handle.start();
+
+		// `move` is already through while `prayer` is still held: one branch retiring is not the
+		// scene ending.
+		await new Promise( r => setTimeout( r, 10 ) );
+		expect( exits ).toEqual( [] );
+		expect( handle.isRunning() ).toBe( true );
+
+		await new Promise( r => setTimeout( r, 60 ) );
+		expect( exits ).toEqual( ['exit'] );
+		expect( handle.isRunning() ).toBe( false );
 	} );
 
 } );
@@ -509,7 +611,10 @@ describe( 'multitrack — cancel cascade', () => {
 		const handle = engine.scene( 's1' );
 		handle.start();
 
-		// main ends → endScene cancels all tracks → explicit cancel cascades
+		// The cancel has to be asked for. This used to lean on the main flow ending to collapse
+		// the scene, so the test named after `cancel()` never actually called it.
+		handle.cancel();
+
 		expect( parentCleanup ).toHaveBeenCalled();
 		expect( childCleanup ).toHaveBeenCalled();
 	} );
@@ -567,7 +672,12 @@ describe( 'multitrack — cancel cascade', () => {
 		const handle = engine.scene( 's1' );
 		handle.start();
 
-		// main1 has no non-async continuation → endScene → all cancelled
+		// main1's only target is async, so the main flow ends the moment it has spawned it — and
+		// that no longer takes the scene down with it. `sub1` is alive and holding its next().
+		expect( handle.isRunning() ).toBe( true );
+		expect( subCleanup ).not.toHaveBeenCalled();
+
+		handle.cancel();
 		expect( subCleanup ).toHaveBeenCalled();
 	} );
 

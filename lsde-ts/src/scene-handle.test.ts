@@ -858,7 +858,7 @@ describe( 'async tracks', () => {
 		expect( handle.getTrackInfos()[0]?.startBlockId ).toBe( 'side' );
 	} );
 
-	it( 'ends every live track when the scene ends', () => {
+	it( 'stays open while a side track is still holding its next()', () => {
 		const global = new HandlerRegistry();
 		registerBaseHandlers( global );
 		// The main flow runs to the end; the side track stays parked on next().
@@ -867,6 +867,12 @@ describe( 'async tracks', () => {
 		const handle = handleFor( forked(), global );
 		handle.start();
 
+		// The main flow reaching its end retires the main flow, not the scene. The side track is
+		// waiting on the game, and cancelling it here is how a branch on a delay lost its turn.
+		expect( handle.isRunning() ).toBe( true );
+		expect( handle.getActiveTracks() ).toBe( 1 );
+
+		handle.cancel();
 		expect( handle.isRunning() ).toBe( false );
 		expect( handle.getActiveTracks() ).toBe( 0 );
 	} );

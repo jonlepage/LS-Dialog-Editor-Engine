@@ -173,9 +173,13 @@ void SceneHandleImpl::registerWaitForBlocks(IWaiter* waiter, const std::vector<s
 }
 
 std::exception_ptr SceneHandleImpl::trackEnded(Track* track) {
-    if (track->id == kMainTrackId) return shutdown();
     retireTrack(track);
-    return nullptr;
+
+    // `endFlow` already cleared this track's `_running`, so it does not count itself here.
+    for (const auto& other : _tracks) {
+        if (other->isRunning() && !other->isWaitingForBlocks()) return nullptr;
+    }
+    return shutdown();
 }
 
 bool SceneHandleImpl::runValidation(const BlueprintBlock& block, const BlueprintBlock* fromBlock,

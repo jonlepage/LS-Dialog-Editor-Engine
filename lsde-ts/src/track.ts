@@ -249,6 +249,17 @@ export class Track implements Waiter {
 		return this.running;
 	}
 
+	/**
+	 * Parked on a `waitForBlocks` — alive, but unable to move on its own.
+	 *
+	 * It is waiting for ANOTHER track to visit a block, so it cannot be what keeps a scene open:
+	 * once every remaining track is parked like this, nothing will ever visit anything again.
+	 * That is the deadlock `SceneHandleImpl.trackEnded` closes the scene on.
+	 */
+	isWaitingForBlocks(): boolean {
+		return this.pendingAdvance !== null;
+	}
+
 	getCurrentBlock(): BlueprintBlock | null {
 		return this.currentBlock;
 	}
