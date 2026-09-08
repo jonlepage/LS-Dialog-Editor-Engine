@@ -2,24 +2,105 @@
 
 ## Unreleased
 
+Engine 2.0 reads `lsde-blueprints` version 1 — the format LSDE 2.x exports. The two formats share
+no field, so there is no dual reader and no fallback: a project still on LSDE 1.6 stays on engine
+0.3.x. The engine version tracks the editor version on purpose, so the number in your package
+manager matches the number on the writer's screen.
+
+### Breaking — the payload
+
+- **Ports are names, not positions.** A wire leaves a block by `out`, `default`, `then`, `catch`,
+  an option id (`C1`…), a condition case (`K1`…), or an actor's card id. `fromPortIndex` is gone,
+  and so is the connection table.
+- **Wires live on the block.** `block.next` is the list of links leaving it, and a link only records
+  where it goes. `engine.getSceneConnections( scene )` still reports them — flattened, with the
+  source id put back on each wire. It reports the wires INSIDE one scene, which is all the format
+  has ever carried; cross-scene links have never existed in any version.
+- **A block is identified by (scene, id).** Ids repeat across scenes on purpose — `DIALOG-001`
+  legitimately exists in several — so there is no global block index anywhere in the engine.
+- **One `props` bag.** The nine native properties sit in `block.props` alongside the writer's own.
+  `NATIVE_PROPERTY_IDS` is exported so you can tell them apart by lookup rather than by guessing.
+- **The emotion belongs to the block**, not to each actor. `actors` is a cast of card ids.
+- **`delay` and `timeout` are MILLISECONDS.** They were seconds in v1, and nothing in a payload
+  reports the change — a v1 timer copied across will run a thousand times too short.
+
+### Breaking — the API
+
+- **Condition blocks have exactly two modes.** Without `portPerCase`, every case must hold → `out`,
+  otherwise `default`. With `portPerCase: true`, the first case that holds takes its own port
+  (`K1`…), otherwise `default`. The third mode — the dispatcher, which fired every matching case at
+  once — is removed. `context.resolve()` takes a PORT NAME.
+- **`setChoiceFilter()` and `filterVisibleChoices()` are removed**, not deprecated.
+  `engine.onResolveCondition()` is the single game-state evaluator: the engine tags every option
+  with `visible` and hands you ALL of them. Filter on `visible !== false` — an option whose test
+  could not be answered stays `undefined`, which means unknown, not hidden.
+- A condition test on the reserved `choice` dictionary is answered internally from the scene's own
+  history and never reaches your evaluator. See `getChoiceHistory()`, `getChoice( id )` and
+  `evaluateCondition( test )`.
+- `onCondition` is optional once a resolver is installed — the engine already knows the exit port,
+  and the handler becomes a logging or override hook.
+- **`TrackInfo.startBlockUuid` and `currentBlockUuid` are now `startBlockId` and `currentBlockId`**,
+  and every `blockUuid` parameter is `blockId`. The v2 payload has no uuids.
+- `reject( error )` takes an optional argument in all four runtimes. The engine ignores it: it
+  routes to the `catch` port and carries no reason.
+- `engine.scene()` accepts a path or the stable scene id (`sc_u0vqg2g8`). Store the id wherever a
+  scene is referenced from outside the payload — a serialized path stops resolving silently the day
+  someone renames the scene, with no compiler to catch it.
+
+### Breaking — behaviour
+
+- **`waitForBlocks` holds the block before it is dispatched**, on every track, the main flow
+  included. In v1 it meant two different things depending on where the block sat, and it was
+  silently inert on the main flow. Your handler is not called until every listed block has been
+  visited, so the game never learns the block exists before its turn.
+- **A handler that throws no longer vanishes.** The scene is closed down — cleanups run, tracks are
+  cancelled, `onSceneExit` fires — and the error is then re-thrown to whoever called `start()` or
+  `next()`. v1 swallowed it while letting an exception from that same handler's cleanup through:
+  one fault, two opposite behaviours.
+- **`onValidateNextBlock` returning `{ valid: false }` ends the track** it was entering, after
+  `onInvalidateBlock` has fired. It used to leave that track alive with nothing able to restart it —
+  the main flow held the scene open forever, a parallel branch became a ghost `getActiveTracks()`
+  counted for the rest of the session.
+
 ### Fixes
-- A NOTE block wired into a loop no longer overflows the stack — the traversal walks past
-  NOTE blocks iteratively and ends the flow when it comes back to one it already stepped
-  over (TS, C#, C++, GDScript)
-- `onBeforeBlock`'s `resolve()` is now single-shot, like `next()` — a delay timer that fires
-  twice no longer dispatches the same block twice (TS, C#, C++, GDScript)
-- A `resolve()` kept in a closure and fired after the scene ended no longer restarts
-  traversal on a dead scene, re-dispatching blocks and firing `onSceneExit` a second time
-  (TS, C#, C++, GDScript)
+
+- A NOTE block wired into a loop no longer overflows the stack — the traversal walks past NOTE
+  blocks iteratively and ends the flow when it comes back to one it already stepped over. In C# this
+  took the whole Unity process down (TS, C#, C++, GDScript)
+- `onBeforeBlock`'s `resolve()` is single-shot, like `next()` — a delay timer that fires twice no
+  longer dispatches the same block twice (TS, C#, C++, GDScript)
+- A `resolve()` kept in a closure and fired after the scene ended no longer restarts traversal on a
+  dead scene, re-dispatching blocks and firing `onSceneExit` a second time (TS, C#, C++, GDScript)
+- **C++**: a `next()` or a `resolve()` kept for a later frame — the normal way to drive this engine —
+  read a dead stack frame. In practice the dialogue froze with no message. The same fault reached
+  `context.nativeProperties`, precisely what a game reads to arm a `delay` timer. Both now hold what
+  they capture
+- **C++**: destroying a scene handle while it was still running left its tracks pointing at freed
+  memory; the handle now shuts itself down
+- A cleanup returned by a handler that had just closed the flow itself — `scene.cancel()`,
+  `engine.stop()` — was filed for an exit that had already happened and never ran, leaving a panel
+  open or a voice line playing for the rest of the process (TS, C#, C++, GDScript)
+- When one cleanup threw during teardown, the tracks and scenes queued behind it were skipped
+  instead of being cancelled. A teardown now always finishes, and the first fault is re-thrown once
+  nothing is left to close (TS, C#)
+- `engine.stop()` closes every scene the engine opened, including a scene opened twice
+- **Godot**: every runtime guard was an `assert()`, which Godot strips from a release export. A
+  published game started a scene with no handler installed and walked the whole graph showing
+  nothing, without a single error. The guards are `push_error()` and now survive the export
 
 ### Other
-- Add robustness test suites covering the three cases above, on all four runtimes, each
-  proven by mutation against the previous commit: TypeScript raises `RangeError`, C# and
-  C++ take the whole process down with a stack overflow, GDScript reports three failures
-  and then dies
-- Pin the documented asymmetry between a throwing handler (swallowed) and a throwing
-  cleanup function (propagates) with a test, so changing either is deliberate
-- README test counts were stale on all four runtimes
+
+- The four runtimes run the same 52 shared conformance cases in CI, one job each, on every push —
+  this did not exist before and its absence is what let a README announce a failing C++ suite for
+  months
+- `waitForBlocks` is the only native carrying a list, and its parsing was untested in every runtime.
+  All four now pin it against the reference LSDE 2.0.3 export, C# on both its JSON paths
+- The documentation site builds again — 38 dead links to removed v1 types — and three shared
+  snippets that declared code which does not compile were rewritten
+- The guides no longer describe a dispatcher mode, `resolve( true / false )` with ports 0 and 1, a
+  `choiceFilter` that no longer exists, or a block field table in which no field is real. French and
+  English are current; the Japanese and Chinese prose is pending translation
+- README test counts and the Unity package manifest version were stale
 
 ## v0.3.0 (2026-04-01)
 

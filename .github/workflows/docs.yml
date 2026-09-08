@@ -28,11 +28,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
+          cache-dependency-path: lsde-ts/package-lock.json
 
       - name: Install and build
         working-directory: lsde-ts
         run: |
-          npm install
+          npm ci
           npm run build
           npm run docs
 

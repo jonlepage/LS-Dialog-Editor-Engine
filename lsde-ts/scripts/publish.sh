@@ -5,6 +5,7 @@ set -euo pipefail
 # Bumps version, runs tests, builds, and publishes npm + NuGet packages.
 #
 # Usage:
+#   ./scripts/publish.sh 2.0.0          # release exactly this version
 #   ./scripts/publish.sh patch          # 0.1.0 → 0.1.1 (bug fix)
 #   ./scripts/publish.sh minor          # 0.1.0 → 0.2.0 (new feature)
 #   ./scripts/publish.sh major          # 0.1.0 → 1.0.0 (breaking change)
@@ -22,6 +23,8 @@ CS_DIR="$ROOT/lsde-csharp/Runtime"
 CSPROJ="$CS_DIR/LsdeDialogEngine.csproj"
 CS_STJ_CSPROJ="$ROOT/lsde-csharp/src~/LsdeDialogEngine.SystemTextJson/LsdeDialogEngine.SystemTextJson.csproj"
 CS_NJ_CSPROJ="$ROOT/lsde-csharp/Runtime/Newtonsoft/LsdeDialogEngine.Newtonsoft.csproj"
+# The Unity Package Manager manifest — its version is what a Unity user reads.
+CS_UPM="$ROOT/lsde-csharp/package.json"
 
 TARGET="both"
 BUMP=""
@@ -31,12 +34,15 @@ for arg in "$@"; do
     npm)           TARGET="npm" ;;
     nuget)         TARGET="nuget" ;;
     patch|minor|major) BUMP="$arg" ;;
+    # An explicit X.Y.Z, for a release the bump arithmetic cannot reach.
+    [0-9]*.[0-9]*.[0-9]*) BUMP="$arg" ;;
   esac
 done
 
 if [ -z "$BUMP" ]; then
-  echo "Usage: ./scripts/publish.sh [npm|nuget] <patch|minor|major>"
+  echo "Usage: ./scripts/publish.sh [npm|nuget] <patch|minor|major|X.Y.Z>"
   echo ""
+  echo "  X.Y.Z  — release exactly this version"
   echo "  patch  — bug fix        (0.1.0 → 0.1.1)"
   echo "  minor  — new feature    (0.1.0 → 0.2.0)"
   echo "  major  — breaking change (0.1.0 → 1.0.0)"
@@ -64,6 +70,13 @@ bump_version() {
   local current
   current=$(node -p "require('$TS_DIR/package.json').version")
 
+  if [[ "$BUMP" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    NEW_VERSION="$BUMP"
+    echo "═══ Version: $current → $NEW_VERSION (explicit) ═══"
+    echo ""
+    return
+  fi
+
   IFS='.' read -r major minor patch <<< "$current"
 
   case "$BUMP" in
@@ -87,6 +100,9 @@ sync_versions() {
   sed -i "s|<Version>.*</Version>|<Version>$NEW_VERSION</Version>|" "$CS_STJ_CSPROJ"
   sed -i "s|<Version>.*</Version>|<Version>$NEW_VERSION</Version>|" "$CS_NJ_CSPROJ"
 
+  # Update the Unity UPM manifest
+  node -e "const f='$CS_UPM',fs=require('fs'),j=JSON.parse(fs.readFileSync(f,'utf8'));j.version='$NEW_VERSION';fs.writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
+
   # Update CMakeLists.txt
   local CMAKE="$ROOT/lsde-cpp/CMakeLists.txt"
   sed -i "s|project(lsde-dialog-engine VERSION [0-9.]*|project(lsde-dialog-engine VERSION $NEW_VERSION|" "$CMAKE"
@@ -101,6 +117,22 @@ generate_changelog() {
   local date
   date=$(date +%Y-%m-%d)
 
+  # A hand-written entry wins over anything derived from commit subjects. The notes a studio reads
+  # when it upgrades a paid engine across a breaking version have to be written, not scraped: a
+  # commit subject says "restructure project files", never "delay is in milliseconds now".
+  if grep -q "^## v$NEW_VERSION " "$changelog" 2>/dev/null; then
+    echo "✓ CHANGELOG.md already documents v$NEW_VERSION — left as written"
+    return
+  fi
+
+  # The usual case: notes were accumulated under "## Unreleased" while the work happened.
+  if grep -q "^## Unreleased" "$changelog" 2>/dev/null; then
+    sed -i "0,/^## Unreleased.*/s||## v$NEW_VERSION ($date)|" "$changelog"
+    echo "✓ CHANGELOG.md: Unreleased → v$NEW_VERSION"
+    return
+  fi
+
+  # Nothing written down: fall back to commit subjects, so a release is never undocumented.
   # Find last version tag
   local last_tag
   last_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
@@ -140,7 +172,7 @@ generate_changelog() {
 # ─── Git tag ─────────────────────────────────────────────────────────────────
 git_tag() {
   cd "$ROOT"
-  git add CHANGELOG.md "$TS_DIR/package.json" "$CSPROJ" "$CS_STJ_CSPROJ" "$CS_NJ_CSPROJ" "$ROOT/lsde-cpp/CMakeLists.txt"
+  git add CHANGELOG.md "$TS_DIR/package.json" "$CSPROJ" "$CS_STJ_CSPROJ" "$CS_NJ_CSPROJ" "$CS_UPM" "$ROOT/lsde-cpp/CMakeLists.txt"
   git commit -m "release: v$NEW_VERSION"
   git tag "v$NEW_VERSION"
   echo "✓ Tagged v$NEW_VERSION"

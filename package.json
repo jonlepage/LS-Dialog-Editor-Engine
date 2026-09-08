@@ -1,14 +1,14 @@
 {
   "name": "ls-dialog-editor-engine",
-  "version": "1.0.0",
-  "main": "index.js",
+  "version": "2.0.0",
+  "private": true,
   "scripts": {
     "publish:patch": "cd lsde-ts && \"C:/Program Files/Git/bin/bash.exe\" scripts/publish.sh patch",
     "publish:minor": "cd lsde-ts && \"C:/Program Files/Git/bin/bash.exe\" scripts/publish.sh minor",
     "publish:major": "cd lsde-ts && \"C:/Program Files/Git/bin/bash.exe\" scripts/publish.sh major"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": ""
+  "author": "LepaSoft",
+  "license": "LicenseRef-Proprietary",
+  "description": "Release task runner for the LSDE Dialog Engine monorepo — not a published package"
 }

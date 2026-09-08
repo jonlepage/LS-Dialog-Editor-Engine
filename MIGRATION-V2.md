@@ -1894,3 +1894,90 @@ C# (System.Text.Json et Newtonsoft) ont chacun le leur.
 | **total** | **782** |
 
 `tsc`, les trois builds et **`npm run docs`** passent — ce dernier ne passait plus.
+
+---
+
+# Cinquième passe — ce qui bloquait la mise en production
+
+Le moteur était prêt ; la **livraison** ne l'était pas. Cette passe ne regarde pas le code : elle
+regarde ce qui se passe entre « les tests sont verts » et « un studio installe le paquet ». Rien de
+ce qui suit n'aurait été vu par une relecture de source, et chacun aurait produit un incident le
+jour de la publication.
+
+## L'intégration continue ne pouvait pas passer
+
+Trois des cinq travaux étaient cassés, et le tableau des tests dans les README le prouvait sans que
+personne ne fasse le lien : il annonçait des comptes vieux de plusieurs revues.
+
+- **TypeScript** — le travail lançait `npm ci`, qui **exige** un `package-lock.json`. Le fichier
+  était dans `.gitignore`. Le travail qui type-vérifie l'implémentation de référence n'a donc jamais
+  pu s'exécuter une seule fois. Le verrou est désormais versionné pour `lsde-ts` uniquement — c'est
+  aussi lui qui fige la chaîne d'outils exacte avec laquelle une version publiée a été validée.
+- **C#** — la solution est un `.slnx`, format que seul un SDK à partir de 9.0.200 sait lire. La CI
+  épinglait `8.0.x` : échec avant la première ligne compilée. Le poste de travail est en 10.0.111,
+  d'où l'absence de symptôme local. La CI installe maintenant les deux SDK — le 10 pour lire la
+  solution, le 8 pour exécuter des assemblages de test qui ciblent `net8.0`.
+- **GDScript** — image `godot-ci:4.5.1`, alors que le README, le `package.json` et `CLAUDE.md`
+  exigent 4.6+ et que le runner local est un 4.6.1. Alignée sur `4.6.1`.
+
+## Le CHANGELOG n'annonçait pas la v2
+
+La dernière entrée était **v0.3.0**. Tout le travail de migration vivait sous « Unreleased », en
+trois lignes qui parlaient de blocs NOTE. Aucune mention du changement de format, des ports nommés,
+de `delay` passé en **millisecondes**, des API retirées. Pour un studio qui monte de 0.3.x à 2.0.0
+sur un moteur payant, c'est **le** document de migration, et il n'existait pas.
+
+Pire, `publish.sh` l'aurait fabriqué tout seul : il dérive l'entrée des sujets de commit depuis la
+dernière étiquette. Cela donnait vingt-deux lignes, moitié français moitié anglais, dont
+« *restructure project files* » et « *add Unity .meta files* ». Un sujet de commit ne dit jamais
+« `delay` est en millisecondes maintenant ».
+
+Deux choses corrigées :
+
+- Une entrée v2.0.0 écrite à la main — rupture du format, rupture de l'API, rupture de
+  comportement, puis les correctifs des cinq passes.
+- `generate_changelog` **promeut** désormais la section « Unreleased » en entrée de version, et
+  s'efface complètement si une entrée porte déjà le numéro publié. La génération par sujets de
+  commit reste, en dernier recours, pour qu'une version ne soit jamais publiée sans notes.
+
+## Les numéros de version ne se rejoignaient pas
+
+`publish.sh` synchronisait `package.json`, les trois `.csproj` et `CMakeLists.txt` — pas le
+**manifeste Unity**, qui est pourtant le seul numéro qu'un utilisateur Unity voit dans le Package
+Manager. Il affichait `0.3.0` pendant que la DLL à l'intérieur disait 2.0.0. Ajouté à la
+synchronisation.
+
+Et le script ne savait pas produire `2.0.0` : les manifestes y étaient déjà, aucune étiquette
+n'existait, et l'arithmétique de bump ne sait que monter (`patch` → 2.0.1, `major` → 3.0.0). Il
+accepte maintenant un `X.Y.Z` explicite.
+
+Le `package.json` de la racine, enfin, était un lanceur de tâches nommé, versionné `1.0.0`, sous
+licence `ISC`, sans `private` — publiable par accident, sous une licence qui n'est pas la sienne.
+
+## Le paquet npm embarquait des fichiers de test
+
+`src/test-builders.ts` n'est importé que par des `*.test.ts` et n'est exporté par aucun barrel : il
+partait quand même chez le client. Et `dist/` n'était **jamais nettoyé** avant un build — la preuve
+était sur le disque, `playground-min-usage-for-doc.js`, exclu de la configuration de build et publié
+malgré tout depuis on ne sait quelle version. Le paquet passe de 67 à 59 fichiers.
+
+## Les comptes annoncés au client étaient faux
+
+Le tableau du README racine donnait 393 / 115 / 52 / 115 pour 417 / 133 / 64 / 168. Les trois README
+de portage annonçaient « 42 tests partagés » là où la spec en contient 52, répartis en 46 suites — et
+celui du C++ annonçait **40/42, deux en échec**, une régression réparée depuis longtemps. Un produit
+payant déclarait publiquement que son runtime C++ ne passait pas la conformité.
+
+## Vérification
+
+`npm ci` valide le verrou. La régénération des trois specs partagées ne bouge pas d'un octet. 417
+tests TypeScript, type-check et build propres, et le site de documentation se construit.
+
+## Ce que je laisse ouvert, volontairement
+
+- **La prose japonaise et chinoise** des guides attend la passe de traduction. Les identifiants, les
+  liens et les extraits de code y sont déjà corrigés ; seul le texte reste à traduire.
+- **`blueprints/`** — l'export v1, que plus rien ne lit. Conservé comme référence historique.
+- **`"samples": []`** dans le manifeste Unity, alors que `samples~/MiniRuntime` existe : l'exemple
+  est livré mais n'apparaît pas dans le Package Manager. C'est un choix produit, pas un défaut.
+

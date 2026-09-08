@@ -295,7 +295,7 @@ engine.onDialog([](ISceneHandle* scene, const DialogBlock* block,
 
 ## Cross-Language Conformance
 
-42 shared JSON tests across all runtimes: **40/42 passing** (2 order-dependent tests differ due to `unordered_set` iteration order).
+52 shared cases, in 46 suites, run by all four runtimes: **52/52 passing**.
 
 ---
 

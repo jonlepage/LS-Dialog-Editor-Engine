@@ -77,9 +77,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Two SDKs on purpose. The solution is a `.slnx`, which only an SDK from 9.0.200 on can
+      # read — pinning 8.0.x alone made this job fail before it compiled a line. The test projects
+      # target net8.0, so the 8.0 runtime has to be there as well.
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - run: dotnet build --nologo
 
@@ -110,7 +115,8 @@ jobs:
     name: GDScript
     runs-on: ubuntu-latest
     container:
-      image: barichello/godot-ci:4.5.1
+      # Must match what the runtime documents and what scripts/godot.cmd runs locally: 4.6.x.
+      image: barichello/godot-ci:4.6.1
     defaults:
       run:
         working-directory: lsde-gdscript

@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 package-lock.json
+# ...except the published package's own. `npm ci` requires it, and it is what pins the exact
+# toolchain a released build was validated with.
+!lsde-ts/package-lock.json
 
 # Build outputs
 dist/
@@ -58,6 +61,11 @@ _bmad/
 
 # VitePress & TypeDoc generated
 lsde-ts/docs/api-ref/
+# Derived from api-ref above, so it carries TypeDoc's commit SHA in every source link: tracking
+# it produced a 309-line diff on every commit that said nothing. `npm run docs` regenerates it
+# before the site is built. The four llm-full-guide-*.txt next to it come from tracked prose and
+# stay tracked.
+lsde-ts/docs/public/llm-full-api.txt
 lsde-ts/docs/.vitepress/dist
 lsde-ts/docs/.vitepress/cache
 
