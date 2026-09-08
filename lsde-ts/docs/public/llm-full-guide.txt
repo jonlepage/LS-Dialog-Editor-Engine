@@ -87,27 +87,31 @@ A `BlueprintExport` is the JSON file exported from the [LSDE](https://lepasoft.c
 
 A scene is a self-contained dialogue sequence — a conversation, a cutscene, a tutorial prompt, a shop interaction. In a game, scenes are typically triggered by script events: the player talks to an NPC, enters a zone, or picks up an item.
 
-Each scene has its own entry block, its own flow, and its own state. Multiple scenes can run in parallel (e.g. a main dialogue and a tutorial overlay). Scenes are defined by the [`BlueprintScene`](/api-ref/interfaces/BlueprintScene) interface:
+Each scene has its own entry block, its own flow, and its own state. Multiple scenes can run in parallel (e.g. a main dialogue and a tutorial overlay). Scenes are defined by the [`BlueprintScene`](/api-ref/type-aliases/BlueprintScene) interface:
 
 <!--@include: ../_shared/blueprint-scene-type.md-->
 
 ## Connections
 
-Connections are the wires between blocks — they define which block leads to which. In the editor, you draw them visually; in the export, they become a flat list of source → target links defined by the [`BlueprintConnection`](/api-ref/interfaces/BlueprintConnection) interface:
+Connections are the wires between blocks — they define which block leads to which. **There is no connection table in the export**: every block carries its own outgoing wires in `block.next`, and a wire only says which port it leaves by and where it goes.
+
+A wire has **never** crossed a scene, in any version of the format: `to` always names a block of the same scene.
+
+[`BlueprintConnection`](/api-ref/type-aliases/BlueprintConnection) is the **flattened** view of those wires, the one `engine.getSceneConnections(sceneRef)` returns — a wire with the block it leaves put back on it:
 
 <!--@include: ../_shared/blueprint-connection-type.md-->
 
-You won't typically need to inspect connections directly — the engine handles routing internally. They are however exposed in [`onValidateNextBlock`](/api-ref/classes/DialogueEngine#onvalidatenextblock) if needed.
+You won't typically need to inspect them — the engine handles routing internally. `engine.getSceneConnections(sceneRef)` exposes them for **graph inspection**: a debug view that shows the wiring without playing the scene.
 
 ## Dictionaries
 
-Dictionaries describe the registers of your game — switches, variables, inventory. The developer declares them in the [LSDE](https://lepasoft.com/en/software/ls-dialog-editor "Lepasoft Dialog Editor") editor to expose available game variables to the narrative designer. At runtime, the developer maps each dictionary to the corresponding system in their game. [`Conditions`](/api-ref/interfaces/ExportCondition) and [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) use these keys to evaluate game state. Defined by the [`Dictionary`](/api-ref/interfaces/Dictionary) interface:
+Dictionaries describe the registers of your game — switches, variables, inventory. The developer declares them in the [LSDE](https://lepasoft.com/en/software/ls-dialog-editor "Lepasoft Dialog Editor") editor to expose available game variables to the narrative designer. At runtime, the developer maps each dictionary to the corresponding system in their game. [`Conditions`](/api-ref/interfaces/ConditionTest) and [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) use these keys to evaluate game state. Defined by the [`DictionaryDefinition`](/api-ref/interfaces/DictionaryDefinition) interface:
 
 <!--@include: ../_shared/blueprint-dictionary-type.md-->
 
 ## Action Signatures
 
-Signatures describe the action types available in your game — `set_flag`, `play_sound`, `give_item`. The developer declares them in the [LSDE](https://lepasoft.com/en/software/ls-dialog-editor "Lepasoft Dialog Editor") editor so that narrative designers can compose action sequences with typed parameters. At runtime, the signature `id` is what the developer maps to their own systems. Defined by the [`ActionSignature`](/api-ref/interfaces/ActionSignature) interface:
+Signatures describe the action types available in your game — `set_flag`, `play_sound`, `give_item`. The developer declares them in the [LSDE](https://lepasoft.com/en/software/ls-dialog-editor "Lepasoft Dialog Editor") editor so that narrative designers can compose action sequences with typed parameters. At runtime, the signature `id` is what the developer maps to their own systems. Defined by the [`FunctionDefinition`](/api-ref/interfaces/FunctionDefinition) interface:
 
 <!--@include: ../_shared/blueprint-signature-type.md-->
 
@@ -131,7 +135,7 @@ When the narrative designer assigns a dedicated output per character ([`portPerC
 
 ## CHOICE
 
-A choice block represents a branching point where the player picks a response — a dialogue menu, a list of options. `context.choices` contains all available options. When [`onResolveCondition()`](/guide/choice-visibility) is configured, each option is tagged `visible: true | false` — the handler filters and displays whichever it wants. After the player interacts, `selectChoice(uuid)` tells the engine which path to follow, then `next()` advances the flow.
+A choice block represents a branching point where the player picks a response — a dialogue menu, a list of options. `context.options` contains all available options. When [`onResolveCondition()`](/guide/choice-visibility) is configured, each option is tagged `visible: true | false` — the handler filters and displays whichever it wants. After the player interacts, `selectChoice(optionId)` tells the engine which path to follow, then `next()` advances the flow.
 
 <!--@include: ../_shared/block-choice.md-->
 
@@ -139,15 +143,22 @@ See [Choice Visibility](/guide/choice-visibility) for the full opt-in tagging sy
 
 ## CONDITION
 
-A condition block is an invisible switch — it evaluates game state and silently sends the flow down one or more paths without the player seeing it. Conditions are grouped in a 2D array: each group is a "case" evaluated as an AND/OR chain.
+A condition block is an invisible switch — it reads game state and sends the flow down a path without the player seeing it.
 
-**When `onResolveCondition` is installed**, the engine pre-evaluates all groups before calling `onCondition`. Each group in `context.conditionGroups` has a `result` (true/false) and a `portIndex`. The engine auto-resolves the routing — `onCondition` is optional and serves as a logging/override hook.
+**The engine never compares anything itself.** It reads no dictionary, does not know what `credits` holds, does not implement `greaterOrEqual`. It hands every test to [`onResolveCondition()`](/guide/choice-visibility) and assembles the answers. Each test reaches the resolver **exactly once**, whatever the mode.
 
-**Routing modes:**
-- **Switch mode** (default): first matching group index routes the flow. `-1` (no match) follows the default port.
-- **Dispatcher mode** (`enableDispatcher: true`): all matching group indices fire as independent async tracks, default port is the main continuation.
+With a resolver installed the engine already knows the exit port before it calls the handler, which is what makes `onCondition` optional: it becomes a place to log or to override. The handler is handed `context.cases`, each case carrying its `port` and its already-computed `result`. To override, `context.resolve(port)` takes a **port NAME** — `"out"`, `"default"`, or a case port (`"K1"`).
 
-`context.resolve()` accepts `boolean` (legacy), `number` (switch), or `number[]` (dispatcher).
+There are **two modes, and only two**:
+
+- **`portPerCase` absent** — every case must hold. If they all do the flow leaves by `out`; otherwise by `default`.
+- **`portPerCase: true`** — the **first** case that holds leaves by **its own port** (`K1`, `K2`…). If none holds, `default`.
+
+A case with no `when` is always true, and makes every case below it unreachable in `portPerCase` mode. That is the writer's drawing, not an error to report. A block with no cases at all leaves by `out`: nothing was asked, so nothing failed.
+
+`default` means "no case held" — **not** "the chosen exit has no wire". A port with no wire ends the flow, which is a legitimate ending.
+
+A test whose dictionary is the reserved word **`choice`** reads an answer the player already gave: `{ dict: "choice", entry: "CHOICE-001", value: "C1" }`. The engine answers it **itself**, from the scene's history — the question never reaches the game. See also `scene.getChoice(blockId)` and `scene.evaluateCondition(test)`.
 
 <!--@include: ../_shared/block-condition.md-->
 
@@ -163,33 +174,48 @@ A note block is a sticky note for the narrative designer — comments, reminders
 
 ## Common Properties
 
-All blocks share these base fields ([`BlueprintBlockBase`](/api-ref/interfaces/BlueprintBlockBase)):
+All blocks share these base fields ([`BlueprintBlockBase`](/api-ref/type-aliases/BlueprintBlock)):
 
 | Field | Type | Description |
 |-------|------|-------------|
-| [`uuid`](/api-ref/interfaces/BlueprintBlockBase#uuid) | `string` | Unique identifier |
-| [`type`](/api-ref/interfaces/BlueprintBlockBase#type) | `BlockType` | Discriminant type |
-| [`label`](/api-ref/interfaces/BlueprintBlockBase#label) | `string?` | Human-readable name |
-| [`parentLabels`](/api-ref/interfaces/BlueprintBlockBase#parentlabels) | `string[]?` | Parent folder hierarchy from the editor |
-| [`properties`](/api-ref/interfaces/BlueprintBlockBase#properties) | `BlockProperty[]` | Key-value properties |
-| [`userProperties`](/api-ref/interfaces/BlueprintBlockBase#userproperties) | `Record?` | Free-form user properties |
-| [`nativeProperties`](/api-ref/interfaces/BlueprintBlockBase#nativeproperties) | `NativeProperties?` | Execution properties |
-| [`metadata`](/api-ref/interfaces/BlueprintBlockBase#metadata) | `BlockMetadata?` | Display metadata (characters, tags, color) |
-| [`isStartBlock`](/api-ref/interfaces/BlueprintBlockBase#isstartblock) | `boolean?` | Marks the entry block |
+| `id` | `string` | Identity **relative to its scene** — `DIALOG-002`. Ids repeat across scenes. |
+| `key` | `string` | The full i18n key, as the localization files carry it |
+| `type` | `BlockType` | `dialog`, `choice`, `condition`, `action` or `note` |
+| `label` | `string?` | Readable name, when the writer set one |
+| `parentLabels` | `string[]?` | Parent folder hierarchy from the editor |
+| `note` | `string?` | The writer's own note |
+| `actors` | `string[]?` | The **card ids** the block cites, in file order |
+| `emotion` | `string?` | The emotion's card id — it belongs to the **block**, not to each actor |
+| `intensity` | `number?` | How strongly, for that emotion |
+| `text` | `TextByLocale?` | The text per locale, when the export is inline |
+| `props` | `PropertyBag?` | **One bag**: the natives and the writer's own properties, by bare id |
+| `options` | `Option[]?` | CHOICE only |
+| `cases` | `ConditionCase[]?` | CONDITION only |
+| `calls` | `ActionCall[]?` | ACTION only |
+| `next` | `Link[]?` | **The block's outgoing wires.** There is no connection table in v2 |
+
+The entry block is not flagged on the block: the **scene** names it, in `scene.start`. A scene therefore cannot declare two of them.
 
 ### NativeProperties
 
+The nine properties the **engine** reads, taken out of `props`. Ids cannot collide — LSDE refuses a project property that takes a native name — so telling them apart is a plain lookup.
+
 | Field | Type | Description |
 |-------|------|-------------|
-| [`isAsync`](/api-ref/interfaces/NativeProperties#isasync) | `boolean?` | Execute on a parallel async track |
-| [`delay`](/api-ref/interfaces/NativeProperties#delay) | `number?` | Delay before execution (consumed by `onBeforeBlock`) |
-| [`timeout`](/api-ref/interfaces/NativeProperties#timeout) | `number?` | Execution timeout |
-| [`portPerCharacter`](/api-ref/interfaces/NativeProperties#portpercharacter) | `boolean?` | One output port per character in metadata |
-| [`skipIfMissingActor`](/api-ref/interfaces/NativeProperties#skipifmissingactor) | `boolean?` | Skip block if the assigned actor is missing |
-| [`debug`](/api-ref/interfaces/NativeProperties#debug) | `boolean?` | Debug flag for the editor |
-| [`waitForBlocks`](/api-ref/interfaces/NativeProperties#waitforblocks) | `string[]?` | Block UUIDs that must be visited before this block can progress |
-| [`waitInput`](/api-ref/interfaces/NativeProperties#waitinput) | `boolean?` | Passive flag for explicit player input control |
-| [`enableDispatcher`](/api-ref/interfaces/NativeProperties#enabledispatcher) | `boolean?` | Condition block: all matching groups fire as async tracks |
+| `isAsync` | `boolean?` | **Opens a parallel track** on this block instead of continuing the current one |
+| `waitForBlocks` | `string[]?` | Block ids **of this scene**. The block is **held before it is dispatched** until every one of them has been visited — no handler is called |
+| `delay` | `number?` | **MILLISECONDS** before the block plays. Applied by `onBeforeBlock`, never by the engine |
+| `timeout` | `number?` | **MILLISECONDS**. Passed through — the engine enforces nothing |
+| `waitInput` | `boolean?` | Wait for player input. Passed through, never interpreted |
+| `debug` | `boolean?` | Debug flag for the editor. Passed through |
+| `portPerCharacter` | `boolean?` | The block leaves by a port **named by the actor's card id**, instead of `out` |
+| `skipIfMissingActor` | `boolean?` | Passed through — the game decides |
+| `portPerCase` | `boolean?` | CONDITION: each case leaves by **its own port** (`K1`…) instead of sharing `out` |
+
+> WARNING:
+They were seconds in v1, and **nothing reports the change at runtime**: a migrated project turns a 3-second pause into 3 ms.
+
+Only **two** of these change anything about the traversal: `isAsync` and `waitForBlocks`. The other seven are handed to the game untouched.
 
 ================================================================================
 
@@ -197,7 +223,7 @@ All blocks share these base fields ([`BlueprintBlockBase`](/api-ref/interfaces/B
 
 ## Overview
 
-When a CHOICE block is dispatched, `context.choices` always contains **all** choices defined in the blueprint — none are pre-filtered. The engine never removes choices from the array.
+When a CHOICE block is dispatched, `context.options` always contains **all** choices defined in the blueprint — none are pre-filtered. The engine never removes choices from the array.
 
 If visibility filtering is needed (e.g., hiding choices based on game state or previous selections), the engine provides an **opt-in tagging** system. A condition resolver is installed once, and the engine tags each choice with `visible: true | false` before the `onChoice` handler sees it.
 
@@ -207,7 +233,7 @@ Register a condition resolver on the engine — once, before starting any scene:
 
 <!--@include: ../_shared/choice-filter-setup.md-->
 
-When installed, the engine evaluates each choice's `visibilityConditions` **before** calling `onChoice`. The same resolver also pre-evaluates condition block groups — see [Condition blocks](/guide/block-types#condition) for details.
+When installed, the engine evaluates each choice's `when` **before** calling `onChoice`. The same resolver also pre-evaluates condition block groups — see [Condition blocks](/guide/block-types#condition) for details.
 
 - **`choice:` conditions** (referencing previous player selections) are resolved automatically by the engine via its internal choice history — the callback never sees them.
 - **Game-state conditions** (everything else) are delegated to the callback.
@@ -229,33 +255,33 @@ When **no resolver is installed**, `visible` is `undefined`. Since `undefined !=
 | `false` | Resolver installed, choice hidden | `false` |
 | `undefined` | No resolver installed | `true` |
 
-## RuntimeChoiceItem
+## RuntimeOption
 
-When a resolver is installed, each choice in `context.choices` is a `RuntimeChoiceItem` — an extension of `ChoiceItem` with the `visible` tag:
+When a resolver is installed, each choice in `context.options` is a `RuntimeOption` — an extension of `Option` with the `visible` tag:
 
 
 ```ts [TypeScript]
-interface RuntimeChoiceItem extends ChoiceItem {
+interface RuntimeOption extends Option {
   visible?: boolean; // true | false | undefined
 }
 ```
 ```csharp [C#]
-public class RuntimeChoiceItem : ChoiceItem
+public class RuntimeOption : Option
 {
     public bool? Visible { get; set; } // true | false | null
 }
 ```
 ```cpp [C++]
-struct RuntimeChoiceItem : ChoiceItem {
+struct RuntimeOption : Option {
     std::optional<bool> visible; // true | false | nullopt
 };
 ```
 ```gdscript [GDScript]
-# RuntimeChoiceItem is a Dictionary with an extra "visible" key:
-# { "uuid": "...", "dialogueText": {...}, "visible": true/false/absent }
+# RuntimeOption is a Dictionary with an extra "visible" key:
+# { "id": "C1", "key": "...", "text": {...}, "visible": true/false/absent }
 ```
 
-Without a resolver, choices are still `RuntimeChoiceItem` but `visible` remains `undefined`/`null`/`nullopt`/absent.
+Without a resolver, choices are still `RuntimeOption` but `visible` remains `undefined`/`null`/`nullopt`/absent.
 
 ## Examples
 
@@ -264,19 +290,19 @@ Without a resolver, choices are still `RuntimeChoiceItem` but `visible` remains 
 
 ```ts [TypeScript]
 engine.onChoice(({ context, next }) => {
-  const visible = context.choices.filter(c => c.visible !== false);
-  ui.showChoices(visible, (uuid) => {
-    context.selectChoice(uuid);
+  const offered = context.options.filter(c => c.visible !== false);
+  ui.showOptions(visible, (optionId) => {
+    context.selectChoice(optionId);
     next();
   });
 });
 ```
 ```csharp [C#]
 engine.OnChoice(args => {
-    var visible = args.Context.Choices
+    var visible = args.Context.Options
         .Where(c => c.Visible != false).ToList();
-    ShowChoicesUI(visible, uuid => {
-        args.Context.SelectChoice(uuid);
+    ShowChoicesUI(visible, optionId => {
+        args.Context.SelectChoice(optionId);
         args.Next();
     });
     return null;
@@ -284,12 +310,12 @@ engine.OnChoice(args => {
 ```
 ```cpp [C++]
 engine.onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
-    std::vector<const RuntimeChoiceItem*> visible;
-    for (const auto& c : ctx->choices())
+    std::vector<const RuntimeOption*> visible;
+    for (const auto& c : ctx->options())
         if (!c.visible.has_value() || c.visible.value())
             visible.push_back(&c);
-    showChoicesUI(visible, [ctx, next](const auto& uuid) {
-        ctx->selectChoice(uuid);
+    showOptionsUI(visible, [ctx, next](const auto& optionId) {
+        ctx->selectChoice(optionId);
         next();
     });
     return {};
@@ -298,11 +324,11 @@ engine.onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
 ```gdscript [GDScript]
 engine.on_choice(func(args):
     var visible = []
-    for c in args["context"].choices:
+    for c in args["context"].options:
         if c.get("visible") != false:
             visible.append(c)
-    show_choices_ui(visible, func(uuid):
-        args["context"].select_choice(uuid)
+    show_options_ui(visible, func(option_id):
+        args["context"].select_choice(option_id)
         args["next"].call()
     )
     return Callable()
@@ -314,34 +340,34 @@ engine.on_choice(func(args):
 
 ```ts [TypeScript]
 engine.onChoice(({ block, context, next }) => {
-  const visible = context.choices.filter(c => c.visible !== false);
-  const timeout = block.nativeProperties?.timeout;
+  const offered = context.options.filter(c => c.visible !== false);
+  const timeout = LsdeUtils.getNativeProperties(block)?.timeout;
 
   const resolve = (choice) => {
-    context.selectChoice(choice.uuid);
+    context.selectChoice(choice.id);
     next();
   };
 
   if (timeout) {
     const timer = setTimeout(() => resolve(visible[0]), timeout * 1000);
-    ui.showChoices(visible, (uuid) => {
+    ui.showOptions(visible, (optionId) => {
       clearTimeout(timer);
-      resolve(visible.find(c => c.uuid === uuid));
+      resolve(visible.find(c => c.id === optionId));
     });
   } else {
-    ui.showChoices(visible, (uuid) => resolve(visible.find(c => c.uuid === uuid)));
+    ui.showOptions(visible, (optionId) => resolve(visible.find(c => c.id === optionId)));
   }
 });
 ```
 ```csharp [C#]
 engine.OnChoice(args => {
     var (_, block, context, next) = args;
-    var visible = context.Choices
+    var visible = context.Options
         .Where(c => c.Visible != false).ToList();
     var timeout = block.NativeProperties?.Timeout;
 
-    void Resolve(RuntimeChoiceItem choice) {
-        context.SelectChoice(choice.Uuid);
+    void Resolve(RuntimeOption choice) {
+        context.SelectChoice(choice.Id);
         next();
     }
 
@@ -349,42 +375,42 @@ engine.OnChoice(args => {
     {
         // use your engine's timer — cancel on player selection
         var timer = ScheduleTimer((float)timeout.Value, () => Resolve(visible[0]));
-        ShowChoicesUI(visible, uuid => {
+        ShowChoicesUI(visible, optionId => {
             timer.Cancel();
-            Resolve(visible.First(c => c.Uuid == uuid));
+            Resolve(visible.First(c => c.Id == optionId));
         });
     }
     else
     {
-        ShowChoicesUI(visible, uuid => Resolve(visible.First(c => c.Uuid == uuid)));
+        ShowChoicesUI(visible, optionId => Resolve(visible.First(c => c.Id == optionId)));
     }
     return null;
 });
 ```
 ```cpp [C++]
 engine.onChoice([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
-    std::vector<const RuntimeChoiceItem*> visible;
-    for (const auto& c : ctx->choices())
+    std::vector<const RuntimeOption*> visible;
+    for (const auto& c : ctx->options())
         if (!c.visible.has_value() || c.visible.value())
             visible.push_back(&c);
 
-    auto timeout = block->nativeProperties
-        ? block->nativeProperties->timeout : std::nullopt;
+    auto timeout = block->props
+        ? block->props->timeout : std::nullopt;
 
-    auto resolve = [ctx, next](const std::string& uuid) {
-        ctx->selectChoice(uuid);
+    auto resolve = [ctx, next](const std::string& optionId) {
+        ctx->selectChoice(optionId);
         next();
     };
 
     if (timeout.has_value()) {
         // use your engine's timer — cancel on player selection
-        auto timer = scheduleDelay(timeout.value(), [&]() { resolve(visible[0]->uuid); });
-        showChoicesUI(visible, [resolve, timer](const auto& uuid) {
+        auto timer = scheduleDelay(timeout.value(), [&]() { resolve(visible[0]->id); });
+        showOptionsUI(visible, [resolve, timer](const auto& optionId) {
             timer->cancel();
-            resolve(uuid);
+            resolve(optionId);
         });
     } else {
-        showChoicesUI(visible, resolve);
+        showOptionsUI(visible, resolve);
     }
     return {};
 });
@@ -395,27 +421,27 @@ engine.on_choice(func(args):
     var next_fn = args["next"]
     var block = args["block"]
     var visible = []
-    for c in ctx.choices:
+    for c in ctx.options:
         if c.get("visible") != false:
             visible.append(c)
 
-    var timeout_val = block.get("nativeProperties", {}).get("timeout", 0)
+    var timeout_val = block.get("props", {}).get("timeout", 0)
 
     if timeout_val > 0:
         # use your engine's timer — cancel on player selection
         var timer = get_tree().create_timer(timeout_val)
         timer.timeout.connect(func():
-            ctx.select_choice(visible[0]["uuid"])
+            ctx.select_choice(visible[0]["id"])
             next_fn.call()
         )
-        show_choices_ui(visible, func(uuid):
+        show_options_ui(visible, func(option_id):
             timer.time_left = 0  # cancel
-            ctx.select_choice(uuid)
+            ctx.select_choice(option_id)
             next_fn.call()
         )
     else:
-        show_choices_ui(visible, func(uuid):
-            ctx.select_choice(uuid)
+        show_options_ui(visible, func(option_id):
+            ctx.select_choice(option_id)
             next_fn.call()
         )
     return Callable()
@@ -427,7 +453,7 @@ engine.on_choice(func(args):
 
 ```ts [TypeScript]
 engine.onChoice(({ context, next }) => {
-  for (const choice of context.choices) {
+  for (const choice of context.options) {
     if (choice.visible === false) {
       ui.addGreyed(choice);   // show but disabled
     } else {
@@ -439,7 +465,7 @@ engine.onChoice(({ context, next }) => {
 ```
 ```csharp [C#]
 engine.OnChoice(args => {
-    foreach (var choice in args.Context.Choices)
+    foreach (var choice in args.Context.Options)
     {
         if (choice.Visible == false)
             AddGreyed(choice);   // show but disabled
@@ -452,7 +478,7 @@ engine.OnChoice(args => {
 ```
 ```cpp [C++]
 engine.onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
-    for (const auto& choice : ctx->choices()) {
+    for (const auto& choice : ctx->options()) {
         if (choice.visible.has_value() && !choice.visible.value())
             addGreyed(choice);   // show but disabled
         else
@@ -464,7 +490,7 @@ engine.onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
 ```
 ```gdscript [GDScript]
 engine.on_choice(func(args):
-    for choice in args["context"].choices:
+    for choice in args["context"].options:
         if choice.get("visible") == false:
             add_greyed(choice)   # show but disabled
         else:
@@ -480,14 +506,14 @@ engine.on_choice(func(args):
 ```ts [TypeScript]
 tutorial.onChoice(({ context, next }) => {
   // force-select the first choice, no filtering
-  context.selectChoice(context.choices[0].uuid);
+  context.selectChoice(context.options[0].id);
   next();
 });
 ```
 ```csharp [C#]
 tutorial.OnChoice(args => {
     // force-select the first choice, no filtering
-    args.Context.SelectChoice(args.Context.Choices[0].Uuid);
+    args.Context.SelectChoice(args.Context.Options[0].Id);
     args.Next();
     return null;
 });
@@ -495,7 +521,7 @@ tutorial.OnChoice(args => {
 ```cpp [C++]
 tutorial->onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
     // force-select the first choice, no filtering
-    ctx->selectChoice(ctx->choices()[0].uuid);
+    ctx->selectChoice(ctx->options()[0].id);
     next();
     return {};
 });
@@ -503,7 +529,7 @@ tutorial->onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
 ```gdscript [GDScript]
 tutorial.on_choice(func(args):
     # force-select the first choice, no filtering
-    args["context"].select_choice(args["context"].choices[0]["uuid"])
+    args["context"].select_choice(args["context"].options[0]["id"])
     args["next"].call()
     return Callable()
 )
@@ -516,7 +542,7 @@ With `onResolveCondition`, a single callback handles **both** choice visibility 
 <!--@include: ../_shared/choice-reusable-filter.md-->
 
 > TIP:
-Before `onResolveCondition`, the same `gameState.check(...)` logic had to be registered in both `setChoiceFilter` and `onCondition` separately. With the unified resolver, it's one callback — the engine handles both automatically.
+Before `onResolveCondition`, the same `gameState.check(...)` logic had to be registered in both `onResolveCondition` and `onCondition` separately. With the unified resolver, it's one callback — the engine handles both automatically.
 
 ## Advanced: Manual Filtering
 
@@ -526,7 +552,7 @@ If a global resolver is not desired, `LsdeUtils` provides a low-level utility:
 ```ts [TypeScript]
 import { LsdeUtils } from '@lsde/dialog-engine';
 
-const visible = LsdeUtils.filterVisibleChoices(
+const offered = LsdeUtils.tagOptionVisibility(
   block.choices ?? [],
   (cond) => gameState.check(cond.key, cond.operator, cond.value),
   scene, // optional — enables choice: condition resolution via history
@@ -578,13 +604,12 @@ The engine exposes the following handlers:
 | [`onInvalidateBlock`](/api-ref/classes/DialogueEngine#oninvalidateblock) | global | React when validation fails |
 | [`onSceneEnter`](/api-ref/classes/DialogueEngine#onsceneenter) | global / scene | A scene starts |
 | [`onSceneExit`](/api-ref/classes/DialogueEngine#onsceneexit) | global / scene | A scene ends |
-| [`onBlock`](/api-ref/interfaces/SceneHandle#onblock) | scene | Override a specific block by UUID |
-| [`onDialogId`](/api-ref/interfaces/SceneHandle#ondialogid) | scene | Override a specific DIALOG block by UUID (type-safe) |
-| [`onChoiceId`](/api-ref/interfaces/SceneHandle#onchoiceid) | scene | Override a specific CHOICE block by UUID (type-safe) |
-| [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | Override a specific CONDITION block by UUID (type-safe) |
-| [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | Override a specific ACTION block by UUID (type-safe) |
+| [`onBlock`](/api-ref/interfaces/SceneHandle#onblock) | scene | Override one block by its id (`DIALOG-001`) |
+| [`onDialogId`](/api-ref/interfaces/SceneHandle#ondialogid) | scene | Override one DIALOG block by its id (type-safe) |
+| [`onChoiceId`](/api-ref/interfaces/SceneHandle#onchoiceid) | scene | Override one CHOICE block by its id (type-safe) |
+| [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | Override one CONDITION block by its id (type-safe) |
+| [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | Override one ACTION block by its id (type-safe) |
 | [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) | global | Unified condition resolver (choice visibility + condition pre-evaluation) |
-| ~~[`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter)~~ | global | _Deprecated — use `onResolveCondition` instead_ |
 
 `onDialog`, `onChoice`, and `onAction` are **required** — the engine validates their presence when `start()` is called and throws a descriptive error if any are missing. `onCondition` is **optional** when `onResolveCondition` is installed — the engine auto-routes from pre-evaluated condition groups.
 
@@ -598,7 +623,7 @@ The engine resolves handlers in two tiers:
 - **Scene handlers** — registered on a specific [`SceneHandle`](/api-ref/interfaces/SceneHandle), they let you override or extend the default behavior when a scene requires a different rendering or control flow. This is rare, but available.
 
 When a block is dispatched, the engine resolves the handler in this order:
-1. `handle.onBlock(uuid)` or `handle.onDialogId(uuid)` / `handle.onActionId(uuid)` / ... — block-specific override
+1. `handle.onBlock(blockId)` or `handle.onDialogId(blockId)` / `handle.onActionId(blockId)` / ... — block-specific override
 2. `handle.onDialog()` / `handle.onChoice()` / ... — scene-level type handler
 3. `engine.onDialog()` / `engine.onChoice()` / ... — global handler
 
@@ -608,7 +633,7 @@ When both tiers are present, both run in sequence — scene first, then global �
 
 ## Character Resolution
 
-Character resolution is optional. By registering an `onResolveCharacter` callback, the engine invokes it before every block that has characters in its `metadata.characters`. The callback receives the list of characters assigned to the block and returns the one that should be active — or `undefined` if none is available. The resolved character is then accessible via `context.character` in all handlers.
+Character resolution is optional. By registering an `onResolveCharacter` callback, the engine invokes it before every block that has characters in its `actors`. The callback receives the list of characters assigned to the block and returns the one that should be active — or `undefined` if none is available. The resolved character is then accessible via `context.character` in all handlers.
 
 This is the ideal integration point to query your game state: check if a character is present in the scene, alive, in camera range, etc. Returning `undefined` opens the door to several strategies: skip the block via [`skipIfMissingActor`](/api-ref/interfaces/NativeProperties#skipifmissingactor), cancel the scene via `handle.cancel()`, or handle the case directly in the handler.
 
@@ -622,13 +647,13 @@ The `onSceneEnter` and `onSceneExit` callbacks let you react to a scene starting
 
 ## Block Override
 
-`onBlock(uuid)` lets you target a specific block by its identifier and assign it a dedicated handler. This is a rare use case — generic handlers cover the vast majority of needs — but for very specific scenarios where an individual block requires distinct behavior, it is available.
+`onBlock(blockId)` lets you target a specific block by its identifier and assign it a dedicated handler. This is a rare use case — generic handlers cover the vast majority of needs — but for very specific scenarios where an individual block requires distinct behavior, it is available.
 
 <!--@include: ../_shared/handler-block-override.md-->
 
 ## Type-Safe Block Override
 
-`onDialogId(uuid)`, `onChoiceId(uuid)`, `onConditionId(uuid)`, and `onActionId(uuid)` are type-safe alternatives to `onBlock(uuid)`. They work exactly the same way — same priority, same `preventGlobalHandler` support — but the handler receives the specialized block type and context instead of the generic union.
+`onDialogId(blockId)`, `onChoiceId(blockId)`, `onConditionId(blockId)`, and `onActionId(blockId)` are type-safe alternatives to `onBlock(blockId)`. They work exactly the same way — same priority, same `preventGlobalHandler` support — but the handler receives the specialized block type and context instead of the generic union.
 
 Use these when you know the block type at registration time and want full autocompletion on `block` and `context`.
 
@@ -641,7 +666,7 @@ Use these when you know the block type at registration time and want full autoco
 ```mermaid
 flowchart TD
     A[block dispatched] --> B{resolve scene handler}
-    B --> B1{"onBlock(uuid) /\nonDialogId(uuid) etc.?"}
+    B --> B1{"onBlock(blockId) /\nonDialogId(blockId) etc.?"}
     B1 -- found --> S
     B1 -- not found --> B2{"handle.onDialog() etc.?"}
     B2 -- found --> S
@@ -674,7 +699,7 @@ Each handler receives the block data and a `next()` callback. The developer proc
 
 - **Dialog** — text, character, native properties. Display the dialogue in your UI, wait for player input or a delay, then call `next()`. Return a cleanup function to hide the UI when the engine moves to the next block.
 
-- **Choice** — list of choices tagged `visible` when a `choiceFilter` is configured. Create the corresponding UI elements — buttons, list, radial menu. On player selection, `selectChoice(uuid)` tells the engine which branch to follow, then `next()` advances the flow.
+- **Choice** — list of choices tagged `visible` when `onResolveCondition()` is installed. The engine hands you **every** option, tagged; filter on `visible !== false`. Create the corresponding UI elements — buttons, list, radial menu. On player selection, `selectChoice(optionId)` tells the engine which branch to follow, then `next()` advances the flow.
 
 - **Condition** — conditions defined in the block. Evaluate them with your game logic — check a flag, a quest, an inventory. `context.resolve(true)` sends the flow to port 0, `context.resolve(false)` to port 1.
 
@@ -684,7 +709,7 @@ Each handler receives the block data and a `next()` callback. The developer proc
 
 - **`next()` is the remote control.** Call it instantly for rapid-fire dialogue, or hold it until an animation finishes. The engine waits — it has no concept of time.
 - **Cleanup functions clean up after you.** Return a function from any handler — the engine calls it when moving to the next block. Perfect for hiding UI, stopping audio, or freeing nodes.
-- **`onBeforeBlock` handles delays.** The engine does not enforce `nativeProperties.delay` — `onBeforeBlock` reads it and calls `resolve()` after a timer. Full control.
+- **`onBeforeBlock` handles delays.** The engine does not enforce `props.delay` — `onBeforeBlock` reads it and calls `resolve()` after a timer. Full control.
 - **Async tracks are parallel flows.** When a cutscene needs dialogue and camera movement at the same time, blocks marked `isAsync` in the editor run on independent tracks.
 
 ================================================================================

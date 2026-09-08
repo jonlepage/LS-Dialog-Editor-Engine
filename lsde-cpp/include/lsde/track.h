@@ -146,7 +146,7 @@ public:
     /// The track that opened this one, or -1 when the main flow opened it.
     const int parentTrackId;
     /// The block this track started on.
-    const std::string startBlockUuid;
+    const std::string startBlockId;
 
 private:
     void processBlock(const BlueprintBlock& startingBlock);

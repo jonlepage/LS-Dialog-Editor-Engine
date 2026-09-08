@@ -18,7 +18,7 @@ handler の詳細な実装については、[Block Types](./block-types) と [Ha
 
 - **Dialog** — テキスト、キャラクター、ネイティブプロパティ。UI にダイアログを表示し、プレイヤーの入力またはディレイを待ってから `next()` を呼び出します。engine が次の block に移る際に UI を非表示にするクリーンアップ関数を返します。
 
-- **Choice** — `choiceFilter` が設定されている場合、`visible` タグ付きの選択肢リスト。対応する UI 要素を作成します — ボタン、リスト、ラジアルメニュー。プレイヤーが選択したら、`selectChoice(uuid)` で分岐先を engine に伝え、`next()` でフローを進めます。
+- **Choice** — `choiceFilter` が設定されている場合、`visible` タグ付きの選択肢リスト。対応する UI 要素を作成します — ボタン、リスト、ラジアルメニュー。プレイヤーが選択したら、`selectChoice(optionId)` で分岐先を engine に伝え、`next()` でフローを進めます。
 
 - **Condition** — block に定義された条件。ゲームロジックで評価します — フラグ、クエスト、インベントリのチェック。`context.resolve(true)` はポート 0 へ、`context.resolve(false)` はポート 1 へフローを送ります。
 

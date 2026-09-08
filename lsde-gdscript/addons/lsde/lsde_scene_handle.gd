@@ -142,7 +142,7 @@ func on_action(handler: Callable) -> void:
 func get_current_block() -> Variant:
 	return _main_track.get_current_block() if _main_track != null else null
 
-## Get UUIDs of all blocks visited so far, in order.
+## The id of every block visited so far in this scene, in order.
 func get_visited_blocks() -> Array:
 	return _visited
 
@@ -162,7 +162,8 @@ func get_track_infos() -> Array:
 		result.append(track.get_track_info())
 	return result
 
-## Get the full choice history. Keys are block UUIDs, values are arrays of selected choice UUIDs.
+## The full choice history. Keys are block ids, values are the option ids the player picked
+## there, in order.
 func get_choice_history() -> Dictionary:
 	return _choice_history
 
@@ -199,10 +200,10 @@ func _get_scene_graph() -> LsdeGraph.SceneGraph:
 func _is_scene_running() -> bool:
 	return _running
 
-func _add_visited(uuid: String) -> void:
-	if not _visited_set.has(uuid):
-		_visited.append(uuid)
-		_visited_set[uuid] = true
+func _add_visited(block_id: String) -> void:
+	if not _visited_set.has(block_id):
+		_visited.append(block_id)
+		_visited_set[block_id] = true
 	if _pending_waits.size() > 0:
 		var satisfied: Array = []
 		for waiter in _pending_waits:
@@ -247,13 +248,13 @@ func _track_ended(track: Variant) -> void:
 		return
 	_remove_track(track)
 
-## Register a track as waiting for specific block UUIDs to be visited.
+## Register a track as waiting for a set of block ids to be visited.
 ## Park a track - or the main flow - until every listed block has been visited.
 func _register_wait_for_blocks(waiter: Variant, block_ids: Array) -> void:
 	_pending_waits[waiter] = block_ids
 
 
-## Check if a block UUID has been visited in this scene.
+## Check if a block id has been visited in this scene.
 ## Run on_validate_next_block for a block, and on_invalidate_block when it refuses.
 ##
 ## Called by BOTH the main flow and every parallel track. It used to live inline in the main flow
@@ -284,8 +285,8 @@ func _run_validation(block: Dictionary, from_block: Variant, from_character: Var
 	return false
 
 
-func _is_visited(uuid: String) -> bool:
-	return _visited_set.has(uuid)
+func _is_visited(block_id: String) -> bool:
+	return _visited_set.has(block_id)
 
 func _remove_track(track: Variant) -> void:
 	var idx: int = _tracks.find(track)

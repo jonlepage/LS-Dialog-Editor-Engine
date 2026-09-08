@@ -104,8 +104,8 @@ func get_track_info() -> Dictionary:
 	return {
 		"id": id,
 		"parentTrackId": parent_track_id,
-		"startBlockUuid": start_block_id,
-		"currentBlockUuid": _current_block.get("id", "") if _current_block != null else "",
+		"startBlockId": start_block_id,
+		"currentBlockId": _current_block.get("id", "") if _current_block != null else "",
 		"running": _running
 	}
 

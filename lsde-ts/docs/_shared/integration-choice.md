@@ -18,7 +18,7 @@ registerChoiceHandler(engine: DialogueEngine) {
         .setDepth(1001)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
-          selectChoice(choice.uuid);
+          selectChoice(choice.id);
           next();
         });
       return btn;
@@ -60,9 +60,9 @@ public void RegisterChoiceHandler(DialogueEngine engine)
             btn.GetComponentInChildren<TMP_Text>().text =
                 LsdeUtils.GetLocalizedText(choice.Text) ?? choice.Label ?? "";
 
-            var uuid = choice.Uuid;
+            var optionId = choice.Id;
             btn.onClick.AddListener(() => {
-                context.SelectChoice(uuid);
+                context.SelectChoice(optionId);
                 next();
             });
         }
@@ -89,7 +89,7 @@ void UDialogueSubsystem::RegisterChoiceHandler()
             if (!c.visible.has_value() || c.visible.value()) {
                 auto text = lsde::LsdeUtils::GetLocalizedText(c.text);
                 ChoiceWidget->AddOption(
-                    FString(UTF8_TO_TCHAR(c.uuid.c_str())),
+                    FString(UTF8_TO_TCHAR(c.id.c_str())),
                     FString(UTF8_TO_TCHAR(text.value_or("").c_str())));
             }
         }
@@ -103,10 +103,10 @@ void UDialogueSubsystem::RegisterChoiceHandler()
 }
 
 // UFUNCTION(BlueprintCallable) — called from the choice button delegate
-void UDialogueSubsystem::OnChoiceSelected(const FString& Uuid)
+void UDialogueSubsystem::OnChoiceSelected(const FString& OptionId)
 {
     if (ChoiceCtx) {
-        ChoiceCtx->selectChoice(TCHAR_TO_UTF8(*Uuid));
+        ChoiceCtx->selectChoice(TCHAR_TO_UTF8(*OptionId));
         if (ChoiceNext) { ChoiceNext(); ChoiceNext = nullptr; }
         ChoiceCtx = nullptr;
     }
@@ -135,7 +135,7 @@ func _register_choice_handler() -> void:
             var btn = Button.new()
             btn.text = LsdeUtils.get_localized_text(c.get("text")) or c.get("label", "")
             btn.pressed.connect(func():
-                ctx.select_choice(c["uuid"])
+                ctx.select_choice(c["id"])
                 next_fn.call()
             )
             choice_container.add_child(btn)

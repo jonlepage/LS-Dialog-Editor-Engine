@@ -18,7 +18,7 @@ handler 的详细实现请参阅 [Block Types](./block-types) 和 [Handlers](./h
 
 - **Dialog** — 文本、角色、原生属性。在 UI 中显示对话，等待玩家输入或延迟，然后调用 `next()`。返回清理函数，在 engine 移到下一个 block 时隐藏 UI。
 
-- **Choice** — 配置 `choiceFilter` 后带有 `visible` 标签的选项列表。创建对应的 UI 元素 — 按钮、列表、径向菜单。玩家选择后，`selectChoice(uuid)` 告诉 engine 走哪条分支，然后 `next()` 推进流程。
+- **Choice** — 配置 `choiceFilter` 后带有 `visible` 标签的选项列表。创建对应的 UI 元素 — 按钮、列表、径向菜单。玩家选择后，`selectChoice(optionId)` 告诉 engine 走哪条分支，然后 `next()` 推进流程。
 
 - **Condition** — block 中定义的条件。用游戏逻辑评估 — 检查标记、任务、背包。`context.resolve(true)` 将流程发送到端口 0，`context.resolve(false)` 发送到端口 1。
 

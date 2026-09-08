@@ -169,6 +169,6 @@ namespace LsdeDialogEngine
 
         public void Resolve() => ActionRejected = false;
 
-        public void Reject(object? error) => ActionRejected = true;
+        public void Reject(object? error = null) => ActionRejected = true;
     }
 }

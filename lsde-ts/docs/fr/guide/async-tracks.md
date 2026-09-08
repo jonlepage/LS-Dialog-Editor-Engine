@@ -49,14 +49,14 @@ Utilisez `scene.getTrackInfos()` pour inspecter les async tracks en cours. Retou
 ```ts [TypeScript]
 const tracks = scene.getTrackInfos();
 for (const track of tracks) {
-  console.log(`Track ${track.id} (parent: ${track.parentTrackId}) at block ${track.currentBlockUuid}`);
+  console.log(`Track ${track.id} (parent: ${track.parentTrackId}) at block ${track.currentBlockId}`);
 }
 ```
 ```csharp [C#]
 var tracks = scene.GetTrackInfos();
 foreach (var track in tracks)
 {
-    Console.WriteLine($"Track {track.Id} (parent: {track.ParentTrackId}) at block {track.CurrentBlockUuid}");
+    Console.WriteLine($"Track {track.Id} (parent: {track.ParentTrackId}) at block {track.CurrentBlockId}");
 }
 ```
 ```cpp [C++]
@@ -64,18 +64,18 @@ auto tracks = scene->getTrackInfos();
 for (const auto& track : tracks) {
     std::cout << "Track " << track.id
               << " (parent: " << track.parentTrackId << ")"
-              << " at block " << track.currentBlockUuid << "\n";
+              << " at block " << track.currentBlockId << "\n";
 }
 ```
 ```gdscript [GDScript]
 var tracks = scene.get_track_infos()
 for track in tracks:
     print("Track %d (parent: %s) at block %s" % [
-        track["id"], str(track["parentTrackId"]), track["currentBlockUuid"]])
+        track["id"], str(track["parentTrackId"]), track["currentBlockId"]])
 ```
 :::
 
-Chaque `TrackInfo` contient : `id`, `parentTrackId`, `startBlockUuid`, `currentBlockUuid`, `running`.
+Chaque `TrackInfo` contient : `id`, `parentTrackId`, `startBlockId`, `currentBlockId`, `running`.
 
 ## Ce qui fonctionne dans les async tracks (et ce qui ne fonctionne pas)
 

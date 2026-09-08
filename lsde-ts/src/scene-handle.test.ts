@@ -855,7 +855,7 @@ describe( 'async tracks', () => {
 		handle.start();
 
 		expect( handle.getActiveTracks() ).toBe( 1 );
-		expect( handle.getTrackInfos()[0]?.startBlockUuid ).toBe( 'side' );
+		expect( handle.getTrackInfos()[0]?.startBlockId ).toBe( 'side' );
 	} );
 
 	it( 'ends every live track when the scene ends', () => {

@@ -146,5 +146,9 @@ class ActionContext extends BaseContext:
 		action_rejected = false
 
 	## A call failed. The flow leaves by "catch", or by "then" when no error branch was drawn.
+	##
+	## The error is OPTIONAL and the engine does nothing with it: routing only needs to know that
+	## the call failed. Pass one if it reads better next to your own logging — nothing here reads
+	## it, forwards it or logs it.
 	func reject(_error: Variant = null) -> void:
 		action_rejected = true

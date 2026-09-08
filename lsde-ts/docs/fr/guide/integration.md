@@ -18,7 +18,7 @@ Chaque handler reçoit les données du block et un callback `next()`. C'est au d
 
 - **Dialog** — texte, personnage, propriétés natives. Affichez le dialogue dans votre UI, attendez l'input joueur ou un délai, puis appelez `next()`. Retournez une fonction de cleanup pour masquer l'UI quand le engine passe au block suivant.
 
-- **Choice** — liste de choix tagués `visible` si un `choiceFilter` est configuré. Créez les éléments UI correspondants — boutons, liste, radial menu. Au choix du joueur, `selectChoice(uuid)` indique la branche à suivre, puis `next()` avance le flow.
+- **Choice** — liste de choix tagués `visible` quand `onResolveCondition()` est installé. Le engine vous rend **toutes** les options, taguées ; filtrez sur `visible !== false`. Créez les éléments UI correspondants — boutons, liste, radial menu. Au choix du joueur, `selectChoice(optionId)` indique la branche à suivre, puis `next()` avance le flow.
 
 - **Condition** — conditions définies dans le block. Évaluez-les avec la logique de votre jeu — flags, quêtes, inventaire. `context.resolve(true)` envoie le flow vers le port 0, `context.resolve(false)` vers le port 1.
 

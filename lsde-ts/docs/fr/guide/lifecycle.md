@@ -72,7 +72,7 @@ Propriétés d'exécution qui contrôlent comment un block est dispatché par le
 | `portPerCharacter` | `boolean?` | Un port de sortie par personnage dans metadata |
 | `skipIfMissingActor` | `boolean?` | Sauter le block si l'acteur référencé est absent |
 | `debug` | `boolean?` | Flag de debug pour l'éditeur |
-| `waitForBlocks` | `string[]?` | UUIDs de blocks qui doivent avoir été visités avant que ce block puisse progresser |
+| `waitForBlocks` | `string[]?` | Ids de blocks **de cette scène**. Le block est retenu **avant d'être affiché** tant qu'ils n'ont pas tous été visités |
 | `waitInput` | `boolean?` | Flag passif pour contrôle explicite de l'input joueur |
 
 ## Référence visuelle

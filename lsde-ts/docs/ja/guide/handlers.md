@@ -38,7 +38,7 @@ engine は handler を2つの階層で解決します：
 - **Scene handler** — 特定の [`SceneHandle`](/api-ref/interfaces/SceneHandle) に登録され、scene が異なるレンダリングや制御フローを必要とする場合にデフォルト動作をオーバーライドまたは拡張できます。まれですが、利用可能です。
 
 block がディスパッチされると、engine は以下の順序で handler を解決します：
-1. `handle.onBlock(uuid)` または `handle.onDialogId(uuid)` / `handle.onActionId(uuid)` / ... — block 固有のオーバーライド
+1. `handle.onBlock(blockId)` または `handle.onDialogId(blockId)` / `handle.onActionId(blockId)` / ... — block 固有のオーバーライド
 2. `handle.onDialog()` / `handle.onChoice()` / ... — scene レベルのタイプ handler
 3. `engine.onDialog()` / `engine.onChoice()` / ... — global handler
 
@@ -62,13 +62,13 @@ block がディスパッチされると、engine は以下の順序で handler �
 
 ## Block Override
 
-`onBlock(uuid)` で特定の block をその識別子で指定し、専用の handler を割り当てることができます。これはまれなユースケースです — ジェネリック handler が大半のニーズをカバーします — ただし、個別の block が異なる動作を必要とする非常に特殊なシナリオでは利用可能です。
+`onBlock(blockId)` で特定の block をその識別子で指定し、専用の handler を割り当てることができます。これはまれなユースケースです — ジェネリック handler が大半のニーズをカバーします — ただし、個別の block が異なる動作を必要とする非常に特殊なシナリオでは利用可能です。
 
 <!--@include: ../../_shared/handler-block-override.md-->
 
 ## Type-Safe Block Override
 
-`onDialogId(uuid)`、`onChoiceId(uuid)`、`onConditionId(uuid)`、`onActionId(uuid)` は `onBlock(uuid)` の型安全な代替メソッドです。動作は全く同じ — 同じ優先度、同じ `preventGlobalHandler` サポート — ただし handler がジェネリックユニオンではなく、特殊化された block 型とコンテキストを受け取ります。
+`onDialogId(blockId)`、`onChoiceId(blockId)`、`onConditionId(blockId)`、`onActionId(blockId)` は `onBlock(blockId)` の型安全な代替メソッドです。動作は全く同じ — 同じ優先度、同じ `preventGlobalHandler` サポート — ただし handler がジェネリックユニオンではなく、特殊化された block 型とコンテキストを受け取ります。
 
 登録時に block タイプが分かっていて、`block` と `context` のオートコンプリートが必要な場合に使用してください。
 
@@ -81,7 +81,7 @@ block がディスパッチされると、engine は以下の順序で handler �
 ```mermaid
 flowchart TD
     A[block dispatched] --> B{resolve scene handler}
-    B --> B1{"onBlock(uuid) /\nonDialogId(uuid) etc.?"}
+    B --> B1{"onBlock(blockId) /\nonDialogId(blockId) etc.?"}
     B1 -- found --> S
     B1 -- not found --> B2{"handle.onDialog() etc.?"}
     B2 -- found --> S

@@ -18,15 +18,14 @@ Le engine expose les handlers suivants :
 | [`onInvalidateBlock`](/api-ref/classes/DialogueEngine#oninvalidateblock) | global | Réagir quand la validation échoue |
 | [`onSceneEnter`](/api-ref/classes/DialogueEngine#onsceneenter) | global / scene | Une scène démarre |
 | [`onSceneExit`](/api-ref/classes/DialogueEngine#onsceneexit) | global / scene | Une scène se termine |
-| [`onBlock`](/api-ref/interfaces/SceneHandle#onblock) | scene | Override un block spécifique par UUID |
-| [`onDialogId`](/api-ref/interfaces/SceneHandle#ondialogid) | scene | Override un block DIALOG spécifique par UUID (type-safe) |
-| [`onChoiceId`](/api-ref/interfaces/SceneHandle#onchoiceid) | scene | Override un block CHOICE spécifique par UUID (type-safe) |
-| [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | Override un block CONDITION spécifique par UUID (type-safe) |
-| [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | Override un block ACTION spécifique par UUID (type-safe) |
+| [`onBlock`](/api-ref/interfaces/SceneHandle#onblock) | scene | Override un block par son id (`DIALOG-001`) |
+| [`onDialogId`](/api-ref/interfaces/SceneHandle#ondialogid) | scene | Override un block DIALOG par son id (type-safe) |
+| [`onChoiceId`](/api-ref/interfaces/SceneHandle#onchoiceid) | scene | Override un block CHOICE par son id (type-safe) |
+| [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | Override un block CONDITION par son id (type-safe) |
+| [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | Override un block ACTION par son id (type-safe) |
 | [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) | global | Résolveur unifié de conditions (visibilité des choix + pré-évaluation des conditions) |
-| ~~[`onResolveCondition`](/api-ref/classes/DialogueEngine#setchoicefilter)~~ | global | _Déprécié — utilisez `onResolveCondition` à la place_ |
 
-`onDialog`, `onChoice` et `onAction` sont **required** — le engine valide leur présence à l'appel de `start()` et throw une erreur descriptive si un manque. `onCondition` est **optionnel** quand `onResolveCondition` est installé — le engine auto-route depuis les groupes de conditions pré-évalués.
+Les **quatre** handlers de type — `onDialog`, `onChoice`, `onCondition`, `onAction` — sont requis : le engine valide leur présence à l'appel de `start()` et lève une erreur nommant ceux qui manquent. Seule exception, `onCondition` devient **facultatif** dès que `onResolveCondition` est installé : le engine connaît alors déjà le port de sortie, et le handler ne sert plus qu'à journaliser ou à forcer une sortie.
 
 <!--@include: ../../_shared/handler-basic.md-->
 
@@ -38,7 +37,7 @@ Le engine résout les handlers sur deux niveaux :
 - **Scene handlers** — enregistrés sur un [`SceneHandle`](/api-ref/interfaces/SceneHandle) spécifique, ils permettent de court-circuiter ou d'étendre le comportement par défaut quand une scène nécessite un rendu ou un contrôle différent. C'est rare, mais disponible.
 
 Quand un block est dispatché, le engine résout le handler dans cet ordre :
-1. `handle.onBlock(uuid)` ou `handle.onDialogId(uuid)` / `handle.onActionId(uuid)` / ... — override spécifique à un block
+1. `handle.onBlock(blockId)` ou `handle.onDialogId(blockId)` / `handle.onActionId(blockId)` / ... — override spécifique à un block
 2. `handle.onDialog()` / `handle.onChoice()` / ... — handler de type au niveau scène
 3. `engine.onDialog()` / `engine.onChoice()` / ... — handler global
 
@@ -62,13 +61,13 @@ Les callbacks `onSceneEnter` et `onSceneExit` permettent de réagir au démarrag
 
 ## Block Override
 
-`onBlock(uuid)` permet de cibler un block précis par son identifiant pour lui attribuer un handler dédié. C'est un cas d'usage rare — les handlers génériques couvrent la grande majorité des besoins — mais pour des scénarios très spécifiques où un block individuel nécessite un comportement distinct, c'est disponible.
+`onBlock(blockId)` permet de cibler un block précis par son identifiant pour lui attribuer un handler dédié. C'est un cas d'usage rare — les handlers génériques couvrent la grande majorité des besoins — mais pour des scénarios très spécifiques où un block individuel nécessite un comportement distinct, c'est disponible.
 
 <!--@include: ../../_shared/handler-block-override.md-->
 
 ## Type-Safe Block Override
 
-`onDialogId(uuid)`, `onChoiceId(uuid)`, `onConditionId(uuid)` et `onActionId(uuid)` sont des alternatives type-safe à `onBlock(uuid)`. Ils fonctionnent exactement de la même façon — même priorité, même support de `preventGlobalHandler` — mais le handler reçoit le type de block spécialisé et le contexte au lieu de l'union générique.
+`onDialogId(blockId)`, `onChoiceId(blockId)`, `onConditionId(blockId)` et `onActionId(blockId)` sont des alternatives type-safe à `onBlock(blockId)`. Ils fonctionnent exactement de la même façon — même priorité, même support de `preventGlobalHandler` — mais le handler reçoit le type de block spécialisé et le contexte au lieu de l'union générique.
 
 Utilisez-les quand vous connaissez le type du block au moment de l'enregistrement et que vous voulez l'autocomplétion complète sur `block` et `context`.
 
@@ -81,7 +80,7 @@ Utilisez-les quand vous connaissez le type du block au moment de l'enregistremen
 ```mermaid
 flowchart TD
     A[block dispatched] --> B{resolve scene handler}
-    B --> B1{"onBlock(uuid) /\nonDialogId(uuid) etc.?"}
+    B --> B1{"onBlock(blockId) /\nonDialogId(blockId) etc.?"}
     B1 -- found --> S
     B1 -- not found --> B2{"handle.onDialog() etc.?"}
     B2 -- found --> S

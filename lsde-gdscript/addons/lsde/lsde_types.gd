@@ -60,8 +60,18 @@ const SUPPORTED_VERSION := 1
 ## writer's own properties. Anything not in here belongs to the game.
 ##
 ## Ids cannot collide — LSDE refuses a project property that takes a native name — so telling them
-## apart is a lookup, not a guess. Most are inert; only [code]isAsync[/code] (spawns a parallel
-## track) and [code]waitForBlocks[/code] (parks one) mean anything to the traversal.
+## apart is a lookup, not a guess. Most are inert; only two mean anything to the traversal:
+##
+## [code]isAsync[/code] opens a parallel track.
+##
+## [code]waitForBlocks[/code] holds a block until the ones it names have been visited — the join
+## half of the fork isAsync opens. [b]The engine holds the block BEFORE dispatching it.[/b] No
+## handler is called, so the game never learns the block exists until the wait lifts; nothing of it
+## can reach the screen early. That is the engine's decision and not a rendering choice a game could
+## make differently: it is a NATIVE property, the designer ticks it in LSDE, and the engine owes
+## them the behaviour. The rule is the same on every track, the one the player is watching included.
+## ALL the listed ids must have been visited, not just one, and init() reports UNKNOWN_WAIT_BLOCK
+## when one of them is not a block of the scene at all.
 ##
 ## [code]delay[/code] and [code]timeout[/code] are MILLISECONDS in v2. They were seconds in v1, and
 ## nothing reports the difference at runtime: a migrated project turns a 3-second pause into 3 ms.

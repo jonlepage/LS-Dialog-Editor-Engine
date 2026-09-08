@@ -1767,3 +1767,130 @@ là qu'étaient les défauts des trois tours.
 
 `tsc` et les trois builds sans erreur. Les playgrounds impriment la même scène : 8 blocs visités,
 27 fils.
+
+---
+
+# Quatrième revue — la passe exhaustive
+
+Les trois revues précédentes ont chacune trouvé des défauts, ce qui est mauvais signe en soi. La
+cause n'était pas que j'en gardais pour plus tard : c'est que je n'avais jamais fait la passe
+exhaustive. Chaque tour a élargi la lentille — d'abord les fichiers que je venais de modifier, puis
+le moteur en TypeScript, puis la comparaison croisée des runtimes. Celle-ci lit **tout** : les
+soixante fichiers du moteur, les quatre langages ensemble, module par module, plus la documentation.
+
+## Le patron qui revient : la correction n'était pas propagée
+
+Presque tout ce que ce tour a trouvé a la même forme. **Une correction faite en TypeScript n'a pas
+été portée** — ni aux trois autres runtimes, ni à la documentation.
+
+- La documentation complète de `waitForBlocks`, écrite au premier tour, n'existait **qu'en
+  TypeScript**. C# et C++ portaient encore « *must have been visited before this block may
+  advance* », la formulation de l'ancien sens ; le GDScript n'avait rien.
+- La docstring périmée de `evaluateEachCase` (« *routing still goes through
+  evaluateConditionCases* ») corrigée au deuxième tour : encore présente dans les trois portages.
+  Pire, le bloc de doc y était **collé sur la mauvaise fonction** — en C# cela produisait deux
+  `<summary>` sur un même membre, ce qui est du XML invalide.
+- « *inter-scene navigation* » sur `getSceneConnections`, l'erreur que `CLAUDE.md` signale comme
+  ayant déjà coûté un correctif inutile : corrigée en C# et C++ au deuxième tour, elle était restée
+  dans l'**interface TypeScript**, où j'avais corrigé l'implémentation mais pas la déclaration.
+
+## Le vocabulaire v1 dans l'API publique
+
+117 occurrences de « uuid » dans 29 fichiers du moteur — le mot d'une version du format qui n'existe
+plus. Ce n'était pas que du commentaire :
+
+- **`TrackInfo.startBlockUuid` et `currentBlockUuid`** — des **noms de champs publics**, dans les
+  quatre runtimes, qui renvoient `DIALOG-001`.
+- Les paramètres `blockUuid` de `onBlock`, `onDialogId`, `getChoice`… lus dans l'autocomplétion de
+  tout intégrateur.
+
+Renommés en `startBlockId` / `currentBlockId` / `blockId`, partout, tests et documentation compris.
+Les deux mentions historiques (« *ce qui a remplacé l'uuid de v1* ») restent : elles racontent le
+passé.
+
+## La documentation ne se construisait plus
+
+`npm run docs` **échouait** — 38 liens morts vers cinq types v1 supprimés : `BlueprintBlockBase`,
+`BlueprintScene`, `BlueprintConnection`, `Dictionary`, `ActionSignature`. Le site de documentation
+d'un produit vendu ne se générait pas.
+
+Et les extraits partagés — ceux qu'un intégrateur copie — étaient pires que périmés, ils étaient
+**syntaxiquement invalides** :
+
+- `blueprint-connection-type.md` déclarait `port: string;` **et** `port?: number;` dans la même
+  interface, et `std::string port;` **et** `std::optional<int> port;` dans la même structure. Deux
+  membres du même nom : ça ne compile pas. Séquelle d'un remplacement de `fromPortIndex`.
+- `blueprint-scene-type.md` déclarait un champ nommé `scene.start` — `scene.start?: string;` dans une
+  interface TypeScript, `std::optional<std::string> scene.start;` en C++.
+
+Les trois fichiers de types partagés ont été réécrits contre les structures réelles de v2.
+
+## La documentation décrivait un moteur qui n'existe plus
+
+Le guide `block-types` — français comme anglais — documentait :
+
+- **un « mode dispatcher »** pour `portPerCase`, où « *tous les groupes qui matchent déclenchent
+  leur port simultanément* ». Le dispatcher a été **supprimé** en v2 ; `portPerCase` veut dire que
+  le premier cas qui tient sort par son propre port ;
+- **`context.resolve(result)`** avec « *true suit le port 0, false suit le port 1* », et
+  « *resolve() accepte boolean (legacy), number (switch), ou number[] (dispatcher)* ». En v2
+  `resolve()` prend un **nom de port** ;
+- une table des champs de block listant `uuid`, `properties: BlockProperty[]`, `userProperties`,
+  `metadata: BlockMetadata` et un `scene.start: boolean?` « marque le block d'entrée » — aucun de ces
+  champs n'existe ;
+- `delay` et `timeout` sans dire qu'ils sont en **millisecondes**, le piège de migration que le
+  reste du dépôt met en gras partout.
+
+Ailleurs : `handlers.md` portait une ligne disant « *`onResolveCondition` — déprécié, utilisez
+`onResolveCondition`* » (un remplacement automatique avait renommé le libellé de l'ancienne ligne
+`setChoiceFilter` sans la retirer), et affirmait que seuls trois handlers sur quatre sont requis.
+`integration.md` demandait de configurer un `choiceFilter`, **supprimé** en v2. `blueprints.md`
+décrivait la table de connexions v1 et disait qu'on y accède par `onValidateNextBlock`.
+
+Le français et l'anglais sont à jour. Le japonais et le chinois gardent leur prose d'origine — les
+**identifiants et les liens y sont corrigés**, la traduction suivra.
+
+## Le code
+
+- **`reject(error)`** : paramètre obligatoire en TypeScript, C# et C++, optionnel en GDScript, et
+  **ignoré dans les quatre**. Le README montrait `context.reject()` sans argument — ce qui ne
+  compilait pas en TypeScript. Rendu optionnel partout, avec la seule phrase qui manquait : le
+  moteur n'en fait rien, le routage a seulement besoin de savoir que l'appel a échoué.
+- **Deux `return {};` consécutifs** dans les deux `getTypeHandler` du registre C++. Le second est
+  inatteignable. Balayage fait sur les quatre runtimes : c'était le seul.
+
+## Le trou de couverture qui comptait le plus
+
+**`waitForBlocks` est la seule native qui porte une liste**, et son parsing n'était vérifié dans
+aucun des quatre runtimes. Chaque portage a besoin de sa propre branche pour sortir un tableau du
+sac `props` — une alternative de `std::variant` en C++, un `JsonElement` ou un `JArray` en C# — et
+une charge dont le `waitForBlocks` revenait vide aurait rendu la propriété **silencieusement
+inerte** : aucune erreur, aucun avertissement, et un bloc qui n'attend jamais.
+
+Les branches étaient correctes. Rien ne les tenait. Les quatre runtimes le vérifient désormais
+contre le même export de référence, `DIALOG-008` de `reactor_breach`, et les deux chemins JSON du
+C# (System.Text.Json et Newtonsoft) ont chacun le leur.
+
+## Ce que j'ai vérifié et laissé tel quel
+
+- Les neuf natives, les noms de ports, les codes de diagnostic, la résolution des handlers, le
+  cycle de vie des scènes, l'indexation du graphe, `setLocale` : extraits des quatre et comparés.
+  Identiques.
+- `getNativeProperties` lit les natives **typées** en C# et C++, telles quelles en TypeScript et
+  GDScript. Sur une charge malformée (`"delay": "500"`) les deux familles divergent, et ne peuvent
+  pas faire autrement : la structure est statiquement typée d'un côté.
+- `tagOptionVisibility` **copie en profondeur** en C++ et GDScript, en surface en TypeScript et C#.
+  C'est la sémantique valeur/référence des langages, sur une mutation qu'un jeu ne devrait pas
+  faire.
+
+## Compte final
+
+| | tests |
+|---|---|
+| TypeScript | 417 |
+| C# | 133 |
+| C++ | 64 |
+| GDScript | 168 |
+| **total** | **782** |
+
+`tsc`, les trois builds et **`npm run docs`** passent — ce dernier ne passait plus.

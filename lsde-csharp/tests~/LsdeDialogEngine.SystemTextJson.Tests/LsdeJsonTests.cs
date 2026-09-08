@@ -152,5 +152,25 @@ namespace LsdeDialogEngine.SystemTextJson.Tests
             Assert.Empty(report.Errors);
             Assert.Empty(report.Warnings);
         }
+
+        // ─── waitForBlocks is the one native holding a LIST ──────────────────
+        //
+        // Every other native is a scalar, so the array branch of the value converter is exercised
+        // by nothing else — and a payload whose waitForBlocks came back as null would make the
+        // property silently inert: no error, no warning, and a block that never waits.
+        //
+        // DIALOG-008 of the reference export carries it.
+
+        [Fact]
+        public void ParsesWaitForBlocksAsARealListOfIds()
+        {
+            var blueprint = LsdeJson.Parse(LoadBlueprint());
+            var block = blueprint.Scenes[0].Blocks.First(b => b.Id == "DIALOG-008");
+
+            var natives = LsdeUtils.GetNativeProperties(block);
+
+            Assert.NotNull(natives.WaitForBlocks);
+            Assert.Equal(new[] { "DIALOG-012", "DIALOG-007" }, natives.WaitForBlocks!);
+        }
     }
 }

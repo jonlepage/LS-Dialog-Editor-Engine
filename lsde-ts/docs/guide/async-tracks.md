@@ -49,14 +49,14 @@ Use `scene.getTrackInfos()` to inspect running async tracks. Returns a read-only
 ```ts [TypeScript]
 const tracks = scene.getTrackInfos();
 for (const track of tracks) {
-  console.log(`Track ${track.id} (parent: ${track.parentTrackId}) at block ${track.currentBlockUuid}`);
+  console.log(`Track ${track.id} (parent: ${track.parentTrackId}) at block ${track.currentBlockId}`);
 }
 ```
 ```csharp [C#]
 var tracks = scene.GetTrackInfos();
 foreach (var track in tracks)
 {
-    Console.WriteLine($"Track {track.Id} (parent: {track.ParentTrackId}) at block {track.CurrentBlockUuid}");
+    Console.WriteLine($"Track {track.Id} (parent: {track.ParentTrackId}) at block {track.CurrentBlockId}");
 }
 ```
 ```cpp [C++]
@@ -64,18 +64,18 @@ auto tracks = scene->getTrackInfos();
 for (const auto& track : tracks) {
     std::cout << "Track " << track.id
               << " (parent: " << track.parentTrackId << ")"
-              << " at block " << track.currentBlockUuid << "\n";
+              << " at block " << track.currentBlockId << "\n";
 }
 ```
 ```gdscript [GDScript]
 var tracks = scene.get_track_infos()
 for track in tracks:
     print("Track %d (parent: %s) at block %s" % [
-        track["id"], str(track["parentTrackId"]), track["currentBlockUuid"]])
+        track["id"], str(track["parentTrackId"]), track["currentBlockId"]])
 ```
 :::
 
-Each `TrackInfo` contains: `id`, `parentTrackId`, `startBlockUuid`, `currentBlockUuid`, `running`. Use this for debug overlays, play-mode renderers, or validation.
+Each `TrackInfo` contains: `id`, `parentTrackId`, `startBlockId`, `currentBlockId`, `running`. Use this for debug overlays, play-mode renderers, or validation.
 
 ## What Works in Async Tracks (and What Doesn't)
 

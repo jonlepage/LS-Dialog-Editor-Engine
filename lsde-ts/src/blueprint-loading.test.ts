@@ -11,6 +11,7 @@
 // middle without a word.
 
 import { describe, it, expect } from 'vitest';
+import { LsdeUtils } from './lsde-utils.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -534,4 +535,20 @@ describe( 'a file exported in another naming convention', () => {
 		expect( validateBlueprint( { data: { hello: 'world' } as never } ).errors[0]!.code )
 			.toBe( 'INVALID_FORMAT' );
 	} );
+} );
+
+// ─── waitForBlocks is the one native holding a LIST ──────────────────────────
+//
+// Every other native is a scalar. The three ports each need a branch of their own to read an
+// array out of the props bag — a std::variant alternative, a JsonElement, a JArray — and a
+// payload whose waitForBlocks came back empty would make the property silently inert: no error,
+// no warning, and a block that never waits. The four runtimes assert it against the same export.
+
+it( 'reads waitForBlocks off the reference export as a real list of ids', () => {
+	const data = load( SINGLE_FILE );
+	const scene = data.scenes.find( s => s.scene === 'reactor_breach' )!;
+	const block = scene.blocks.find( b => b.id === 'DIALOG-008' )!;
+
+	expect( LsdeUtils.getNativeProperties( block ).waitForBlocks )
+		.toEqual( ['DIALOG-012', 'DIALOG-007'] );
 } );

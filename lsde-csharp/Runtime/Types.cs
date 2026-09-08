@@ -294,7 +294,19 @@ namespace LsdeDialogEngine
         /// <summary>Condition blocks: each case exits by its own port instead of sharing Out.</summary>
         public bool? PortPerCase { get; set; }
 
-        /// <summary>Block ids OF THIS SCENE that must have been visited before this block may advance.</summary>
+        /// <summary>Block ids OF THIS SCENE that must have been visited before this block STARTS.</summary>
+        /// <remarks>The join half of the fork IsAsync opens: a branch runs in parallel, and a block
+        /// downstream waits for it to have got somewhere before it plays.
+        /// <para><b>The engine holds the block BEFORE dispatching it.</b> No handler is called, so
+        /// the game never learns the block exists until the wait lifts — nothing of it can reach
+        /// the screen early. That is the engine's decision and not a rendering choice a game could
+        /// make differently: this is a NATIVE property, the designer ticks it in LSDE, and the
+        /// engine owes them the behaviour.</para>
+        /// <para>The rule is the same on every track, the one the player is watching included.</para>
+        /// <para>ALL the listed blocks must have been visited, not just one. Visiting a block
+        /// releases everything waiting on it, in turn. A block that is never visited parks its
+        /// track for good — Init() reports UNKNOWN_WAIT_BLOCK when an id is not a block of the
+        /// scene at all.</para></remarks>
         public List<string>? WaitForBlocks { get; set; }
     }
 
@@ -446,10 +458,10 @@ namespace LsdeDialogEngine
         public int? ParentTrackId { get; set; }
 
         /// <summary>The block this track started on.</summary>
-        public string StartBlockUuid { get; set; } = "";
+        public string StartBlockId { get; set; } = "";
 
         /// <summary>The block it is on now, or null when it has ended.</summary>
-        public string? CurrentBlockUuid { get; set; }
+        public string? CurrentBlockId { get; set; }
 
         /// <summary>Whether it is still running.</summary>
         public bool Running { get; set; }
@@ -466,10 +478,10 @@ namespace LsdeDialogEngine
         /// <summary>Human-readable description of the issue.</summary>
         public string Message { get; set; } = "";
 
-        /// <summary>UUID of the scene where the issue was found, if applicable.</summary>
+        /// <summary>Id of the scene where the issue was found, if applicable.</summary>
         public string? SceneId { get; set; }
 
-        /// <summary>UUID of the block where the issue was found, if applicable.</summary>
+        /// <summary>Id of the block where the issue was found, if applicable.</summary>
         public string? BlockId { get; set; }
     }
 
@@ -604,7 +616,10 @@ namespace LsdeDialogEngine
         void Resolve();
 
         /// <summary>A call failed. The flow leaves by "catch", or by "then" when no error branch was drawn.</summary>
-        void Reject(object? error);
+        /// <remarks>The error is OPTIONAL and the engine does nothing with it: routing only needs
+        /// to know that the call failed. Pass one if it reads better next to your own logging —
+        /// nothing here reads it, forwards it or logs it.</remarks>
+        void Reject(object? error = null);
     }
 
     /// <summary>Context passed to OnBeforeBlock handler.</summary>
@@ -622,7 +637,7 @@ namespace LsdeDialogEngine
     /// <summary>Arguments passed to any block handler.
     /// <para>The engine uses a two-tier handler system:
     /// Tier 2 (scene) is called first, Tier 1 (global) after — unless PreventGlobalHandler() is called.
-    /// A block-specific override via OnBlock(uuid) takes highest priority.</para></summary>
+    /// A block-specific override via OnBlock(blockId) takes highest priority.</para></summary>
     public class BlockHandlerArgs<TBlock, TContext>
         where TBlock : BlueprintBlock
         where TContext : IBaseBlockContext
@@ -747,7 +762,7 @@ namespace LsdeDialogEngine
     // ─── SceneHandle Interface ──────────────────────────────────────────────────
 
     /// <summary>Public interface for controlling a running scene.
-    /// <para>Obtain an ISceneHandle by calling engine.Scene(sceneUuid). Register scene-specific
+    /// <para>Obtain an ISceneHandle by calling engine.Scene(sceneRef). Register scene-specific
     /// (Tier 2) handlers, then call Start() to begin traversal from the entry block.</para>
     /// <para>Lifecycle: Start() → OnSceneEnter → blocks dispatched → scene ends → OnSceneExit.
     /// Scene-level handlers are called BEFORE global handlers. Both execute unless PreventGlobalHandler() is called.</para></summary>

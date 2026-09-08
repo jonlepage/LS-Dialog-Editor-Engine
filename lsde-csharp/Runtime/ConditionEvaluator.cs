@@ -92,12 +92,6 @@ namespace LsdeDialogEngine
             return Ports.Out;
         }
 
-        /// <summary>
-        /// Evaluate every case on its own, without picking a port.
-        /// <para>This is what fills the handler's Cases[i].Result, so a game can show what matched,
-        /// override the routing, or log it. Routing itself still goes through
-        /// EvaluateConditionCases — reading a result here never decides an exit.</para>
-        /// </summary>
         /// <summary>Pick the exit port from case results that were ALREADY computed.</summary>
         /// <remarks>Same rules as EvaluateConditionCases, same answer — it just does not ask again.
         /// <para>The engine needs both halves for every condition block: a result per case, so the
@@ -132,6 +126,11 @@ namespace LsdeDialogEngine
             return Ports.Out;
         }
 
+        /// <summary>Evaluate every case on its own, without picking a port.</summary>
+        /// <remarks>Handed to a game that wants to show what matched without changing where the
+        /// flow goes. The engine fills Cases[i].Result with the same rule, then reads the exit port
+        /// off those results with PickPortFromResults — never by calling this and deciding for
+        /// itself.</remarks>
         public static List<bool> EvaluateEachCase(
             List<ConditionCase>? cases,
             Func<ConditionTest, bool> evaluator)

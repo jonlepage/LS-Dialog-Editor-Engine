@@ -78,11 +78,11 @@ void SceneHandleImpl::cancel() {
 
 void SceneHandleImpl::onEnter(SceneLifecycleHandler h) { _sceneRegistry.enterHandler = std::move(h); }
 void SceneHandleImpl::onExit(SceneLifecycleHandler h) { _sceneRegistry.exitHandler = std::move(h); }
-void SceneHandleImpl::onBlock(const std::string& uuid, InternalBlockHandler h) { _sceneRegistry.setBlockHandler(uuid, std::move(h)); }
-void SceneHandleImpl::onDialogId(const std::string& uuid, TypedBlockHandler<BlueprintBlock, IDialogContext> h) { _sceneRegistry.setBlockHandler(uuid, wrapHandler<BlueprintBlock, IDialogContext>(std::move(h))); }
-void SceneHandleImpl::onChoiceId(const std::string& uuid, TypedBlockHandler<BlueprintBlock, IChoiceContext> h) { _sceneRegistry.setBlockHandler(uuid, wrapHandler<BlueprintBlock, IChoiceContext>(std::move(h))); }
-void SceneHandleImpl::onConditionId(const std::string& uuid, TypedBlockHandler<BlueprintBlock, IConditionContext> h) { _sceneRegistry.setBlockHandler(uuid, wrapHandler<BlueprintBlock, IConditionContext>(std::move(h))); }
-void SceneHandleImpl::onActionId(const std::string& uuid, TypedBlockHandler<BlueprintBlock, IActionContext> h) { _sceneRegistry.setBlockHandler(uuid, wrapHandler<BlueprintBlock, IActionContext>(std::move(h))); }
+void SceneHandleImpl::onBlock(const std::string& blockId, InternalBlockHandler h) { _sceneRegistry.setBlockHandler(blockId, std::move(h)); }
+void SceneHandleImpl::onDialogId(const std::string& blockId, TypedBlockHandler<BlueprintBlock, IDialogContext> h) { _sceneRegistry.setBlockHandler(blockId, wrapHandler<BlueprintBlock, IDialogContext>(std::move(h))); }
+void SceneHandleImpl::onChoiceId(const std::string& blockId, TypedBlockHandler<BlueprintBlock, IChoiceContext> h) { _sceneRegistry.setBlockHandler(blockId, wrapHandler<BlueprintBlock, IChoiceContext>(std::move(h))); }
+void SceneHandleImpl::onConditionId(const std::string& blockId, TypedBlockHandler<BlueprintBlock, IConditionContext> h) { _sceneRegistry.setBlockHandler(blockId, wrapHandler<BlueprintBlock, IConditionContext>(std::move(h))); }
+void SceneHandleImpl::onActionId(const std::string& blockId, TypedBlockHandler<BlueprintBlock, IActionContext> h) { _sceneRegistry.setBlockHandler(blockId, wrapHandler<BlueprintBlock, IActionContext>(std::move(h))); }
 void SceneHandleImpl::onDialog(TypedBlockHandler<BlueprintBlock, IDialogContext> h) { _sceneRegistry.dialogHandler = wrapHandler<BlueprintBlock, IDialogContext>(std::move(h)); }
 void SceneHandleImpl::onChoice(TypedBlockHandler<BlueprintBlock, IChoiceContext> h) { _sceneRegistry.choiceHandler = wrapHandler<BlueprintBlock, IChoiceContext>(std::move(h)); }
 void SceneHandleImpl::onCondition(TypedBlockHandler<BlueprintBlock, IConditionContext> h) { _sceneRegistry.conditionHandler = wrapHandler<BlueprintBlock, IConditionContext>(std::move(h)); }
@@ -122,9 +122,9 @@ std::vector<TrackInfo> SceneHandleImpl::getTrackInfos() const {
     return result;
 }
 
-void SceneHandleImpl::addVisited(const std::string& uuid) {
-    if (_visitedSet.insert(uuid).second) {
-        _visitedOrder.push_back(uuid);
+void SceneHandleImpl::addVisited(const std::string& blockId) {
+    if (_visitedSet.insert(blockId).second) {
+        _visitedOrder.push_back(blockId);
     }
     if (!_pendingWaits.empty()) {
         std::vector<IWaiter*> satisfied;
@@ -203,8 +203,8 @@ bool SceneHandleImpl::runValidation(const BlueprintBlock& block, const Blueprint
     return false;
 }
 
-bool SceneHandleImpl::isVisited(const std::string& uuid) const {
-    return _visitedSet.find(uuid) != _visitedSet.end();
+bool SceneHandleImpl::isVisited(const std::string& blockId) const {
+    return _visitedSet.find(blockId) != _visitedSet.end();
 }
 
 /// A track that ended is stopped, not deleted — see the note in shutdown().
@@ -219,8 +219,8 @@ std::unique_ptr<IBaseBlockContext> SceneHandleImpl::createBlockContext(const Blu
     return createContext(block);
 }
 
-void SceneHandleImpl::recordChoice(const std::string& blockUuid, const std::string& choiceUuid) {
-    _choiceHistory[blockUuid].push_back(choiceUuid);
+void SceneHandleImpl::recordChoice(const std::string& blockId, const std::string& optionId) {
+    _choiceHistory[blockId].push_back(optionId);
 }
 
 bool SceneHandleImpl::evaluateConditionForBlock(const ConditionTest& test,
@@ -232,8 +232,8 @@ const std::unordered_map<std::string, std::vector<std::string>>& SceneHandleImpl
     return _choiceHistory;
 }
 
-const std::vector<std::string>* SceneHandleImpl::getChoice(const std::string& blockUuid) const {
-    auto it = _choiceHistory.find(blockUuid);
+const std::vector<std::string>* SceneHandleImpl::getChoice(const std::string& blockId) const {
+    auto it = _choiceHistory.find(blockId);
     if (it == _choiceHistory.end()) return nullptr;
     return &it->second;
 }

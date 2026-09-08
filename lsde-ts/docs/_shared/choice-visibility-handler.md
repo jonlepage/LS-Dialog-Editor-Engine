@@ -2,8 +2,8 @@
 ```ts [TypeScript]
 engine.onChoice(({ block, context, next }) => {
   const offered = context.options.filter(c => c.visible !== false);
-  showOptionsUI(visible, (uuid) => {
-    context.selectChoice(uuid);
+  showOptionsUI(visible, (optionId) => {
+    context.selectChoice(optionId);
     next();
   });
 });
@@ -12,8 +12,8 @@ engine.onChoice(({ block, context, next }) => {
 engine.OnChoice(args => {
     var visible = args.Context.Options
         .Where(c => c.Visible != false).ToList();
-    ShowChoicesUI(visible, uuid => {
-        args.Context.SelectChoice(uuid);
+    ShowChoicesUI(visible, optionId => {
+        args.Context.SelectChoice(optionId);
         args.Next();
     });
     return null;
@@ -25,8 +25,8 @@ engine.onChoice([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
     for (const auto& c : ctx->options())
         if (!c.visible.has_value() || c.visible.value())
             visible.push_back(&c);
-    showOptionsUI(visible, [ctx, next](auto& uuid) {
-        ctx->selectChoice(uuid);
+    showOptionsUI(visible, [ctx, next](auto& optionId) {
+        ctx->selectChoice(optionId);
         next();
     });
     return {};
@@ -38,8 +38,8 @@ engine.on_choice(func(args):
     for c in args["context"].options:
         if c.get("visible") != false:
             visible.append(c)
-    show_options_ui(visible, func(uuid):
-        args["context"].select_choice(uuid)
+    show_options_ui(visible, func(option_id):
+        args["context"].select_choice(option_id)
         args["next"].call()
     )
     return Callable()

@@ -70,7 +70,7 @@ bool globalPrevented(IBaseBlockContext* ctx) {
 // ─── Track ───────────────────────────────────────────────────────────────────
 
 Track::Track(ITrackHost& host, const BlueprintBlock& startBlock, int id_, int parentTrackId_)
-    : id(id_), parentTrackId(parentTrackId_), startBlockUuid(startBlock.id),
+    : id(id_), parentTrackId(parentTrackId_), startBlockId(startBlock.id),
       _host(host), _startBlock(&startBlock) {}
 
 void Track::start() {
@@ -110,8 +110,8 @@ TrackInfo Track::getTrackInfo() const {
     TrackInfo info;
     info.id = id;
     info.parentTrackId = parentTrackId;
-    info.startBlockUuid = startBlockUuid;
-    info.currentBlockUuid = _currentBlock ? _currentBlock->id : "";
+    info.startBlockId = startBlockId;
+    info.currentBlockId = _currentBlock ? _currentBlock->id : "";
     info.running = _running;
     return info;
 }

@@ -18,7 +18,7 @@ Each handler receives the block data and a `next()` callback. The developer proc
 
 - **Dialog** — text, character, native properties. Display the dialogue in your UI, wait for player input or a delay, then call `next()`. Return a cleanup function to hide the UI when the engine moves to the next block.
 
-- **Choice** — list of choices tagged `visible` when a `choiceFilter` is configured. Create the corresponding UI elements — buttons, list, radial menu. On player selection, `selectChoice(uuid)` tells the engine which branch to follow, then `next()` advances the flow.
+- **Choice** — list of choices tagged `visible` when `onResolveCondition()` is installed. The engine hands you **every** option, tagged; filter on `visible !== false`. Create the corresponding UI elements — buttons, list, radial menu. On player selection, `selectChoice(optionId)` tells the engine which branch to follow, then `next()` advances the flow.
 
 - **Condition** — conditions defined in the block. Evaluate them with your game logic — check a flag, a quest, an inventory. `context.resolve(true)` sends the flow to port 0, `context.resolve(false)` to port 1.
 

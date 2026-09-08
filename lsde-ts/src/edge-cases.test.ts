@@ -1,6 +1,6 @@
 /**
  * Edge case tests across all modules.
- * Covers: next() double-call, NOTE-only scene, selectChoice invalid UUID,
+ * Covers: next() double-call, NOTE-only scene, selectChoice with an option id that does not exist,
  * resolve() double-call, onBeforeBlock no resolve,
  * entryBlockId → NOTE, condition long chain, handler overwrite.
  */
@@ -143,11 +143,11 @@ describe( 'edge — NOTE-only scene', () => {
 
 } );
 
-// ─── selectChoice with invalid UUID ──────────────────────────────────────────
+// ─── selectChoice with an option id that does not exist ──────────────────────
 
-describe( 'edge — selectChoice with invalid UUID', () => {
+describe( 'edge — selectChoice with an unknown option id', () => {
 
-	it( 'selecting a non-existent choice UUID leads to dead end', () => {
+	it( 'selecting an option id the block does not have leads to a dead end', () => {
 		const visited: string[] = [];
 		const s = makeScene( {
 			blocks: [

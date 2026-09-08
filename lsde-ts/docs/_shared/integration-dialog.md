@@ -22,7 +22,7 @@ export class DialogueUI extends Phaser.Scene {
       const { character, resolveCharacterPort } = context;
       const text = LsdeUtils.getLocalizedText(text);
 
-      character && resolveCharacterPort(character.uuid);
+      character && resolveCharacterPort(character.id);
 
       panel.show(text, character?.name);
 
@@ -113,7 +113,7 @@ public class DialogueUI : MonoBehaviour
             var text = LsdeUtils.GetLocalizedText(block.Text);
             var ch = context.Character;
 
-            if (ch != null) context.ResolveCharacterPort(ch.Uuid);
+            if (ch != null) context.ResolveCharacterPort(ch.Id);
 
             // pass the block data to the UI
             speakerName.text = ch?.Name ?? "";
@@ -155,7 +155,7 @@ void UDialogueSubsystem::RegisterHandlers()
         auto localized = lsde::LsdeUtils::GetLocalizedText(block->text);
         auto* ch = ctx->character();
 
-        if (ch) ctx->resolveCharacterPort(ch->uuid);
+        if (ch) ctx->resolveCharacterPort(ch->id);
 
         // pass the block data to the UMG widget
         DialogWidget->SetDialogue(
@@ -211,7 +211,7 @@ func _register_handlers() -> void:
         var text = LsdeUtils.get_localized_text(block.get("text"))
 
         if ch:
-            ctx.resolve_character_port(ch.get("uuid", ""))
+            ctx.resolve_character_port(ch.get("id", ""))
 
         # pass the block data to the UI
         speaker_label.text = ch.get("name", "") if ch else ""

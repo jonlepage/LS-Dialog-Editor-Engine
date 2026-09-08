@@ -6,7 +6,7 @@ engine.onDialog(({ block, context, next }) => {
   const text = game.getLocalizedText(text);
   const emotion = game.getCharacterEmotion(character);
 
-  character && resolveCharacterPort(character.uuid);
+  character && resolveCharacterPort(character.id);
 
   game.moveCameraToCharacter(character);
   game.animateCharacter(character, emotion);
@@ -40,7 +40,7 @@ engine.OnDialog(args => {
         Game.GetCharacterEmotion(context.Character)
     );
 
-    if (ch != null) context.ResolveCharacterPort(ch.Uuid);
+    if (ch != null) context.ResolveCharacterPort(ch.Id);
 
     Game.MoveCameraToCharacter(ch);
     Game.AnimateCharacter(ch, emotion);
@@ -69,7 +69,7 @@ engine.onDialog([&game](auto* scene, auto* block, auto* ctx, auto next) -> Clean
     auto text = game.getLocalizedText(block->text);
     auto emotion = game.getCharacterEmotion(ch);
 
-    if (ch) ctx->resolveCharacterPort(ch->uuid);
+    if (ch) ctx->resolveCharacterPort(ch->id);
 
     game.moveCameraToCharacter(ch);
     game.animateCharacter(ch, emotion);
@@ -105,7 +105,7 @@ engine.on_dialog(func(args):
     var emotion = game.get_character_emotion(ch)
 
     if ch:
-        ctx.resolve_character_port(ch.get("uuid", ""))
+        ctx.resolve_character_port(ch.get("id", ""))
 
     game.move_camera_to_character(ch)
     game.animate_character(ch, emotion)

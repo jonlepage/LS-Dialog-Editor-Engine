@@ -162,9 +162,9 @@ export interface DiagnosticEntry {
 	code: string;
 	/** Human-readable description of the issue. */
 	message: string;
-	/** UUID of the scene where the issue was found, if applicable. */
+	/** Id of the scene where the issue was found, if applicable. */
 	sceneId?: string;
-	/** UUID of the block where the issue was found, if applicable. */
+	/** Id of the block where the issue was found, if applicable. */
 	blockId?: string;
 }
 
@@ -302,8 +302,14 @@ export interface ActionContext extends BaseBlockContext {
 	calls: ActionCall[];
 	/** The calls went through. The flow leaves by `then`. */
 	resolve: () => void;
-	/** A call failed. The flow leaves by `catch`, or by `then` when no error branch was drawn. */
-	reject: ( error: unknown ) => void;
+	/**
+	 * A call failed. The flow leaves by `catch`, or by `then` when no error branch was drawn.
+	 *
+	 * The error is OPTIONAL and the engine does nothing with it: routing only needs to know that
+	 * the call failed. Pass one if it reads better next to your own logging — nothing here reads
+	 * it, forwards it or logs it.
+	 */
+	reject: ( error?: unknown ) => void;
 }
 
 /** What `onBeforeBlock` gets. */
@@ -334,7 +340,7 @@ export interface SceneContext {
  * When a block is dispatched, the scene handler (Tier 2) is called first. The global handler
  * (Tier 1) is then called **after**, unless `context.preventGlobalHandler()` was invoked.
  *
- * A block-specific override via `handle.onBlock(uuid, handler)` takes highest priority.
+ * A block-specific override via `handle.onBlock(blockId, handler)` takes highest priority.
  *
  * @see {@link BlockHandler} for the handler function signature
  * @see {@link SceneHandle} for scene-level handler registration
@@ -484,10 +490,10 @@ export interface TrackInfo {
 	readonly id: number;
 	/** ID of the track that spawned this one. `null` means spawned directly by the main track. */
 	readonly parentTrackId: number | null;
-	/** UUID of the first block that started this track's execution. */
-	readonly startBlockUuid: string;
-	/** UUID of the block currently being processed, or `null` if the track has ended. */
-	readonly currentBlockUuid: string | null;
+	/** Id of the first block that started this track's execution. */
+	readonly startBlockId: string;
+	/** Id of the block currently being processed, or `null` if the track has ended. */
+	readonly currentBlockId: string | null;
 	/** Whether this track is still actively executing. */
 	readonly running: boolean;
 }
@@ -498,7 +504,7 @@ export interface TrackInfo {
  * Public interface for controlling a running scene.
  *
  * @remarks
- * Obtain a `SceneHandle` by calling `engine.scene(sceneUuid)`. Use it to register
+ * Obtain a `SceneHandle` by calling `engine.scene(sceneRef)`. Use it to register
  * scene-specific (Tier 2) handlers, then call `start()` to begin traversal from the
  * scene's entry block.
  *
@@ -510,7 +516,7 @@ export interface TrackInfo {
  *
  * Scene-level handlers (`onDialog`, `onChoice`, etc.) are called **before** global handlers.
  * Both tiers execute unless the scene handler calls `context.preventGlobalHandler()`.
- * Use `onBlock(uuid, handler)` for a block-specific handler that takes highest priority.
+ * Use `onBlock(blockId, handler)` for a block-specific handler that takes highest priority.
  *
  * @example
  * ```ts
@@ -539,16 +545,16 @@ export interface SceneHandle {
 	/** Override the global onSceneExit for this scene. */
 	onExit(handler: SceneLifecycleHandler): void;
 
-	/** Override a specific block by UUID. */
-	onBlock(blockUuid: string, handler: BlockHandler<BlueprintBlock, BaseBlockContext>): void;
-	/** Override a specific DIALOG block by UUID (type-safe). */
-	onDialogId(blockUuid: string, handler: DialogHandler): void;
-	/** Override a specific CHOICE block by UUID (type-safe). */
-	onChoiceId(blockUuid: string, handler: ChoiceHandler): void;
-	/** Override a specific CONDITION block by UUID (type-safe). */
-	onConditionId(blockUuid: string, handler: ConditionHandler): void;
-	/** Override a specific ACTION block by UUID (type-safe). */
-	onActionId(blockUuid: string, handler: ActionHandler): void;
+	/** Override one block by its id (DIALOG-001). */
+	onBlock(blockId: string, handler: BlockHandler<BlueprintBlock, BaseBlockContext>): void;
+	/** Override one DIALOG block by its id (type-safe). */
+	onDialogId(blockId: string, handler: DialogHandler): void;
+	/** Override one CHOICE block by its id (type-safe). */
+	onChoiceId(blockId: string, handler: ChoiceHandler): void;
+	/** Override one CONDITION block by its id (type-safe). */
+	onConditionId(blockId: string, handler: ConditionHandler): void;
+	/** Override one ACTION block by its id (type-safe). */
+	onActionId(blockId: string, handler: ActionHandler): void;
 	/** Override all DIALOG blocks for this scene. */
 	onDialog(handler: DialogHandler): void;
 	/** Override all CHOICE blocks for this scene. */
@@ -560,7 +566,7 @@ export interface SceneHandle {
 
 	/** Get the block currently being executed. */
 	getCurrentBlock(): BlueprintBlock | null;
-	/** Get UUIDs of all blocks visited so far. */
+	/** The id of every block visited so far, in this scene. */
 	getVisitedBlocks(): ReadonlySet<string>;
 	/** Check if the scene flow is currently active. */
 	isRunning(): boolean;
@@ -569,10 +575,10 @@ export interface SceneHandle {
 	/** Get detailed info for all currently running async tracks. Useful for debug, rendering, and validation. */
 	getTrackInfos(): readonly TrackInfo[];
 
-	/** Get the full choice history for this scene. Keys are block UUIDs, values are arrays of selected choice UUIDs. */
+	/** Get the full choice history for this scene. Keys are block ids, values are the option ids the player picked there, in order. */
 	getChoiceHistory(): ReadonlyMap<string, readonly string[]>;
 	/** Get the choice(s) selected at a specific block. Returns undefined if block never visited as choice. */
-	getChoice( blockUuid: string ): readonly string[] | undefined;
+	getChoice( blockId: string ): readonly string[] | undefined;
 
 	/** Evaluate a condition. Handles `choice:` conditions via internal choice history. Returns `false` for non-choice conditions. */
 	evaluateCondition(condition: ConditionTest): boolean;
@@ -669,7 +675,13 @@ export interface IDialogueEngine {
 	getActiveScenes(): SceneHandle[];
 	/** Get the current block of every active scene. */
 	getCurrentBlocks(): BlueprintBlock[];
-	/** Get connections for a scene (for inter-scene navigation). */
+	/**
+	 * Every wire INSIDE a scene, flattened so each carries the block it leaves.
+	 *
+	 * Graph inspection, for a debug view that wants to see the wiring without playing it. It has
+	 * never had anything to do with going from one scene to another: a wire has never crossed a
+	 * scene in any version of the format, and chaining two scenes is the game's own business.
+	 */
 	getSceneConnections(sceneId: string): BlueprintConnection[];
 }
 

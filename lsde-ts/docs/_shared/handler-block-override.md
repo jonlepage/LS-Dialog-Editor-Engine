@@ -1,27 +1,27 @@
 ::: code-group
 ```ts [TypeScript]
 const handle = engine.scene(sceneId);
-handle.onBlock('block-uuid-123', ({ block, context, next }) => {
+handle.onBlock('DIALOG-001', ({ block, context, next }) => {
   next();
 });
 ```
 ```csharp [C#]
 var handle = engine.Scene(sceneId);
-handle.OnBlock("block-uuid-123", args => {
+handle.OnBlock("DIALOG-001", args => {
     args.Next();
     return null;
 });
 ```
 ```cpp [C++]
 auto handle = engine.scene(sceneId);
-handle->onBlock("block-uuid-123", [](auto*, auto*, auto*, auto next) -> CleanupFn {
+handle->onBlock("DIALOG-001", [](auto*, auto*, auto*, auto next) -> CleanupFn {
     next();
     return {};
 });
 ```
 ```gdscript [GDScript]
 var handle = engine.scene(scene_id)
-handle.on_block("block-uuid-123", func(args):
+handle.on_block("DIALOG-001", func(args):
     args["next"].call()
     return Callable()
 )

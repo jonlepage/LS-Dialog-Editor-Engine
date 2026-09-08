@@ -604,9 +604,9 @@ describe( 'multitrack — TrackInfo', () => {
 
 		expect( infos ).toHaveLength( 2 );
 		expect( infos[0]!.parentTrackId ).toBeNull(); // spawned by main
-		expect( infos[0]!.startBlockUuid ).toBe( 'a1' );
+		expect( infos[0]!.startBlockId ).toBe( 'a1' );
 		expect( infos[0]!.running ).toBe( true );
-		expect( infos[1]!.startBlockUuid ).toBe( 'a2' );
+		expect( infos[1]!.startBlockId ).toBe( 'a2' );
 	} );
 
 	it( 'sub-track parentTrackId matches parent track id', () => {
@@ -637,8 +637,8 @@ describe( 'multitrack — TrackInfo', () => {
 		handle.start();
 
 		expect( infos ).toHaveLength( 2 );
-		const parent = infos.find( t => t.startBlockUuid === 'a1' )!;
-		const child = infos.find( t => t.startBlockUuid === 'sub1' )!;
+		const parent = infos.find( t => t.startBlockId === 'a1' )!;
+		const child = infos.find( t => t.startBlockId === 'sub1' )!;
 		expect( parent.parentTrackId ).toBeNull();
 		expect( child.parentTrackId ).toBe( parent.id );
 	} );
@@ -756,7 +756,7 @@ describe( 'multitrack — waitForBlocks', () => {
 		expect( calls ).toContain( 'a2' );
 	} );
 
-	it( 'waitForBlocks with multiple UUIDs waits for ALL', () => {
+	it( 'waitForBlocks with several ids waits for ALL of them', () => {
 		const calls: string[] = [];
 		const scene = makeScene( {
 			blocks: [

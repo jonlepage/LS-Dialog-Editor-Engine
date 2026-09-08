@@ -173,7 +173,7 @@ namespace LsdeDialogEngine
 
         internal int Id { get; }
         internal int? ParentTrackId { get; }
-        internal string StartBlockUuid { get; }
+        internal string StartBlockId { get; }
 
         private readonly ITrackHost _host;
         private readonly BlueprintBlock _startBlock;
@@ -195,7 +195,7 @@ namespace LsdeDialogEngine
             _startBlock = startBlock;
             Id = id;
             ParentTrackId = parentTrackId;
-            StartBlockUuid = startBlock.Id;
+            StartBlockId = startBlock.Id;
         }
 
         /// <summary>Begin walking. Must be called after the track is in the scene's pool.</summary>
@@ -248,8 +248,8 @@ namespace LsdeDialogEngine
             {
                 Id = Id,
                 ParentTrackId = ParentTrackId,
-                StartBlockUuid = StartBlockUuid,
-                CurrentBlockUuid = _currentBlock?.Id,
+                StartBlockId = StartBlockId,
+                CurrentBlockId = _currentBlock?.Id,
                 Running = _running,
             };
         }

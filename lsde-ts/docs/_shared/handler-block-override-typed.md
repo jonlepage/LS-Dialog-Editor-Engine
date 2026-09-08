@@ -1,7 +1,7 @@
 ::: code-group
 ```ts [TypeScript]
 const handle = engine.scene(sceneId);
-handle.onActionId('block-uuid-123', ({ block, context, next }) => {
+handle.onActionId('ACTION-001', ({ block, context, next }) => {
   // block is ActionBlock — actions is directly accessible
   for (const action of block.actions ?? []) {
     executeAction(action);
@@ -13,7 +13,7 @@ handle.onActionId('block-uuid-123', ({ block, context, next }) => {
 ```
 ```csharp [C#]
 var handle = engine.Scene(sceneId);
-handle.OnActionId("block-uuid-123", args => {
+handle.OnActionId("ACTION-001", args => {
     // args.Block is ActionBlock — Actions is directly accessible
     foreach (var action in args.Block.Actions ?? [])
         ExecuteAction(action);
@@ -24,7 +24,7 @@ handle.OnActionId("block-uuid-123", args => {
 ```
 ```cpp [C++]
 auto handle = engine.scene(sceneId);
-handle->onActionId("block-uuid-123", [](auto* scene, const ActionBlock* block, IActionContext* ctx, auto next) -> CleanupFn {
+handle->onActionId("ACTION-001", [](auto* scene, const ActionBlock* block, IActionContext* ctx, auto next) -> CleanupFn {
     // block is const ActionBlock* — actions is directly accessible
     for (const auto& action : block->actions)
         executeAction(action);
@@ -36,7 +36,7 @@ handle->onActionId("block-uuid-123", [](auto* scene, const ActionBlock* block, I
 ```
 ```gdscript [GDScript]
 var handle = engine.scene(scene_id)
-handle.on_action_id("block-uuid-123", func(args):
+handle.on_action_id("ACTION-001", func(args):
     # args["block"] contains actions directly
     for action in args["block"].get("actions", []):
         execute_action(action)

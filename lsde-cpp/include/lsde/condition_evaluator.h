@@ -58,10 +58,6 @@ std::string evaluateConditionCases(
     bool portPerCase,
     const ConditionEvaluatorFn& evaluator);
 
-/// Evaluate every case on its own, without picking a port.
-///
-/// This is what fills the handler's cases()[i].result, so a game can show what matched, override
-/// the routing, or log it. Routing itself still goes through evaluateConditionCases.
 /// Pick the exit port from case results that were ALREADY computed.
 ///
 /// Same rules as evaluateConditionCases, same answer - it just does not ask again.
@@ -80,6 +76,11 @@ std::string pickPortFromResults(
     bool portPerCase,
     const std::vector<bool>& results);
 
+/// Evaluate every case on its own, without picking a port.
+///
+/// Handed to a game that wants to show what matched without changing where the flow goes. The
+/// engine fills cases()[i].result with the same rule, then reads the exit port off those results
+/// with pickPortFromResults - never by calling this and deciding for itself.
 std::vector<bool> evaluateEachCase(
     const std::vector<ConditionCase>& cases,
     const ConditionEvaluatorFn& evaluator);

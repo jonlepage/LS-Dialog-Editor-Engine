@@ -1,56 +1,48 @@
 ::: code-group
 ```ts [TypeScript]
-interface ActionSignature {
-  uuid: string;
-  id: string;
-  params: SignatureParam[];
+interface FunctionDefinition {
+  id: string;                  // what an ActionCall.fn names
+  params: FunctionParameter[];
 }
 
-interface SignatureParam {
-  label?: string;
-  type: 'boolean' | 'string' | 'number' | 'enum' | 'dictionary';
-  dictionaryGroupUuid?: string;
-  enumOptions?: { id: string; label?: string }[];
+interface FunctionParameter {
+  name: string;                // ActionCall.args is keyed BY NAME, never by position
+  type: ValueType;             // 'boolean' | 'number' | 'string' | 'dictionary'
+  dictionary?: string;         // for type 'dictionary': the DictionaryDefinition.id it draws from
 }
 ```
 ```csharp [C#]
-public class ActionSignature {
-    public string Uuid { get; set; }
+public class FunctionDefinition {
     public string Id { get; set; }
-    public List<SignatureParam> Params { get; set; }
+    public List<FunctionParameter> Params { get; set; }
 }
 
-public class SignatureParam {
-    public string? Label { get; set; }
+public class FunctionParameter {
+    public string Name { get; set; }
     public string Type { get; set; }
-    public string? DictionaryGroupUuid { get; set; }
-    public List<EnumOption>? EnumOptions { get; set; }
+    public string? Dictionary { get; set; }
 }
 ```
 ```cpp [C++]
-struct ActionSignature {
-    std::string uuid;
+struct FunctionDefinition {
     std::string id;
-    std::vector<SignatureParam> params;
+    std::vector<FunctionParameter> params;
 };
 
-struct SignatureParam {
-    std::optional<std::string> label;
+struct FunctionParameter {
+    std::string name;
     std::string type;
-    std::optional<std::string> dictionaryGroupUuid;
-    std::vector<EnumOption> enumOptions;
+    std::optional<std::string> dictionary;
 };
 ```
 ```gdscript [GDScript]
-# ActionSignature Dictionary:
-# "uuid": String
+# FunctionDefinition Dictionary:
 # "id": String
-# "params": Array[SignatureParam]
+# "params": Array[FunctionParameter]
 #
-# SignatureParam Dictionary:
-# "label": String (optional)
-# "type": "boolean" | "string" | "number" | "enum" | "dictionary"
-# "dictionaryGroupUuid": String (optional)
-# "enumOptions": Array[{"id": String, "label": String?}] (optional)
+# FunctionParameter Dictionary:
+# "name": String   — args are keyed BY NAME, never by position
+# "type": "boolean" | "number" | "string" | "dictionary"
+# "dictionary": String (optional) — for type "dictionary", the DictionaryDefinition id
 ```
 :::

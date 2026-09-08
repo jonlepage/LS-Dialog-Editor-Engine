@@ -10,26 +10,30 @@ Un `BlueprintExport` est le fichier JSON exporté de l'éditeur [LSDE](https://l
 
 Une scene est une séquence de dialogue autonome — une conversation, une cinématique, un tutoriel, une interaction de shop. Dans un jeu, les scenes sont généralement déclenchées par des événements scriptés : le joueur parle à un NPC, entre dans une zone, ou ramasse un objet.
 
-Chaque scene a son propre block d'entrée, son propre flow et son propre état. Plusieurs scenes peuvent tourner en parallèle (ex: un dialogue principal et un overlay de tutoriel). Les scenes sont définies par l'interface [`BlueprintScene`](/api-ref/interfaces/BlueprintScene) :
+Chaque scene a son propre block d'entrée, son propre flow et son propre état. Plusieurs scenes peuvent tourner en parallèle (ex: un dialogue principal et un overlay de tutoriel). Les scenes sont définies par l'interface [`BlueprintScene`](/api-ref/type-aliases/BlueprintScene) :
 
 <!--@include: ../../_shared/blueprint-scene-type.md-->
 
 ## Connections
 
-Les connections sont les fils entre les blocks — elles définissent quel block mène à quel autre. Dans l'éditeur, on les dessine visuellement; dans l'export, elles deviennent une liste plate de liens source → cible définis par l'interface [`BlueprintConnection`](/api-ref/interfaces/BlueprintConnection) :
+Les connections sont les fils entre les blocks — elles définissent quel block mène à quel autre. **Il n'y a pas de table de connexions dans l'export** : chaque block porte ses propres fils sortants dans `block.next`, et un fil ne dit que par quel port il part et où il va.
+
+Un fil n'a **jamais** traversé une scène, dans aucune version du format : `to` désigne toujours un block de la même scène.
+
+[`BlueprintConnection`](/api-ref/type-aliases/BlueprintConnection) est la vue **aplatie** de ces fils, celle que rend `engine.getSceneConnections(sceneRef)` — un fil auquel on a rattaché le block dont il part :
 
 <!--@include: ../../_shared/blueprint-connection-type.md-->
 
-Vous n'aurez normalement pas besoin d'inspecter les connections directement — le engine gère le routing en interne. Elles sont toutefois accessibles via [`onValidateNextBlock`](/api-ref/classes/DialogueEngine#onvalidatenextblock) si nécessaire.
+Vous n'aurez normalement pas besoin de les inspecter — le engine gère le routing en interne. `engine.getSceneConnections(sceneRef)` les expose pour de l'**inspection de graphe** : une vue de debug qui montre le câblage sans jouer la scène.
 
 ## Dictionaries
 
-Les dictionaries décrivent les registres de votre jeu — switches, variables, inventaire. Le développeur les déclare dans [LSDE](https://lepasoft.com/fr/software/ls-dialog-editor "Lepasoft Dialog Editor") pour exposer au narrative designer les variables disponibles dans le moteur. Au runtime, le développeur mappe chaque dictionnaire vers le système correspondant de son jeu. Les [`conditions`](/api-ref/interfaces/ConditionTest) et [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) utilisent ces clés pour évaluer l'état du jeu. Définis par [`Dictionary`](/api-ref/interfaces/Dictionary) :
+Les dictionaries décrivent les registres de votre jeu — switches, variables, inventaire. Le développeur les déclare dans [LSDE](https://lepasoft.com/fr/software/ls-dialog-editor "Lepasoft Dialog Editor") pour exposer au narrative designer les variables disponibles dans le moteur. Au runtime, le développeur mappe chaque dictionnaire vers le système correspondant de son jeu. Les [`conditions`](/api-ref/interfaces/ConditionTest) et [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) utilisent ces clés pour évaluer l'état du jeu. Définis par [`DictionaryDefinition`](/api-ref/interfaces/DictionaryDefinition) :
 
 <!--@include: ../../_shared/blueprint-dictionary-type.md-->
 
 ## Action Signatures
 
-Les signatures décrivent les types d'actions disponibles dans votre jeu — `set_flag`, `play_sound`, `give_item`. Le développeur les déclare dans [LSDE](https://lepasoft.com/fr/software/ls-dialog-editor "Lepasoft Dialog Editor") pour que le narrative designer compose des séquences d'actions avec des paramètres typés. Au runtime, le `id` de la signature est ce que le développeur mappe vers ses propres systèmes. Définis par [`ActionSignature`](/api-ref/interfaces/ActionSignature) :
+Les signatures décrivent les types d'actions disponibles dans votre jeu — `set_flag`, `play_sound`, `give_item`. Le développeur les déclare dans [LSDE](https://lepasoft.com/fr/software/ls-dialog-editor "Lepasoft Dialog Editor") pour que le narrative designer compose des séquences d'actions avec des paramètres typés. Au runtime, le `id` de la signature est ce que le développeur mappe vers ses propres systèmes. Définis par [`FunctionDefinition`](/api-ref/interfaces/FunctionDefinition) :
 
 <!--@include: ../../_shared/blueprint-signature-type.md-->

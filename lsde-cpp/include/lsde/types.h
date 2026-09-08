@@ -261,7 +261,23 @@ struct NativeProperties {
     std::optional<bool> skipIfMissingActor;
     /// Condition blocks: each case exits by its own port instead of sharing `out`.
     std::optional<bool> portPerCase;
-    /// Block ids OF THIS SCENE that must have been visited before this block may advance.
+    /// Block ids OF THIS SCENE that must have been visited before this block STARTS.
+    ///
+    /// The join half of the fork `isAsync` opens: a branch runs in parallel, and a block
+    /// downstream waits for it to have got somewhere before it plays.
+    ///
+    /// **The engine holds the block BEFORE dispatching it.** No handler is called, so the game
+    /// never learns the block exists until the wait lifts - nothing of it can reach the screen
+    /// early. That is the engine's decision and not a rendering choice a game could make
+    /// differently: this is a NATIVE property, the designer ticks it in LSDE, and the engine owes
+    /// them the behaviour.
+    ///
+    /// The rule is the same on every track, the one the player is watching included.
+    ///
+    /// - ALL the listed blocks must have been visited, not just one.
+    /// - Visiting a block releases everything waiting on it, in turn.
+    /// - A block that is never visited parks its track for good. init() reports
+    ///   UNKNOWN_WAIT_BLOCK when an id is not a block of the scene at all.
     std::vector<std::string> waitForBlocks;
 };
 
@@ -371,9 +387,9 @@ struct DiagnosticEntry {
     std::string code;
     /// Human-readable description of the issue.
     std::string message;
-    /// UUID of the scene where the issue was found, if applicable.
+    /// Id of the scene where the issue was found, if applicable.
     std::optional<std::string> sceneId;
-    /// UUID of the block where the issue was found, if applicable.
+    /// Id of the block where the issue was found, if applicable.
     std::optional<std::string> blockId;
 };
 
@@ -508,7 +524,11 @@ public:
     virtual void resolve() = 0;
 
     /// A call failed. The flow leaves by "catch", or by "then" when no error branch was drawn.
-    virtual void reject(const std::string& error) = 0;
+    ///
+    /// The error is OPTIONAL and the engine does nothing with it: routing only needs to know that
+    /// the call failed. Pass one if it reads better next to your own logging — nothing here reads
+    /// it, forwards it or logs it.
+    virtual void reject(const std::string& error = "") = 0;
 };
 
 /// Context passed to onBeforeBlock handler.
@@ -627,7 +647,7 @@ using SceneLifecycleHandler = std::function<void(const SceneLifecycleArgs&)>;
 
 /// Public interface for controlling a running scene.
 ///
-/// Obtain an ISceneHandle by calling engine.scene(sceneUuid). Use it to register
+/// Obtain an ISceneHandle by calling engine.scene(sceneRef). Use it to register
 /// scene-specific (Tier 2) handlers, then call start() to begin traversal from the
 /// scene's entry block.
 ///
@@ -639,7 +659,7 @@ using SceneLifecycleHandler = std::function<void(const SceneLifecycleArgs&)>;
 ///
 /// Scene-level handlers (onDialog, onChoice, etc.) are called BEFORE global handlers.
 /// Both tiers execute unless the scene handler calls context->preventGlobalHandler().
-/// Use onBlock(uuid, handler) for a block-specific handler that takes highest priority.
+/// Use onBlock(blockId, handler) for a block-specific handler that takes highest priority.
 /// Read-only snapshot of an async track's state.
 /// Returned by ISceneHandle::getTrackInfos() for debug, rendering, and validation.
 struct TrackInfo {
@@ -647,10 +667,11 @@ struct TrackInfo {
     int id = 0;
     /// ID of the track that spawned this one. -1 means spawned directly by the main track.
     int parentTrackId = -1;
-    /// UUID of the first block that started this track's execution.
-    std::string startBlockUuid;
-    /// UUID of the block currently being processed, or empty if the track has not yet started.
-    std::string currentBlockUuid;
+    /// Id of the first block this track started on.
+    std::string startBlockId;
+    /// Id of the block this track is on, or empty when it is on none — before it starts, and once
+    /// it has ended.
+    std::string currentBlockId;
     /// Whether this track is still actively executing.
     bool running = false;
 };
@@ -671,15 +692,15 @@ public:
     /// Override the global onSceneExit for this scene.
     virtual void onExit(SceneLifecycleHandler handler) = 0;
 
-    /// Override a specific block by UUID. Takes highest priority over type handlers.
+    /// Override one block by its id (DIALOG-001). Takes highest priority over type handlers.
     virtual void onBlock(const std::string& blockId, InternalBlockHandler handler) = 0;
-    /// Override a specific DIALOG block by UUID (type-safe).
+    /// Override one DIALOG block by its id (type-safe).
     virtual void onDialogId(const std::string& blockId, TypedBlockHandler<BlueprintBlock, IDialogContext> handler) = 0;
-    /// Override a specific CHOICE block by UUID (type-safe).
+    /// Override one CHOICE block by its id (type-safe).
     virtual void onChoiceId(const std::string& blockId, TypedBlockHandler<BlueprintBlock, IChoiceContext> handler) = 0;
-    /// Override a specific CONDITION block by UUID (type-safe).
+    /// Override one CONDITION block by its id (type-safe).
     virtual void onConditionId(const std::string& blockId, TypedBlockHandler<BlueprintBlock, IConditionContext> handler) = 0;
-    /// Override a specific ACTION block by UUID (type-safe).
+    /// Override one ACTION block by its id (type-safe).
     virtual void onActionId(const std::string& blockId, TypedBlockHandler<BlueprintBlock, IActionContext> handler) = 0;
     /// Override all DIALOG blocks for this scene (Tier 2).
     virtual void onDialog(TypedBlockHandler<BlueprintBlock, IDialogContext> handler) = 0;
@@ -692,7 +713,7 @@ public:
 
     /// Get the block currently being executed, or nullptr if scene is not running.
     virtual const BlueprintBlock* getCurrentBlock() const = 0;
-    /// Get UUIDs of all blocks visited so far, in order.
+    /// The id of every block visited so far in this scene, in order.
     virtual const std::vector<std::string>& getVisitedBlocks() const = 0;
     /// Check if the scene flow is currently active.
     virtual bool isRunning() const = 0;
@@ -702,7 +723,7 @@ public:
     virtual std::vector<TrackInfo> getTrackInfos() const = 0;
 
     /// Get the full choice history for this scene.
-    /// Keys are block UUIDs, values are arrays of selected choice UUIDs.
+    /// Keys are block ids, values are the option ids the player picked there, in order.
     virtual const std::unordered_map<std::string, std::vector<std::string>>& getChoiceHistory() const = 0;
     /// Get the choice(s) selected at a specific block. Returns nullptr if block never visited as choice.
     virtual const std::vector<std::string>* getChoice(const std::string& blockId) const = 0;

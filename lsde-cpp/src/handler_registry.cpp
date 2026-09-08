@@ -13,7 +13,6 @@ InternalBlockHandler HandlerRegistry::getTypeHandler(const std::string& type) co
     if (type == BlockType::Action)    return actionHandler;
     // A note is never dispatched, and a type this engine does not know is not either.
     return {};
-    return {};
 }
 
 // ─── SceneHandlerRegistry (Tier 2) ──────────────────────────────────────────
@@ -34,7 +33,6 @@ InternalBlockHandler SceneHandlerRegistry::getTypeHandler(const std::string& typ
     if (type == BlockType::Action)    return actionHandler;
     // A note is never dispatched, and a type this engine does not know is not either.
     return {};
-    return {};
 }
 
 // ─── Resolution ──────────────────────────────────────────────────────────────
@@ -51,7 +49,7 @@ ResolvedHandlers resolveHandler(
         return {{}, globalHandler};
     }
 
-    // Most specific: onBlock(uuid)
+    // Most specific: onBlock(blockId)
     auto blockOverride = sceneRegistry->getBlockHandler(blockId);
     if (blockOverride) {
         return {blockOverride, globalHandler};

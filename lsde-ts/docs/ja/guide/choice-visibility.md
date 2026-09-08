@@ -57,7 +57,7 @@ struct RuntimeOption : Option {
 ```
 ```gdscript [GDScript]
 # RuntimeOption is a Dictionary with an extra "visible" key:
-# { "uuid": "...", "text": {...}, "visible": true/false/absent }
+# { "id": "C1", "key": "...", "text": {...}, "visible": true/false/absent }
 ```
 :::
 
@@ -71,8 +71,8 @@ struct RuntimeOption : Option {
 ```ts [TypeScript]
 engine.onChoice(({ context, next }) => {
   const offered = context.options.filter(c => c.visible !== false);
-  ui.showOptions(visible, (uuid) => {
-    context.selectChoice(uuid);
+  ui.showOptions(visible, (optionId) => {
+    context.selectChoice(optionId);
     next();
   });
 });
@@ -81,8 +81,8 @@ engine.onChoice(({ context, next }) => {
 engine.OnChoice(args => {
     var visible = args.Context.Options
         .Where(c => c.Visible != false).ToList();
-    ShowChoicesUI(visible, uuid => {
-        args.Context.SelectChoice(uuid);
+    ShowChoicesUI(visible, optionId => {
+        args.Context.SelectChoice(optionId);
         args.Next();
     });
     return null;
@@ -94,8 +94,8 @@ engine.onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
     for (const auto& c : ctx->options())
         if (!c.visible.has_value() || c.visible.value())
             visible.push_back(&c);
-    showOptionsUI(visible, [ctx, next](const auto& uuid) {
-        ctx->selectChoice(uuid);
+    showOptionsUI(visible, [ctx, next](const auto& optionId) {
+        ctx->selectChoice(optionId);
         next();
     });
     return {};
@@ -107,8 +107,8 @@ engine.on_choice(func(args):
     for c in args["context"].options:
         if c.get("visible") != false:
             visible.append(c)
-    show_options_ui(visible, func(uuid):
-        args["context"].select_choice(uuid)
+    show_options_ui(visible, func(option_id):
+        args["context"].select_choice(option_id)
         args["next"].call()
     )
     return Callable()
@@ -125,18 +125,18 @@ engine.onChoice(({ block, context, next }) => {
   const timeout = LsdeUtils.getNativeProperties(block)?.timeout;
 
   const resolve = (choice) => {
-    context.selectChoice(choice.uuid);
+    context.selectChoice(choice.id);
     next();
   };
 
   if (timeout) {
     const timer = setTimeout(() => resolve(visible[0]), timeout * 1000);
-    ui.showOptions(visible, (uuid) => {
+    ui.showOptions(visible, (optionId) => {
       clearTimeout(timer);
-      resolve(visible.find(c => c.uuid === uuid));
+      resolve(visible.find(c => c.id === optionId));
     });
   } else {
-    ui.showOptions(visible, (uuid) => resolve(visible.find(c => c.uuid === uuid)));
+    ui.showOptions(visible, (optionId) => resolve(visible.find(c => c.id === optionId)));
   }
 });
 ```
@@ -148,7 +148,7 @@ engine.OnChoice(args => {
     var timeout = block.NativeProperties?.Timeout;
 
     void Resolve(RuntimeOption choice) {
-        context.SelectChoice(choice.Uuid);
+        context.SelectChoice(choice.Id);
         next();
     }
 
@@ -156,14 +156,14 @@ engine.OnChoice(args => {
     {
         // use your engine's timer — cancel on player selection
         var timer = ScheduleTimer((float)timeout.Value, () => Resolve(visible[0]));
-        ShowChoicesUI(visible, uuid => {
+        ShowChoicesUI(visible, optionId => {
             timer.Cancel();
-            Resolve(visible.First(c => c.Uuid == uuid));
+            Resolve(visible.First(c => c.Id == optionId));
         });
     }
     else
     {
-        ShowChoicesUI(visible, uuid => Resolve(visible.First(c => c.Uuid == uuid)));
+        ShowChoicesUI(visible, optionId => Resolve(visible.First(c => c.Id == optionId)));
     }
     return null;
 });
@@ -178,17 +178,17 @@ engine.onChoice([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
     auto timeout = block->props
         ? block->props->timeout : std::nullopt;
 
-    auto resolve = [ctx, next](const std::string& uuid) {
-        ctx->selectChoice(uuid);
+    auto resolve = [ctx, next](const std::string& optionId) {
+        ctx->selectChoice(optionId);
         next();
     };
 
     if (timeout.has_value()) {
         // use your engine's timer — cancel on player selection
-        auto timer = scheduleDelay(timeout.value(), [&]() { resolve(visible[0]->uuid); });
-        showOptionsUI(visible, [resolve, timer](const auto& uuid) {
+        auto timer = scheduleDelay(timeout.value(), [&]() { resolve(visible[0]->id); });
+        showOptionsUI(visible, [resolve, timer](const auto& optionId) {
             timer->cancel();
-            resolve(uuid);
+            resolve(optionId);
         });
     } else {
         showOptionsUI(visible, resolve);
@@ -212,17 +212,17 @@ engine.on_choice(func(args):
         # use your engine's timer — cancel on player selection
         var timer = get_tree().create_timer(timeout_val)
         timer.timeout.connect(func():
-            ctx.select_choice(visible[0]["uuid"])
+            ctx.select_choice(visible[0]["id"])
             next_fn.call()
         )
-        show_options_ui(visible, func(uuid):
+        show_options_ui(visible, func(option_id):
             timer.time_left = 0  # cancel
-            ctx.select_choice(uuid)
+            ctx.select_choice(option_id)
             next_fn.call()
         )
     else:
-        show_options_ui(visible, func(uuid):
-            ctx.select_choice(uuid)
+        show_options_ui(visible, func(option_id):
+            ctx.select_choice(option_id)
             next_fn.call()
         )
     return Callable()
@@ -289,14 +289,14 @@ engine.on_choice(func(args):
 ```ts [TypeScript]
 tutorial.onChoice(({ context, next }) => {
   // force-select the first choice, no filtering
-  context.selectChoice(context.options[0].uuid);
+  context.selectChoice(context.options[0].id);
   next();
 });
 ```
 ```csharp [C#]
 tutorial.OnChoice(args => {
     // force-select the first choice, no filtering
-    args.Context.SelectChoice(args.Context.Options[0].Uuid);
+    args.Context.SelectChoice(args.Context.Options[0].Id);
     args.Next();
     return null;
 });
@@ -304,7 +304,7 @@ tutorial.OnChoice(args => {
 ```cpp [C++]
 tutorial->onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
     // force-select the first choice, no filtering
-    ctx->selectChoice(ctx->options()[0].uuid);
+    ctx->selectChoice(ctx->options()[0].id);
     next();
     return {};
 });
@@ -312,7 +312,7 @@ tutorial->onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
 ```gdscript [GDScript]
 tutorial.on_choice(func(args):
     # force-select the first choice, no filtering
-    args["context"].select_choice(args["context"].options[0]["uuid"])
+    args["context"].select_choice(args["context"].options[0]["id"])
     args["next"].call()
     return Callable()
 )

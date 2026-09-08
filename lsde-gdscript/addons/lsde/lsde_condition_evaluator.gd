@@ -75,10 +75,6 @@ static func evaluate_condition_cases(cases: Array, port_per_case: bool, evaluato
 			return LsdeTypes.PORT_DEFAULT
 	return LsdeTypes.PORT_OUT
 
-## Evaluate every case on its own, without picking a port.
-##
-## This is what fills the handler's [code]cases[i].result[/code], so a game can show what matched,
-## override the routing, or log it. Routing itself still goes through evaluate_condition_cases.
 ## Pick the exit port from case results that were ALREADY computed.
 ##
 ## Same rules as evaluate_condition_cases, same answer - it just does not ask again.
@@ -105,6 +101,11 @@ static func pick_port_from_results(cases: Array, port_per_case: bool, results: A
 	return LsdeTypes.PORT_OUT
 
 
+## Evaluate every case on its own, without picking a port.
+##
+## Handed to a game that wants to show what matched without changing where the flow goes. The
+## engine fills [code]cases[i].result[/code] with the same rule, then reads the exit port off those
+## results with pick_port_from_results — never by calling this and deciding for itself.
 static func evaluate_each_case(cases: Array, evaluator: Callable) -> Array:
 	var results: Array = []
 	for condition_case in cases:

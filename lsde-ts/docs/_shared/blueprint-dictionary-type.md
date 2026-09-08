@@ -1,41 +1,29 @@
 ::: code-group
 ```ts [TypeScript]
-interface Dictionary {
-  uuid: string;
-  id: string;
-  rows: DictionaryRow[];
-}
-
-interface DictionaryRow {
-  key: string;
+interface DictionaryDefinition {
+  id: string;                                  // what a ConditionTest.dict cites
+  valueType: 'boolean' | 'number' | 'string';  // what its entries hold
+  entries: string[];                           // the entry names, flat
 }
 ```
 ```csharp [C#]
-public class LsdeDictionary {
-    public string Uuid { get; set; }
+public class DictionaryDefinition {
     public string Id { get; set; }
-    public List<DictionaryRow> Rows { get; set; }
-}
-
-public class DictionaryRow {
-    public string Key { get; set; }
+    public string ValueType { get; set; }      // "boolean" | "number" | "string"
+    public List<string> Entries { get; set; }
 }
 ```
 ```cpp [C++]
-struct LsdeDictionary {
-    std::string uuid;
+struct DictionaryDefinition {
     std::string id;
-    std::vector<DictionaryRow> rows;
-};
-
-struct DictionaryRow {
-    std::string key;
+    std::string valueType;                     // "boolean" | "number" | "string"
+    std::vector<std::string> entries;
 };
 ```
 ```gdscript [GDScript]
 # Dictionary with keys:
-# "uuid": String
 # "id": String
-# "rows": Array[{"key": String}]
+# "valueType": "boolean" | "number" | "string"
+# "entries": Array[String]
 ```
 :::

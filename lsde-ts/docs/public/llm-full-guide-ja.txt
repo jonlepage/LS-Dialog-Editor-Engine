@@ -87,13 +87,13 @@ engine は `BlueprintExport` オブジェクトを受け取ります（ファイ
 
 scene は独立した対話シーケンスです — 会話、カットシーン、チュートリアル、ショップのやり取りなど。ゲームでは通常、スクリプトイベントによってトリガーされます：プレイヤーが NPC に話しかける、ゾーンに入る、アイテムを拾うなど。
 
-各 scene は独自のエントリーブロック、独自のフロー、独自の状態を持ちます。複数の scene を並行して実行できます（例：メインダイアログとチュートリアルオーバーレイ）。scene は [`BlueprintScene`](/api-ref/interfaces/BlueprintScene) インターフェースで定義されます：
+各 scene は独自のエントリーブロック、独自のフロー、独自の状態を持ちます。複数の scene を並行して実行できます（例：メインダイアログとチュートリアルオーバーレイ）。scene は [`BlueprintScene`](/api-ref/type-aliases/BlueprintScene) インターフェースで定義されます：
 
 <!--@include: ../../_shared/blueprint-scene-type.md-->
 
 ## Connection
 
-connection は block 間のワイヤーです — どの block がどの block に繋がるかを定義します。エディター上では視覚的に描画し、エクスポートではソース → ターゲットのフラットなリストになります。[`BlueprintConnection`](/api-ref/interfaces/BlueprintConnection) インターフェースで定義されます：
+connection は block 間のワイヤーです — どの block がどの block に繋がるかを定義します。エディター上では視覚的に描画し、エクスポートではソース → ターゲットのフラットなリストになります。[`BlueprintConnection`](/api-ref/type-aliases/BlueprintConnection) インターフェースで定義されます：
 
 <!--@include: ../../_shared/blueprint-connection-type.md-->
 
@@ -101,13 +101,13 @@ connection は block 間のワイヤーです — どの block がどの block �
 
 ## Dictionary
 
-dictionary はゲームのレジスタを記述します — スイッチ、変数、インベントリなど。開発者が [LSDE](https://lepasoft.com/ja/software/ls-dialog-editor "Lepasoft Dialog Editor") エディターで宣言し、ナラティブデザイナーにゲーム内で利用可能な変数を公開します。ランタイムでは、開発者が各 dictionary をゲームの対応するシステムにマッピングします。[`condition`](/api-ref/interfaces/ExportCondition) と [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) がこれらのキーを使ってゲーム状態を評価します。[`Dictionary`](/api-ref/interfaces/Dictionary) インターフェースで定義されます：
+dictionary はゲームのレジスタを記述します — スイッチ、変数、インベントリなど。開発者が [LSDE](https://lepasoft.com/ja/software/ls-dialog-editor "Lepasoft Dialog Editor") エディターで宣言し、ナラティブデザイナーにゲーム内で利用可能な変数を公開します。ランタイムでは、開発者が各 dictionary をゲームの対応するシステムにマッピングします。[`condition`](/api-ref/interfaces/ConditionTest) と [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) がこれらのキーを使ってゲーム状態を評価します。[`DictionaryDefinition`](/api-ref/interfaces/DictionaryDefinition) インターフェースで定義されます：
 
 <!--@include: ../../_shared/blueprint-dictionary-type.md-->
 
 ## Action Signature
 
-signature はゲームで利用可能なアクションタイプを記述します — `set_flag`、`play_sound`、`give_item`。開発者が [LSDE](https://lepasoft.com/ja/software/ls-dialog-editor "Lepasoft Dialog Editor") エディターで宣言し、ナラティブデザイナーが型付きパラメーターでアクションシーケンスを構成できるようにします。ランタイムでは、signature の `id` を開発者が自分のシステムにマッピングします。[`ActionSignature`](/api-ref/interfaces/ActionSignature) インターフェースで定義されます：
+signature はゲームで利用可能なアクションタイプを記述します — `set_flag`、`play_sound`、`give_item`。開発者が [LSDE](https://lepasoft.com/ja/software/ls-dialog-editor "Lepasoft Dialog Editor") エディターで宣言し、ナラティブデザイナーが型付きパラメーターでアクションシーケンスを構成できるようにします。ランタイムでは、signature の `id` を開発者が自分のシステムにマッピングします。[`FunctionDefinition`](/api-ref/interfaces/FunctionDefinition) インターフェースで定義されます：
 
 <!--@include: ../../_shared/blueprint-signature-type.md-->
 
@@ -131,7 +131,7 @@ dialog block はセリフを表します — キャラクターの会話、ナ�
 
 ## CHOICE
 
-choice block はプレイヤーが選択する分岐点です — ダイアログメニュー、選択肢リスト。`context.choices` に全ての選択肢が含まれます。[`onResolveCondition()`](/ja/guide/choice-visibility) が設定されている場合、各選択肢は `visible: true | false` でタグ付けされ、handler が表示する選択肢をフィルタリングします。プレイヤーの操作後、`selectChoice(uuid)` で engine にどのパスを辿るかを伝え、`next()` でフローを進めます。
+choice block はプレイヤーが選択する分岐点です — ダイアログメニュー、選択肢リスト。`context.options` に全ての選択肢が含まれます。[`onResolveCondition()`](/ja/guide/choice-visibility) が設定されている場合、各選択肢は `visible: true | false` でタグ付けされ、handler が表示する選択肢をフィルタリングします。プレイヤーの操作後、`selectChoice(optionId)` で engine にどのパスを辿るかを伝え、`next()` でフローを進めます。
 
 <!--@include: ../../_shared/block-choice.md-->
 
@@ -144,7 +144,7 @@ condition block は不可視のスイッチです — ゲーム状態を評価�
 condition block は2つの評価モードをサポートしています：
 
 - **switch モード**（デフォルト）：条件グループを順番に評価します。最初にマッチしたグループが対応する port（`true`/`case_N`）にルーティングします。マッチしない場合は `false`/`default` port に従います。
-- **dispatcher モード**（[`enableDispatcher`](/api-ref/interfaces/NativeProperties#enabledispatcher) `= true`）：マッチした**すべて**のグループが async track として同時に発火します。`false`/`default` port はメインの継続 track（"Continue"）となり、**常に実行されます**。条件 port に接続される block は async でなければなりません。
+- **dispatcher モード**（[`portPerCase`](/api-ref/interfaces/NativeProperties#enabledispatcher) `= true`）：マッチした**すべて**のグループが async track として同時に発火します。`false`/`default` port はメインの継続 track（"Continue"）となり、**常に実行されます**。条件 port に接続される block は async でなければなりません。
 
 <!--@include: ../../_shared/block-condition.md-->
 
@@ -160,19 +160,19 @@ note block はナラティブデザイナーのためのメモです — コメ�
 
 ## 共通プロパティ
 
-すべての block は以下の基本フィールドを共有します（[`BlueprintBlockBase`](/api-ref/interfaces/BlueprintBlockBase)）：
+すべての block は以下の基本フィールドを共有します（[`BlueprintBlockBase`](/api-ref/type-aliases/BlueprintBlock)）：
 
 | フィールド | 型 | 説明 |
 |-------|------|-------------|
-| [`uuid`](/api-ref/interfaces/BlueprintBlockBase#uuid) | `string` | 一意識別子 |
-| [`type`](/api-ref/interfaces/BlueprintBlockBase#type) | `BlockType` | 判別タイプ |
-| [`label`](/api-ref/interfaces/BlueprintBlockBase#label) | `string?` | 人間可読な名前 |
-| [`parentLabels`](/api-ref/interfaces/BlueprintBlockBase#parentlabels) | `string[]?` | エディター内の親フォルダー階層 |
-| [`properties`](/api-ref/interfaces/BlueprintBlockBase#properties) | `BlockProperty[]` | キー・バリュープロパティ |
-| [`userProperties`](/api-ref/interfaces/BlueprintBlockBase#userproperties) | `Record?` | 自由形式のユーザープロパティ |
-| [`nativeProperties`](/api-ref/interfaces/BlueprintBlockBase#nativeproperties) | `NativeProperties?` | 実行プロパティ |
-| [`metadata`](/api-ref/interfaces/BlueprintBlockBase#metadata) | `BlockMetadata?` | 表示メタデータ（キャラクター、タグ、カラー） |
-| [`isStartBlock`](/api-ref/interfaces/BlueprintBlockBase#isstartblock) | `boolean?` | エントリー block を示す |
+| [`uuid`](/api-ref/type-aliases/BlueprintBlock#uuid) | `string` | 一意識別子 |
+| [`type`](/api-ref/type-aliases/BlueprintBlock#type) | `BlockType` | 判別タイプ |
+| [`label`](/api-ref/type-aliases/BlueprintBlock#label) | `string?` | 人間可読な名前 |
+| [`parentLabels`](/api-ref/type-aliases/BlueprintBlock#parentlabels) | `string[]?` | エディター内の親フォルダー階層 |
+| [`properties`](/api-ref/type-aliases/BlueprintBlock#properties) | `BlockProperty[]` | キー・バリュープロパティ |
+| [`userProperties`](/api-ref/type-aliases/BlueprintBlock#userproperties) | `Record?` | 自由形式のユーザープロパティ |
+| [`props`](/api-ref/type-aliases/BlueprintBlock#nativeproperties) | `NativeProperties?` | 実行プロパティ |
+| [`metadata`](/api-ref/type-aliases/BlueprintBlock#metadata) | `BlockMetadata?` | 表示メタデータ（キャラクター、タグ、カラー） |
+| [`scene.start`](/api-ref/type-aliases/BlueprintBlock#isstartblock) | `boolean?` | エントリー block を示す |
 
 ### NativeProperties
 
@@ -186,7 +186,7 @@ note block はナラティブデザイナーのためのメモです — コメ�
 | [`debug`](/api-ref/interfaces/NativeProperties#debug) | `boolean?` | エディタ用デバッグフラグ |
 | [`waitForBlocks`](/api-ref/interfaces/NativeProperties#waitforblocks) | `string[]?` | この block が進行する前に訪問済みでなければならない block UUID |
 | [`waitInput`](/api-ref/interfaces/NativeProperties#waitinput) | `boolean?` | プレイヤー入力制御用パッシブフラグ |
-| [`enableDispatcher`](/api-ref/interfaces/NativeProperties#enabledispatcher) | `boolean?` | dispatcher モード：マッチしたすべての条件が async track として発火、false/default port は継続 track |
+| [`portPerCase`](/api-ref/interfaces/NativeProperties#enabledispatcher) | `boolean?` | dispatcher モード：マッチしたすべての条件が async track として発火、false/default port は継続 track |
 
 ================================================================================
 
@@ -194,7 +194,7 @@ note block はナラティブデザイナーのためのメモです — コメ�
 
 ## 概要
 
-CHOICE block がディスパッチされると、`context.choices` には blueprint で定義された**すべての** choice が常に含まれます — 事前にフィルタリングされるものはありません。engine は配列から choice を削除することはありません。
+CHOICE block がディスパッチされると、`context.options` には blueprint で定義された**すべての** choice が常に含まれます — 事前にフィルタリングされるものはありません。engine は配列から choice を削除することはありません。
 
 表示制御フィルタリングが必要な場合（例：ゲームステートや以前の選択に基づいて choice を非表示にする）、engine は**オプトイン方式のタグ付け**システムを提供します。condition リゾルバーを一度インストールすると、`onChoice` handler が呼ばれる前に、engine が各 choice に `visible: true | false` をタグ付けします。
 
@@ -204,7 +204,7 @@ engine に condition リゾルバーを登録します — scene を開始する
 
 <!--@include: ../../_shared/choice-filter-setup.md-->
 
-インストールされると、engine は `onChoice` を呼び出す**前に**各 choice の `visibilityConditions` を評価します。同じリゾルバーは condition block のグループも事前評価します — 詳細は [Condition blocks](/ja/guide/block-types#condition) を参照してください。
+インストールされると、engine は `onChoice` を呼び出す**前に**各 choice の `when` を評価します。同じリゾルバーは condition block のグループも事前評価します — 詳細は [Condition blocks](/ja/guide/block-types#condition) を参照してください。
 
 - **`choice:` condition**（以前のプレイヤー選択を参照）は、engine の内部 choice 履歴によって自動的に解決されます — 登録された callback には渡されません。
 - **ゲームステート condition**（その他すべて）は、登録された callback に委任されます。
@@ -226,33 +226,33 @@ handler 内で、1行でフィルタリングできます：
 | `false` | リゾルバーインストール済み、choice は非表示 | `false` |
 | `undefined` | リゾルバー未インストール | `true` |
 
-## RuntimeChoiceItem
+## RuntimeOption
 
-リゾルバーがインストールされている場合、`context.choices` 内の各 choice は `RuntimeChoiceItem` です — `visible` タグが追加された `ChoiceItem` の拡張です：
+リゾルバーがインストールされている場合、`context.options` 内の各 choice は `RuntimeOption` です — `visible` タグが追加された `Option` の拡張です：
 
 
 ```ts [TypeScript]
-interface RuntimeChoiceItem extends ChoiceItem {
+interface RuntimeOption extends Option {
   visible?: boolean; // true | false | undefined
 }
 ```
 ```csharp [C#]
-public class RuntimeChoiceItem : ChoiceItem
+public class RuntimeOption : Option
 {
     public bool? Visible { get; set; } // true | false | null
 }
 ```
 ```cpp [C++]
-struct RuntimeChoiceItem : ChoiceItem {
+struct RuntimeOption : Option {
     std::optional<bool> visible; // true | false | nullopt
 };
 ```
 ```gdscript [GDScript]
-# RuntimeChoiceItem is a Dictionary with an extra "visible" key:
-# { "uuid": "...", "dialogueText": {...}, "visible": true/false/absent }
+# RuntimeOption is a Dictionary with an extra "visible" key:
+# { "id": "C1", "key": "...", "text": {...}, "visible": true/false/absent }
 ```
 
-リゾルバーなしの場合、choice は `RuntimeChoiceItem` のままですが、`visible` は `undefined`/`null`/`nullopt`/absent のままです。
+リゾルバーなしの場合、choice は `RuntimeOption` のままですが、`visible` は `undefined`/`null`/`nullopt`/absent のままです。
 
 ## 使用例
 
@@ -261,19 +261,19 @@ struct RuntimeChoiceItem : ChoiceItem {
 
 ```ts [TypeScript]
 engine.onChoice(({ context, next }) => {
-  const visible = context.choices.filter(c => c.visible !== false);
-  ui.showChoices(visible, (uuid) => {
-    context.selectChoice(uuid);
+  const offered = context.options.filter(c => c.visible !== false);
+  ui.showOptions(visible, (optionId) => {
+    context.selectChoice(optionId);
     next();
   });
 });
 ```
 ```csharp [C#]
 engine.OnChoice(args => {
-    var visible = args.Context.Choices
+    var visible = args.Context.Options
         .Where(c => c.Visible != false).ToList();
-    ShowChoicesUI(visible, uuid => {
-        args.Context.SelectChoice(uuid);
+    ShowChoicesUI(visible, optionId => {
+        args.Context.SelectChoice(optionId);
         args.Next();
     });
     return null;
@@ -281,12 +281,12 @@ engine.OnChoice(args => {
 ```
 ```cpp [C++]
 engine.onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
-    std::vector<const RuntimeChoiceItem*> visible;
-    for (const auto& c : ctx->choices())
+    std::vector<const RuntimeOption*> visible;
+    for (const auto& c : ctx->options())
         if (!c.visible.has_value() || c.visible.value())
             visible.push_back(&c);
-    showChoicesUI(visible, [ctx, next](const auto& uuid) {
-        ctx->selectChoice(uuid);
+    showOptionsUI(visible, [ctx, next](const auto& optionId) {
+        ctx->selectChoice(optionId);
         next();
     });
     return {};
@@ -295,11 +295,11 @@ engine.onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
 ```gdscript [GDScript]
 engine.on_choice(func(args):
     var visible = []
-    for c in args["context"].choices:
+    for c in args["context"].options:
         if c.get("visible") != false:
             visible.append(c)
-    show_choices_ui(visible, func(uuid):
-        args["context"].select_choice(uuid)
+    show_options_ui(visible, func(option_id):
+        args["context"].select_choice(option_id)
         args["next"].call()
     )
     return Callable()
@@ -311,34 +311,34 @@ engine.on_choice(func(args):
 
 ```ts [TypeScript]
 engine.onChoice(({ block, context, next }) => {
-  const visible = context.choices.filter(c => c.visible !== false);
-  const timeout = block.nativeProperties?.timeout;
+  const offered = context.options.filter(c => c.visible !== false);
+  const timeout = LsdeUtils.getNativeProperties(block)?.timeout;
 
   const resolve = (choice) => {
-    context.selectChoice(choice.uuid);
+    context.selectChoice(choice.id);
     next();
   };
 
   if (timeout) {
     const timer = setTimeout(() => resolve(visible[0]), timeout * 1000);
-    ui.showChoices(visible, (uuid) => {
+    ui.showOptions(visible, (optionId) => {
       clearTimeout(timer);
-      resolve(visible.find(c => c.uuid === uuid));
+      resolve(visible.find(c => c.id === optionId));
     });
   } else {
-    ui.showChoices(visible, (uuid) => resolve(visible.find(c => c.uuid === uuid)));
+    ui.showOptions(visible, (optionId) => resolve(visible.find(c => c.id === optionId)));
   }
 });
 ```
 ```csharp [C#]
 engine.OnChoice(args => {
     var (_, block, context, next) = args;
-    var visible = context.Choices
+    var visible = context.Options
         .Where(c => c.Visible != false).ToList();
     var timeout = block.NativeProperties?.Timeout;
 
-    void Resolve(RuntimeChoiceItem choice) {
-        context.SelectChoice(choice.Uuid);
+    void Resolve(RuntimeOption choice) {
+        context.SelectChoice(choice.Id);
         next();
     }
 
@@ -346,42 +346,42 @@ engine.OnChoice(args => {
     {
         // use your engine's timer — cancel on player selection
         var timer = ScheduleTimer((float)timeout.Value, () => Resolve(visible[0]));
-        ShowChoicesUI(visible, uuid => {
+        ShowChoicesUI(visible, optionId => {
             timer.Cancel();
-            Resolve(visible.First(c => c.Uuid == uuid));
+            Resolve(visible.First(c => c.Id == optionId));
         });
     }
     else
     {
-        ShowChoicesUI(visible, uuid => Resolve(visible.First(c => c.Uuid == uuid)));
+        ShowChoicesUI(visible, optionId => Resolve(visible.First(c => c.Id == optionId)));
     }
     return null;
 });
 ```
 ```cpp [C++]
 engine.onChoice([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
-    std::vector<const RuntimeChoiceItem*> visible;
-    for (const auto& c : ctx->choices())
+    std::vector<const RuntimeOption*> visible;
+    for (const auto& c : ctx->options())
         if (!c.visible.has_value() || c.visible.value())
             visible.push_back(&c);
 
-    auto timeout = block->nativeProperties
-        ? block->nativeProperties->timeout : std::nullopt;
+    auto timeout = block->props
+        ? block->props->timeout : std::nullopt;
 
-    auto resolve = [ctx, next](const std::string& uuid) {
-        ctx->selectChoice(uuid);
+    auto resolve = [ctx, next](const std::string& optionId) {
+        ctx->selectChoice(optionId);
         next();
     };
 
     if (timeout.has_value()) {
         // use your engine's timer — cancel on player selection
-        auto timer = scheduleDelay(timeout.value(), [&]() { resolve(visible[0]->uuid); });
-        showChoicesUI(visible, [resolve, timer](const auto& uuid) {
+        auto timer = scheduleDelay(timeout.value(), [&]() { resolve(visible[0]->id); });
+        showOptionsUI(visible, [resolve, timer](const auto& optionId) {
             timer->cancel();
-            resolve(uuid);
+            resolve(optionId);
         });
     } else {
-        showChoicesUI(visible, resolve);
+        showOptionsUI(visible, resolve);
     }
     return {};
 });
@@ -392,27 +392,27 @@ engine.on_choice(func(args):
     var next_fn = args["next"]
     var block = args["block"]
     var visible = []
-    for c in ctx.choices:
+    for c in ctx.options:
         if c.get("visible") != false:
             visible.append(c)
 
-    var timeout_val = block.get("nativeProperties", {}).get("timeout", 0)
+    var timeout_val = block.get("props", {}).get("timeout", 0)
 
     if timeout_val > 0:
         # use your engine's timer — cancel on player selection
         var timer = get_tree().create_timer(timeout_val)
         timer.timeout.connect(func():
-            ctx.select_choice(visible[0]["uuid"])
+            ctx.select_choice(visible[0]["id"])
             next_fn.call()
         )
-        show_choices_ui(visible, func(uuid):
+        show_options_ui(visible, func(option_id):
             timer.time_left = 0  # cancel
-            ctx.select_choice(uuid)
+            ctx.select_choice(option_id)
             next_fn.call()
         )
     else:
-        show_choices_ui(visible, func(uuid):
-            ctx.select_choice(uuid)
+        show_options_ui(visible, func(option_id):
+            ctx.select_choice(option_id)
             next_fn.call()
         )
     return Callable()
@@ -424,7 +424,7 @@ engine.on_choice(func(args):
 
 ```ts [TypeScript]
 engine.onChoice(({ context, next }) => {
-  for (const choice of context.choices) {
+  for (const choice of context.options) {
     if (choice.visible === false) {
       ui.addGreyed(choice);   // show but disabled
     } else {
@@ -436,7 +436,7 @@ engine.onChoice(({ context, next }) => {
 ```
 ```csharp [C#]
 engine.OnChoice(args => {
-    foreach (var choice in args.Context.Choices)
+    foreach (var choice in args.Context.Options)
     {
         if (choice.Visible == false)
             AddGreyed(choice);   // show but disabled
@@ -449,7 +449,7 @@ engine.OnChoice(args => {
 ```
 ```cpp [C++]
 engine.onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
-    for (const auto& choice : ctx->choices()) {
+    for (const auto& choice : ctx->options()) {
         if (choice.visible.has_value() && !choice.visible.value())
             addGreyed(choice);   // show but disabled
         else
@@ -461,7 +461,7 @@ engine.onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
 ```
 ```gdscript [GDScript]
 engine.on_choice(func(args):
-    for choice in args["context"].choices:
+    for choice in args["context"].options:
         if choice.get("visible") == false:
             add_greyed(choice)   # show but disabled
         else:
@@ -477,14 +477,14 @@ engine.on_choice(func(args):
 ```ts [TypeScript]
 tutorial.onChoice(({ context, next }) => {
   // force-select the first choice, no filtering
-  context.selectChoice(context.choices[0].uuid);
+  context.selectChoice(context.options[0].id);
   next();
 });
 ```
 ```csharp [C#]
 tutorial.OnChoice(args => {
     // force-select the first choice, no filtering
-    args.Context.SelectChoice(args.Context.Choices[0].Uuid);
+    args.Context.SelectChoice(args.Context.Options[0].Id);
     args.Next();
     return null;
 });
@@ -492,7 +492,7 @@ tutorial.OnChoice(args => {
 ```cpp [C++]
 tutorial->onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
     // force-select the first choice, no filtering
-    ctx->selectChoice(ctx->choices()[0].uuid);
+    ctx->selectChoice(ctx->options()[0].id);
     next();
     return {};
 });
@@ -500,7 +500,7 @@ tutorial->onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
 ```gdscript [GDScript]
 tutorial.on_choice(func(args):
     # force-select the first choice, no filtering
-    args["context"].select_choice(args["context"].choices[0]["uuid"])
+    args["context"].select_choice(args["context"].options[0]["id"])
     args["next"].call()
     return Callable()
 )
@@ -513,7 +513,7 @@ tutorial.on_choice(func(args):
 <!--@include: ../../_shared/choice-reusable-filter.md-->
 
 > TIP:
-`onResolveCondition` 以前は、同じ `gameState.check(...)` ロジックを `setChoiceFilter` と `onCondition` に別々に登録する必要がありました。統合リゾルバーでは1つの callback で済みます — engine が両方を自動的に処理します。
+`onResolveCondition` 以前は、同じ `gameState.check(...)` ロジックを `onResolveCondition` と `onCondition` に別々に登録する必要がありました。統合リゾルバーでは1つの callback で済みます — engine が両方を自動的に処理します。
 
 ## 上級: 手動フィルタリング
 
@@ -523,7 +523,7 @@ tutorial.on_choice(func(args):
 ```ts [TypeScript]
 import { LsdeUtils } from '@lsde/dialog-engine';
 
-const visible = LsdeUtils.filterVisibleChoices(
+const offered = LsdeUtils.tagOptionVisibility(
   block.choices ?? [],
   (cond) => gameState.check(cond.key, cond.operator, cond.value),
   scene, // optional — enables choice: condition resolution via history
@@ -581,7 +581,7 @@ engine は以下の handler を公開しています：
 | [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | UUID で特定の CONDITION block をオーバーライド（型安全） |
 | [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | UUID で特定の ACTION block をオーバーライド（型安全） |
 | [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) | global | 統合 condition リゾルバー（choice の可視性 + condition の事前評価） |
-| ~~[`setChoiceFilter`](/api-ref/classes/DialogueEngine#setchoicefilter)~~ | global | _非推奨 — 代わりに `onResolveCondition` を使用してください_ |
+| ~~[`onResolveCondition`](/api-ref/classes/DialogueEngine#setchoicefilter)~~ | global | _非推奨 — 代わりに `onResolveCondition` を使用してください_ |
 
 `onDialog`、`onChoice`、`onAction` は**必須**です — `start()` 呼び出し時に engine がその存在を検証し、欠けている場合は記述的なエラーをスローします。`onCondition` は `onResolveCondition` がインストールされている場合は**オプション**です — engine が事前評価された condition グループから自動ルーティングします。
 
@@ -595,7 +595,7 @@ engine は handler を2つの階層で解決します：
 - **Scene handler** — 特定の [`SceneHandle`](/api-ref/interfaces/SceneHandle) に登録され、scene が異なるレンダリングや制御フローを必要とする場合にデフォルト動作をオーバーライドまたは拡張できます。まれですが、利用可能です。
 
 block がディスパッチされると、engine は以下の順序で handler を解決します：
-1. `handle.onBlock(uuid)` または `handle.onDialogId(uuid)` / `handle.onActionId(uuid)` / ... — block 固有のオーバーライド
+1. `handle.onBlock(blockId)` または `handle.onDialogId(blockId)` / `handle.onActionId(blockId)` / ... — block 固有のオーバーライド
 2. `handle.onDialog()` / `handle.onChoice()` / ... — scene レベルのタイプ handler
 3. `engine.onDialog()` / `engine.onChoice()` / ... — global handler
 
@@ -605,7 +605,7 @@ block がディスパッチされると、engine は以下の順序で handler �
 
 ## Character Resolution
 
-キャラクター解決はオプションです。`onResolveCharacter` callback を登録すると、engine は `metadata.characters` にキャラクターを持つすべての block の前にそれを呼び出します。callback は block に割り当てられたキャラクターのリストを受け取り、アクティブにすべきキャラクターを返します — 利用可能なキャラクターがいない場合は `undefined` を返します。解決されたキャラクターは、すべての handler で `context.character` としてアクセスできます。
+キャラクター解決はオプションです。`onResolveCharacter` callback を登録すると、engine は `actors` にキャラクターを持つすべての block の前にそれを呼び出します。callback は block に割り当てられたキャラクターのリストを受け取り、アクティブにすべきキャラクターを返します — 利用可能なキャラクターがいない場合は `undefined` を返します。解決されたキャラクターは、すべての handler で `context.character` としてアクセスできます。
 
 これはゲーム状態を照会するための理想的な統合ポイントです：キャラクターがシーンに存在するか、生存しているか、カメラ範囲内にいるかなどを確認できます。`undefined` を返すことで、[`skipIfMissingActor`](/api-ref/interfaces/NativeProperties#skipifmissingactor) による block スキップ、`handle.cancel()` による scene キャンセル、handler 内での直接処理など、複数の戦略が可能になります。
 
@@ -619,13 +619,13 @@ block がディスパッチされると、engine は以下の順序で handler �
 
 ## Block Override
 
-`onBlock(uuid)` で特定の block をその識別子で指定し、専用の handler を割り当てることができます。これはまれなユースケースです — ジェネリック handler が大半のニーズをカバーします — ただし、個別の block が異なる動作を必要とする非常に特殊なシナリオでは利用可能です。
+`onBlock(blockId)` で特定の block をその識別子で指定し、専用の handler を割り当てることができます。これはまれなユースケースです — ジェネリック handler が大半のニーズをカバーします — ただし、個別の block が異なる動作を必要とする非常に特殊なシナリオでは利用可能です。
 
 <!--@include: ../../_shared/handler-block-override.md-->
 
 ## Type-Safe Block Override
 
-`onDialogId(uuid)`、`onChoiceId(uuid)`、`onConditionId(uuid)`、`onActionId(uuid)` は `onBlock(uuid)` の型安全な代替メソッドです。動作は全く同じ — 同じ優先度、同じ `preventGlobalHandler` サポート — ただし handler がジェネリックユニオンではなく、特殊化された block 型とコンテキストを受け取ります。
+`onDialogId(blockId)`、`onChoiceId(blockId)`、`onConditionId(blockId)`、`onActionId(blockId)` は `onBlock(blockId)` の型安全な代替メソッドです。動作は全く同じ — 同じ優先度、同じ `preventGlobalHandler` サポート — ただし handler がジェネリックユニオンではなく、特殊化された block 型とコンテキストを受け取ります。
 
 登録時に block タイプが分かっていて、`block` と `context` のオートコンプリートが必要な場合に使用してください。
 
@@ -638,7 +638,7 @@ block がディスパッチされると、engine は以下の順序で handler �
 ```mermaid
 flowchart TD
     A[block dispatched] --> B{resolve scene handler}
-    B --> B1{"onBlock(uuid) /\nonDialogId(uuid) etc.?"}
+    B --> B1{"onBlock(blockId) /\nonDialogId(blockId) etc.?"}
     B1 -- found --> S
     B1 -- not found --> B2{"handle.onDialog() etc.?"}
     B2 -- found --> S
@@ -671,7 +671,7 @@ handler の詳細な実装については、[Block Types](./block-types) と [Ha
 
 - **Dialog** — テキスト、キャラクター、ネイティブプロパティ。UI にダイアログを表示し、プレイヤーの入力またはディレイを待ってから `next()` を呼び出します。engine が次の block に移る際に UI を非表示にするクリーンアップ関数を返します。
 
-- **Choice** — `choiceFilter` が設定されている場合、`visible` タグ付きの選択肢リスト。対応する UI 要素を作成します — ボタン、リスト、ラジアルメニュー。プレイヤーが選択したら、`selectChoice(uuid)` で分岐先を engine に伝え、`next()` でフローを進めます。
+- **Choice** — `choiceFilter` が設定されている場合、`visible` タグ付きの選択肢リスト。対応する UI 要素を作成します — ボタン、リスト、ラジアルメニュー。プレイヤーが選択したら、`selectChoice(optionId)` で分岐先を engine に伝え、`next()` でフローを進めます。
 
 - **Condition** — block に定義された条件。ゲームロジックで評価します — フラグ、クエスト、インベントリのチェック。`context.resolve(true)` はポート 0 へ、`context.resolve(false)` はポート 1 へフローを送ります。
 
@@ -681,7 +681,7 @@ handler の詳細な実装については、[Block Types](./block-types) と [Ha
 
 - **`next()` はリモコンです。** 高速ダイアログのために即座に呼び出すか、アニメーションが完了するまで保持します。engine は待機します — 時間の概念を持ちません。
 - **クリーンアップ関数が後片付けします。** どの handler からでも関数を返せば、engine が次の block に移る時に呼び出します。UI の非表示、オーディオの停止、ノードの解放に最適です。
-- **`onBeforeBlock` が delay を処理します。** engine は `nativeProperties.delay` を強制しません — `onBeforeBlock` がそれを読み取り、タイマー後に `resolve()` を呼び出します。完全な制御権があります。
+- **`onBeforeBlock` が delay を処理します。** engine は `props.delay` を強制しません — `onBeforeBlock` がそれを読み取り、タイマー後に `resolve()` を呼び出します。完全な制御権があります。
 - **async track は並列フローです。** カットシーンでダイアログとカメラ移動を同時に行う場合、エディタで `isAsync` マークされた block は独立した track で実行されます。
 
 ================================================================================

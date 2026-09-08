@@ -49,7 +49,7 @@ private:
     std::unordered_map<std::string, InternalBlockHandler> _blockHandlers;
 };
 
-/// Resolve which handlers to call. Priority: onBlock(uuid) > scene.onType > engine.onType.
+/// Resolve which handlers to call. Priority: onBlock(blockId) > scene.onType > engine.onType.
 ResolvedHandlers resolveHandler(
     const std::string& blockType,
     const std::string& blockId,

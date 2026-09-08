@@ -464,6 +464,37 @@ func _test_scene_before_init_returns_null() -> void:
 
 	_assert_eq(engine.scene("s1"), null, "no scene before init()")
 
+# ─── waitForBlocks is the one native holding a LIST ───────────────────────
+#
+# Every other native is a scalar. Each runtime needs its own branch to read an array out of the
+# props bag — a std::variant alternative in C++, a JsonElement or a JArray in C# — and a payload
+# whose waitForBlocks came back empty would make the property silently inert: no error, no warning,
+# and a block that never waits. The four runtimes assert it against the same reference export.
+
+func _test_wait_for_blocks_is_read_off_the_reference_export() -> void:
+	var base: String = ProjectSettings.globalize_path("res://").get_base_dir().get_base_dir()
+	var path: String = base.path_join("mock/blueprints/Engine-Conformance-Scene.blueprints.json")
+	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		_assert_eq(true, false, "cannot open the reference export at %s" % path)
+		return
+
+	var blueprint: Variant = JSON.parse_string(file.get_as_text())
+	_assert_eq(blueprint is Dictionary, true, "the reference export parses")
+
+	var found: Variant = null
+	for sc in blueprint.get("scenes", []):
+		for b in sc.get("blocks", []):
+			if b.get("id", "") == "DIALOG-008":
+				found = b
+	_assert_eq(found != null, true, "DIALOG-008 is in the export")
+	if found == null:
+		return
+
+	var natives: Dictionary = LsdeUtils.get_native_properties(found)
+	_assert_eq(natives.get("waitForBlocks", []), ["DIALOG-012", "DIALOG-007"],
+		"waitForBlocks survives the parse as a real list of ids")
+
 # ─── Entry point ──────────────────────────────────────────────────────────
 
 func run() -> Dictionary:
@@ -488,4 +519,5 @@ func run() -> Dictionary:
 	_test_starting_without_handlers_refuses_instead_of_playing_blind()
 	_test_an_unknown_scene_returns_null_rather_than_a_broken_handle()
 	_test_scene_before_init_returns_null()
+	_test_wait_for_blocks_is_read_off_the_reference_export()
 	return {"passed": _passed, "failed": _failed, "total": _total}

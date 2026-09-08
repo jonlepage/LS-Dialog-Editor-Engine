@@ -182,3 +182,21 @@ TEST(LsdeJson, ThePayloadItParsesLoadsWithNoError) {
 TEST(LsdeJson, ParseFileThrowsOnAMissingFile) {
     EXPECT_THROW(LsdeJson::parseFile("no-such-file.json"), std::runtime_error);
 }
+
+// ─── waitForBlocks is the one native holding a LIST ──────────────────────────
+//
+// Every other native is a scalar, so the array branch of parsePropertyValue is exercised by
+// nothing else. A PropertyValue that came back holding the wrong alternative would make the
+// property silently inert: no error, no warning, and a block that never waits.
+//
+// DIALOG-008 of the reference export carries it.
+
+TEST(LsdeJson, ParsesWaitForBlocksAsARealListOfIds) {
+    auto bp = load();
+    const auto* block = find(bp.scenes[0], "DIALOG-008");
+    ASSERT_NE(block, nullptr);
+
+    auto natives = getNativeProperties(*block);
+
+    EXPECT_EQ(natives.waitForBlocks, std::vector<std::string>({"DIALOG-012", "DIALOG-007"}));
+}

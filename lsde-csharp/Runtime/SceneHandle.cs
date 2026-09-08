@@ -256,9 +256,9 @@ namespace LsdeDialogEngine
         public HandlerRegistry GetGlobalRegistry() => _globalRegistry;
         public ISceneHandle AsSceneHandle() => this;
         public bool IsSceneRunning() => _running;
-        public void AddVisited(string uuid)
+        public void AddVisited(string blockId)
         {
-            _visited.Add(uuid);
+            _visited.Add(blockId);
             if (_pendingWaits.Count > 0)
             {
                 var satisfied = new List<IWaiter>();
@@ -317,7 +317,7 @@ namespace LsdeDialogEngine
             _pendingWaits[waiter] = blockIds;
         }
 
-        public bool IsVisited(string uuid) => _visited.Contains(uuid);
+        public bool IsVisited(string blockId) => _visited.Contains(blockId);
 
         /// <summary>Run OnValidateNextBlock for a block, and OnInvalidateBlock when it refuses.</summary>
         /// <remarks>Called by BOTH the main flow and every parallel track. It used to live inline
@@ -370,15 +370,15 @@ namespace LsdeDialogEngine
             return CreateContext(block);
         }
 
-        private void RecordChoice(string blockId, string choiceUuid)
+        private void RecordChoice(string blockId, string optionId)
         {
             if (_choiceHistory.TryGetValue(blockId, out var existing))
             {
-                existing.Add(choiceUuid);
+                existing.Add(optionId);
             }
             else
             {
-                _choiceHistory[blockId] = new List<string> { choiceUuid };
+                _choiceHistory[blockId] = new List<string> { optionId };
             }
         }
 

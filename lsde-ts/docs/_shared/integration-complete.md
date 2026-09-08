@@ -25,7 +25,7 @@ export class DialogueUI extends Phaser.Scene {
       const { character, resolveCharacterPort } = context;
       const text = LsdeUtils.getLocalizedText(text);
 
-      character && resolveCharacterPort(character.uuid);
+      character && resolveCharacterPort(character.id);
 
       dialog.show(text, character?.name);
       this.pendingNext = next;
@@ -45,8 +45,8 @@ export class DialogueUI extends Phaser.Scene {
       const { choices: items, selectChoice } = context;
       const offered = items.filter(c => c.visible !== false);
 
-      const buttons = choices.show(visible, (uuid) => {
-        selectChoice(uuid);
+      const buttons = choices.show(visible, (optionId) => {
+        selectChoice(optionId);
         next();
       });
 
@@ -113,8 +113,8 @@ export class DialogueUI extends Phaser.Scene {
   private createChoicePanel() {
     return {
       show: (
-        visible: { uuid: string; text?: Record<string, string>; label?: string }[],
-        onSelect: (uuid: string) => void,
+        visible: { id: string; text?: Record<string, string> }[],
+        onSelect: (optionId: string) => void,
       ) => {
         return visible.map((choice, i) => {
           const text = LsdeUtils.getLocalizedText(choice.text) ?? choice.label ?? '';
@@ -123,7 +123,7 @@ export class DialogueUI extends Phaser.Scene {
             .setScrollFactor(0)
             .setDepth(1001)
             .setInteractive({ useHandCursor: true })
-            .on('pointerdown', () => onSelect(choice.uuid));
+            .on('pointerdown', () => onSelect(choice.id));
         });
       },
       hide: (buttons: Phaser.GameObjects.Text[]) => buttons.forEach(b => b.destroy()),
@@ -171,7 +171,7 @@ public class DialogueUI : MonoBehaviour
             var text = LsdeUtils.GetLocalizedText(block.Text);
             var ch = context.Character;
 
-            if (ch != null) context.ResolveCharacterPort(ch.Uuid);
+            if (ch != null) context.ResolveCharacterPort(ch.Id);
 
             speakerName.text = ch?.Name ?? "";
             dialogText.text = text ?? "";
@@ -194,9 +194,9 @@ public class DialogueUI : MonoBehaviour
                 btn.GetComponentInChildren<TMP_Text>().text =
                     LsdeUtils.GetLocalizedText(choice.Text) ?? choice.Label ?? "";
 
-                var uuid = choice.Uuid;
+                var optionId = choice.Id;
                 btn.GetComponent<Button>().onClick.AddListener(() => {
-                    context.SelectChoice(uuid);
+                    context.SelectChoice(optionId);
                     next();
                 });
             }
@@ -262,7 +262,7 @@ void UDialogueSubsystem::RegisterHandlers()
         auto localized = lsde::LsdeUtils::GetLocalizedText(block->text);
         auto* ch = ctx->character();
 
-        if (ch) ctx->resolveCharacterPort(ch->uuid);
+        if (ch) ctx->resolveCharacterPort(ch->id);
 
         DialogWidget->SetDialogue(
             FString(UTF8_TO_TCHAR(localized.value_or("").c_str())),
@@ -287,7 +287,7 @@ void UDialogueSubsystem::RegisterHandlers()
             if (!c.visible.has_value() || c.visible.value()) {
                 auto text = lsde::LsdeUtils::GetLocalizedText(c.text);
                 ChoiceWidget->AddOption(
-                    FString(UTF8_TO_TCHAR(c.uuid.c_str())),
+                    FString(UTF8_TO_TCHAR(c.id.c_str())),
                     FString(UTF8_TO_TCHAR(text.value_or("").c_str())));
             }
         }
@@ -327,10 +327,10 @@ void UDialogueSubsystem::AdvanceDialogue()
 }
 
 // UFUNCTION(BlueprintCallable) — call from your choice button delegate
-void UDialogueSubsystem::OnChoiceSelected(const FString& Uuid)
+void UDialogueSubsystem::OnChoiceSelected(const FString& OptionId)
 {
     if (PendingChoiceCtx) {
-        PendingChoiceCtx->selectChoice(TCHAR_TO_UTF8(*Uuid));
+        PendingChoiceCtx->selectChoice(TCHAR_TO_UTF8(*OptionId));
         if (PendingChoiceNext) { PendingChoiceNext(); PendingChoiceNext = nullptr; }
         PendingChoiceCtx = nullptr;
     }
@@ -376,7 +376,7 @@ func _register_handlers() -> void:
         var text = LsdeUtils.get_localized_text(block.get("text"))
 
         if ch:
-            ctx.resolve_character_port(ch.get("uuid", ""))
+            ctx.resolve_character_port(ch.get("id", ""))
 
         speaker_label.text = ch.get("name", "") if ch else ""
         dialogue_label.text = text if text else ""
@@ -405,7 +405,7 @@ func _register_handlers() -> void:
             var label = LsdeUtils.get_localized_text(c.get("text"))
             btn.text = label if label else c.get("label", "")
             btn.pressed.connect(func():
-                ctx.select_choice(c["uuid"])
+                ctx.select_choice(c["id"])
                 next_fn.call()
             )
             choice_container.add_child(btn)

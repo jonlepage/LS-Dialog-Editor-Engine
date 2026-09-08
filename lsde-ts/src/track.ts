@@ -186,7 +186,7 @@ export class Track implements Waiter {
 	/** The track that opened this one, or `null` when the main flow opened it. */
 	public readonly parentTrackId: number | null;
 	/** The block this track started on. */
-	public readonly startBlockUuid: string;
+	public readonly startBlockId: string;
 
 	private readonly host: TrackHost;
 	private readonly startBlock: BlueprintBlock;
@@ -212,7 +212,7 @@ export class Track implements Waiter {
 		this.startBlock = startBlock;
 		this.id = id;
 		this.parentTrackId = parentTrackId;
-		this.startBlockUuid = startBlock.id;
+		this.startBlockId = startBlock.id;
 	}
 
 	/** Begin walking. Must be called after the track is in the scene's pool. */
@@ -266,8 +266,8 @@ export class Track implements Waiter {
 		return {
 			id: this.id,
 			parentTrackId: this.parentTrackId,
-			startBlockUuid: this.startBlockUuid,
-			currentBlockUuid: this.currentBlock?.id ?? null,
+			startBlockId: this.startBlockId,
+			currentBlockId: this.currentBlock?.id ?? null,
 			running: this.running,
 		};
 	}

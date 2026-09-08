@@ -111,7 +111,7 @@ namespace LsdeDialogEngine
     {
         /// <summary>
         /// Resolve which handlers to call for a given block.
-        /// Priority: onBlock(uuid) > scene.onType > engine.onType
+        /// Priority: OnBlock(blockId) > scene.OnType > engine.OnType
         /// </summary>
         internal static ResolvedHandlers ResolveHandler(
             string blockType,
@@ -126,7 +126,7 @@ namespace LsdeDialogEngine
                 return new ResolvedHandlers { SceneHandler = null, GlobalHandler = globalHandler };
             }
 
-            // Most specific: onBlock(uuid)
+            // Most specific: OnBlock(blockId)
             var blockOverride = sceneRegistry.GetBlockHandler(blockId);
             if (blockOverride != null)
             {

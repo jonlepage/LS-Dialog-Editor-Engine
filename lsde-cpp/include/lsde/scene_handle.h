@@ -50,7 +50,7 @@ class SceneHandleImpl;
 ///
 /// When a block is dispatched, the scene handler (Tier 2) is called first. The global handler
 /// (Tier 1) is then called after, unless context->preventGlobalHandler() was invoked.
-/// A block-specific override via handle->onBlock(uuid, handler) takes highest priority.
+/// A block-specific override via handle->onBlock(blockId, handler) takes highest priority.
 class SceneHandleImpl : public ISceneHandle, public ITrackHost {
 public:
     SceneHandleImpl(const SceneGraph& sceneGraph, const HandlerRegistry& globalRegistry, SceneHandleCallbacks callbacks);
@@ -97,7 +97,7 @@ public:
     const HandlerRegistry& hostGlobalRegistry() const override;
     ISceneHandle* asSceneHandle() override;
     bool isSceneRunning() const override;
-    void addVisited(const std::string& uuid) override;
+    void addVisited(const std::string& blockId) override;
     /// Open a parallel track. Returns its id.
     int spawnTrack(const BlueprintBlock& startBlock, int parentTrackId) override;
     /// Cancel a specific track by ID (used for parent->child cascade).
@@ -124,11 +124,11 @@ public:
                        const Card* fromCharacter) override;
 
     /// Check if a block id has been visited in this scene.
-    bool isVisited(const std::string& uuid) const override;
+    bool isVisited(const std::string& blockId) const override;
     /// Create the appropriate context for a block (Dialog/Choice/Condition/Action).
     std::unique_ptr<IBaseBlockContext> createBlockContext(const BlueprintBlock& block) override;
     /// Record a choice selection in the history for condition evaluation.
-    void recordChoice(const std::string& blockId, const std::string& choiceUuid);
+    void recordChoice(const std::string& blockId, const std::string& optionId);
     /// Evaluate a condition with choice history support. Non-choice conditions delegate to fallbackEvaluator.
     bool evaluateConditionForBlock(const ConditionTest& test,
         const std::function<bool(const ConditionTest&)>& fallbackEvaluator);

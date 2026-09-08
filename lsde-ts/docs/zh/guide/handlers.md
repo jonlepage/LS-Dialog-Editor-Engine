@@ -38,7 +38,7 @@ engine 在两个层级上解析 handler：
 - **Scene handler** — 注册在特定的 [`SceneHandle`](/api-ref/interfaces/SceneHandle) 上，当 scene 需要不同的渲染或控制流程时，可以覆盖或扩展默认行为。这种情况很少见，但可用。
 
 当一个 block 被分发时，engine 按以下顺序解析 handler：
-1. `handle.onBlock(uuid)` 或 `handle.onDialogId(uuid)` / `handle.onActionId(uuid)` / ... — block 级别的覆盖
+1. `handle.onBlock(blockId)` 或 `handle.onDialogId(blockId)` / `handle.onActionId(blockId)` / ... — block 级别的覆盖
 2. `handle.onDialog()` / `handle.onChoice()` / ... — scene 级别的类型 handler
 3. `engine.onDialog()` / `engine.onChoice()` / ... — global handler
 
@@ -62,13 +62,13 @@ engine 在两个层级上解析 handler：
 
 ## Block Override
 
-`onBlock(uuid)` 可以通过标识符定位特定 block 并为其分配专用 handler。这是一个罕见的用例 — 通用 handler 覆盖了绝大多数需求 — 但对于个别 block 需要不同行为的非常特殊的场景，它是可用的。
+`onBlock(blockId)` 可以通过标识符定位特定 block 并为其分配专用 handler。这是一个罕见的用例 — 通用 handler 覆盖了绝大多数需求 — 但对于个别 block 需要不同行为的非常特殊的场景，它是可用的。
 
 <!--@include: ../../_shared/handler-block-override.md-->
 
 ## Type-Safe Block Override
 
-`onDialogId(uuid)`、`onChoiceId(uuid)`、`onConditionId(uuid)` 和 `onActionId(uuid)` 是 `onBlock(uuid)` 的类型安全替代方法。工作方式完全相同 — 相同的优先级、相同的 `preventGlobalHandler` 支持 — 但 handler 接收特殊化的 block 类型和 context，而不是通用联合类型。
+`onDialogId(blockId)`、`onChoiceId(blockId)`、`onConditionId(blockId)` 和 `onActionId(blockId)` 是 `onBlock(blockId)` 的类型安全替代方法。工作方式完全相同 — 相同的优先级、相同的 `preventGlobalHandler` 支持 — 但 handler 接收特殊化的 block 类型和 context，而不是通用联合类型。
 
 当你在注册时已知 block 类型，并需要 `block` 和 `context` 的完整自动补全时使用这些方法。
 
@@ -81,7 +81,7 @@ engine 在两个层级上解析 handler：
 ```mermaid
 flowchart TD
     A[block dispatched] --> B{resolve scene handler}
-    B --> B1{"onBlock(uuid) /\nonDialogId(uuid) etc.?"}
+    B --> B1{"onBlock(blockId) /\nonDialogId(blockId) etc.?"}
     B1 -- found --> S
     B1 -- not found --> B2{"handle.onDialog() etc.?"}
     B2 -- found --> S

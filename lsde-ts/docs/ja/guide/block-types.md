@@ -16,7 +16,7 @@ dialog block はセリフを表します — キャラクターの会話、ナ�
 
 ## CHOICE
 
-choice block はプレイヤーが選択する分岐点です — ダイアログメニュー、選択肢リスト。`context.options` に全ての選択肢が含まれます。[`onResolveCondition()`](/ja/guide/choice-visibility) が設定されている場合、各選択肢は `visible: true | false` でタグ付けされ、handler が表示する選択肢をフィルタリングします。プレイヤーの操作後、`selectChoice(uuid)` で engine にどのパスを辿るかを伝え、`next()` でフローを進めます。
+choice block はプレイヤーが選択する分岐点です — ダイアログメニュー、選択肢リスト。`context.options` に全ての選択肢が含まれます。[`onResolveCondition()`](/ja/guide/choice-visibility) が設定されている場合、各選択肢は `visible: true | false` でタグ付けされ、handler が表示する選択肢をフィルタリングします。プレイヤーの操作後、`selectChoice(optionId)` で engine にどのパスを辿るかを伝え、`next()` でフローを進めます。
 
 <!--@include: ../../_shared/block-choice.md-->
 
@@ -45,19 +45,19 @@ note block はナラティブデザイナーのためのメモです — コメ�
 
 ## 共通プロパティ
 
-すべての block は以下の基本フィールドを共有します（[`BlueprintBlockBase`](/api-ref/interfaces/BlueprintBlockBase)）：
+すべての block は以下の基本フィールドを共有します（[`BlueprintBlockBase`](/api-ref/type-aliases/BlueprintBlock)）：
 
 | フィールド | 型 | 説明 |
 |-------|------|-------------|
-| [`uuid`](/api-ref/interfaces/BlueprintBlockBase#uuid) | `string` | 一意識別子 |
-| [`type`](/api-ref/interfaces/BlueprintBlockBase#type) | `BlockType` | 判別タイプ |
-| [`label`](/api-ref/interfaces/BlueprintBlockBase#label) | `string?` | 人間可読な名前 |
-| [`parentLabels`](/api-ref/interfaces/BlueprintBlockBase#parentlabels) | `string[]?` | エディター内の親フォルダー階層 |
-| [`properties`](/api-ref/interfaces/BlueprintBlockBase#properties) | `BlockProperty[]` | キー・バリュープロパティ |
-| [`userProperties`](/api-ref/interfaces/BlueprintBlockBase#userproperties) | `Record?` | 自由形式のユーザープロパティ |
-| [`props`](/api-ref/interfaces/BlueprintBlockBase#nativeproperties) | `NativeProperties?` | 実行プロパティ |
-| [`metadata`](/api-ref/interfaces/BlueprintBlockBase#metadata) | `BlockMetadata?` | 表示メタデータ（キャラクター、タグ、カラー） |
-| [`scene.start`](/api-ref/interfaces/BlueprintBlockBase#isstartblock) | `boolean?` | エントリー block を示す |
+| [`uuid`](/api-ref/type-aliases/BlueprintBlock#uuid) | `string` | 一意識別子 |
+| [`type`](/api-ref/type-aliases/BlueprintBlock#type) | `BlockType` | 判別タイプ |
+| [`label`](/api-ref/type-aliases/BlueprintBlock#label) | `string?` | 人間可読な名前 |
+| [`parentLabels`](/api-ref/type-aliases/BlueprintBlock#parentlabels) | `string[]?` | エディター内の親フォルダー階層 |
+| [`properties`](/api-ref/type-aliases/BlueprintBlock#properties) | `BlockProperty[]` | キー・バリュープロパティ |
+| [`userProperties`](/api-ref/type-aliases/BlueprintBlock#userproperties) | `Record?` | 自由形式のユーザープロパティ |
+| [`props`](/api-ref/type-aliases/BlueprintBlock#nativeproperties) | `NativeProperties?` | 実行プロパティ |
+| [`metadata`](/api-ref/type-aliases/BlueprintBlock#metadata) | `BlockMetadata?` | 表示メタデータ（キャラクター、タグ、カラー） |
+| [`scene.start`](/api-ref/type-aliases/BlueprintBlock#isstartblock) | `boolean?` | エントリー block を示す |
 
 ### NativeProperties
 

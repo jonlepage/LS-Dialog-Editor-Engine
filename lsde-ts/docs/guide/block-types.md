@@ -16,7 +16,7 @@ When the narrative designer assigns a dedicated output per character ([`portPerC
 
 ## CHOICE
 
-A choice block represents a branching point where the player picks a response — a dialogue menu, a list of options. `context.options` contains all available options. When [`onResolveCondition()`](/guide/choice-visibility) is configured, each option is tagged `visible: true | false` — the handler filters and displays whichever it wants. After the player interacts, `selectChoice(uuid)` tells the engine which path to follow, then `next()` advances the flow.
+A choice block represents a branching point where the player picks a response — a dialogue menu, a list of options. `context.options` contains all available options. When [`onResolveCondition()`](/guide/choice-visibility) is configured, each option is tagged `visible: true | false` — the handler filters and displays whichever it wants. After the player interacts, `selectChoice(optionId)` tells the engine which path to follow, then `next()` advances the flow.
 
 <!--@include: ../_shared/block-choice.md-->
 
@@ -24,15 +24,22 @@ See [Choice Visibility](/guide/choice-visibility) for the full opt-in tagging sy
 
 ## CONDITION
 
-A condition block is an invisible switch — it evaluates game state and silently sends the flow down one or more paths without the player seeing it. Conditions are grouped in a 2D array: each group is a "case" evaluated as an AND/OR chain.
+A condition block is an invisible switch — it reads game state and sends the flow down a path without the player seeing it.
 
-**When `onResolveCondition` is installed**, the engine pre-evaluates all groups before calling `onCondition`. Each group in `context.cases` has a `result` (true/false) and a `port`. The engine auto-resolves the routing — `onCondition` is optional and serves as a logging/override hook.
+**The engine never compares anything itself.** It reads no dictionary, does not know what `credits` holds, does not implement `greaterOrEqual`. It hands every test to [`onResolveCondition()`](/guide/choice-visibility) and assembles the answers. Each test reaches the resolver **exactly once**, whatever the mode.
 
-**Routing modes:**
-- **Switch mode** (default): first matching group index routes the flow. `-1` (no match) follows the default port.
-- **Dispatcher mode** (`portPerCase: true`): all matching group indices fire as independent async tracks, default port is the main continuation.
+With a resolver installed the engine already knows the exit port before it calls the handler, which is what makes `onCondition` optional: it becomes a place to log or to override. The handler is handed `context.cases`, each case carrying its `port` and its already-computed `result`. To override, `context.resolve(port)` takes a **port NAME** — `"out"`, `"default"`, or a case port (`"K1"`).
 
-`context.resolve()` accepts `boolean` (legacy), `number` (switch), or `number[]` (dispatcher).
+There are **two modes, and only two**:
+
+- **`portPerCase` absent** — every case must hold. If they all do the flow leaves by `out`; otherwise by `default`.
+- **`portPerCase: true`** — the **first** case that holds leaves by **its own port** (`K1`, `K2`…). If none holds, `default`.
+
+A case with no `when` is always true, and makes every case below it unreachable in `portPerCase` mode. That is the writer's drawing, not an error to report. A block with no cases at all leaves by `out`: nothing was asked, so nothing failed.
+
+`default` means "no case held" — **not** "the chosen exit has no wire". A port with no wire ends the flow, which is a legitimate ending.
+
+A test whose dictionary is the reserved word **`choice`** reads an answer the player already gave: `{ dict: "choice", entry: "CHOICE-001", value: "C1" }`. The engine answers it **itself**, from the scene's history — the question never reaches the game. See also `scene.getChoice(blockId)` and `scene.evaluateCondition(test)`.
 
 <!--@include: ../_shared/block-condition.md-->
 
@@ -48,30 +55,46 @@ A note block is a sticky note for the narrative designer — comments, reminders
 
 ## Common Properties
 
-All blocks share these base fields ([`BlueprintBlockBase`](/api-ref/interfaces/BlueprintBlockBase)):
+All blocks share these base fields ([`BlueprintBlockBase`](/api-ref/type-aliases/BlueprintBlock)):
 
 | Field | Type | Description |
 |-------|------|-------------|
-| [`uuid`](/api-ref/interfaces/BlueprintBlockBase#uuid) | `string` | Unique identifier |
-| [`type`](/api-ref/interfaces/BlueprintBlockBase#type) | `BlockType` | Discriminant type |
-| [`label`](/api-ref/interfaces/BlueprintBlockBase#label) | `string?` | Human-readable name |
-| [`parentLabels`](/api-ref/interfaces/BlueprintBlockBase#parentlabels) | `string[]?` | Parent folder hierarchy from the editor |
-| [`properties`](/api-ref/interfaces/BlueprintBlockBase#properties) | `BlockProperty[]` | Key-value properties |
-| [`userProperties`](/api-ref/interfaces/BlueprintBlockBase#userproperties) | `Record?` | Free-form user properties |
-| [`props`](/api-ref/interfaces/BlueprintBlockBase#nativeproperties) | `NativeProperties?` | Execution properties |
-| [`metadata`](/api-ref/interfaces/BlueprintBlockBase#metadata) | `BlockMetadata?` | Display metadata (characters, tags, color) |
-| [`scene.start`](/api-ref/interfaces/BlueprintBlockBase#isstartblock) | `boolean?` | Marks the entry block |
+| `id` | `string` | Identity **relative to its scene** — `DIALOG-002`. Ids repeat across scenes. |
+| `key` | `string` | The full i18n key, as the localization files carry it |
+| `type` | `BlockType` | `dialog`, `choice`, `condition`, `action` or `note` |
+| `label` | `string?` | Readable name, when the writer set one |
+| `parentLabels` | `string[]?` | Parent folder hierarchy from the editor |
+| `note` | `string?` | The writer's own note |
+| `actors` | `string[]?` | The **card ids** the block cites, in file order |
+| `emotion` | `string?` | The emotion's card id — it belongs to the **block**, not to each actor |
+| `intensity` | `number?` | How strongly, for that emotion |
+| `text` | `TextByLocale?` | The text per locale, when the export is inline |
+| `props` | `PropertyBag?` | **One bag**: the natives and the writer's own properties, by bare id |
+| `options` | `Option[]?` | CHOICE only |
+| `cases` | `ConditionCase[]?` | CONDITION only |
+| `calls` | `ActionCall[]?` | ACTION only |
+| `next` | `Link[]?` | **The block's outgoing wires.** There is no connection table in v2 |
+
+The entry block is not flagged on the block: the **scene** names it, in `scene.start`. A scene therefore cannot declare two of them.
 
 ### NativeProperties
 
+The nine properties the **engine** reads, taken out of `props`. Ids cannot collide — LSDE refuses a project property that takes a native name — so telling them apart is a plain lookup.
+
 | Field | Type | Description |
 |-------|------|-------------|
-| [`isAsync`](/api-ref/interfaces/NativeProperties#isasync) | `boolean?` | Execute on a parallel async track |
-| [`delay`](/api-ref/interfaces/NativeProperties#delay) | `number?` | Delay before execution (consumed by `onBeforeBlock`) |
-| [`timeout`](/api-ref/interfaces/NativeProperties#timeout) | `number?` | Execution timeout |
-| [`portPerCharacter`](/api-ref/interfaces/NativeProperties#portpercharacter) | `boolean?` | One output port per character in metadata |
-| [`skipIfMissingActor`](/api-ref/interfaces/NativeProperties#skipifmissingactor) | `boolean?` | Skip block if the assigned actor is missing |
-| [`debug`](/api-ref/interfaces/NativeProperties#debug) | `boolean?` | Debug flag for the editor |
-| [`waitForBlocks`](/api-ref/interfaces/NativeProperties#waitforblocks) | `string[]?` | Block UUIDs that must be visited before this block can progress |
-| [`waitInput`](/api-ref/interfaces/NativeProperties#waitinput) | `boolean?` | Passive flag for explicit player input control |
-| [`portPerCase`](/api-ref/interfaces/NativeProperties#enabledispatcher) | `boolean?` | Condition block: all matching groups fire as async tracks |
+| `isAsync` | `boolean?` | **Opens a parallel track** on this block instead of continuing the current one |
+| `waitForBlocks` | `string[]?` | Block ids **of this scene**. The block is **held before it is dispatched** until every one of them has been visited — no handler is called |
+| `delay` | `number?` | **MILLISECONDS** before the block plays. Applied by `onBeforeBlock`, never by the engine |
+| `timeout` | `number?` | **MILLISECONDS**. Passed through — the engine enforces nothing |
+| `waitInput` | `boolean?` | Wait for player input. Passed through, never interpreted |
+| `debug` | `boolean?` | Debug flag for the editor. Passed through |
+| `portPerCharacter` | `boolean?` | The block leaves by a port **named by the actor's card id**, instead of `out` |
+| `skipIfMissingActor` | `boolean?` | Passed through — the game decides |
+| `portPerCase` | `boolean?` | CONDITION: each case leaves by **its own port** (`K1`…) instead of sharing `out` |
+
+::: warning `delay` and `timeout` are MILLISECONDS in v2
+They were seconds in v1, and **nothing reports the change at runtime**: a migrated project turns a 3-second pause into 3 ms.
+:::
+
+Only **two** of these change anything about the traversal: `isAsync` and `waitForBlocks`. The other seven are handed to the game untouched.
