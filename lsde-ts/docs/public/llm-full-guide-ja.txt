@@ -6,7 +6,7 @@ Source: lsde-ts/docs/ja/guide/*.md
 
 # LSDEDE とは？
 
-**LSDE**（LS Dialog Editor）は、ゲームおよびソフトウェア開発者向けの無料ツールで、ビジュアルダイアローググラフ編集、AI翻訳、音声生成、i18nコード統合、プロジェクト診断を統合しています。対話グラフを、scene、block、connection、dictionary、action signature を含む blueprint（JSON、XML、YAML、CSV）として出力します。詳細: https://lepasoft.com/ja/software/ls-dialog-editor
+**LSDE**（LS Dialog Editor）は、ゲームおよびソフトウェア開発者向けの無料ツールで、ビジュアルダイアローググラフ編集、AI翻訳、音声生成、i18nコード統合、プロジェクト診断を統合しています。対話グラフを、scene、block、dictionary、function、card を含む blueprint（JSON、XML、YAML、CSV）として出力します。詳細: https://lepasoft.com/ja/software/ls-dialog-editor
 
 **LSDEDE**（LSDE Dialog Engine）は、これらの blueprint を読み込み実行するマルチランタイム engine です。複数の言語で利用可能なため、各種ゲームエンジンやフレームワークにネイティブ統合できます。
 
@@ -25,7 +25,7 @@ Source: lsde-ts/docs/ja/guide/*.md
 
 すべてのランタイムは同じ **callback 駆動型グラフディスパッチャー** パターンに従います：
 
-1. **Blueprint** — LSDE から出力されたファイル（JSON、XML、YAML）。scene、block、connection を含みます。
+1. **Blueprint** — LSDE からの出力（JSON、XML、YAML、CSV）。各 block が自身の出力ワイヤーを `next` に持ちます: connection テーブルは存在しません。
 2. **Engine** — blueprint を検証し、内部グラフを構築して block を handler にディスパッチします。
 3. **Handler** — 各 block タイプ（dialog、choice、condition、action）に反応するホストアプリケーション側の関数です。
 4. **ゲーム本体** — condition、action、キャラクター解決は、登録された handler callback によって処理されます。
@@ -93,11 +93,15 @@ scene は独立した対話シーケンスです — 会話、カットシーン
 
 ## Connection
 
-connection は block 間のワイヤーです — どの block がどの block に繋がるかを定義します。エディター上では視覚的に描画し、エクスポートではソース → ターゲットのフラットなリストになります。[`BlueprintConnection`](/api-ref/type-aliases/BlueprintConnection) インターフェースで定義されます：
+connection は block 間のワイヤーです — どの block がどの block に繋がるかを定義します。**エクスポートに connection テーブルは存在しません**：各 block が自身の出力ワイヤーを `block.next` に持ち、ワイヤーはどの port から出てどこへ向かうかだけを示します。
+
+ワイヤーが scene の境界を越えたことは、この形式のどのバージョンでも**一度もありません**：`to` は常に同じ scene の block を指します。
+
+[`BlueprintConnection`](/api-ref/type-aliases/BlueprintConnection) はそれらのワイヤーを**フラット化**したビューで、`engine.getSceneConnections(sceneRef)` が返すものです — 出発元の block を付け直したワイヤーです：
 
 <!--@include: ../../_shared/blueprint-connection-type.md-->
 
-通常、connection を直接検査する必要はありません — engine が内部でルーティングを処理します。ただし、必要に応じて [`onValidateNextBlock`](/api-ref/classes/DialogueEngine#onvalidatenextblock) で参照できます。
+通常、これらを検査する必要はありません — engine が内部でルーティングを処理します。`engine.getSceneConnections(sceneRef)` は**グラフ検査**のために公開されています：scene を再生せずに配線を見るデバッグビューです。
 
 ## Dictionary
 
@@ -105,9 +109,9 @@ dictionary はゲームのレジスタを記述します — スイッチ、変�
 
 <!--@include: ../../_shared/blueprint-dictionary-type.md-->
 
-## Action Signature
+## Function
 
-signature はゲームで利用可能なアクションタイプを記述します — `set_flag`、`play_sound`、`give_item`。開発者が [LSDE](https://lepasoft.com/ja/software/ls-dialog-editor "Lepasoft Dialog Editor") エディターで宣言し、ナラティブデザイナーが型付きパラメーターでアクションシーケンスを構成できるようにします。ランタイムでは、signature の `id` を開発者が自分のシステムにマッピングします。[`FunctionDefinition`](/api-ref/interfaces/FunctionDefinition) インターフェースで定義されます：
+function はゲームが実行できる処理を記述します — `set_flag`、`play_sound`、`give_item`。開発者が [LSDE](https://lepasoft.com/ja/software/ls-dialog-editor "Lepasoft Dialog Editor") エディターで宣言し、ナラティブデザイナーが型付きパラメーターでシーケンスを構成できるようにします。ランタイムでは、function の `id` を開発者が自分のシステムにマッピングします：ACTION block が `call.fn` でそれを参照し、引数は `call.args` に**名前で**渡されます。[`FunctionDefinition`](/api-ref/interfaces/FunctionDefinition) インターフェースで定義されます：
 
 <!--@include: ../../_shared/blueprint-signature-type.md-->
 
@@ -139,18 +143,45 @@ choice block はプレイヤーが選択する分岐点です — ダイアロ�
 
 ## CONDITION
 
-condition block は不可視のスイッチです — ゲーム状態を評価し、プレイヤーに見えることなくフローを2つのパスのどちらかに送ります。handler は block の条件（変数、フラグ、インベントリ…）を評価し、`context.resolve(result)` を呼び出します — `true` は port 0 に、`false` は port 1 に従います。`choice:` で始まるキーの条件はプレイヤーの過去の選択を参照しており、`scene.evaluateCondition(cond)` が内部の履歴から自動的に解決します。
+condition block は不可視の分岐器です — ゲーム状態を参照し、プレイヤーに見えないままフローを送り出します。
 
-condition block は2つの評価モードをサポートしています：
+**engine 自身は何も比較しません。** dictionary を読まず、`credits` の中身を知らず、`greaterOrEqual` を
+実装してもいません。各テストを [`onResolveCondition()`](/ja/guide/choice-visibility) に渡し、答えを
+組み立てるだけです。各テストが尋ねられるのは、モードに関わらず**一度だけ**です。
 
-- **switch モード**（デフォルト）：条件グループを順番に評価します。最初にマッチしたグループが対応する port（`true`/`case_N`）にルーティングします。マッチしない場合は `false`/`default` port に従います。
-- **dispatcher モード**（[`portPerCase`](/api-ref/interfaces/NativeProperties#enabledispatcher) `= true`）：マッチした**すべて**のグループが async track として同時に発火します。`false`/`default` port はメインの継続 track（"Continue"）となり、**常に実行されます**。条件 port に接続される block は async でなければなりません。
+resolver が登録されていれば、engine は handler を呼ぶ前から出口 port を知っています：`onCondition` は
+**任意**になり、ログ出力や上書きのためのフックになります。handler は `context.cases` を受け取り、各 case
+は自身の `port` と評価済みの `result` を持ちます。上書きするには、`context.resolve(port)` に**ポート名**を
+渡します — `"out"`、`"default"`、あるいは case のポート（`"K1"`）。
+
+モードは**二つ、それだけ**です：
+
+- **`portPerCase` なし** — すべての case が成立する必要があります。成立すればフローは `out` から、
+  そうでなければ `default` から出ます。
+- **`portPerCase: true`** — **最初に**成立した case が**自身の port**（`K1`、`K2`…）から出ます。
+  どれも成立しなければ `default`。
+
+`when` を持たない case は常に真であり、`portPerCase` モードではそれより下の case を到達不能にします。
+これは writer が描いた図であって、報告すべき誤りではありません。case が一つもない block は `out` から
+出ます：何も尋ねられていないので、何も失敗していません。
+
+`default` は「どの case も成立しなかった」を意味します — 「選ばれた出口に線がない」では**ありません**。
+線のない port はフローを終わらせますが、それは正当な終わり方です。
+
+dictionary が予約語 **`choice`** であるテストは、プレイヤーがすでに出した答えを問い合わせます：
+`{ dict: "choice", entry: "CHOICE-001", value: "C1" }`。engine は scene の履歴から**自分で**答えるため、
+この問いがゲームに届くことはありません。`scene.getChoice(blockId)` と `scene.evaluateCondition(test)` も
+参照してください。
 
 <!--@include: ../../_shared/block-condition.md-->
 
 ## ACTION
 
-action block はゲーム内で副作用を発動します — アイテムの付与、サウンドの再生、フラグの設定。各アクションは開発者が自身のシステムにマッピングする `actionId` を参照します。handler はアクションリストを実行し、`context.resolve()` で "then" port を、`context.reject(error)` で "catch" port を辿ります（"catch" 接続がない場合は "then" にフォールバック）。
+action block はゲーム内で副作用を発動します — アイテムの付与、サウンドの再生、フラグの設定。
+`context.calls` が呼び出しを保持します：それぞれが宣言済みの [function](/ja/guide/blueprints#function) の
+`fn` を参照し、その `args` は位置ではなく**名前で**渡されます。handler はそれらを実行してから
+`context.resolve()` で `then` port を、`context.reject()` で `catch` port を辿ります — designer が `catch` を
+一本も配線していない場合、プレイヤーを置き去りにするのではなく `then` からフローが続きます。
 
 <!--@include: ../../_shared/block-action.md-->
 
@@ -164,29 +195,48 @@ note block はナラティブデザイナーのためのメモです — コメ�
 
 | フィールド | 型 | 説明 |
 |-------|------|-------------|
-| [`uuid`](/api-ref/type-aliases/BlueprintBlock#uuid) | `string` | 一意識別子 |
-| [`type`](/api-ref/type-aliases/BlueprintBlock#type) | `BlockType` | 判別タイプ |
-| [`label`](/api-ref/type-aliases/BlueprintBlock#label) | `string?` | 人間可読な名前 |
-| [`parentLabels`](/api-ref/type-aliases/BlueprintBlock#parentlabels) | `string[]?` | エディター内の親フォルダー階層 |
-| [`properties`](/api-ref/type-aliases/BlueprintBlock#properties) | `BlockProperty[]` | キー・バリュープロパティ |
-| [`userProperties`](/api-ref/type-aliases/BlueprintBlock#userproperties) | `Record?` | 自由形式のユーザープロパティ |
-| [`props`](/api-ref/type-aliases/BlueprintBlock#nativeproperties) | `NativeProperties?` | 実行プロパティ |
-| [`metadata`](/api-ref/type-aliases/BlueprintBlock#metadata) | `BlockMetadata?` | 表示メタデータ（キャラクター、タグ、カラー） |
-| [`scene.start`](/api-ref/type-aliases/BlueprintBlock#isstartblock) | `boolean?` | エントリー block を示す |
+| `id` | `string` | **その scene に対する**識別子 — `DIALOG-002`。id は scene をまたいで繰り返されます。 |
+| `key` | `string` | ローカライズファイルが持つ完全な i18n キー |
+| `type` | `BlockType` | `dialog`、`choice`、`condition`、`action`、`note` |
+| `label` | `string?` | writer が付けた場合の可読名 |
+| `parentLabels` | `string[]?` | エディター内の親フォルダー階層 |
+| `note` | `string?` | writer のメモ |
+| `actors` | `string[]?` | block が参照する **card の id**、ファイル順 |
+| `emotion` | `string?` | 感情の card id — 各 actor ではなく **block** に属します |
+| `intensity` | `number?` | その感情の強さ |
+| `text` | `TextByLocale?` | inline 出力の場合のロケール別テキスト |
+| `props` | `PropertyBag?` | **ひとつの袋**：native と writer 自身のプロパティが、素の id で同居します |
+| `options` | `Option[]?` | CHOICE のみ |
+| `cases` | `ConditionCase[]?` | CONDITION のみ |
+| `calls` | `ActionCall[]?` | ACTION のみ |
+| `next` | `Link[]?` | **block の出力ワイヤー。** v2 に connection テーブルはありません |
+
+エントリー block は block 側には印されていません：それを指名するのは **scene** で、`scene.start` に
+書かれます。したがって、ひとつの scene がエントリーを二つ宣言することはできません。
 
 ### NativeProperties
 
+**engine** が `props` から読み取る九つのプロパティです。id が衝突することはありません — LSDE は
+native と同じ名前のプロジェクトプロパティを拒否します — したがって見分けるのは単なる検索です。
+
 | フィールド | 型 | 説明 |
 |-------|------|-------------|
-| [`isAsync`](/api-ref/interfaces/NativeProperties#isasync) | `boolean?` | 並列 async トラックで実行 |
-| [`delay`](/api-ref/interfaces/NativeProperties#delay) | `number?` | 実行前の遅延（`onBeforeBlock` で処理） |
-| [`timeout`](/api-ref/interfaces/NativeProperties#timeout) | `number?` | 実行タイムアウト |
-| [`portPerCharacter`](/api-ref/interfaces/NativeProperties#portpercharacter) | `boolean?` | metadata 内のキャラクターごとに1つの出力 port |
-| [`skipIfMissingActor`](/api-ref/interfaces/NativeProperties#skipifmissingactor) | `boolean?` | 参照アクターが不在の場合 block をスキップ |
-| [`debug`](/api-ref/interfaces/NativeProperties#debug) | `boolean?` | エディタ用デバッグフラグ |
-| [`waitForBlocks`](/api-ref/interfaces/NativeProperties#waitforblocks) | `string[]?` | この block が進行する前に訪問済みでなければならない block UUID |
-| [`waitInput`](/api-ref/interfaces/NativeProperties#waitinput) | `boolean?` | プレイヤー入力制御用パッシブフラグ |
-| [`portPerCase`](/api-ref/interfaces/NativeProperties#enabledispatcher) | `boolean?` | dispatcher モード：マッチしたすべての条件が async track として発火、false/default port は継続 track |
+| `isAsync` | `boolean?` | 現在のトラックを続ける代わりに、この block で**並列トラックを開きます** |
+| `waitForBlocks` | `string[]?` | **この scene の** block id。それらがすべて訪問されるまで、block は**ディスパッチされる前に**保持されます — handler は呼ばれません |
+| `delay` | `number?` | block が再生されるまでの**ミリ秒**。`onBeforeBlock` が適用し、engine は決して適用しません |
+| `timeout` | `number?` | **ミリ秒**。そのまま渡されます — engine は何も強制しません |
+| `waitInput` | `boolean?` | プレイヤー入力を待つ。そのまま渡され、解釈されません |
+| `debug` | `boolean?` | エディタ用デバッグフラグ。そのまま渡されます |
+| `portPerCharacter` | `boolean?` | block は `out` ではなく、actor の **card id で名付けられた port** から出ます |
+| `skipIfMissingActor` | `boolean?` | そのまま渡されます — 判断はゲーム側です |
+| `portPerCase` | `boolean?` | CONDITION：各 case が `out` を共有せず、**自身の port**（`K1`…）から出ます |
+
+> WARNING:
+v1 では秒でした。そして**実行時にそれを知らせるものは何もありません**：移行したプロジェクトでは
+3 秒の間が 3 ミリ秒になります。
+
+これら九つのうち、走査を変えるのは**二つ**だけです：`isAsync` と `waitForBlocks`。残りの七つは
+そのままゲームに渡され、どう扱うかはゲームが決めます。
 
 ================================================================================
 
@@ -226,33 +276,33 @@ handler 内で、1行でフィルタリングできます：
 | `false` | リゾルバーインストール済み、choice は非表示 | `false` |
 | `undefined` | リゾルバー未インストール | `true` |
 
-## RuntimeOption
+## RuntimeChoiceItem
 
-リゾルバーがインストールされている場合、`context.options` 内の各 choice は `RuntimeOption` です — `visible` タグが追加された `Option` の拡張です：
+`context.options` の各要素は [`RuntimeChoiceItem`](/api-ref/interfaces/RuntimeChoiceItem) です — blueprint の `Option` に `visible` タグが加わったものです：
 
 
 ```ts [TypeScript]
-interface RuntimeOption extends Option {
+interface RuntimeChoiceItem extends Option {
   visible?: boolean; // true | false | undefined
 }
 ```
 ```csharp [C#]
-public class RuntimeOption : Option
+public class RuntimeChoiceItem : Option
 {
     public bool? Visible { get; set; } // true | false | null
 }
 ```
 ```cpp [C++]
-struct RuntimeOption : Option {
+struct RuntimeChoiceItem : Option {
     std::optional<bool> visible; // true | false | nullopt
 };
 ```
 ```gdscript [GDScript]
-# RuntimeOption is a Dictionary with an extra "visible" key:
+# RuntimeChoiceItem is a Dictionary with an extra "visible" key:
 # { "id": "C1", "key": "...", "text": {...}, "visible": true/false/absent }
 ```
 
-リゾルバーなしの場合、choice は `RuntimeOption` のままですが、`visible` は `undefined`/`null`/`nullopt`/absent のままです。
+リゾルバーなしの場合も choice は `RuntimeChoiceItem` ですが、`visible` は `undefined`/`null`/`nullopt`/absent のままです。`Option` 自体は `id`、`key`、`text`、`when` を持ち、その **`id` が出口 port**（`C1`、`C2`…）です。
 
 ## 使用例
 
@@ -281,7 +331,7 @@ engine.OnChoice(args => {
 ```
 ```cpp [C++]
 engine.onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
-    std::vector<const RuntimeOption*> visible;
+    std::vector<const RuntimeChoiceItem*> visible;
     for (const auto& c : ctx->options())
         if (!c.visible.has_value() || c.visible.value())
             visible.push_back(&c);
@@ -337,7 +387,7 @@ engine.OnChoice(args => {
         .Where(c => c.Visible != false).ToList();
     var timeout = block.NativeProperties?.Timeout;
 
-    void Resolve(RuntimeOption choice) {
+    void Resolve(RuntimeChoiceItem choice) {
         context.SelectChoice(choice.Id);
         next();
     }
@@ -360,7 +410,7 @@ engine.OnChoice(args => {
 ```
 ```cpp [C++]
 engine.onChoice([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
-    std::vector<const RuntimeOption*> visible;
+    std::vector<const RuntimeChoiceItem*> visible;
     for (const auto& c : ctx->options())
         if (!c.visible.has_value() || c.visible.value())
             visible.push_back(&c);
@@ -515,43 +565,47 @@ tutorial.on_choice(func(args):
 > TIP:
 `onResolveCondition` 以前は、同じ `gameState.check(...)` ロジックを `onResolveCondition` と `onCondition` に別々に登録する必要がありました。統合リゾルバーでは1つの callback で済みます — engine が両方を自動的に処理します。
 
-## 上級: 手動フィルタリング
+## 上級: 自分でタグ付けする
 
-グローバルリゾルバーをインストールしたくない場合、`LsdeUtils` がローレベルのユーティリティを提供します：
+グローバルリゾルバーを登録したくない場合、`LsdeUtils.tagOptionVisibility` が同じ仕事をその場で行います。
+引数は**二つ** — options と評価関数 — で、リストを**丸ごと**タグ付きで返します：
 
 
 ```ts [TypeScript]
-import { LsdeUtils } from '@lsde/dialog-engine';
+import { LsdeUtils, type ConditionEvaluator } from '@lsde/dialog-engine';
 
-const offered = LsdeUtils.tagOptionVisibility(
-  block.choices ?? [],
-  (cond) => gameState.check(cond.key, cond.operator, cond.value),
-  scene, // optional — enables choice: condition resolution via history
-);
+const evaluator: ConditionEvaluator = t => gameState.check(t.dict, t.entry, t.op, t.value);
+const offered = LsdeUtils.tagOptionVisibility(block.options, evaluator);
 ```
 ```csharp [C#]
-var visible = LsdeUtils.FilterVisibleChoices(
-    block.Choices ?? new(),
-    cond => GameState.Check(cond.Key, cond.Operator, cond.Value),
-    scene // optional — enables choice: condition resolution via history
-);
+var offered = LsdeUtils.TagOptionVisibility(
+    block.Options,
+    t => GameState.Check(t.Dict, t.Entry, t.Op, t.Value));
 ```
 ```cpp [C++]
-auto visible = lsde::LsdeUtils::FilterVisibleChoices(
-    block->choices,
-    [](const auto& cond) { return gameState.check(cond.key, cond.op, cond.value); },
-    scene // optional — enables choice: condition resolution via history
-);
+lsde::ConditionEvaluatorFn evaluator = [](const lsde::ConditionTest& t) {
+    return gameState.check(t.dict, t.entry, t.op, t.value);
+};
+auto offered = lsde::LsdeUtils::TagOptionVisibility(block->options, &evaluator);
 ```
 ```gdscript [GDScript]
-var visible = LsdeUtils.filter_visible_choices(
-    block.get("choices", []),
-    func(cond): return game_state.check(cond),
-    scene # optional — enables choice: condition resolution via history
-)
+var offered = LsdeUtils.tag_option_visibility(
+    block.get("options", []),
+    func(t): return GameState.check(t["dict"], t["entry"], t["op"], t["value"]))
 ```
 
-`scene` パラメーターを指定すると、`choice:` condition の自動解決が有効になります。指定しない場合、すべての condition は登録されたリゾルバー callback に委任されます。
+> WARNING:
+それを自動的に処理していた近道は存在しません：engine が介在しないため、予約された `choice` dictionary
+に対するテストは**あなたの**評価関数に届きます。履歴を持っている scene に転送してください：
+
+```ts
+const evaluator: ConditionEvaluator = t =>
+  LsdeUtils.isChoiceCondition(t) ? scene.evaluateCondition(t)
+                                 : gameState.check(t.dict, t.entry, t.op, t.value);
+```
+
+`tagOptionVisibility` は v1 の `filterVisibleChoices` を置き換えます。あちらはリストを**短くしてしまい**、
+ロックされた回答を表示する余地を奪っていました。
 
 ================================================================================
 
@@ -671,11 +725,11 @@ handler の詳細な実装については、[Block Types](./block-types) と [Ha
 
 - **Dialog** — テキスト、キャラクター、ネイティブプロパティ。UI にダイアログを表示し、プレイヤーの入力またはディレイを待ってから `next()` を呼び出します。engine が次の block に移る際に UI を非表示にするクリーンアップ関数を返します。
 
-- **Choice** — `choiceFilter` が設定されている場合、`visible` タグ付きの選択肢リスト。対応する UI 要素を作成します — ボタン、リスト、ラジアルメニュー。プレイヤーが選択したら、`selectChoice(optionId)` で分岐先を engine に伝え、`next()` でフローを進めます。
+- **Choice** — `onResolveCondition()` が設定されている場合、`visible` タグ付きの選択肢リスト。engine は**すべて**の選択肢をタグ付きで渡します。`visible !== false` でフィルターしてください。対応する UI 要素を作成します — ボタン、リスト、ラジアルメニュー。プレイヤーが選択したら、`selectChoice(optionId)` で分岐先を engine に伝え、`next()` でフローを進めます。
 
-- **Condition** — block に定義された条件。ゲームロジックで評価します — フラグ、クエスト、インベントリのチェック。`context.resolve(true)` はポート 0 へ、`context.resolve(false)` はポート 1 へフローを送ります。
+- **Condition** — block に定義された case。`onResolveCondition()` を一度登録すれば engine が事前評価するため、`onCondition` は任意になります。ルーティングを上書きする場合、`context.resolve(port)` は**ポート名**を取ります — `"out"`、`"default"`、または case のポート（`"K1"`）。
 
-- **Action** — block に定義されたアクション。エンジンで実行します — サウンド再生、アイテム付与、シネマティックのトリガー。`context.resolve()` は成功を確認、`context.reject(err)` は失敗を通知します。
+- **Action** — block の呼び出しは `context.calls` にあります：`fn` と、**名前で**渡される `args`。エンジンで実行します — サウンド再生、アイテム付与、シネマティックのトリガー。`context.resolve()` は `then` から、`context.reject()` は `catch` から出ます — `catch` が配線されていない場合は `then` にフォールバックします。
 
 ## Tips
 

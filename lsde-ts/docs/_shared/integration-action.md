@@ -1,27 +1,28 @@
 ::: code-group
 ```ts [TypeScript]
-engine.onAction(({ block, context, next }) => {
-  for (const { actionId, params } of block.actions ?? []) {
-    switch (actionId) {
-      case 'set_flag':   gameState.setFlag(params[0], params[1]); break;
-      case 'play_sound': audio.play(params[0] as string); break;
-      case 'give_item':  inventory.add(params[0] as string); break;
+engine.onAction(({ context, next }) => {
+  // `args` is a bag BY NAME, as the function declares its params — never a positional array.
+  for (const { fn, args } of context.calls) {
+    switch (fn) {
+      case 'set_switch': gameState.setFlag(args.flag as string, args.value as boolean); break;
+      case 'add_item':   inventory.add(args.item as string, args.count as number); break;
+      case 'play_sound': audio.play(args.id as string); break;
     }
   }
-  context.resolve();    // success → "then" port
-  // context.reject(err); // failure → "catch" port (fallback "then")
+  context.resolve();      // success → `then` port
+  // context.reject();    // failure → `catch` port, falling back to `then` when none is wired
   next();
 });
 ```
 ```csharp [C# — Unity]
 engine.OnAction(args => {
-    foreach (var action in args.Block.Actions ?? new())
+    foreach (var call in args.Context.Calls)
     {
-        switch (action.ActionId)
+        switch (call.Fn)
         {
-            case "set_flag":   GameState.Instance.SetFlag(action.Params); break;
-            case "play_sound": AudioManager.Play(action.Params[0].ToString()); break;
-            case "give_item":  Inventory.Add(action.Params[0].ToString()); break;
+            case "set_switch": GameState.Instance.SetFlag((string)call.Args["flag"], (bool)call.Args["value"]); break;
+            case "add_item":   Inventory.Add((string)call.Args["item"], (int)(double)call.Args["count"]); break;
+            case "play_sound": AudioManager.Play((string)call.Args["id"]); break;
         }
     }
     args.Context.Resolve();
@@ -30,12 +31,26 @@ engine.OnAction(args => {
 });
 ```
 ```cpp [C++ — Unreal]
-engine.onAction([this](auto*, auto* block, auto* ctx, auto next) -> lsde::CleanupFn {
-    auto* ab = dynamic_cast<const lsde::ActionBlock*>(block);
-    for (const auto& a : ab->actions) {
-        if (a.actionId == "set_flag")   GetGameState()->SetFlag(a.params);
-        if (a.actionId == "play_sound") GetAudioManager()->Play(a.params);
-        if (a.actionId == "give_item")  GetInventory()->Add(a.params);
+// PropertyValue is a std::variant<std::string, double, bool, std::vector<std::string>>:
+// the engine hands the value over as the payload wrote it and never converts it for you.
+template <typename T>
+static T Arg(const lsde::PropertyBag& args, const char* name, T fallback = {}) {
+    auto it = args.find(name);
+    if (it == args.end()) return fallback;
+    const T* v = std::get_if<T>(&it->second);
+    return v ? *v : fallback;
+}
+
+engine.onAction([this](auto*, auto*, auto* ctx, auto next) -> lsde::CleanupFn {
+    for (const auto& call : ctx->calls()) {
+        if (call.fn == "set_switch")
+            GetGameState()->SetFlag(Arg<std::string>(call.args, "flag"),
+                                    Arg<bool>(call.args, "value"));
+        else if (call.fn == "add_item")
+            GetInventory()->Add(Arg<std::string>(call.args, "item"),
+                                static_cast<int>(Arg<double>(call.args, "count")));
+        else if (call.fn == "play_sound")
+            GetAudioManager()->Play(Arg<std::string>(call.args, "id"));
     }
     ctx->resolve();
     next();
@@ -44,11 +59,11 @@ engine.onAction([this](auto*, auto* block, auto* ctx, auto next) -> lsde::Cleanu
 ```
 ```gdscript [GDScript — Godot]
 engine.on_action(func(args):
-    for action in args["block"].get("actions", []):
-        match action.get("actionId"):
-            "set_flag":   GameState.set_flag(action["params"][0], action["params"][1])
-            "play_sound": AudioManager.play(action["params"][0])
-            "give_item":  Inventory.add(action["params"][0])
+    for call in args["context"].calls:
+        match call.get("fn"):
+            "set_switch": GameState.set_flag(call["args"]["flag"], call["args"]["value"])
+            "add_item":   Inventory.add(call["args"]["item"], call["args"]["count"])
+            "play_sound": AudioManager.play(call["args"]["id"])
     args["context"].resolve()
     args["next"].call()
     return Callable()

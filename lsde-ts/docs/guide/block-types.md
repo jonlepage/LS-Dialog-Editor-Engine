@@ -45,7 +45,7 @@ A test whose dictionary is the reserved word **`choice`** reads an answer the pl
 
 ## ACTION
 
-An action block fires side effects in the game — give an item, play a sound, set a flag. Each action references an `actionId` that the developer maps to their own systems. The handler executes the action list then calls `context.resolve()` to follow the "then" port, or `context.reject(error)` to follow the "catch" port (falls back to "then" if no "catch" connection exists).
+An action block fires side effects in the game — give an item, play a sound, set a flag. `context.calls` carries the calls: each cites the `fn` of a declared [function](/guide/blueprints#functions), and its `args` arrive **by name**, never by position. The handler executes them then calls `context.resolve()` to follow the `then` port, or `context.reject()` to follow the `catch` port — and when the designer wired no `catch`, the flow carries on through `then` rather than stranding the player.
 
 <!--@include: ../_shared/block-action.md-->
 

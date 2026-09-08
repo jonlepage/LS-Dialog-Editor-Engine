@@ -1,6 +1,6 @@
 # C'est quoi LSDEDE?
 
-**LSDE** (LS Dialog Editor) est un outil gratuit pour les développeurs de jeux et de logiciels qui combine l'édition visuelle de graphes de dialogue, la traduction assistée par IA, la génération de voix, l'intégration i18n au code, et les diagnostics de projet. Plus d'info : [lepasoft.com/fr/software/ls-dialog-editor](https://lepasoft.com/fr/software/ls-dialog-editor). LSDE exporte les graphes de dialogue en blueprints (JSON, XML, YAML ou CSV) contenant des scenes, blocks, connections, dictionaries et action signatures.
+**LSDE** (LS Dialog Editor) est un outil gratuit pour les développeurs de jeux et de logiciels qui combine l'édition visuelle de graphes de dialogue, la traduction assistée par IA, la génération de voix, l'intégration i18n au code, et les diagnostics de projet. Plus d'info : [lepasoft.com/fr/software/ls-dialog-editor](https://lepasoft.com/fr/software/ls-dialog-editor). LSDE exporte les graphes de dialogue en blueprints (JSON, XML, YAML ou CSV) contenant des scenes, blocks, dictionaries, functions et cards.
 
 **LSDEDE** (LSDE Dialog Engine) est le engine multi-runtime qui load et exécute ces blueprints. Il est disponible en plusieurs langages pour une intégration native dans n'importe quel game engine ou framework.
 
@@ -19,7 +19,7 @@ Tous les runtimes partagent le même format de blueprint et passent une suite de
 
 Chaque runtime suit le même pattern de **callback-driven graph dispatcher** :
 
-1. **Blueprint** — Un fichier exporté de LSDE (JSON, XML ou YAML), contenant les scenes, blocks et connections.
+1. **Blueprint** — Un export de LSDE (JSON, XML, YAML ou CSV). Chaque block y porte ses propres fils sortants dans `next` : il n'y a pas de table de connexions.
 2. **Engine** — Valide le blueprint, build le graphe interne et dispatch les blocks aux handlers enregistrés.
 3. **Handlers** — Les fonctions qui réagissent à chaque type de block (dialog, choice, condition, action).
 4. **Le jeu** — Les conditions, actions et la résolution de personnages sont gérées par les handler callbacks.

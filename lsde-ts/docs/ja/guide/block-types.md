@@ -24,18 +24,45 @@ choice block はプレイヤーが選択する分岐点です — ダイアロ�
 
 ## CONDITION
 
-condition block は不可視のスイッチです — ゲーム状態を評価し、プレイヤーに見えることなくフローを2つのパスのどちらかに送ります。handler は block の条件（変数、フラグ、インベントリ…）を評価し、`context.resolve(result)` を呼び出します — `true` は port 0 に、`false` は port 1 に従います。`choice:` で始まるキーの条件はプレイヤーの過去の選択を参照しており、`scene.evaluateCondition(cond)` が内部の履歴から自動的に解決します。
+condition block は不可視の分岐器です — ゲーム状態を参照し、プレイヤーに見えないままフローを送り出します。
 
-condition block は2つの評価モードをサポートしています：
+**engine 自身は何も比較しません。** dictionary を読まず、`credits` の中身を知らず、`greaterOrEqual` を
+実装してもいません。各テストを [`onResolveCondition()`](/ja/guide/choice-visibility) に渡し、答えを
+組み立てるだけです。各テストが尋ねられるのは、モードに関わらず**一度だけ**です。
 
-- **switch モード**（デフォルト）：条件グループを順番に評価します。最初にマッチしたグループが対応する port（`true`/`case_N`）にルーティングします。マッチしない場合は `false`/`default` port に従います。
-- **dispatcher モード**（[`portPerCase`](/api-ref/interfaces/NativeProperties#enabledispatcher) `= true`）：マッチした**すべて**のグループが async track として同時に発火します。`false`/`default` port はメインの継続 track（"Continue"）となり、**常に実行されます**。条件 port に接続される block は async でなければなりません。
+resolver が登録されていれば、engine は handler を呼ぶ前から出口 port を知っています：`onCondition` は
+**任意**になり、ログ出力や上書きのためのフックになります。handler は `context.cases` を受け取り、各 case
+は自身の `port` と評価済みの `result` を持ちます。上書きするには、`context.resolve(port)` に**ポート名**を
+渡します — `"out"`、`"default"`、あるいは case のポート（`"K1"`）。
+
+モードは**二つ、それだけ**です：
+
+- **`portPerCase` なし** — すべての case が成立する必要があります。成立すればフローは `out` から、
+  そうでなければ `default` から出ます。
+- **`portPerCase: true`** — **最初に**成立した case が**自身の port**（`K1`、`K2`…）から出ます。
+  どれも成立しなければ `default`。
+
+`when` を持たない case は常に真であり、`portPerCase` モードではそれより下の case を到達不能にします。
+これは writer が描いた図であって、報告すべき誤りではありません。case が一つもない block は `out` から
+出ます：何も尋ねられていないので、何も失敗していません。
+
+`default` は「どの case も成立しなかった」を意味します — 「選ばれた出口に線がない」では**ありません**。
+線のない port はフローを終わらせますが、それは正当な終わり方です。
+
+dictionary が予約語 **`choice`** であるテストは、プレイヤーがすでに出した答えを問い合わせます：
+`{ dict: "choice", entry: "CHOICE-001", value: "C1" }`。engine は scene の履歴から**自分で**答えるため、
+この問いがゲームに届くことはありません。`scene.getChoice(blockId)` と `scene.evaluateCondition(test)` も
+参照してください。
 
 <!--@include: ../../_shared/block-condition.md-->
 
 ## ACTION
 
-action block はゲーム内で副作用を発動します — アイテムの付与、サウンドの再生、フラグの設定。各アクションは開発者が自身のシステムにマッピングする `actionId` を参照します。handler はアクションリストを実行し、`context.resolve()` で "then" port を、`context.reject(error)` で "catch" port を辿ります（"catch" 接続がない場合は "then" にフォールバック）。
+action block はゲーム内で副作用を発動します — アイテムの付与、サウンドの再生、フラグの設定。
+`context.calls` が呼び出しを保持します：それぞれが宣言済みの [function](/ja/guide/blueprints#function) の
+`fn` を参照し、その `args` は位置ではなく**名前で**渡されます。handler はそれらを実行してから
+`context.resolve()` で `then` port を、`context.reject()` で `catch` port を辿ります — designer が `catch` を
+一本も配線していない場合、プレイヤーを置き去りにするのではなく `then` からフローが続きます。
 
 <!--@include: ../../_shared/block-action.md-->
 
@@ -49,26 +76,46 @@ note block はナラティブデザイナーのためのメモです — コメ�
 
 | フィールド | 型 | 説明 |
 |-------|------|-------------|
-| [`uuid`](/api-ref/type-aliases/BlueprintBlock#uuid) | `string` | 一意識別子 |
-| [`type`](/api-ref/type-aliases/BlueprintBlock#type) | `BlockType` | 判別タイプ |
-| [`label`](/api-ref/type-aliases/BlueprintBlock#label) | `string?` | 人間可読な名前 |
-| [`parentLabels`](/api-ref/type-aliases/BlueprintBlock#parentlabels) | `string[]?` | エディター内の親フォルダー階層 |
-| [`properties`](/api-ref/type-aliases/BlueprintBlock#properties) | `BlockProperty[]` | キー・バリュープロパティ |
-| [`userProperties`](/api-ref/type-aliases/BlueprintBlock#userproperties) | `Record?` | 自由形式のユーザープロパティ |
-| [`props`](/api-ref/type-aliases/BlueprintBlock#nativeproperties) | `NativeProperties?` | 実行プロパティ |
-| [`metadata`](/api-ref/type-aliases/BlueprintBlock#metadata) | `BlockMetadata?` | 表示メタデータ（キャラクター、タグ、カラー） |
-| [`scene.start`](/api-ref/type-aliases/BlueprintBlock#isstartblock) | `boolean?` | エントリー block を示す |
+| `id` | `string` | **その scene に対する**識別子 — `DIALOG-002`。id は scene をまたいで繰り返されます。 |
+| `key` | `string` | ローカライズファイルが持つ完全な i18n キー |
+| `type` | `BlockType` | `dialog`、`choice`、`condition`、`action`、`note` |
+| `label` | `string?` | writer が付けた場合の可読名 |
+| `parentLabels` | `string[]?` | エディター内の親フォルダー階層 |
+| `note` | `string?` | writer のメモ |
+| `actors` | `string[]?` | block が参照する **card の id**、ファイル順 |
+| `emotion` | `string?` | 感情の card id — 各 actor ではなく **block** に属します |
+| `intensity` | `number?` | その感情の強さ |
+| `text` | `TextByLocale?` | inline 出力の場合のロケール別テキスト |
+| `props` | `PropertyBag?` | **ひとつの袋**：native と writer 自身のプロパティが、素の id で同居します |
+| `options` | `Option[]?` | CHOICE のみ |
+| `cases` | `ConditionCase[]?` | CONDITION のみ |
+| `calls` | `ActionCall[]?` | ACTION のみ |
+| `next` | `Link[]?` | **block の出力ワイヤー。** v2 に connection テーブルはありません |
+
+エントリー block は block 側には印されていません：それを指名するのは **scene** で、`scene.start` に
+書かれます。したがって、ひとつの scene がエントリーを二つ宣言することはできません。
 
 ### NativeProperties
 
+**engine** が `props` から読み取る九つのプロパティです。id が衝突することはありません — LSDE は
+native と同じ名前のプロジェクトプロパティを拒否します — したがって見分けるのは単なる検索です。
+
 | フィールド | 型 | 説明 |
 |-------|------|-------------|
-| [`isAsync`](/api-ref/interfaces/NativeProperties#isasync) | `boolean?` | 並列 async トラックで実行 |
-| [`delay`](/api-ref/interfaces/NativeProperties#delay) | `number?` | 実行前の遅延（`onBeforeBlock` で処理） |
-| [`timeout`](/api-ref/interfaces/NativeProperties#timeout) | `number?` | 実行タイムアウト |
-| [`portPerCharacter`](/api-ref/interfaces/NativeProperties#portpercharacter) | `boolean?` | metadata 内のキャラクターごとに1つの出力 port |
-| [`skipIfMissingActor`](/api-ref/interfaces/NativeProperties#skipifmissingactor) | `boolean?` | 参照アクターが不在の場合 block をスキップ |
-| [`debug`](/api-ref/interfaces/NativeProperties#debug) | `boolean?` | エディタ用デバッグフラグ |
-| [`waitForBlocks`](/api-ref/interfaces/NativeProperties#waitforblocks) | `string[]?` | この block が進行する前に訪問済みでなければならない block UUID |
-| [`waitInput`](/api-ref/interfaces/NativeProperties#waitinput) | `boolean?` | プレイヤー入力制御用パッシブフラグ |
-| [`portPerCase`](/api-ref/interfaces/NativeProperties#enabledispatcher) | `boolean?` | dispatcher モード：マッチしたすべての条件が async track として発火、false/default port は継続 track |
+| `isAsync` | `boolean?` | 現在のトラックを続ける代わりに、この block で**並列トラックを開きます** |
+| `waitForBlocks` | `string[]?` | **この scene の** block id。それらがすべて訪問されるまで、block は**ディスパッチされる前に**保持されます — handler は呼ばれません |
+| `delay` | `number?` | block が再生されるまでの**ミリ秒**。`onBeforeBlock` が適用し、engine は決して適用しません |
+| `timeout` | `number?` | **ミリ秒**。そのまま渡されます — engine は何も強制しません |
+| `waitInput` | `boolean?` | プレイヤー入力を待つ。そのまま渡され、解釈されません |
+| `debug` | `boolean?` | エディタ用デバッグフラグ。そのまま渡されます |
+| `portPerCharacter` | `boolean?` | block は `out` ではなく、actor の **card id で名付けられた port** から出ます |
+| `skipIfMissingActor` | `boolean?` | そのまま渡されます — 判断はゲーム側です |
+| `portPerCase` | `boolean?` | CONDITION：各 case が `out` を共有せず、**自身の port**（`K1`…）から出ます |
+
+::: warning `delay` と `timeout` は v2 では**ミリ秒**です
+v1 では秒でした。そして**実行時にそれを知らせるものは何もありません**：移行したプロジェクトでは
+3 秒の間が 3 ミリ秒になります。
+:::
+
+これら九つのうち、走査を変えるのは**二つ**だけです：`isAsync` と `waitForBlocks`。残りの七つは
+そのままゲームに渡され、どう扱うかはゲームが決めます。

@@ -7,8 +7,8 @@ interface FunctionDefinition {
 
 interface FunctionParameter {
   name: string;                // ActionCall.args is keyed BY NAME, never by position
-  type: ValueType;             // 'boolean' | 'number' | 'string' | 'dictionary'
-  dictionary?: string;         // for type 'dictionary': the DictionaryDefinition.id it draws from
+  type: ValueType;             // 'boolean' | 'number' | 'string' | 'dictionaryKey'
+  dictionary?: string;         // for type 'dictionaryKey': the DictionaryDefinition.id it draws from
 }
 ```
 ```csharp [C#]
@@ -42,7 +42,7 @@ struct FunctionParameter {
 #
 # FunctionParameter Dictionary:
 # "name": String   — args are keyed BY NAME, never by position
-# "type": "boolean" | "number" | "string" | "dictionary"
-# "dictionary": String (optional) — for type "dictionary", the DictionaryDefinition id
+# "type": "boolean" | "number" | "string" | "dictionaryKey"
+# "dictionary": String (optional) — for type "dictionaryKey", the DictionaryDefinition id
 ```
 :::

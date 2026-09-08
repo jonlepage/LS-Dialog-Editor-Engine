@@ -15,7 +15,7 @@ hero:
 
 features:
   - title: 可视化 Blueprint
-    details: 使用 LSDE 编辑器导出的 JSON 文件 — 包含 scene、block、connection、dictionary 和 signature。
+    details: 使用 LSDE 编辑器的导出文件 — 包含 scene、block、dictionary、function 和 card。
   - title: 多运行时
     details: 提供 TypeScript、C#、C++ 和 GDScript 版本。相同的 blueprint 格式、相同的测试套件、原生集成。
   - title: 回调驱动

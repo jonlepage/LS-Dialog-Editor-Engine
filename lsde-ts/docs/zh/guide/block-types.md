@@ -24,18 +24,41 @@ choice block 是玩家做出选择的分支点 — 对话菜单、选项列表�
 
 ## CONDITION
 
-condition block 是一个不可见的开关 — 它评估游戏状态，在玩家看不到的情况下将 flow 送入两条路径之一。handler 评估 block 中的条件（变量、标志、背包…）然后调用 `context.resolve(result)` — `true` 走 port 0，`false` 走 port 1。以 `choice:` 开头的 key 的条件引用了玩家之前的选择 — `scene.evaluateCondition(cond)` 通过内部历史自动解析。
+condition block 是一个不可见的道岔 — 它查阅游戏状态，在玩家看不见的情况下把 flow 送出去。
 
-condition block 支持两种评估模式：
+**engine 自己不比较任何东西。** 它不读 dictionary，不知道 `credits` 里装着什么，也没有实现
+`greaterOrEqual`。它只是把每个测试交给 [`onResolveCondition()`](/zh/guide/choice-visibility) 并把答案
+组装起来。无论哪种模式，每个测试都**只被问一次**。
 
-- **switch 模式**（默认）：按顺序评估条件组。第一个匹配的组路由到对应的 port（`true`/`case_N`）。如果没有匹配，则走 `false`/`default` port。
-- **dispatcher 模式**（[`portPerCase`](/api-ref/interfaces/NativeProperties#enabledispatcher) `= true`）：**所有**匹配的组同时作为 async track 触发。`false`/`default` port 变为主继续 track（"Continue"），**始终执行**。连接到条件 port 的 block 必须是 async 的。
+只要注册了 resolver，engine 在调用 handler 之前就已经知道出口 port：`onCondition` 变为**可选**，
+沦为记录日志或强制覆盖的钩子。handler 收到 `context.cases`，每个 case 都带着自己的 `port` 和已经
+求好的 `result`。要覆盖路由，`context.resolve(port)` 接受一个**端口名** — `"out"`、`"default"`，
+或某个 case 的端口（`"K1"`）。
+
+模式只有**两种，仅此两种**：
+
+- **没有 `portPerCase`** — 所有 case 都必须成立。成立则 flow 从 `out` 出，否则从 `default` 出。
+- **`portPerCase: true`** — **第一个**成立的 case 从**它自己的 port**（`K1`、`K2`…）出。
+  若无一成立，则 `default`。
+
+没有 `when` 的 case 永远为真，在 `portPerCase` 模式下会让它下面的 case 无法到达。这是 writer 画出的
+图，不是需要报告的错误。一个 case 都没有的 block 从 `out` 出：什么都没被问，所以什么都没失败。
+
+`default` 意思是「没有任何 case 成立」— **不是**「选中的出口没有接线」。没有接线的 port 会结束
+flow，而那是一种正当的结束。
+
+dictionary 为保留字 **`choice`** 的测试查询玩家已经给出的答案：
+`{ dict: "choice", entry: "CHOICE-001", value: "C1" }`。engine 会从 scene 的历史中**自行**回答，
+这个问题永远不会到达游戏。另见 `scene.getChoice(blockId)` 和 `scene.evaluateCondition(test)`。
 
 <!--@include: ../../_shared/block-condition.md-->
 
 ## ACTION
 
-action block 在游戏中触发副作用 — 给予物品、播放音效、设置标志。每个 action 引用一个 `actionId`，由开发者映射到自己的系统。handler 执行 action 列表后调用 `context.resolve()` 走 "then" port，或调用 `context.reject(error)` 走 "catch" port（如果没有 "catch" 连接则回退到 "then"）。
+action block 在游戏中触发副作用 — 给予物品、播放音效、设置标志。`context.calls` 携带这些调用：
+每一个都引用一个已声明 [function](/zh/guide/blueprints#function) 的 `fn`，其 `args` **按名称**传入，
+从不按位置。handler 执行它们，然后调用 `context.resolve()` 走 `then` port，或 `context.reject()` 走
+`catch` port — 而如果 designer 没有接任何 `catch`，flow 会从 `then` 继续，而不是把玩家丢在原地。
 
 <!--@include: ../../_shared/block-action.md-->
 
@@ -49,26 +72,45 @@ note block 是叙事设计师的便签 — 注释、提醒、上下文。在遍�
 
 | 字段 | 类型 | 描述 |
 |------|------|------|
-| [`uuid`](/api-ref/type-aliases/BlueprintBlock#uuid) | `string` | 唯一标识符 |
-| [`type`](/api-ref/type-aliases/BlueprintBlock#type) | `BlockType` | 判别类型 |
-| [`label`](/api-ref/type-aliases/BlueprintBlock#label) | `string?` | 人类可读的名称 |
-| [`parentLabels`](/api-ref/type-aliases/BlueprintBlock#parentlabels) | `string[]?` | 编辑器中的父文件夹层级 |
-| [`properties`](/api-ref/type-aliases/BlueprintBlock#properties) | `BlockProperty[]` | 键值属性 |
-| [`userProperties`](/api-ref/type-aliases/BlueprintBlock#userproperties) | `Record?` | 自由格式的用户属性 |
-| [`props`](/api-ref/type-aliases/BlueprintBlock#nativeproperties) | `NativeProperties?` | 执行属性 |
-| [`metadata`](/api-ref/type-aliases/BlueprintBlock#metadata) | `BlockMetadata?` | 显示元数据（角色、标签、颜色） |
-| [`scene.start`](/api-ref/type-aliases/BlueprintBlock#isstartblock) | `boolean?` | 标记入口 block |
+| `id` | `string` | **相对于所在 scene** 的标识 — `DIALOG-002`。id 会在不同 scene 之间重复。 |
+| `key` | `string` | 本地化文件所持有的完整 i18n key |
+| `type` | `BlockType` | `dialog`、`choice`、`condition`、`action` 或 `note` |
+| `label` | `string?` | writer 填写时的可读名称 |
+| `parentLabels` | `string[]?` | 编辑器中的父文件夹层级 |
+| `note` | `string?` | writer 的备注 |
+| `actors` | `string[]?` | block 引用的 **card id**，按文件顺序 |
+| `emotion` | `string?` | 情绪的 card id — 它属于 **block**，而不是每个 actor |
+| `intensity` | `number?` | 该情绪的强度 |
+| `text` | `TextByLocale?` | inline 导出模式下按 locale 的文本 |
+| `props` | `PropertyBag?` | **同一个袋子**：native 与 writer 自己的属性，以裸 id 共存 |
+| `options` | `Option[]?` | 仅 CHOICE |
+| `cases` | `ConditionCase[]?` | 仅 CONDITION |
+| `calls` | `ActionCall[]?` | 仅 ACTION |
+| `next` | `Link[]?` | **block 的出线。** v2 中没有 connection 表 |
+
+入口 block 并不标记在 block 上：指名它的是 **scene**，写在 `scene.start` 里。因此一个 scene 不可能
+声明两个入口。
 
 ### NativeProperties
 
+**engine** 从 `props` 中读取的九个属性。id 不会冲突 — LSDE 会拒绝与 native 同名的项目属性 — 所以
+区分它们只是一次查找。
+
 | 字段 | 类型 | 描述 |
 |------|------|------|
-| [`isAsync`](/api-ref/interfaces/NativeProperties#isasync) | `boolean?` | 在并行异步轨道上执行 |
-| [`delay`](/api-ref/interfaces/NativeProperties#delay) | `number?` | 执行前的延迟（由 `onBeforeBlock` 消费） |
-| [`timeout`](/api-ref/interfaces/NativeProperties#timeout) | `number?` | 执行超时时间 |
-| [`portPerCharacter`](/api-ref/interfaces/NativeProperties#portpercharacter) | `boolean?` | metadata 中每个角色对应一个输出 port |
-| [`skipIfMissingActor`](/api-ref/interfaces/NativeProperties#skipifmissingactor) | `boolean?` | 如果引用的 actor 不存在则跳过 block |
-| [`debug`](/api-ref/interfaces/NativeProperties#debug) | `boolean?` | 编辑器调试标志 |
-| [`waitForBlocks`](/api-ref/interfaces/NativeProperties#waitforblocks) | `string[]?` | 此 block 可以继续之前必须已访问的 block UUID |
-| [`waitInput`](/api-ref/interfaces/NativeProperties#waitinput) | `boolean?` | 用于显式玩家输入控制的被动标志 |
-| [`portPerCase`](/api-ref/interfaces/NativeProperties#enabledispatcher) | `boolean?` | dispatcher 模式：所有匹配的条件作为 async track 触发，false/default port 变为继续 track |
+| `isAsync` | `boolean?` | 在这个 block 上**开启一条并行轨道**，而不是继续当前轨道 |
+| `waitForBlocks` | `string[]?` | **本 scene 的** block id。在它们全部被访问之前，block 会**在被分发之前**被扣住 — 不会调用任何 handler |
+| `delay` | `number?` | block 播放前的**毫秒数**。由 `onBeforeBlock` 应用，engine 从不应用 |
+| `timeout` | `number?` | **毫秒**。原样传递 — engine 不做任何强制 |
+| `waitInput` | `boolean?` | 等待玩家输入。原样传递，从不解释 |
+| `debug` | `boolean?` | 编辑器调试标志。原样传递 |
+| `portPerCharacter` | `boolean?` | block 从以 actor 的 **card id 命名的 port** 出去，而不是 `out` |
+| `skipIfMissingActor` | `boolean?` | 原样传递 — 由游戏决定 |
+| `portPerCase` | `boolean?` | CONDITION：每个 case 从**自己的 port**（`K1`…）出去，而不是共用 `out` |
+
+::: warning 在 v2 中 `delay` 和 `timeout` 的单位是**毫秒**
+它们在 v1 中是秒，而**运行时没有任何东西会提示这个变化**：迁移过来的项目会把 3 秒的停顿变成 3 毫秒。
+:::
+
+这九个之中，只有**两个**会改变遍历：`isAsync` 和 `waitForBlocks`。其余七个原样交给游戏，由游戏决定
+拿它们做什么。

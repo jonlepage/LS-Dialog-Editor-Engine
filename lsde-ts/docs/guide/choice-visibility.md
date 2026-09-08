@@ -34,34 +34,34 @@ When **no resolver is installed**, `visible` is `undefined`. Since `undefined !=
 | `false` | Resolver installed, choice hidden | `false` |
 | `undefined` | No resolver installed | `true` |
 
-## RuntimeOption
+## RuntimeChoiceItem
 
-When a resolver is installed, each choice in `context.options` is a `RuntimeOption` — an extension of `Option` with the `visible` tag:
+Every entry of `context.options` is a [`RuntimeChoiceItem`](/api-ref/interfaces/RuntimeChoiceItem) — the blueprint's `Option`, plus the `visible` tag:
 
 ::: code-group
 ```ts [TypeScript]
-interface RuntimeOption extends Option {
+interface RuntimeChoiceItem extends Option {
   visible?: boolean; // true | false | undefined
 }
 ```
 ```csharp [C#]
-public class RuntimeOption : Option
+public class RuntimeChoiceItem : Option
 {
     public bool? Visible { get; set; } // true | false | null
 }
 ```
 ```cpp [C++]
-struct RuntimeOption : Option {
+struct RuntimeChoiceItem : Option {
     std::optional<bool> visible; // true | false | nullopt
 };
 ```
 ```gdscript [GDScript]
-# RuntimeOption is a Dictionary with an extra "visible" key:
+# RuntimeChoiceItem is a Dictionary with an extra "visible" key:
 # { "id": "C1", "key": "...", "text": {...}, "visible": true/false/absent }
 ```
 :::
 
-Without a resolver, choices are still `RuntimeOption` but `visible` remains `undefined`/`null`/`nullopt`/absent.
+Without a resolver, choices are still `RuntimeChoiceItem` but `visible` remains `undefined`/`null`/`nullopt`/absent. The `Option` itself carries `id`, `key`, `text` and `when` — and its **`id` is the exit port** (`C1`, `C2`…).
 
 ## Examples
 
@@ -90,7 +90,7 @@ engine.OnChoice(args => {
 ```
 ```cpp [C++]
 engine.onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
-    std::vector<const RuntimeOption*> visible;
+    std::vector<const RuntimeChoiceItem*> visible;
     for (const auto& c : ctx->options())
         if (!c.visible.has_value() || c.visible.value())
             visible.push_back(&c);
@@ -147,7 +147,7 @@ engine.OnChoice(args => {
         .Where(c => c.Visible != false).ToList();
     var timeout = block.NativeProperties?.Timeout;
 
-    void Resolve(RuntimeOption choice) {
+    void Resolve(RuntimeChoiceItem choice) {
         context.SelectChoice(choice.Id);
         next();
     }
@@ -170,7 +170,7 @@ engine.OnChoice(args => {
 ```
 ```cpp [C++]
 engine.onChoice([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
-    std::vector<const RuntimeOption*> visible;
+    std::vector<const RuntimeChoiceItem*> visible;
     for (const auto& c : ctx->options())
         if (!c.visible.has_value() || c.visible.value())
             visible.push_back(&c);
@@ -329,41 +329,47 @@ With `onResolveCondition`, a single callback handles **both** choice visibility 
 Before `onResolveCondition`, the same `gameState.check(...)` logic had to be registered in both `onResolveCondition` and `onCondition` separately. With the unified resolver, it's one callback — the engine handles both automatically.
 :::
 
-## Advanced: Manual Filtering
+## Advanced: tagging them yourself
 
-If a global resolver is not desired, `LsdeUtils` provides a low-level utility:
+If a global resolver is not desired, `LsdeUtils.tagOptionVisibility` does the same work on demand.
+It takes **two** arguments — the options and the evaluator — and returns the list **whole**, tagged:
 
 ::: code-group
 ```ts [TypeScript]
-import { LsdeUtils } from '@lsde/dialog-engine';
+import { LsdeUtils, type ConditionEvaluator } from '@lsde/dialog-engine';
 
-const offered = LsdeUtils.tagOptionVisibility(
-  block.choices ?? [],
-  (cond) => gameState.check(cond.key, cond.operator, cond.value),
-  scene, // optional — enables choice: condition resolution via history
-);
+const evaluator: ConditionEvaluator = t => gameState.check(t.dict, t.entry, t.op, t.value);
+const offered = LsdeUtils.tagOptionVisibility(block.options, evaluator);
 ```
 ```csharp [C#]
-var visible = LsdeUtils.FilterVisibleChoices(
-    block.Choices ?? new(),
-    cond => GameState.Check(cond.Key, cond.Operator, cond.Value),
-    scene // optional — enables choice: condition resolution via history
-);
+var offered = LsdeUtils.TagOptionVisibility(
+    block.Options,
+    t => GameState.Check(t.Dict, t.Entry, t.Op, t.Value));
 ```
 ```cpp [C++]
-auto visible = lsde::LsdeUtils::FilterVisibleChoices(
-    block->choices,
-    [](const auto& cond) { return gameState.check(cond.key, cond.op, cond.value); },
-    scene // optional — enables choice: condition resolution via history
-);
+lsde::ConditionEvaluatorFn evaluator = [](const lsde::ConditionTest& t) {
+    return gameState.check(t.dict, t.entry, t.op, t.value);
+};
+auto offered = lsde::LsdeUtils::TagOptionVisibility(block->options, &evaluator);
 ```
 ```gdscript [GDScript]
-var visible = LsdeUtils.filter_visible_choices(
-    block.get("choices", []),
-    func(cond): return game_state.check(cond),
-    scene # optional — enables choice: condition resolution via history
-)
+var offered = LsdeUtils.tag_option_visibility(
+    block.get("options", []),
+    func(t): return GameState.check(t["dict"], t["entry"], t["op"], t["value"]))
 ```
 :::
 
-The `scene` parameter enables automatic `choice:` condition resolution. Without it, all conditions are delegated to the evaluator callback.
+::: warning `choice:` conditions are NOT resolved for you here
+The shortcut that handled them automatically does not exist: with the engine out of the loop, a test
+on the reserved `choice` dictionary reaches **your** evaluator. Send it back to the scene, which
+keeps the history:
+
+```ts
+const evaluator: ConditionEvaluator = t =>
+  LsdeUtils.isChoiceCondition(t) ? scene.evaluateCondition(t)
+                                 : gameState.check(t.dict, t.entry, t.op, t.value);
+```
+:::
+
+`tagOptionVisibility` replaces the v1 `filterVisibleChoices`, which **shortened** the list and took
+away the ability to show a locked answer.

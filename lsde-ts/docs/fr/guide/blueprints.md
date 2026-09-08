@@ -32,8 +32,8 @@ Les dictionaries décrivent les registres de votre jeu — switches, variables, 
 
 <!--@include: ../../_shared/blueprint-dictionary-type.md-->
 
-## Action Signatures
+## Functions
 
-Les signatures décrivent les types d'actions disponibles dans votre jeu — `set_flag`, `play_sound`, `give_item`. Le développeur les déclare dans [LSDE](https://lepasoft.com/fr/software/ls-dialog-editor "Lepasoft Dialog Editor") pour que le narrative designer compose des séquences d'actions avec des paramètres typés. Au runtime, le `id` de la signature est ce que le développeur mappe vers ses propres systèmes. Définis par [`FunctionDefinition`](/api-ref/interfaces/FunctionDefinition) :
+Les functions décrivent les actions que votre jeu sait exécuter — `set_flag`, `play_sound`, `give_item`. Le développeur les déclare dans [LSDE](https://lepasoft.com/fr/software/ls-dialog-editor "Lepasoft Dialog Editor") pour que le narrative designer compose des séquences avec des paramètres typés. Au runtime, c'est l'`id` de la function que le développeur mappe vers ses propres systèmes : un block ACTION le cite dans `call.fn`, et ses arguments arrivent **par nom** dans `call.args`. Définies par [`FunctionDefinition`](/api-ref/interfaces/FunctionDefinition) :
 
 <!--@include: ../../_shared/blueprint-signature-type.md-->

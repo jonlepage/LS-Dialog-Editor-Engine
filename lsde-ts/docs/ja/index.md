@@ -15,7 +15,7 @@ hero:
 
 features:
   - title: ビジュアル Blueprint
-    details: LSDE エディターから出力された JSON をそのまま使用 — scene、block、connection、dictionary、signature。
+    details: LSDE エディターの出力をそのまま使用 — scene、block、dictionary、function、card。
   - title: マルチランタイム
     details: TypeScript、C#、C++、GDScript で利用可能。同じ blueprint フォーマット、同じテストスイート、ネイティブ統合。
   - title: Callback 駆動型

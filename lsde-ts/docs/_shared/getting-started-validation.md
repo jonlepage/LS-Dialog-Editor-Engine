@@ -3,9 +3,9 @@
 engine.init({
   data,
   check: {
-    signatures: ['set_flag', 'play_sound'],
-    dictionaries: { items: ['sword', 'shield'] },
-    characters: ['Alice', 'Bob'],
+    functions: ['set_flag', 'play_sound'],          // function ids your game implements
+    dictionaries: { items: ['sword', 'shield'] },   // dictionary ids and their entry keys
+    cards: ['Alice', 'Bob'],                        // card NAMES, never the editor id
   },
 });
 ```
@@ -13,29 +13,27 @@ engine.init({
 engine.Init(new InitOptions {
     Data = blueprint,
     Check = new CheckOptions {
-        Signatures = new() { "set_flag", "play_sound" },
+        Functions = new() { "set_flag", "play_sound" },
         Dictionaries = new() { ["items"] = new() { "sword", "shield" } },
-        Characters = new() { "Alice", "Bob" },
+        Cards = new() { "Alice", "Bob" },
     },
 });
 ```
 ```cpp [C++]
-engine.init({
-    blueprint,
-    CheckOptions{
-        .signatures = {"set_flag", "play_sound"},
-        .dictionaries = {{"items", {"sword", "shield"}}},
-        .characters = {"Alice", "Bob"},
-    },
-});
+lsde::CheckOptions check;
+check.functions = {"set_flag", "play_sound"};
+check.dictionaries = {{"items", {"sword", "shield"}}};
+check.cards = {"Alice", "Bob"};
+
+engine.init({blueprint, check});
 ```
 ```gdscript [GDScript]
 engine.init({
     "data": blueprint,
     "check": {
-        "signatures": ["set_flag", "play_sound"],
+        "functions": ["set_flag", "play_sound"],
         "dictionaries": {"items": ["sword", "shield"]},
-        "characters": ["Alice", "Bob"],
+        "cards": ["Alice", "Bob"],
     },
 })
 ```

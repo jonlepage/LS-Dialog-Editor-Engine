@@ -34,34 +34,34 @@ handler 内で、1行でフィルタリングできます：
 | `false` | リゾルバーインストール済み、choice は非表示 | `false` |
 | `undefined` | リゾルバー未インストール | `true` |
 
-## RuntimeOption
+## RuntimeChoiceItem
 
-リゾルバーがインストールされている場合、`context.options` 内の各 choice は `RuntimeOption` です — `visible` タグが追加された `Option` の拡張です：
+`context.options` の各要素は [`RuntimeChoiceItem`](/api-ref/interfaces/RuntimeChoiceItem) です — blueprint の `Option` に `visible` タグが加わったものです：
 
 ::: code-group
 ```ts [TypeScript]
-interface RuntimeOption extends Option {
+interface RuntimeChoiceItem extends Option {
   visible?: boolean; // true | false | undefined
 }
 ```
 ```csharp [C#]
-public class RuntimeOption : Option
+public class RuntimeChoiceItem : Option
 {
     public bool? Visible { get; set; } // true | false | null
 }
 ```
 ```cpp [C++]
-struct RuntimeOption : Option {
+struct RuntimeChoiceItem : Option {
     std::optional<bool> visible; // true | false | nullopt
 };
 ```
 ```gdscript [GDScript]
-# RuntimeOption is a Dictionary with an extra "visible" key:
+# RuntimeChoiceItem is a Dictionary with an extra "visible" key:
 # { "id": "C1", "key": "...", "text": {...}, "visible": true/false/absent }
 ```
 :::
 
-リゾルバーなしの場合、choice は `RuntimeOption` のままですが、`visible` は `undefined`/`null`/`nullopt`/absent のままです。
+リゾルバーなしの場合も choice は `RuntimeChoiceItem` ですが、`visible` は `undefined`/`null`/`nullopt`/absent のままです。`Option` 自体は `id`、`key`、`text`、`when` を持ち、その **`id` が出口 port**（`C1`、`C2`…）です。
 
 ## 使用例
 
@@ -90,7 +90,7 @@ engine.OnChoice(args => {
 ```
 ```cpp [C++]
 engine.onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
-    std::vector<const RuntimeOption*> visible;
+    std::vector<const RuntimeChoiceItem*> visible;
     for (const auto& c : ctx->options())
         if (!c.visible.has_value() || c.visible.value())
             visible.push_back(&c);
@@ -147,7 +147,7 @@ engine.OnChoice(args => {
         .Where(c => c.Visible != false).ToList();
     var timeout = block.NativeProperties?.Timeout;
 
-    void Resolve(RuntimeOption choice) {
+    void Resolve(RuntimeChoiceItem choice) {
         context.SelectChoice(choice.Id);
         next();
     }
@@ -170,7 +170,7 @@ engine.OnChoice(args => {
 ```
 ```cpp [C++]
 engine.onChoice([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
-    std::vector<const RuntimeOption*> visible;
+    std::vector<const RuntimeChoiceItem*> visible;
     for (const auto& c : ctx->options())
         if (!c.visible.has_value() || c.visible.value())
             visible.push_back(&c);
@@ -329,41 +329,46 @@ tutorial.on_choice(func(args):
 `onResolveCondition` 以前は、同じ `gameState.check(...)` ロジックを `onResolveCondition` と `onCondition` に別々に登録する必要がありました。統合リゾルバーでは1つの callback で済みます — engine が両方を自動的に処理します。
 :::
 
-## 上級: 手動フィルタリング
+## 上級: 自分でタグ付けする
 
-グローバルリゾルバーをインストールしたくない場合、`LsdeUtils` がローレベルのユーティリティを提供します：
+グローバルリゾルバーを登録したくない場合、`LsdeUtils.tagOptionVisibility` が同じ仕事をその場で行います。
+引数は**二つ** — options と評価関数 — で、リストを**丸ごと**タグ付きで返します：
 
 ::: code-group
 ```ts [TypeScript]
-import { LsdeUtils } from '@lsde/dialog-engine';
+import { LsdeUtils, type ConditionEvaluator } from '@lsde/dialog-engine';
 
-const offered = LsdeUtils.tagOptionVisibility(
-  block.choices ?? [],
-  (cond) => gameState.check(cond.key, cond.operator, cond.value),
-  scene, // optional — enables choice: condition resolution via history
-);
+const evaluator: ConditionEvaluator = t => gameState.check(t.dict, t.entry, t.op, t.value);
+const offered = LsdeUtils.tagOptionVisibility(block.options, evaluator);
 ```
 ```csharp [C#]
-var visible = LsdeUtils.FilterVisibleChoices(
-    block.Choices ?? new(),
-    cond => GameState.Check(cond.Key, cond.Operator, cond.Value),
-    scene // optional — enables choice: condition resolution via history
-);
+var offered = LsdeUtils.TagOptionVisibility(
+    block.Options,
+    t => GameState.Check(t.Dict, t.Entry, t.Op, t.Value));
 ```
 ```cpp [C++]
-auto visible = lsde::LsdeUtils::FilterVisibleChoices(
-    block->choices,
-    [](const auto& cond) { return gameState.check(cond.key, cond.op, cond.value); },
-    scene // optional — enables choice: condition resolution via history
-);
+lsde::ConditionEvaluatorFn evaluator = [](const lsde::ConditionTest& t) {
+    return gameState.check(t.dict, t.entry, t.op, t.value);
+};
+auto offered = lsde::LsdeUtils::TagOptionVisibility(block->options, &evaluator);
 ```
 ```gdscript [GDScript]
-var visible = LsdeUtils.filter_visible_choices(
-    block.get("choices", []),
-    func(cond): return game_state.check(cond),
-    scene # optional — enables choice: condition resolution via history
-)
+var offered = LsdeUtils.tag_option_visibility(
+    block.get("options", []),
+    func(t): return GameState.check(t["dict"], t["entry"], t["op"], t["value"]))
 ```
 :::
 
-`scene` パラメーターを指定すると、`choice:` condition の自動解決が有効になります。指定しない場合、すべての condition は登録されたリゾルバー callback に委任されます。
+::: warning ここでは `choice:` condition は自動解決されません
+それを自動的に処理していた近道は存在しません：engine が介在しないため、予約された `choice` dictionary
+に対するテストは**あなたの**評価関数に届きます。履歴を持っている scene に転送してください：
+
+```ts
+const evaluator: ConditionEvaluator = t =>
+  LsdeUtils.isChoiceCondition(t) ? scene.evaluateCondition(t)
+                                 : gameState.check(t.dict, t.entry, t.op, t.value);
+```
+:::
+
+`tagOptionVisibility` は v1 の `filterVisibleChoices` を置き換えます。あちらはリストを**短くしてしまい**、
+ロックされた回答を表示する余地を奪っていました。

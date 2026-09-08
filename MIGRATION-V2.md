@@ -2098,3 +2098,57 @@ eux affirment des choses **fausses** : le mode dispatcher supprimé y est toujou
 « Error Boundaries » y dit encore que les erreurs sont silencieuses. Ces trois-là doivent ouvrir la
 passe de traduction, pas la fermer.
 
+# Septième passe — la documentation refaite depuis le français
+
+Jonathan a demandé de finaliser le français, puis de traduire à partir de lui. Relire la doc **ligne
+par ligne contre le code** au lieu de la parcourir a sorti bien plus que les trois pages en retard.
+
+## Les extraits partagés étaient v1
+
+`docs/_shared/` porte le code que **les quatre langues** incluent. Quatre de ces quarante extraits
+décrivaient un format qui n'existe plus, donc quatre fois dans chaque langue :
+
+- **`blueprint-export-type.md`** — la racine du payload, dans les quatre langages. `exportDate`,
+  `projectName`, `primaryLanguage`, `signatures` : pas un champ juste. Le vrai en-tête est
+  `format`, `version`, `generator`, `exportedAt`, `project`, `locales`, `referenceLocale`,
+  `dictionaries`, `functions`, `cards`, `scenes`.
+- **`integration-action.md`** — l'exemple ACTION, celui que tout intégrateur copie. Il lisait
+  `block.actions[].actionId` avec des `params` **positionnels**. Le payload porte `context.calls`,
+  chaque appel citant un `fn` et ses `args` **par nom**. L'onglet C++ inventait en plus des helpers
+  `GetString`/`GetBool` qui n'existent pas — `PropertyValue` est un `std::variant`, et le lecteur
+  doit le traiter lui-même.
+- **`getting-started-validation.md`** — `check.signatures` et `check.characters` pour `functions`
+  et `cards`.
+- **`choice-visibility-handler.md`** — le type `RuntimeOption`, et un onglet TypeScript qui
+  déclarait `offered` puis passait `visible`, une variable jamais définie.
+
+## La plus grande page appelait une API retirée
+
+`choice-visibility.md`, section « filtrage manuel », dans les quatre langues :
+`LsdeUtils.FilterVisibleChoices` — **supprimée en v2** — dans trois onglets sur quatre, avec un
+troisième paramètre `scene` qui n'a jamais existé, `block.choices` pour `block.options`, et
+`cond.key`/`cond.operator` pour `dict`/`entry`/`op`/`value`. Le vrai appel est
+`tagOptionVisibility( options, evaluator )`, deux arguments, et il rend la liste entière.
+
+Le raccourci `scene` n'existant pas, la page promettait aussi que les tests sur le dictionnaire
+réservé `choice` seraient résolus tout seuls. Ils arrivent à l'évaluateur du jeu. La page dit
+maintenant comment les renvoyer vers `scene.evaluateCondition()`.
+
+## `resolve(true)` → port 0
+
+Le guide d'intégration décrivait encore la v2 avec la sémantique v1, **dans les quatre langues** —
+y compris l'anglais, que j'avais déclaré corrigé sur ce point à la quatrième revue. Je l'avais
+corrigé dans `block-types.md` et nulle part ailleurs.
+
+## Le reste
+
+`index` et `what-is-lsde` annonçaient un payload « scenes, blocks, connections, dictionaries,
+signatures ». `blueprints` titrait « Action Signatures » alors que le payload dit `functions`. Le
+type d'un paramètre de function est `dictionaryKey`, pas `dictionary`.
+
+## Résultat
+
+Les onze pages de guide ont le **même découpage en sections dans les quatre langues** — le japonais
+et le chinois ne sont plus en retard sur `block-types`, `blueprints` ni `lifecycle`. Aucune API
+morte, aucun identifiant v1 dans `docs/`. Le site se construit, 417 tests TypeScript, `tsc` propre.
+

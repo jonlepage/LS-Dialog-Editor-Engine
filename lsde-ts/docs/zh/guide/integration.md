@@ -18,11 +18,11 @@ handler 的详细实现请参阅 [Block Types](./block-types) 和 [Handlers](./h
 
 - **Dialog** — 文本、角色、原生属性。在 UI 中显示对话，等待玩家输入或延迟，然后调用 `next()`。返回清理函数，在 engine 移到下一个 block 时隐藏 UI。
 
-- **Choice** — 配置 `choiceFilter` 后带有 `visible` 标签的选项列表。创建对应的 UI 元素 — 按钮、列表、径向菜单。玩家选择后，`selectChoice(optionId)` 告诉 engine 走哪条分支，然后 `next()` 推进流程。
+- **Choice** — 配置 `onResolveCondition()` 后带有 `visible` 标签的选项列表。engine 会把**每一个**选项都带标签交给你；请按 `visible !== false` 过滤。创建对应的 UI 元素 — 按钮、列表、径向菜单。玩家选择后，`selectChoice(optionId)` 告诉 engine 走哪条分支，然后 `next()` 推进流程。
 
-- **Condition** — block 中定义的条件。用游戏逻辑评估 — 检查标记、任务、背包。`context.resolve(true)` 将流程发送到端口 0，`context.resolve(false)` 发送到端口 1。
+- **Condition** — block 中定义的 case。只需注册一次 `onResolveCondition()`，engine 就会预先求值，因此 `onCondition` 变为可选。若要覆盖路由，`context.resolve(port)` 接受一个**端口名** — `"out"`、`"default"`，或某个 case 的端口（`"K1"`）。
 
-- **Action** — block 中定义的动作。在引擎中执行 — 播放音效、给予物品、触发过场动画。`context.resolve()` 确认成功，`context.reject(err)` 通知失败。
+- **Action** — block 的调用位于 `context.calls`：一个 `fn` 及其**按名称**传入的 `args`。在引擎中执行 — 播放音效、给予物品、触发过场动画。`context.resolve()` 从 `then` 离开，`context.reject()` 从 `catch` 离开 — 若未接线 `catch`，则回退到 `then`。
 
 ## 实用技巧
 

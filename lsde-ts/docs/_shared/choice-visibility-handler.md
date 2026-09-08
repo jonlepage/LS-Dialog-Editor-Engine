@@ -1,18 +1,19 @@
 ::: code-group
 ```ts [TypeScript]
-engine.onChoice(({ block, context, next }) => {
-  const offered = context.options.filter(c => c.visible !== false);
-  showOptionsUI(visible, (optionId) => {
-    context.selectChoice(optionId);
+engine.onChoice(({ context, next }) => {
+  // `visible` is undefined when no resolver is installed: unknown, not hidden.
+  const offered = context.options.filter(o => o.visible !== false);
+  showOptionsUI(offered, (optionId) => {
+    context.selectChoice(optionId);   // the option id IS the exit port (C1, C2…)
     next();
   });
 });
 ```
 ```csharp [C#]
 engine.OnChoice(args => {
-    var visible = args.Context.Options
-        .Where(c => c.Visible != false).ToList();
-    ShowChoicesUI(visible, optionId => {
+    var offered = args.Context.Options
+        .Where(o => o.Visible != false).ToList();
+    ShowChoicesUI(offered, optionId => {
         args.Context.SelectChoice(optionId);
         args.Next();
     });
@@ -20,12 +21,12 @@ engine.OnChoice(args => {
 });
 ```
 ```cpp [C++]
-engine.onChoice([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
-    std::vector<const RuntimeOption*> visible;
-    for (const auto& c : ctx->options())
-        if (!c.visible.has_value() || c.visible.value())
-            visible.push_back(&c);
-    showOptionsUI(visible, [ctx, next](auto& optionId) {
+engine.onChoice([](auto*, auto*, auto* ctx, auto next) -> lsde::CleanupFn {
+    std::vector<const lsde::RuntimeChoiceItem*> offered;
+    for (const auto& o : ctx->options())
+        if (!o.visible.has_value() || *o.visible)
+            offered.push_back(&o);
+    showOptionsUI(offered, [ctx, next](const std::string& optionId) {
         ctx->selectChoice(optionId);
         next();
     });
@@ -34,11 +35,11 @@ engine.onChoice([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
 ```
 ```gdscript [GDScript]
 engine.on_choice(func(args):
-    var visible = []
-    for c in args["context"].options:
-        if c.get("visible") != false:
-            visible.append(c)
-    show_options_ui(visible, func(option_id):
+    var offered = []
+    for o in args["context"].options:
+        if o.get("visible") != false:
+            offered.append(o)
+    show_options_ui(offered, func(option_id):
         args["context"].select_choice(option_id)
         args["next"].call()
     )

@@ -6,7 +6,7 @@ Source: lsde-ts/docs/guide/*.md
 
 # What is LSDEDE?
 
-**LSDE** (LS Dialog Editor) is a free tool for game and software developers that combines visual dialogue graph editing, AI-powered translation, voice generation, i18n code integration, and project diagnostics. It exports dialogue graphs as blueprints (JSON, XML, YAML, or CSV) containing scenes, blocks, connections, dictionaries, and action signatures. More info: [lepasoft.com/en/software/ls-dialog-editor](https://lepasoft.com/en/software/ls-dialog-editor).
+**LSDE** (LS Dialog Editor) is a free tool for game and software developers that combines visual dialogue graph editing, AI-powered translation, voice generation, i18n code integration, and project diagnostics. It exports dialogue graphs as blueprints (JSON, XML, YAML, or CSV) containing scenes, blocks, dictionaries, functions and cards. More info: [lepasoft.com/en/software/ls-dialog-editor](https://lepasoft.com/en/software/ls-dialog-editor).
 
 **LSDEDE** (LSDE Dialog Engine) is the multi-runtime engine that loads and executes these blueprints. It is available in multiple languages for native integration into any game engine or framework.
 
@@ -25,7 +25,7 @@ All runtimes share the same blueprint format and pass a common cross-language te
 
 Every runtime follows the same **callback-driven graph dispatcher** pattern:
 
-1. **Blueprint** — A file exported from LSDE (JSON, XML, or YAML), containing scenes, blocks and connections.
+1. **Blueprint** — An export from LSDE (JSON, XML, YAML or CSV). Every block carries its own outgoing wires in `next`: there is no connection table.
 2. **Engine** — Validates the blueprint, builds the internal graph and dispatches blocks to registered handlers.
 3. **Handlers** — Functions that react to each block type (dialog, choice, condition, action).
 4. **Host Application** — Conditions, actions, and character resolution are implemented by handler callbacks.
@@ -109,9 +109,9 @@ Dictionaries describe the registers of your game — switches, variables, invent
 
 <!--@include: ../_shared/blueprint-dictionary-type.md-->
 
-## Action Signatures
+## Functions
 
-Signatures describe the action types available in your game — `set_flag`, `play_sound`, `give_item`. The developer declares them in the [LSDE](https://lepasoft.com/en/software/ls-dialog-editor "Lepasoft Dialog Editor") editor so that narrative designers can compose action sequences with typed parameters. At runtime, the signature `id` is what the developer maps to their own systems. Defined by the [`FunctionDefinition`](/api-ref/interfaces/FunctionDefinition) interface:
+Functions describe what your game knows how to do — `set_flag`, `play_sound`, `give_item`. The developer declares them in the [LSDE](https://lepasoft.com/en/software/ls-dialog-editor "Lepasoft Dialog Editor") editor so that narrative designers can compose sequences with typed parameters. At runtime, the function `id` is what the developer maps to their own systems: an ACTION block cites it in `call.fn`, and its arguments arrive **by name** in `call.args`. Defined by the [`FunctionDefinition`](/api-ref/interfaces/FunctionDefinition) interface:
 
 <!--@include: ../_shared/blueprint-signature-type.md-->
 
@@ -164,7 +164,7 @@ A test whose dictionary is the reserved word **`choice`** reads an answer the pl
 
 ## ACTION
 
-An action block fires side effects in the game — give an item, play a sound, set a flag. Each action references an `actionId` that the developer maps to their own systems. The handler executes the action list then calls `context.resolve()` to follow the "then" port, or `context.reject(error)` to follow the "catch" port (falls back to "then" if no "catch" connection exists).
+An action block fires side effects in the game — give an item, play a sound, set a flag. `context.calls` carries the calls: each cites the `fn` of a declared [function](/guide/blueprints#functions), and its `args` arrive **by name**, never by position. The handler executes them then calls `context.resolve()` to follow the `then` port, or `context.reject()` to follow the `catch` port — and when the designer wired no `catch`, the flow carries on through `then` rather than stranding the player.
 
 <!--@include: ../_shared/block-action.md-->
 
@@ -255,33 +255,33 @@ When **no resolver is installed**, `visible` is `undefined`. Since `undefined !=
 | `false` | Resolver installed, choice hidden | `false` |
 | `undefined` | No resolver installed | `true` |
 
-## RuntimeOption
+## RuntimeChoiceItem
 
-When a resolver is installed, each choice in `context.options` is a `RuntimeOption` — an extension of `Option` with the `visible` tag:
+Every entry of `context.options` is a [`RuntimeChoiceItem`](/api-ref/interfaces/RuntimeChoiceItem) — the blueprint's `Option`, plus the `visible` tag:
 
 
 ```ts [TypeScript]
-interface RuntimeOption extends Option {
+interface RuntimeChoiceItem extends Option {
   visible?: boolean; // true | false | undefined
 }
 ```
 ```csharp [C#]
-public class RuntimeOption : Option
+public class RuntimeChoiceItem : Option
 {
     public bool? Visible { get; set; } // true | false | null
 }
 ```
 ```cpp [C++]
-struct RuntimeOption : Option {
+struct RuntimeChoiceItem : Option {
     std::optional<bool> visible; // true | false | nullopt
 };
 ```
 ```gdscript [GDScript]
-# RuntimeOption is a Dictionary with an extra "visible" key:
+# RuntimeChoiceItem is a Dictionary with an extra "visible" key:
 # { "id": "C1", "key": "...", "text": {...}, "visible": true/false/absent }
 ```
 
-Without a resolver, choices are still `RuntimeOption` but `visible` remains `undefined`/`null`/`nullopt`/absent.
+Without a resolver, choices are still `RuntimeChoiceItem` but `visible` remains `undefined`/`null`/`nullopt`/absent. The `Option` itself carries `id`, `key`, `text` and `when` — and its **`id` is the exit port** (`C1`, `C2`…).
 
 ## Examples
 
@@ -310,7 +310,7 @@ engine.OnChoice(args => {
 ```
 ```cpp [C++]
 engine.onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
-    std::vector<const RuntimeOption*> visible;
+    std::vector<const RuntimeChoiceItem*> visible;
     for (const auto& c : ctx->options())
         if (!c.visible.has_value() || c.visible.value())
             visible.push_back(&c);
@@ -366,7 +366,7 @@ engine.OnChoice(args => {
         .Where(c => c.Visible != false).ToList();
     var timeout = block.NativeProperties?.Timeout;
 
-    void Resolve(RuntimeOption choice) {
+    void Resolve(RuntimeChoiceItem choice) {
         context.SelectChoice(choice.Id);
         next();
     }
@@ -389,7 +389,7 @@ engine.OnChoice(args => {
 ```
 ```cpp [C++]
 engine.onChoice([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
-    std::vector<const RuntimeOption*> visible;
+    std::vector<const RuntimeChoiceItem*> visible;
     for (const auto& c : ctx->options())
         if (!c.visible.has_value() || c.visible.value())
             visible.push_back(&c);
@@ -544,43 +544,48 @@ With `onResolveCondition`, a single callback handles **both** choice visibility 
 > TIP:
 Before `onResolveCondition`, the same `gameState.check(...)` logic had to be registered in both `onResolveCondition` and `onCondition` separately. With the unified resolver, it's one callback — the engine handles both automatically.
 
-## Advanced: Manual Filtering
+## Advanced: tagging them yourself
 
-If a global resolver is not desired, `LsdeUtils` provides a low-level utility:
+If a global resolver is not desired, `LsdeUtils.tagOptionVisibility` does the same work on demand.
+It takes **two** arguments — the options and the evaluator — and returns the list **whole**, tagged:
 
 
 ```ts [TypeScript]
-import { LsdeUtils } from '@lsde/dialog-engine';
+import { LsdeUtils, type ConditionEvaluator } from '@lsde/dialog-engine';
 
-const offered = LsdeUtils.tagOptionVisibility(
-  block.choices ?? [],
-  (cond) => gameState.check(cond.key, cond.operator, cond.value),
-  scene, // optional — enables choice: condition resolution via history
-);
+const evaluator: ConditionEvaluator = t => gameState.check(t.dict, t.entry, t.op, t.value);
+const offered = LsdeUtils.tagOptionVisibility(block.options, evaluator);
 ```
 ```csharp [C#]
-var visible = LsdeUtils.FilterVisibleChoices(
-    block.Choices ?? new(),
-    cond => GameState.Check(cond.Key, cond.Operator, cond.Value),
-    scene // optional — enables choice: condition resolution via history
-);
+var offered = LsdeUtils.TagOptionVisibility(
+    block.Options,
+    t => GameState.Check(t.Dict, t.Entry, t.Op, t.Value));
 ```
 ```cpp [C++]
-auto visible = lsde::LsdeUtils::FilterVisibleChoices(
-    block->choices,
-    [](const auto& cond) { return gameState.check(cond.key, cond.op, cond.value); },
-    scene // optional — enables choice: condition resolution via history
-);
+lsde::ConditionEvaluatorFn evaluator = [](const lsde::ConditionTest& t) {
+    return gameState.check(t.dict, t.entry, t.op, t.value);
+};
+auto offered = lsde::LsdeUtils::TagOptionVisibility(block->options, &evaluator);
 ```
 ```gdscript [GDScript]
-var visible = LsdeUtils.filter_visible_choices(
-    block.get("choices", []),
-    func(cond): return game_state.check(cond),
-    scene # optional — enables choice: condition resolution via history
-)
+var offered = LsdeUtils.tag_option_visibility(
+    block.get("options", []),
+    func(t): return GameState.check(t["dict"], t["entry"], t["op"], t["value"]))
 ```
 
-The `scene` parameter enables automatic `choice:` condition resolution. Without it, all conditions are delegated to the evaluator callback.
+> WARNING:
+The shortcut that handled them automatically does not exist: with the engine out of the loop, a test
+on the reserved `choice` dictionary reaches **your** evaluator. Send it back to the scene, which
+keeps the history:
+
+```ts
+const evaluator: ConditionEvaluator = t =>
+  LsdeUtils.isChoiceCondition(t) ? scene.evaluateCondition(t)
+                                 : gameState.check(t.dict, t.entry, t.op, t.value);
+```
+
+`tagOptionVisibility` replaces the v1 `filterVisibleChoices`, which **shortened** the list and took
+away the ability to show a locked answer.
 
 ================================================================================
 
@@ -701,9 +706,9 @@ Each handler receives the block data and a `next()` callback. The developer proc
 
 - **Choice** — list of choices tagged `visible` when `onResolveCondition()` is installed. The engine hands you **every** option, tagged; filter on `visible !== false`. Create the corresponding UI elements — buttons, list, radial menu. On player selection, `selectChoice(optionId)` tells the engine which branch to follow, then `next()` advances the flow.
 
-- **Condition** — conditions defined in the block. Evaluate them with your game logic — check a flag, a quest, an inventory. `context.resolve(true)` sends the flow to port 0, `context.resolve(false)` to port 1.
+- **Condition** — the cases defined in the block. Install `onResolveCondition()` once and the engine pre-evaluates them, which makes `onCondition` optional. To override the routing, `context.resolve(port)` takes a **port name** — `"out"`, `"default"`, or a case port (`"K1"`).
 
-- **Action** — actions defined in the block. Execute them in your engine — play a sound, give an item, trigger a cinematic. `context.resolve()` confirms success, `context.reject(err)` signals failure.
+- **Action** — the block's calls, in `context.calls`: an `fn` and its `args` **by name**. Execute them in your engine — play a sound, give an item, trigger a cinematic. `context.resolve()` leaves by `then`, `context.reject()` leaves by `catch` — falling back to `then` when no `catch` is wired.
 
 ## Tips
 

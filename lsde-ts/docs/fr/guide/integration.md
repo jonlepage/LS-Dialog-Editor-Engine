@@ -20,9 +20,9 @@ Chaque handler reçoit les données du block et un callback `next()`. C'est au d
 
 - **Choice** — liste de choix tagués `visible` quand `onResolveCondition()` est installé. Le engine vous rend **toutes** les options, taguées ; filtrez sur `visible !== false`. Créez les éléments UI correspondants — boutons, liste, radial menu. Au choix du joueur, `selectChoice(optionId)` indique la branche à suivre, puis `next()` avance le flow.
 
-- **Condition** — conditions définies dans le block. Évaluez-les avec la logique de votre jeu — flags, quêtes, inventaire. `context.resolve(true)` envoie le flow vers le port 0, `context.resolve(false)` vers le port 1.
+- **Condition** — cas définis dans le block. Installez `onResolveCondition()` une fois et le engine les pré-évalue : `onCondition` devient facultatif. Pour forcer une sortie, `context.resolve(port)` prend un **nom de port** — `"out"`, `"default"`, ou le port d'un cas (`"K1"`).
 
-- **Action** — actions définies dans le block. Exécutez-les dans votre moteur — jouer un son, donner un item, déclencher une cinématique. `context.resolve()` confirme le succès, `context.reject(err)` signale un échec.
+- **Action** — les appels du block, dans `context.calls` : un `fn` et ses `args` **par nom**. Exécutez-les dans votre moteur — jouer un son, donner un item, déclencher une cinématique. `context.resolve()` sort par `then`, `context.reject()` sort par `catch` (et retombe sur `then` si aucun `catch` n'est câblé).
 
 ## Tips
 

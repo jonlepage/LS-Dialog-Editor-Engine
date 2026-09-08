@@ -18,11 +18,11 @@ handler の詳細な実装については、[Block Types](./block-types) と [Ha
 
 - **Dialog** — テキスト、キャラクター、ネイティブプロパティ。UI にダイアログを表示し、プレイヤーの入力またはディレイを待ってから `next()` を呼び出します。engine が次の block に移る際に UI を非表示にするクリーンアップ関数を返します。
 
-- **Choice** — `choiceFilter` が設定されている場合、`visible` タグ付きの選択肢リスト。対応する UI 要素を作成します — ボタン、リスト、ラジアルメニュー。プレイヤーが選択したら、`selectChoice(optionId)` で分岐先を engine に伝え、`next()` でフローを進めます。
+- **Choice** — `onResolveCondition()` が設定されている場合、`visible` タグ付きの選択肢リスト。engine は**すべて**の選択肢をタグ付きで渡します。`visible !== false` でフィルターしてください。対応する UI 要素を作成します — ボタン、リスト、ラジアルメニュー。プレイヤーが選択したら、`selectChoice(optionId)` で分岐先を engine に伝え、`next()` でフローを進めます。
 
-- **Condition** — block に定義された条件。ゲームロジックで評価します — フラグ、クエスト、インベントリのチェック。`context.resolve(true)` はポート 0 へ、`context.resolve(false)` はポート 1 へフローを送ります。
+- **Condition** — block に定義された case。`onResolveCondition()` を一度登録すれば engine が事前評価するため、`onCondition` は任意になります。ルーティングを上書きする場合、`context.resolve(port)` は**ポート名**を取ります — `"out"`、`"default"`、または case のポート（`"K1"`）。
 
-- **Action** — block に定義されたアクション。エンジンで実行します — サウンド再生、アイテム付与、シネマティックのトリガー。`context.resolve()` は成功を確認、`context.reject(err)` は失敗を通知します。
+- **Action** — block の呼び出しは `context.calls` にあります：`fn` と、**名前で**渡される `args`。エンジンで実行します — サウンド再生、アイテム付与、シネマティックのトリガー。`context.resolve()` は `then` から、`context.reject()` は `catch` から出ます — `catch` が配線されていない場合は `then` にフォールバックします。
 
 ## Tips
 

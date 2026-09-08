@@ -45,7 +45,7 @@ Un test dont le dictionnaire est le mot réservé **`choice`** interroge une ré
 
 ## ACTION
 
-Un block action déclenche des effets de bord dans le jeu — donner un item, jouer un son, activer un flag. Chaque action référence un `actionId` que le développeur mappe vers ses propres systèmes. Le handler exécute la liste d'actions puis appelle `context.resolve()` pour suivre le port "then", ou `context.reject(error)` pour suivre le port "catch" (fallback sur "then" si aucun "catch" n'existe).
+Un block action déclenche des effets de bord dans le jeu — donner un item, jouer un son, activer un flag. `context.calls` porte les appels : chacun cite l'`fn` d'une [function](/fr/guide/blueprints#functions) déclarée, et ses `args` arrivent **par nom**, jamais par position. Le handler les exécute puis appelle `context.resolve()` pour suivre le port `then`, ou `context.reject()` pour suivre le port `catch` — et si le designer n'a câblé aucun `catch`, le flow repart par `then` plutôt que de laisser le joueur en plan.
 
 <!--@include: ../../_shared/block-action.md-->
 
@@ -84,7 +84,7 @@ Les neuf propriétés que le **engine** lit, prises dans `props`. Les ids ne peu
 | Champ | Type | Description |
 |-------|------|-------------|
 | `isAsync` | `boolean?` | **Ouvre une piste parallèle** sur ce block au lieu de continuer la piste courante |
-| `waitForBlocks` | `string[]?` | Ids de blocks **de cette scène**. Le block est **retenu avant d'être affiché** tant qu'ils n'ont pas tous été visités — aucun handler n'est appelé |
+| `waitForBlocks` | `string[]?` | Ids de blocks **de cette scène**. Le block est **retenu avant d'être dispatché** tant qu'ils n'ont pas tous été visités — aucun handler n'est appelé |
 | `delay` | `number?` | **MILLISECONDES** avant que le block joue. Appliqué par `onBeforeBlock`, jamais par le engine |
 | `timeout` | `number?` | **MILLISECONDES**. Passé tel quel — le engine n'impose rien |
 | `waitInput` | `boolean?` | Attendre une entrée joueur. Passé tel quel, jamais interprété |

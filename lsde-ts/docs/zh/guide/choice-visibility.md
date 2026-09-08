@@ -34,34 +34,34 @@
 | `false` | 已安装解析器，choice 隐藏 | `false` |
 | `undefined` | 未安装解析器 | `true` |
 
-## RuntimeOption
+## RuntimeChoiceItem
 
-安装解析器后，`context.options` 中的每个 choice 都是 `RuntimeOption` — 它是 `Option` 的扩展，增加了 `visible` 标记：
+`context.options` 的每一项都是 [`RuntimeChoiceItem`](/api-ref/interfaces/RuntimeChoiceItem) — blueprint 的 `Option`，加上 `visible` 标记：
 
 ::: code-group
 ```ts [TypeScript]
-interface RuntimeOption extends Option {
+interface RuntimeChoiceItem extends Option {
   visible?: boolean; // true | false | undefined
 }
 ```
 ```csharp [C#]
-public class RuntimeOption : Option
+public class RuntimeChoiceItem : Option
 {
     public bool? Visible { get; set; } // true | false | null
 }
 ```
 ```cpp [C++]
-struct RuntimeOption : Option {
+struct RuntimeChoiceItem : Option {
     std::optional<bool> visible; // true | false | nullopt
 };
 ```
 ```gdscript [GDScript]
-# RuntimeOption is a Dictionary with an extra "visible" key:
+# RuntimeChoiceItem is a Dictionary with an extra "visible" key:
 # { "id": "C1", "key": "...", "text": {...}, "visible": true/false/absent }
 ```
 :::
 
-未安装解析器时，choice 仍然是 `RuntimeOption`，但 `visible` 保持为 `undefined`/`null`/`nullopt`/absent。
+未安装解析器时，choice 仍然是 `RuntimeChoiceItem`，但 `visible` 保持为 `undefined`/`null`/`nullopt`/absent。`Option` 本身携带 `id`、`key`、`text` 和 `when` — 而它的 **`id` 就是出口 port**（`C1`、`C2`…）。
 
 ## 示例
 
@@ -90,7 +90,7 @@ engine.OnChoice(args => {
 ```
 ```cpp [C++]
 engine.onChoice([](auto*, auto*, auto* ctx, auto next) -> CleanupFn {
-    std::vector<const RuntimeOption*> visible;
+    std::vector<const RuntimeChoiceItem*> visible;
     for (const auto& c : ctx->options())
         if (!c.visible.has_value() || c.visible.value())
             visible.push_back(&c);
@@ -147,7 +147,7 @@ engine.OnChoice(args => {
         .Where(c => c.Visible != false).ToList();
     var timeout = block.NativeProperties?.Timeout;
 
-    void Resolve(RuntimeOption choice) {
+    void Resolve(RuntimeChoiceItem choice) {
         context.SelectChoice(choice.Id);
         next();
     }
@@ -170,7 +170,7 @@ engine.OnChoice(args => {
 ```
 ```cpp [C++]
 engine.onChoice([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
-    std::vector<const RuntimeOption*> visible;
+    std::vector<const RuntimeChoiceItem*> visible;
     for (const auto& c : ctx->options())
         if (!c.visible.has_value() || c.visible.value())
             visible.push_back(&c);
@@ -329,41 +329,46 @@ tutorial.on_choice(func(args):
 在 `onResolveCondition` 之前，相同的 `gameState.check(...)` 逻辑需要分别在 `onResolveCondition` 和 `onCondition` 中注册。使用统一解析器后，只需一个 callback — engine 自动处理两者。
 :::
 
-## 高级用法：手动过滤
+## 高级用法：自己打标记
 
-如果不需要安装全局解析器，`LsdeUtils` 提供了一个底层工具函数：
+如果不想注册全局解析器，`LsdeUtils.tagOptionVisibility` 会按需完成同样的工作。
+它接受**两个**参数 — 选项和求值函数 — 并把列表**完整地**带着标记返回：
 
 ::: code-group
 ```ts [TypeScript]
-import { LsdeUtils } from '@lsde/dialog-engine';
+import { LsdeUtils, type ConditionEvaluator } from '@lsde/dialog-engine';
 
-const offered = LsdeUtils.tagOptionVisibility(
-  block.choices ?? [],
-  (cond) => gameState.check(cond.key, cond.operator, cond.value),
-  scene, // optional — enables choice: condition resolution via history
-);
+const evaluator: ConditionEvaluator = t => gameState.check(t.dict, t.entry, t.op, t.value);
+const offered = LsdeUtils.tagOptionVisibility(block.options, evaluator);
 ```
 ```csharp [C#]
-var visible = LsdeUtils.FilterVisibleChoices(
-    block.Choices ?? new(),
-    cond => GameState.Check(cond.Key, cond.Operator, cond.Value),
-    scene // optional — enables choice: condition resolution via history
-);
+var offered = LsdeUtils.TagOptionVisibility(
+    block.Options,
+    t => GameState.Check(t.Dict, t.Entry, t.Op, t.Value));
 ```
 ```cpp [C++]
-auto visible = lsde::LsdeUtils::FilterVisibleChoices(
-    block->choices,
-    [](const auto& cond) { return gameState.check(cond.key, cond.op, cond.value); },
-    scene // optional — enables choice: condition resolution via history
-);
+lsde::ConditionEvaluatorFn evaluator = [](const lsde::ConditionTest& t) {
+    return gameState.check(t.dict, t.entry, t.op, t.value);
+};
+auto offered = lsde::LsdeUtils::TagOptionVisibility(block->options, &evaluator);
 ```
 ```gdscript [GDScript]
-var visible = LsdeUtils.filter_visible_choices(
-    block.get("choices", []),
-    func(cond): return game_state.check(cond),
-    scene # optional — enables choice: condition resolution via history
-)
+var offered = LsdeUtils.tag_option_visibility(
+    block.get("options", []),
+    func(t): return GameState.check(t["dict"], t["entry"], t["op"], t["value"]))
 ```
 :::
 
-`scene` 参数启用自动的 `choice:` condition 解析。如果不提供，所有 condition 都将委托给解析器 callback。
+::: warning 这里不会为你解析 `choice:` condition
+那个自动处理它们的捷径并不存在：由于 engine 不在回路中，针对保留 `choice` dictionary 的测试会到达
+**你的**求值函数。请把它转交给持有历史的 scene：
+
+```ts
+const evaluator: ConditionEvaluator = t =>
+  LsdeUtils.isChoiceCondition(t) ? scene.evaluateCondition(t)
+                                 : gameState.check(t.dict, t.entry, t.op, t.value);
+```
+:::
+
+`tagOptionVisibility` 取代了 v1 的 `filterVisibleChoices`，后者会**缩短**列表，并夺走了显示一个
+被锁定回答的可能。

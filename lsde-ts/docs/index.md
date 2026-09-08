@@ -15,7 +15,7 @@ hero:
 
 features:
   - title: Visual Blueprints
-    details: Consume JSON exports from the LSDE editor — scenes, blocks, connections, dictionaries, signatures.
+    details: Consume exports from the LSDE editor — scenes, blocks, dictionaries, functions and cards.
   - title: Multi-Runtime
     details: Available in TypeScript, C#, C++, and GDScript. Same blueprint format, same test suite, native integration.
   - title: Callback-driven

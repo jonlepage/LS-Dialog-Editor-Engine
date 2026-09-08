@@ -118,9 +118,18 @@ manager matches the number on the writer's screen.
   is neither logged nor re-thrown" — and was two sections behind the English rewrite. It is
   realigned section by section. `delay` and `timeout` are now stated as MILLISECONDS in that
   page's table too, English included
-- Three guide pages still lag in Japanese and Chinese — `block-types`, `blueprints`,
-  `lifecycle` — and two of them state things that are no longer true: the removed dispatcher
-  mode, and errors being swallowed. They lead the translation pass
+- **The guides are v2 in all four languages.** The pass started from French and propagated.
+  Four shared snippets — the ones every locale includes — still declared the v1 payload: the
+  export root (`exportDate`, `primaryLanguage`, `signatures`), `check.signatures` /
+  `check.characters` instead of `functions` / `cards`, and the ACTION example reading
+  `block.actions[].actionId` with positional `params` when the payload carries `context.calls`
+  with an `fn` and `args` BY NAME
+- `choice-visibility` documented `filterVisibleChoices` — removed in v2 — in three of its four
+  tabs, with a third `scene` argument that never existed, `block.choices` for `block.options`,
+  and `cond.key`/`cond.operator` for `dict`/`entry`/`op`/`value`. The type is
+  `RuntimeChoiceItem`, not `RuntimeOption`
+- `integration` still said `context.resolve(true)` routes to port 0 — v1, in every language
+- A function parameter's type value is `dictionaryKey`, not `dictionary`
 
 ## v0.3.0 (2026-04-01)
 
