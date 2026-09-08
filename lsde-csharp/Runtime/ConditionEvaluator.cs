@@ -16,6 +16,7 @@ using System.Collections.Generic;
 
 namespace LsdeDialogEngine
 {
+    /// <summary>Evaluates condition chains left to right, with NO operator precedence, and picks a block's exit port. Must behave identically in every runtime.</summary>
     public static class ConditionEvaluator
     {
         /// <summary>

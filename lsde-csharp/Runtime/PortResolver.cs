@@ -25,6 +25,7 @@ using System.Collections.Generic;
 
 namespace LsdeDialogEngine
 {
+    /// <summary>Resolves a PORT NAME to the wires leaving it. The one algorithm that must be equivalent byte for byte across every runtime: a divergence here does not crash, it sends a player down a branch the writer never drew.</summary>
     public static class PortResolver
     {
         /// <summary>

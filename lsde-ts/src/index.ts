@@ -13,6 +13,9 @@ export * from './blueprint-types.js';
 
 export { NATIVE_PROPERTY_IDS } from './types.js';
 export type { LocaleTable } from './lsde-utils.js';
+// The evaluator a game hands to LsdeUtils.evaluateConditionCases / evaluateEachCase. Without
+// it there is no name for the function the caller has to write.
+export type { ConditionEvaluator } from './condition-evaluator.js';
 
 export type {
 	// The engine's names for the payload types, plus what it adds on top

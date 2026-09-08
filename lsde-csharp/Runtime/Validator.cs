@@ -13,6 +13,7 @@ using System.Collections.Generic;
 
 namespace LsdeDialogEngine
 {
+    /// <summary>Turns a payload into the DiagnosticReport that Init() returns. Reads format and version first.</summary>
     public static class Validator
     {
         /// <summary>The only payload this engine reads. A file that says anything else is refused.</summary>

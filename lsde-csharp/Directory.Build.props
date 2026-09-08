@@ -1,0 +1,17 @@
+<Project>
+
+  <!--
+    Build output has to land outside Runtime/, because Runtime/ IS the Unity package: anything
+    written there is imported as an asset and gets a .meta file. The two .csproj set
+    BaseIntermediateOutputPath themselves, but an SDK-style project imports Microsoft.Common.props
+    before its own PropertyGroup is read, so by then NuGet has already decided where to restore —
+    that is the MSB3539 warning on every build, and Runtime/obj/ with its .meta files is the result.
+
+    Directory.Build.props is read BEFORE that import, which is the whole reason it exists.
+  -->
+  <PropertyGroup>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)build~\bin\$(MSBuildProjectName)\</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)build~\obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+
+</Project>

@@ -45,8 +45,11 @@ namespace LsdeDialogEngine.Json
     /// </summary>
     public class LooseValueConverter : JsonConverter<object>
     {
+        /// <summary>Claims the untyped slots only, never a typed field.</summary>
         public override bool CanConvert(Type typeToConvert) => typeToConvert == typeof(object);
 
+        /// <summary>Reads one untyped value as bool, double, string, or a list of strings
+        /// for waitForBlocks — the one native that carries a list.</summary>
         public override object? Read(
             ref Utf8JsonReader reader,
             Type typeToConvert,
@@ -83,6 +86,7 @@ namespace LsdeDialogEngine.Json
             }
         }
 
+        /// <summary>Writes the value back with its own runtime type.</summary>
         public override void Write(
             Utf8JsonWriter writer,
             object value,
@@ -99,6 +103,8 @@ namespace LsdeDialogEngine.Json
     /// </summary>
     public class TolerantVersionConverter : JsonConverter<int>
     {
+        /// <summary>Reads the version as a number, accepting the string a v1 payload wrote
+        /// there so the validator gets to report the problem instead of the parser.</summary>
         public override int Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
             if (reader.TokenType == JsonTokenType.Number) return reader.GetInt32();
@@ -115,6 +121,7 @@ namespace LsdeDialogEngine.Json
             return 0;
         }
 
+        /// <summary>Writes the version back as a plain number.</summary>
         public override void Write(Utf8JsonWriter writer, int value, JsonSerializerOptions options)
             => writer.WriteNumberValue(value);
     }

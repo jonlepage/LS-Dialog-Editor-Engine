@@ -26,6 +26,7 @@ namespace LsdeDialogEngine
         private readonly BlueprintScene _scene;
         private readonly Dictionary<string, BlueprintBlock> _blocksById;
 
+        /// <summary>Index one scene by block id. Built once during Init().</summary>
         public SceneGraph(BlueprintScene scene)
         {
             _scene = scene;
@@ -91,8 +92,10 @@ namespace LsdeDialogEngine
             return string.IsNullOrEmpty(_scene.Start) ? null : GetBlock(_scene.Start!);
         }
 
+        /// <summary>The scene this graph indexes, as the payload declares it.</summary>
         public BlueprintScene GetScene() => _scene;
 
+        /// <summary>Every block of the scene, in payload order. NOTE blocks included.</summary>
         public List<BlueprintBlock> GetAllBlocks() => _scene.Blocks;
     }
 
@@ -110,6 +113,7 @@ namespace LsdeDialogEngine
         private readonly List<string> _locales;
         private readonly string _referenceLocale;
 
+        /// <summary>Index a whole export: scenes, functions, dictionaries and cards. Built once during Init().</summary>
         public BlueprintGraph(BlueprintExport data)
         {
             _locales = data.Locales ?? new List<string>();
@@ -194,6 +198,7 @@ namespace LsdeDialogEngine
             return GetSceneGraph(sceneRef)?.GetConnections() ?? new List<BlueprintConnection>();
         }
 
+        /// <summary>The locales the export carries, reference locale first.</summary>
         public List<string> GetLocales() => _locales;
 
         /// <summary>The locale written first in the export. Empty when the project declares none.</summary>

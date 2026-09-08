@@ -1981,3 +1981,71 @@ tests TypeScript, type-check et build propres, et le site de documentation se co
 - **`"samples": []`** dans le manifeste Unity, alors que `samples~/MiniRuntime` existe : l'exemple
   est livré mais n'apparaît pas dans le Package Manager. C'est un choix produit, pas un défaut.
 
+---
+
+# Sixième passe — les avertissements que personne ne lisait
+
+Suite directe de la précédente, sur la même question : ce que reçoit le client. Cette fois en
+regardant ce que **les compilateurs disent** sur nos propres livrables, ce qu'aucune suite de tests
+ne rapporte parce que rien n'échoue.
+
+## Le paquet C# n'avait pas d'infobulles
+
+`GenerateDocumentationFile` est actif — le `.xml` part dans le paquet NuGet, et c'est lui qui
+alimente IntelliSense dans Unity et Visual Studio. Il manquait **43 membres publics** : tous les
+membres de `BlockType`, `ConditionOperator`, `ConditionJoin`, `ValueType` et `CardRole`, les champs
+de `DiagnosticReport` et `DiagnosticStats`, `ValidationResult.Ok/Fail`, `PortResolutionResult`,
+`NativePropertyIds`, `SceneGraph`, `BlueprintGraph`, et les trois classes `ConditionEvaluator`,
+`PortResolver`, `Validator` elles-mêmes.
+
+Le fichier disait pourtant déjà comment faire : `Ports`, juste à côté, documente chacun de ses
+membres. Le reste ne l'avait pas suivi.
+
+48 avertissements → **0**.
+
+## L'en-tête C++ déversait 160 avertissements chez le client
+
+Chaque `Internal*Context` est au bas d'un losange volontaire : l'implémentation vient de
+`InternalBlockContext`, la déclaration pure de `IDialogContext` et consorts, les deux atteignant
+`IBaseBlockContext` virtuellement. La dominance résout vers l'implémentation — c'est exactement
+l'intention — mais MSVC l'annonce une fois par membre et par classe.
+
+Ces 160 avertissements ne tombaient pas seulement chez nous : `block_context.h` est un en-tête
+**public**. Chaque unité de compilation d'un studio Unreal qui l'inclut les recevait, et les aurait
+attribués à notre code. Supprimés sur place, avec la raison écrite à côté.
+
+## Unity importait les artefacts NuGet du paquet
+
+Les deux `.csproj` déplaçaient leur sortie hors de `Runtime/` — qui **est** le paquet Unity, donc
+tout ce qui y est écrit devient un asset avec son `.meta`. Sauf qu'un projet SDK-style importe
+`Microsoft.Common.props` **avant** de lire son propre `PropertyGroup` : la restauration NuGet avait
+déjà choisi son chemin. C'est l'avertissement MSB3539 à chaque build, et `Runtime/obj/` peuplé de
+`project.assets.json.meta` en était le résultat. La règle `lsde-csharp/**/obj.meta` dans
+`.gitignore` était le pansement.
+
+Un `Directory.Build.props`, lu avant cet import, est précisément l'outil que le message d'erreur de
+MSBuild recommande. `Runtime/` reste vide après un build complet.
+
+## Deux références mortes dans la référence d'API publiée
+
+TypeDoc les signalait à chaque génération du site :
+
+- **`ConditionEvaluator`** n'était pas exporté. C'est le type du callback que `evaluateConditionCases`
+  et `evaluateEachCase` exigent : un jeu TypeScript n'avait aucun nom pour annoter la fonction qu'il
+  doit écrire. Ce n'était pas un défaut de documentation, c'était un trou dans l'API publique.
+- Un `{@link pickPortFromResults}` pointait vers une fonction non publique. Reformulé vers le
+  helper que le jeu peut réellement atteindre.
+
+## Compte final
+
+| | tests | avertissements de build |
+|---|---|---|
+| TypeScript | 417 | 0 (`tsc`, TypeDoc) |
+| C# | 133 | 0 |
+| C++ | 64 | 0 |
+| GDScript | 168 | 0 |
+| **total** | **782** | |
+
+Le site de documentation se construit, `npm ci` valide le verrou, la régénération des specs
+partagées ne bouge pas d'un octet.
+

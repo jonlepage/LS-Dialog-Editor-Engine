@@ -20,46 +20,67 @@ namespace LsdeDialogEngine
     /// <summary>What a block is. Decides which optional fields it carries.</summary>
     public static class BlockType
     {
+        /// <summary>A line spoken by a cast of actors. Exits by <c>out</c>.</summary>
         public const string Dialog = "dialog";
+        /// <summary>A question. Each option exits by its own id — C1, C2…</summary>
         public const string Choice = "choice";
+        /// <summary>A test on game state. Exits by <c>out</c>/<c>default</c>, or by K1… with portPerCase.</summary>
         public const string Condition = "condition";
+        /// <summary>A call into the game. Exits by <c>then</c>, or <c>catch</c> when a call failed.</summary>
         public const string Action = "action";
+        /// <summary>A designer-only note. Never dispatched: the traversal steps over it.</summary>
         public const string Note = "note";
     }
 
     /// <summary>How a condition compares a dictionary entry to its value.</summary>
     public static class ConditionOperator
     {
+        /// <summary>The entry equals the value.</summary>
         public new const string Equals = "equals";
+        /// <summary>The entry differs from the value.</summary>
         public const string NotEquals = "notEquals";
+        /// <summary>The entry is below the value.</summary>
         public const string LessThan = "lessThan";
+        /// <summary>The entry is below the value, or equal to it.</summary>
         public const string LessOrEqual = "lessOrEqual";
+        /// <summary>The entry is above the value.</summary>
         public const string GreaterThan = "greaterThan";
+        /// <summary>The entry is above the value, or equal to it.</summary>
         public const string GreaterOrEqual = "greaterOrEqual";
     }
 
     /// <summary>How a comparison links to the one ABOVE it. The list is flat: precedence is yours.</summary>
     public static class ConditionJoin
     {
+        /// <summary>Both this comparison and the one above it must hold.</summary>
         public const string And = "and";
+        /// <summary>This comparison or the one above it must hold.</summary>
         public const string Or = "or";
     }
 
     /// <summary>What a function parameter accepts: a literal, or a key picked in a dictionary.</summary>
     public static class ValueType
     {
+        /// <summary>A literal true or false.</summary>
         public const string Boolean = "boolean";
+        /// <summary>A literal string.</summary>
         public const string String = "string";
+        /// <summary>A literal number.</summary>
         public const string Number = "number";
+        /// <summary>A key picked in one of the blueprint dictionaries, not a literal.</summary>
         public const string DictionaryKey = "dictionaryKey";
     }
 
     /// <summary>What a card is used for in the editor.</summary>
     public static class CardRole
     {
+        /// <summary>The card has no assigned role.</summary>
         public const string None = "none";
+        /// <summary>The card is an actor: what a block's <c>Actors</c> reference.</summary>
         public const string Characters = "characters";
+        /// <summary>The card is an emotion: what a block's <c>Emotion</c> references.</summary>
         public const string Emotions = "emotions";
+        /// <summary>The card is a place.</summary>
         public const string Places = "places";
     }
 
@@ -314,12 +335,14 @@ namespace LsdeDialogEngine
     /// own properties. Anything not in here belongs to the game.</summary>
     public static class NativePropertyIds
     {
+        /// <summary>The nine ids LSDE reserves. Everything else in <c>Props</c> is the writer's own.</summary>
         public static readonly string[] All =
         {
             "isAsync", "delay", "timeout", "waitInput", "debug",
             "portPerCharacter", "skipIfMissingActor", "portPerCase", "waitForBlocks",
         };
 
+        /// <summary>Whether an id in <c>Props</c> is a native rather than one of the writer's properties.</summary>
         public static bool Contains(string id)
         {
             foreach (var known in All)
@@ -488,16 +511,22 @@ namespace LsdeDialogEngine
     /// <summary>Aggregate statistics from blueprint validation.</summary>
     public class DiagnosticStats
     {
+        /// <summary>How many scenes the export holds.</summary>
         public int SceneCount { get; set; }
+        /// <summary>How many blocks, across every scene.</summary>
         public int BlockCount { get; set; }
+        /// <summary>How many wires, across every scene.</summary>
         public int ConnectionCount { get; set; }
     }
 
     /// <summary>Result of engine.Init() — validation report.</summary>
     public class DiagnosticReport
     {
+        /// <summary>What makes the payload unusable. A non-empty list means the engine did not load it.</summary>
         public List<DiagnosticEntry> Errors { get; set; } = new List<DiagnosticEntry>();
+        /// <summary>What loaded, but will probably surprise someone at runtime.</summary>
         public List<DiagnosticEntry> Warnings { get; set; } = new List<DiagnosticEntry>();
+        /// <summary>What the payload contains, counted.</summary>
         public DiagnosticStats Stats { get; set; } = new DiagnosticStats();
     }
 
@@ -540,8 +569,10 @@ namespace LsdeDialogEngine
         /// <summary>Reason for validation failure.</summary>
         public string? Reason { get; set; }
 
+        /// <summary>Let the flow enter the block.</summary>
         public static ValidationResult Ok() => new ValidationResult { Valid = true };
 
+        /// <summary>Refuse the block: OnInvalidateBlock fires, and the track that was entering it ends.</summary>
         public static ValidationResult Fail(string reason) =>
             new ValidationResult { Valid = false, Reason = reason };
     }
@@ -654,6 +685,7 @@ namespace LsdeDialogEngine
         /// <summary>Advance the flow to the next block. Must be called exactly once.</summary>
         public Action Next { get; }
 
+        /// <summary>Built by the engine before a handler is called. Games never construct one.</summary>
         public BlockHandlerArgs(ISceneHandle scene, TBlock block, TContext context, Action next)
         {
             Scene = scene;
@@ -934,13 +966,16 @@ namespace LsdeDialogEngine
     /// <summary>The wires to follow. The traversal decides which is the main track.</summary>
     public class PortResolutionResult
     {
+        /// <summary>The wires leaving the resolved port, in the order the block declares them.</summary>
         public List<Link> Links { get; }
 
+        /// <summary>Wrap the wires a port resolved to.</summary>
         public PortResolutionResult(List<Link> links)
         {
             Links = links;
         }
 
+        /// <summary>No wire leaves that port: a dead end, which ends the track.</summary>
         public static readonly PortResolutionResult None = new PortResolutionResult(new List<Link>());
     }
 }

@@ -138,7 +138,8 @@ export function pickPortFromResults(
  *
  * Handed to a game that wants to show what matched without changing where the flow goes. The
  * engine fills `context.cases[i].result` with the same rule, then reads the exit port off those
- * results with {@link pickPortFromResults} — never by calling this and deciding for itself.
+ * results, by the same rule {@link evaluateConditionCases} applies — never by calling this and
+ * deciding for itself.
  */
 export function evaluateEachCase(
 	cases: ConditionCase[] | undefined,

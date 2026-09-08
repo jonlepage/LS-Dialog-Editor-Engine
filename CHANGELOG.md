@@ -101,6 +101,13 @@ manager matches the number on the writer's screen.
   `choiceFilter` that no longer exists, or a block field table in which no field is real. French and
   English are current; the Japanese and Chinese prose is pending translation
 - README test counts and the Unity package manifest version were stale
+- The four runtimes build with **zero warnings**. C# shipped 43 public members with no XML
+  documentation, so Unity and Visual Studio showed no tooltip for them; the C++ public header
+  poured 160 MSVC C4250 warnings into the build of every game that included it
+- `ConditionEvaluator` is exported: the callback type of `LsdeUtils.evaluateConditionCases` and
+  `evaluateEachCase` had no name a TypeScript game could write down
+- The Unity package no longer imports NuGet restore artifacts: build output was redirected out
+  of `Runtime/` by properties an SDK-style project reads too late to matter
 
 ## v0.3.0 (2026-04-01)
 

@@ -43,6 +43,16 @@ struct ResolvedCards {
 
 // ─── Internal context classes ────────────────────────────────────────────────
 
+// Every Internal*Context below sits at the bottom of a deliberate diamond: it inherits the
+// implementation from InternalBlockContext and the pure declaration from IDialogContext & co,
+// both reaching IBaseBlockContext virtually. Dominance resolves that to the implementation,
+// which is exactly the intent — but MSVC announces the resolution once per member per class,
+// and those 160 warnings would land in the build of every game that includes this header.
+#if defined(_MSC_VER)
+#  pragma warning(push)
+#  pragma warning(disable : 4250) // inherits via dominance
+#endif
+
 /// What every context carries, whatever the block type.
 class InternalBlockContext : public virtual IBaseBlockContext {
 public:
@@ -131,5 +141,9 @@ public:
 private:
     std::vector<ActionCall> _calls;
 };
+
+#if defined(_MSC_VER)
+#  pragma warning(pop)
+#endif
 
 } // namespace lsde
