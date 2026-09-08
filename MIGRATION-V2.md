@@ -1649,3 +1649,121 @@ sans le correctif et passe avec.
 
 `tsc` et les trois builds sans erreur. Les quatre playgrounds impriment la même scène : 8 blocs
 visités, 27 fils.
+
+---
+
+# Troisième revue complète — avant la production
+
+Relecture de tout le moteur, module par module, en comparant les quatre portages côte à côte plutôt
+qu'en relisant chacun séparément. C'est cette comparaison qui trouve : deux tours de suite, les
+défauts étaient là où un runtime disait une chose et un autre le contraire, sans que rien ne le
+signale.
+
+## 1. Un bloc refusé arrêtait la piste sans la terminer
+
+`onValidateNextBlock` qui répond `{ valid: false }` faisait simplement **sortir** de `processBlock`.
+La piste restait marquée vivante, à jamais. Rien ne peut la relancer : il n'existe ni `goto`, ni
+reprise, et `start()` refuse une scène déjà en cours.
+
+Conséquences, identiques dans les quatre :
+
+- **piste principale** → la scène entière restait ouverte pour toujours. Pas d'`onSceneExit`,
+  `isRunning()` répondait vrai indéfiniment, le handle restait dans le registre du moteur.
+- **branche parallèle** → une piste fantôme que `getActiveTracks()` comptait sans fin.
+
+Le guide décrivait pourtant le bon comportement depuis toujours — le diagramme du flux d'exécution
+dit « *onInvalidateBlock → scene stops* ». Et **tous les autres culs-de-sac du moteur terminent déjà
+le flux** : une boucle de NOTE, un port sans fil, une cible absente. Le refus était le seul à ne pas
+le faire.
+
+Un refus termine désormais la piste qui entrait dans le bloc. Le second diagramme du guide, qui
+montrait le jeu appelant `scene.cancel()` lui-même, n'a plus lieu d'être : c'était un contournement.
+
+## 2. Un nettoyage rendu après la fermeture du flux ne tournait jamais
+
+`scene.cancel()` et `engine.stop()` sont appelables **depuis un handler** — le guide le montre. Le
+handler rend ensuite son nettoyage comme d'habitude, et le moteur le rangeait pour un départ qui
+avait déjà eu lieu : le bloc n'était plus jamais quitté, donc le panneau ouvert restait ouvert et la
+voix lancée continuait, pour le reste du processus.
+
+Le moteur a bel et bien quitté le bloc ; le nettoyage s'exécute maintenant sur place.
+
+## 3. Godot : toutes les gardes disparaissaient en build release
+
+Le runtime GDScript n'avait que des `assert()` et **aucun** `push_error`. Or `assert()` est
+**retiré d'un export release de Godot**. Un jeu publié n'avait donc plus une seule de ses gardes :
+
+| garde | en release, avant |
+|---|---|
+| démarrer sans handler | la scène **démarrait** et parcourait tout le graphe sans rien afficher — un dialogue invisible, sans une seule erreur |
+| nom de scène inconnu | un handle construit sur un graphe nul, qui plantait plus tard sur `start()` avec « Invalid call on base null » |
+| moteur non initialisé | idem |
+| locale inconnue | acceptée en silence, puis aucun texte trouvé |
+| aucune locale définie | chaque texte lu contre une locale vide, sans rien dans le journal |
+
+Le pire est le premier : c'est un échec **total et silencieux**, en production, sur la seule des
+quatre cibles où le code de garde n'existe plus.
+
+Tout est passé en `push_error` + retour sûr — ce que les trois autres font en levant. Effet de bord
+utile : ces gardes deviennent **testables**, ce qu'un `assert` interdisait puisqu'il faisait halter
+le runner. `scene()` rend maintenant `null` sur un nom inconnu au lieu d'un handle cassé.
+
+## Parité des diagnostics
+
+`WRONG_NAMING_CONVENTION` — le code qui dit « ton export est en snake_case, change le réglage »
+plutôt que « ce n'est pas un blueprint » sur un fichier qui en est un — n'existait qu'en
+TypeScript. C'est une décision consignée (problème 9), pas un oubli, donc elle reste.
+
+Mais la raison de l'absence n'était écrite nulle part. Elle est structurelle : **TypeScript et
+GDScript reçoivent la charge brute**, clés comprises, et peuvent voir un `exported_at` ; **C# et C++
+valident un objet typé** que le jeu a déjà désérialisé, où les noms d'origine ont disparu. Le
+fichier est refusé dans les quatre cas ; seul le message diffère.
+
+Le GDScript le fait donc maintenant, comme le TypeScript. Le C# et le C++ portent une note à
+l'endroit exact où le lecteur se poserait la question. Même chose pour `MISSING_DATA`, que le C++ ne
+peut pas produire parce que `InitOptions::data` est un objet par valeur : « absent » et « vide » n'y
+sont pas distinguables — le même mur que le problème du premier tour.
+
+## Les contrats qui n'étaient prouvés que dans un langage
+
+« Chaque test de condition n'atteint `onResolveCondition` **qu'une seule fois** » était le défaut 4
+du premier tour. Il n'était épinglé qu'en TypeScript. Les trois portages faisaient la bonne chose,
+mais rien ne les en empêchait de dériver. Le test existe désormais dans les quatre.
+
+C'est le risque systémique de ce dépôt : la spec partagée couvre le **format** et le routage, jamais
+le **cycle de vie** — son vocabulaire d'actions ne connaît que `next`, `selectChoice`,
+`resolveCondition`, `resolveAction`, `rejectAction`, `resolveCharacterPort`. Tout ce qui touche à la
+fermeture, aux fautes et à l'annulation vit dans quatre suites écrites à la main. C'est exactement
+là qu'étaient les défauts des trois tours.
+
+## Ce que j'ai vérifié et laissé tel quel
+
+- **Un bloc qui s'attend lui-même** dans `waitForBlocks` n'est **pas** un blocage garanti : au
+  second passage sur ce bloc, il est déjà visité et l'attente est satisfaite. Le validateur ne peut
+  donc pas le signaler comme une erreur. Même chose pour deux blocs qui s'attendent mutuellement.
+  J'avais noté ça comme « à décider » au tour précédent ; la réponse est non.
+- **Les neuf natives, les noms de ports, les codes de diagnostic** : listes extraites des quatre
+  runtimes et comparées. Identiques.
+- **`fireSceneEnter` / `fireSceneExit`** : « le handler de scène OU le global, jamais les deux »,
+  dans les quatre. C'est bien l'inverse de la règle des handlers de bloc, et c'est voulu.
+- **Le graphe** : les quatre indexent `scene.id → scene.scene`, donc `scene()` répond au chemin
+  comme à l'identifiant stable, partout.
+- **Les signaux Godot** `scene_entered` / `scene_exited` n'existent que là. C'est l'idiome de
+  l'hôte, ils doublent les handlers sans les remplacer.
+- **`getNativeProperties`** lit les natives typées en C# et C++, telles quelles en TypeScript et
+  GDScript. Sur une charge malformée (`"delay": "500"`) les deux familles divergent, et elles ne
+  peuvent pas faire autrement : la structure est statiquement typée d'un côté. Aucun export LSDE ne
+  produit ça.
+
+## Compte final
+
+| | tests |
+|---|---|
+| TypeScript | 416 |
+| C# | 131 |
+| C++ | 63 |
+| GDScript | 165 |
+| **total** | **775** |
+
+`tsc` et les trois builds sans erreur. Les playgrounds impriment la même scène : 8 blocs visités,
+27 fils.

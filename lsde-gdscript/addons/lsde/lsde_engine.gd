@@ -54,7 +54,11 @@ func set_locale(locale: String) -> void:
 	if _graph != null:
 		var valid_locales: Array = _graph.get_locales()
 		if valid_locales.size() > 0 and not valid_locales.has(locale):
-			assert(false, "Invalid locale \"%s\". Available locales: %s" % [locale, ", ".join(valid_locales)])
+			# push_error, not assert: assert() is STRIPPED from a Godot release export, so a
+			# shipped game took an unknown locale in silence and then found no text for it. The
+			# other three runtimes throw here; this is what GDScript has that survives release.
+			push_error("Invalid locale \"%s\". Available locales: %s" % [locale, ", ".join(valid_locales)])
+			return
 	_locale = locale
 	LsdeUtils.locale = locale
 
@@ -128,9 +132,17 @@ func on_scene_exit(handler: Callable) -> void:
 ## database row. The path is what a writer reads and what builds the i18n keys, but it changes the
 ## day someone renames the scene, and a stored path then resolves to nothing.
 func scene(scene_ref: String) -> LsdeSceneHandle:
-	assert(_initialized and _graph != null, "Engine not initialized. Call init() first.")
+	# push_error and a null return, not assert: assert() is STRIPPED from a Godot release export,
+	# and the code below would then build a handle over a null graph — a scene that crashes at
+	# start() with "Invalid call on base null" instead of saying which name was wrong. The other
+	# three runtimes throw; here the caller gets null and a logged reason.
+	if not _initialized or _graph == null:
+		push_error("Engine not initialized. Call init() first.")
+		return null
 	var scene_graph: Variant = _graph.get_scene_graph(scene_ref)
-	assert(scene_graph != null, "Scene \"%s\" not found." % scene_ref)
+	if scene_graph == null:
+		push_error("Scene \"%s\" not found." % scene_ref)
+		return null
 
 	var graph := _graph
 

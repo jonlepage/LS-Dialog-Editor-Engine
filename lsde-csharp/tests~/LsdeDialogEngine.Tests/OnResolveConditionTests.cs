@@ -246,5 +246,34 @@ namespace LsdeDialogEngine.Tests
             var engine = Engine(Branching());
             Assert.False(engine.Scene("s1").EvaluateCondition(Build.Test("switches", "flag", true)));
         }
+
+        // ─── Each test reaches the resolver exactly once ─────────────────────
+        //
+        // The engine needs two things per condition block: a result per case, so the handler is
+        // handed answers rather than questions, and the port to leave by. Computing them with two
+        // passes asked the game about the same test twice, and how many times depended on the mode
+        // and on which case matched — which broke the one promise the evaluator makes, that a
+        // project can count and log what it was asked.
+        //
+        // Pinned in every runtime: this is a contract a port can lose silently.
+
+        [Fact]
+        public void EachTestReachesTheResolverExactlyOnce()
+        {
+            foreach (var portPerCase in new[] { true, false })
+            {
+                var cond = Build.Condition("k1", Build.Case("K1", When("a")), Build.Case("K2", When("b")))
+                    .Wire("after", portPerCase ? "K1" : Ports.Out);
+                if (portPerCase) cond.Prop("portPerCase", true);
+
+                var engine = Engine(Build.OneScene(cond, Build.Dialog("after")));
+                var asked = new List<string>();
+                engine.OnResolveCondition(test => { asked.Add(test.Entry); return true; });
+
+                engine.Scene("s1").Start();
+
+                Assert.Equal(new List<string> { "a", "b" }, asked);
+            }
+        }
     }
 }

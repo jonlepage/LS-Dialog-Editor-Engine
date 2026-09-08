@@ -223,6 +223,39 @@ func _test_evaluate_condition_is_false_with_no_resolver() -> void:
 	_assert_false(engine.scene("s1").evaluate_condition(_test("flag")),
 		"no resolver → game-state tests are false")
 
+# ─── Each test reaches the resolver exactly once ──────────────────────────
+#
+# The engine needs two things per condition block: a result per case, so the handler is handed
+# answers rather than questions, and the port to leave by. Computing them with two passes asked the
+# game about the same test twice, and how many times depended on the mode and on which case matched
+# — which broke the one promise the evaluator makes, that a project can count and log what it was
+# asked.
+#
+# Pinned in every runtime: this is a contract a port can lose silently.
+
+func _test_each_test_reaches_the_resolver_exactly_once() -> void:
+	for port_per_case in [true, false]:
+		var props: Dictionary = {"portPerCase": true} if port_per_case else {}
+		var exit_port: String = "K1" if port_per_case else LsdeTypes.PORT_OUT
+		var cond: Dictionary = _block("k1", LsdeTypes.BLOCK_CONDITION, {
+			"props": props,
+			"cases": [
+				{"port": "K1", "when": [_test("a")]},
+				{"port": "K2", "when": [_test("b")]},
+			],
+			"next": [_link("after", exit_port)],
+		})
+		var engine := _base_engine(_one_scene([cond, _dialog("after")]))
+		var asked: Array = []
+		engine.on_resolve_condition(func(t: Dictionary) -> bool:
+			asked.append(t["entry"])
+			return true)
+
+		engine.scene("s1").start()
+
+		_assert_eq(asked, ["a", "b"],
+			"each test asked once (portPerCase = %s)" % str(port_per_case))
+
 # ─── Entry point ──────────────────────────────────────────────────────────
 
 func run() -> Dictionary:
@@ -239,4 +272,5 @@ func run() -> Dictionary:
 	_test_a_choice_test_is_answered_from_the_scene_history()
 	_test_evaluate_condition_answers_through_the_scene_handle()
 	_test_evaluate_condition_is_false_with_no_resolver()
+	_test_each_test_reaches_the_resolver_exactly_once()
 	return {"passed": _passed, "failed": _failed, "total": _total}

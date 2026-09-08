@@ -297,7 +297,23 @@ namespace LsdeDialogEngine
                 return;
             }
 
-            if (!_host.RunValidation(block, _previousBlock, _previousCharacter)) return;
+            if (!_host.RunValidation(block, _previousBlock, _previousCharacter))
+            {
+                // A refusal is a dead end like any other, so it ENDS this track.
+                //
+                // There is no API to resume a refused track — no goto, no retry, and Start()
+                // refuses a running scene. Returning silently left the track alive and idle for
+                // good: on the main flow that was the whole scene hung open, with no OnSceneExit,
+                // the handle still in the engine's registry and IsRunning() answering true
+                // forever; on a parallel branch it was a phantom track GetActiveTracks() kept
+                // counting.
+                //
+                // Every other dead end here already does it: a NOTE loop, a port with no wire, a
+                // missing target.
+                var refused = EndFlow();
+                if (refused != null) throw refused;
+                return;
+            }
 
             _currentBlock = block;
             _host.AddVisited(block.Id);
@@ -401,8 +417,21 @@ namespace LsdeDialogEngine
                 throw;
             }
 
+            var cleanup = Cleanups.Combine(sceneCleanup, globalCleanup);
+
+            // The handler may have closed the flow from inside itself — scene.Cancel(),
+            // engine.Stop(), anything that ends this track. Storing the cleanup then hung it on a
+            // block nobody will ever leave again, and whatever it held — a panel, an audio voice —
+            // was never released. The engine HAS left the block, so the cleanup runs now.
+            if (!_running || !_host.IsSceneRunning())
+            {
+                var closed = Cleanups.Run(cleanup);
+                if (closed != null) throw closed;
+                return;
+            }
+
             // Stored BEFORE any advance runs, so leaving the block finds it.
-            _previousCleanup = Cleanups.Combine(sceneCleanup, globalCleanup);
+            _previousCleanup = cleanup;
 
             syncPhase = false;
             if (nextCalled)

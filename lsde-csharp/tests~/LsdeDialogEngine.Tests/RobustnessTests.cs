@@ -362,5 +362,114 @@ namespace LsdeDialogEngine.Tests
             Assert.False(second.IsRunning());
             Assert.False(engine.IsRunning());
         }
+
+        // ─── A refused block is a dead end, and dead ends end the flow ───────
+        //
+        // OnValidateNextBlock returning valid:false made the track return silently, still marked
+        // running. Nothing can restart it — no goto, no retry, and Start() refuses a running
+        // scene — so the main flow hung the whole scene open and a refused branch stayed counted.
+
+        [Fact]
+        public void ABlockRefusedOnTheMainFlowClosesTheScene()
+        {
+            var seen = new List<string>();
+            var exits = 0;
+            string? refused = null;
+
+            var engine = Ready(Build.OneScene(
+                Build.Dialog("DIALOG-001").Wire("DIALOG-002"),
+                Build.Dialog("DIALOG-002")));
+
+            engine.OnDialog(args => { seen.Add(args.Block.Id); args.Next(); return null; });
+            engine.OnSceneExit(_ => exits++);
+            engine.OnInvalidateBlock(args => refused = args.Reason);
+            engine.OnValidateNextBlock(args => args.NextBlock.Id == "DIALOG-002"
+                ? new ValidationResult { Valid = false, Reason = "no_keycard" }
+                : new ValidationResult { Valid = true });
+
+            var handle = engine.Scene("s1");
+            handle.Start();
+
+            Assert.Equal(new List<string> { "DIALOG-001" }, seen);
+            Assert.Equal("no_keycard", refused);
+            Assert.False(handle.IsRunning());
+            Assert.Equal(1, exits);
+            Assert.False(engine.IsRunning());
+        }
+
+        [Fact]
+        public void ARefusedParallelBranchStopsBeingCountedAsATrack()
+        {
+            var engine = Ready(Build.OneScene(
+                Build.Dialog("FORK").Wire("MAIN").Wire("SIDE"),
+                Build.Dialog("MAIN"),
+                Build.Dialog("SIDE").Prop("isAsync", true)));
+
+            engine.OnDialog(args =>
+            {
+                if (args.Block.Id == "MAIN") return null;  // the main flow parks
+                args.Next();
+                return null;
+            });
+            engine.OnValidateNextBlock(args => args.NextBlock.Id == "SIDE"
+                ? new ValidationResult { Valid = false, Reason = "nope" }
+                : new ValidationResult { Valid = true });
+
+            var handle = engine.Scene("s1");
+            handle.Start();
+
+            Assert.True(handle.IsRunning());
+            Assert.Equal(0, handle.GetActiveTracks());
+            Assert.Empty(handle.GetTrackInfos());
+        }
+
+        // ─── A cleanup returned after the flow was closed still runs ─────────
+        //
+        // scene.Cancel() and engine.Stop() are callable from inside a handler. The handler then
+        // returns its cleanup as usual, and the engine stored it for a departure that had already
+        // happened: the block was never left again, so whatever it held was never released.
+
+        [Fact]
+        public void AHandlerThatCancelsItsOwnSceneStillGetsItsCleanupRun()
+        {
+            var cleaned = new List<string>();
+            var engine = Ready(Build.OneScene(
+                Build.Dialog("DIALOG-001").Wire("DIALOG-002"),
+                Build.Dialog("DIALOG-002")));
+
+            engine.OnDialog(args =>
+            {
+                var id = args.Block.Id;
+                if (id == "DIALOG-001") args.Scene.Cancel();
+                return () => cleaned.Add(id);
+            });
+
+            var handle = engine.Scene("s1");
+            handle.Start();
+
+            Assert.False(handle.IsRunning());
+            Assert.Equal(new List<string> { "DIALOG-001" }, cleaned);
+        }
+
+        [Fact]
+        public void TheSameThroughEngineStop()
+        {
+            var cleaned = new List<string>();
+            var engine = Ready(Build.OneScene(
+                Build.Dialog("DIALOG-001").Wire("DIALOG-002"),
+                Build.Dialog("DIALOG-002")));
+
+            engine.OnDialog(args =>
+            {
+                var id = args.Block.Id;
+                if (id == "DIALOG-001") engine.Stop();
+                return () => cleaned.Add(id);
+            });
+
+            engine.Scene("s1").Start();
+
+            Assert.Equal(new List<string> { "DIALOG-001" }, cleaned);
+            Assert.False(engine.IsRunning());
+        }
     }
 }

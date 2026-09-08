@@ -280,6 +280,10 @@ DiagnosticReport validateBlueprint(const InitOptions& options) {
     }
 
     if (payload->format != SUPPORTED_FORMAT) {
+        // No naming-convention check here, unlike TypeScript and GDScript: those two are handed
+        // the raw payload and can spot an `exported_at` key. This runtime validates a typed object
+        // the game already deserialized, so the original key names are gone. The file is refused
+        // either way - WRONG_NAMING_CONVENTION is a better message, not a different verdict.
         report.errors.push_back(DiagnosticEntry{
             "INVALID_FORMAT",
             std::string("Not an LSDE blueprint: expected format \"") + SUPPORTED_FORMAT

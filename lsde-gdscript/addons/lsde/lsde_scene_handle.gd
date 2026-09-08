@@ -63,7 +63,13 @@ func start() -> void:
 	if not _scene_registry.action_handler.is_valid() and not _global_registry.action_handler.is_valid():
 		missing.append("on_action")
 	if missing.size() > 0:
-		assert(false, "Cannot start scene — missing required handler(s): %s.\nRegister all 4 handlers before starting:\n  engine.on_dialog(handler)\n  engine.on_choice(handler)\n  engine.on_condition(handler)\n  engine.on_action(handler)" % ", ".join(missing))
+		# push_error and refuse to start, not assert: assert() is STRIPPED from a Godot release
+		# export, so a shipped game started the scene anyway — with no handler for any block type
+		# the traversal walked the whole graph dispatching nothing. An invisible dialogue that
+		# reported no error at all. The other three runtimes throw; here the scene simply does
+		# not start, and says why.
+		push_error("Cannot start scene — missing required handler(s): %s.\nRegister all 4 handlers before starting:\n  engine.on_dialog(handler)\n  engine.on_choice(handler)\n  engine.on_condition(handler)\n  engine.on_action(handler)" % ", ".join(missing))
+		return
 
 	_running = true
 	if _callbacks.has("on_scene_started"):

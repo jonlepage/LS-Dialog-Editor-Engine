@@ -79,13 +79,20 @@ static func validate_blueprint(options: Dictionary) -> Dictionary:
 
 	var format: Variant = payload.get("format")
 	if format != LsdeTypes.SUPPORTED_FORMAT:
-		errors.append({
-			"code": "INVALID_FORMAT",
-			"message": "Not an LSDE blueprint: expected format \"%s\", got %s." % [
-				LsdeTypes.SUPPORTED_FORMAT,
-				"nothing" if format == null else "\"%s\"" % str(format),
-			],
-		})
+		var convention: String = _detect_naming_convention(payload)
+		if convention != "":
+			errors.append({
+				"code": "WRONG_NAMING_CONVENTION",
+				"message": "This file is exported in %s; the engine reads camelCase — Project settings › Exporters › Naming convention." % convention,
+			})
+		else:
+			errors.append({
+				"code": "INVALID_FORMAT",
+				"message": "Not an LSDE blueprint: expected format \"%s\", got %s." % [
+					LsdeTypes.SUPPORTED_FORMAT,
+					"nothing" if format == null else "\"%s\"" % str(format),
+				],
+			})
 		return {"errors": errors, "warnings": warnings, "stats": empty_stats}
 
 	# Godot's JSON parser has no integer type: it reads `"version": 1` as the float 1.0. Comparing
@@ -142,6 +149,27 @@ static func validate_blueprint(options: Dictionary) -> Dictionary:
 			"connectionCount": total_connections,
 		},
 	}
+
+## Did the exporter write this file in another naming convention?
+##
+## LSDE can write camelCase (its default), snake_case or PascalCase, and the choice RENAMES the
+## fields of the JSON. The engine reads camelCase only, so the point of this check is to say which
+## setting to change instead of leaving the reader with "not an LSDE blueprint" on a file that
+## plainly is one.
+##
+## format and version are single words and survive every convention, so the tell is a field that is
+## not: exportedAt.
+##
+## Only this runtime and TypeScript can answer it: both are handed the raw payload, keys and all.
+## C# and C++ validate a typed object the game already deserialized — the original key names are
+## gone by then — so they report INVALID_FORMAT for the same file. The payload is refused either
+## way; only the message differs.
+static func _detect_naming_convention(raw: Dictionary) -> String:
+	if raw.has("exported_at"):
+		return "snake_case"
+	if raw.has("ExportedAt"):
+		return "PascalCase"
+	return ""
 
 static func _validate_scene(scene: Dictionary, errors: Array, warnings: Array) -> void:
 	var path: String = scene.get("scene", "")

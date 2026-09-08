@@ -55,7 +55,11 @@ static func get_block_label(block: Dictionary) -> String:
 ## no text at all and get_text_from_table() is the one to use.
 static func get_localized_text(text: Variant, locale_override: String = "") -> Variant:
 	var resolved: String = locale_override if locale_override != "" else locale
-	assert(resolved != "", "No locale set. Call engine.set_locale() first or pass a locale parameter.")
+	if resolved == "":
+		# push_error, not assert: assert() is STRIPPED from a Godot release export, and a
+		# shipped game then read every text against an empty locale and found none, with
+		# nothing logged at all.
+		push_error("No locale set. Call engine.set_locale() first or pass a locale parameter.")
 	if text is Dictionary:
 		return text.get(resolved)
 	return null

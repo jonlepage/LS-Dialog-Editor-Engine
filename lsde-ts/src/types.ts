@@ -208,7 +208,14 @@ export interface InitOptions {
 
 /** Result of block validation. */
 export interface ValidationResult {
-	/** Whether the block passed validation. When `false`, the `onInvalidateBlock` handler is called. */
+	/**
+	 * Whether the block passed validation.
+	 *
+	 * `false` calls `onInvalidateBlock` and then **ends the flow that was entering the block** —
+	 * the whole scene when it is the one the player is watching (`onSceneExit` fires), just that
+	 * branch when a parallel track was refused. A refusal is a dead end: nothing can resume a
+	 * track the game turned away.
+	 */
 	valid: boolean;
 	/** Reason for validation failure. Passed to `InvalidateBlockArgs.reason` when `valid` is `false`. */
 	reason?: string;

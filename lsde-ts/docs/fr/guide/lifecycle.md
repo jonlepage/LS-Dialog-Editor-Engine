@@ -87,7 +87,7 @@ flowchart TD
     D -- yes --> E[skip to next connection]
     D -- no --> F["onValidateNextBlock\n• nextContext.character\n• fromContext.character"]
     F --> G{valid?}
-    G -- no --> H[onInvalidateBlock\nscene stops]
+    G -- no --> H["onInvalidateBlock\nthe engine ends the flow"]
     G -- yes --> I["onBeforeBlock\nresolve()"]
     I --> J[type handler\nTier 2 then Tier 1]
     J --> K["next() → advance"]
@@ -101,6 +101,6 @@ flowchart TD
     B --> C["onValidateNextBlock\nnextContext.character = Lia\nfromContext.character = prev"]
     C --> D{valid?}
     D -- "Lia OK" --> E["execute block\ncontext.character = Lia"]
-    D -- "Lia stunned" --> F["onInvalidateBlock\nscene.cancel()"]
+    D -- "Lia stunned" --> F["onInvalidateBlock\nthe engine ends the flow"]
     D -- "undefined\nno character in party" --> F
 ```

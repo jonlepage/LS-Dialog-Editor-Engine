@@ -391,3 +391,38 @@ TEST(OnResolveCondition, EvaluateConditionIsFalseWithNoResolver) {
 
     EXPECT_FALSE(engine.scene("s1")->evaluateCondition(test("flag")));
 }
+
+// ─── Each test reaches the resolver exactly once ─────────────────────────────
+//
+// The engine needs two things per condition block: a result per case, so the handler is handed
+// answers rather than questions, and the port to leave by. Computing them with two passes asked
+// the game about the same test twice, and how many times depended on the mode and on which case
+// matched — which broke the one promise the evaluator makes, that a project can count and log what
+// it was asked.
+//
+// Pinned in every runtime: this is a contract a port can lose silently.
+
+TEST(OnResolveCondition, EachTestReachesTheResolverExactlyOnce) {
+    for (bool portPerCase : {true, false}) {
+        auto cond = block("k1", BlockType::Condition);
+        cond.cases.push_back(whenCase("K1", {test("a")}));
+        cond.cases.push_back(whenCase("K2", {test("b")}));
+        if (portPerCase) cond.props["portPerCase"] = true;
+        wire(cond, "after", portPerCase ? "K1" : Ports::Out);
+
+        DialogueEngine engine;
+        ASSERT_TRUE(engine.init({oneScene({cond, dialog("after")})}).errors.empty());
+        registerBase(engine);
+
+        std::vector<std::string> asked;
+        engine.onResolveCondition([&asked](const ConditionTest& t) {
+            asked.push_back(t.entry);
+            return true;
+        });
+
+        engine.scene("s1")->start();
+
+        EXPECT_EQ(asked, std::vector<std::string>({"a", "b"}))
+            << "portPerCase = " << portPerCase;
+    }
+}

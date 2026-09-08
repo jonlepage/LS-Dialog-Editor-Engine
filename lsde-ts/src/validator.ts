@@ -63,6 +63,11 @@ export function mergePayloads(
  *
  * `format` and `version` are single words and survive every convention, so the tell is a field
  * that is not: `exportedAt`.
+ *
+ * Only this runtime and the GDScript one can answer it: both are handed the raw payload, keys and
+ * all. C# and C++ validate a typed object the game already deserialized — the original key names
+ * are gone by then — so they report `INVALID_FORMAT` for the same file. The payload is refused
+ * either way; only the message differs.
  */
 function detectNamingConvention( raw: Record<string, unknown> ): string | undefined {
 	if ( 'exported_at' in raw ) return 'snake_case';

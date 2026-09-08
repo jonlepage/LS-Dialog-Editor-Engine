@@ -301,6 +301,169 @@ func _test_the_same_scene_opened_twice_is_tracked_twice() -> void:
 	_assert_eq(second.is_running(), false, "stop() reaches the second run")
 	_assert_eq(engine.is_running(), false, "the engine is idle")
 
+# ─── A refused block is a dead end, and dead ends end the flow ────────────
+#
+# on_validate_next_block returning valid:false made the track return silently, still marked
+# running. Nothing can restart it — no goto, no retry, and start() refuses a running scene — so the
+# main flow hung the whole scene open and a refused branch stayed counted as active.
+
+func _test_a_refused_block_on_the_main_flow_closes_the_scene() -> void:
+	var seen: Array = []
+	var exits: Array = [0]
+	var refused: Array = [""]
+	var engine := _ready_engine(_one_scene([
+		_dialog("DIALOG-001", [_link("DIALOG-002")]),
+		_dialog("DIALOG-002"),
+	]))
+	engine.on_dialog(func(args: Dictionary) -> Variant:
+		seen.append(args["block"]["id"])
+		args["next"].call()
+		return null)
+	engine.on_scene_exit(func(_args: Dictionary) -> void: exits[0] += 1)
+	engine.on_invalidate_block(func(args: Dictionary) -> void: refused[0] = args["reason"])
+	engine.on_validate_next_block(func(args: Dictionary) -> Dictionary:
+		if args["nextBlock"]["id"] == "DIALOG-002":
+			return {"valid": false, "reason": "no_keycard"}
+		return {"valid": true})
+
+	var handle: LsdeSceneHandle = engine.scene("s1")
+	handle.start()
+
+	_assert_eq(seen, ["DIALOG-001"], "the refused block is never dispatched")
+	_assert_eq(refused[0], "no_keycard", "on_invalidate_block got the reason")
+	_assert_eq(handle.is_running(), false, "the scene closed instead of hanging open")
+	_assert_eq(exits[0], 1, "on_scene_exit fired")
+	_assert_eq(engine.is_running(), false, "the engine deregistered it")
+
+func _test_a_refused_parallel_branch_stops_being_counted() -> void:
+	var side := _dialog("SIDE")
+	side["props"] = {"isAsync": true}
+	var engine := _ready_engine(_one_scene([
+		_dialog("FORK", [_link("MAIN"), _link("SIDE")]),
+		_dialog("MAIN"),
+		side,
+	]))
+	engine.on_dialog(func(args: Dictionary) -> Variant:
+		if args["block"]["id"] == "MAIN":
+			return null  # the main flow parks
+		args["next"].call()
+		return null)
+	engine.on_validate_next_block(func(args: Dictionary) -> Dictionary:
+		if args["nextBlock"]["id"] == "SIDE":
+			return {"valid": false, "reason": "nope"}
+		return {"valid": true})
+
+	var handle: LsdeSceneHandle = engine.scene("s1")
+	handle.start()
+
+	_assert_eq(handle.is_running(), true, "the main flow is still parked")
+	_assert_eq(handle.get_active_tracks(), 0, "the refused branch is gone")
+	_assert_eq(handle.get_track_infos(), [], "and shows in no debug view")
+
+# ─── A cleanup returned after the flow was closed still runs ──────────────
+#
+# scene.cancel() and engine.stop() are callable from inside a handler. The handler then returns its
+# cleanup as usual, and the engine stored it for a departure that had already happened: the block
+# was never left again, so whatever it held was never released.
+
+func _test_a_handler_that_cancels_its_own_scene_still_gets_its_cleanup_run() -> void:
+	var cleaned: Array = []
+	var engine := _ready_engine(_one_scene([
+		_dialog("DIALOG-001", [_link("DIALOG-002")]),
+		_dialog("DIALOG-002"),
+	]))
+	engine.on_dialog(func(args: Dictionary) -> Variant:
+		var block_id: String = args["block"]["id"]
+		if block_id == "DIALOG-001":
+			args["scene"].cancel()
+		return func() -> void: cleaned.append(block_id))
+
+	var handle: LsdeSceneHandle = engine.scene("s1")
+	handle.start()
+
+	_assert_eq(handle.is_running(), false, "the scene closed")
+	_assert_eq(cleaned, ["DIALOG-001"], "the cleanup still ran")
+
+func _test_the_same_through_engine_stop() -> void:
+	var cleaned: Array = []
+	var engine := _ready_engine(_one_scene([
+		_dialog("DIALOG-001", [_link("DIALOG-002")]),
+		_dialog("DIALOG-002"),
+	]))
+	engine.on_dialog(func(args: Dictionary) -> Variant:
+		var block_id: String = args["block"]["id"]
+		if block_id == "DIALOG-001":
+			engine.stop()
+		return func() -> void: cleaned.append(block_id))
+
+	engine.scene("s1").start()
+
+	_assert_eq(cleaned, ["DIALOG-001"], "the cleanup still ran")
+	_assert_eq(engine.is_running(), false, "the engine is idle")
+
+# ─── A file exported in the wrong naming convention says which one ────────
+#
+# LSDE can write camelCase, snake_case or PascalCase, and the choice renames the JSON fields. This
+# runtime and TypeScript are handed the raw payload, so both can name the setting to change instead
+# of leaving the reader with "not an LSDE blueprint" on a file that plainly is one. C# and C++
+# validate a typed object and report INVALID_FORMAT for the same file.
+
+func _test_a_snake_case_export_names_the_setting() -> void:
+	var engine := LsdeDialogueEngine.new()
+	var report: Dictionary = engine.init({"data": {
+		"exported_at": "2026-09-07T00:00:00.000Z",
+		"reference_locale": "en",
+		"scenes": [],
+	}})
+	_assert_eq(report["errors"].size(), 1, "one error")
+	_assert_eq(report["errors"][0]["code"], "WRONG_NAMING_CONVENTION", "names the convention")
+
+func _test_a_pascal_case_export_names_the_setting() -> void:
+	var engine := LsdeDialogueEngine.new()
+	var report: Dictionary = engine.init({"data": {
+		"ExportedAt": "2026-09-07T00:00:00.000Z",
+		"Scenes": [],
+	}})
+	_assert_eq(report["errors"][0]["code"], "WRONG_NAMING_CONVENTION", "names the convention")
+
+func _test_a_file_that_is_simply_not_a_blueprint_says_so() -> void:
+	var engine := LsdeDialogueEngine.new()
+	var report: Dictionary = engine.init({"data": {"format": "something-else", "scenes": []}})
+	_assert_eq(report["errors"][0]["code"], "INVALID_FORMAT", "not a convention problem")
+
+# ─── The guards have to survive a release export ──────────────────────────
+#
+# assert() is STRIPPED from a Godot release build. Every guard in this runtime used to be one, so a
+# shipped game got none of them: an unknown scene name built a handle over a null graph, an unknown
+# locale was taken in silence, and a scene started with no handlers walked its whole graph
+# dispatching nothing — an invisible dialogue that reported no error at all.
+#
+# They are push_error + a safe return now, which is also what makes them testable: an assert would
+# halt this runner.
+
+func _test_starting_without_handlers_refuses_instead_of_playing_blind() -> void:
+	var engine := LsdeDialogueEngine.new()
+	var report: Dictionary = engine.init({"data": _one_scene([_dialog("b1")])})
+	_assert_eq(report["errors"].size(), 0, "the payload is fine")
+	# No on_dialog / on_choice / on_condition / on_action registered.
+
+	var handle: LsdeSceneHandle = engine.scene("s1")
+	handle.start()
+
+	_assert_eq(handle.is_running(), false, "the scene refused to start")
+	_assert_eq(engine.is_running(), false, "and nothing was registered as active")
+
+func _test_an_unknown_scene_returns_null_rather_than_a_broken_handle() -> void:
+	var engine := LsdeDialogueEngine.new()
+	engine.init({"data": _one_scene([_dialog("b1")])})
+
+	_assert_eq(engine.scene("no_such_scene"), null, "an unknown scene name gives null")
+
+func _test_scene_before_init_returns_null() -> void:
+	var engine := LsdeDialogueEngine.new()
+
+	_assert_eq(engine.scene("s1"), null, "no scene before init()")
+
 # ─── Entry point ──────────────────────────────────────────────────────────
 
 func run() -> Dictionary:
@@ -315,4 +478,14 @@ func run() -> Dictionary:
 	_test_a_kept_next_called_twice_is_ignored()
 	_test_cancelling_a_scene_runs_every_track_cleanup()
 	_test_the_same_scene_opened_twice_is_tracked_twice()
+	_test_a_refused_block_on_the_main_flow_closes_the_scene()
+	_test_a_refused_parallel_branch_stops_being_counted()
+	_test_a_handler_that_cancels_its_own_scene_still_gets_its_cleanup_run()
+	_test_the_same_through_engine_stop()
+	_test_a_snake_case_export_names_the_setting()
+	_test_a_pascal_case_export_names_the_setting()
+	_test_a_file_that_is_simply_not_a_blueprint_says_so()
+	_test_starting_without_handlers_refuses_instead_of_playing_blind()
+	_test_an_unknown_scene_returns_null_rather_than_a_broken_handle()
+	_test_scene_before_init_returns_null()
 	return {"passed": _passed, "failed": _failed, "total": _total}

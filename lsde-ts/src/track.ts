@@ -312,7 +312,21 @@ export class Track implements Waiter {
 			return;
 		}
 
-		if ( !this.host.runValidation( block, this.previousBlock, this.previousCharacter ) ) return;
+		if ( !this.host.runValidation( block, this.previousBlock, this.previousCharacter ) ) {
+			// A refusal is a dead end like any other, so it ENDS this track.
+			//
+			// There is no API to resume a refused track — no goto, no retry, and `start()` refuses
+			// a running scene. Returning silently left the track alive and idle for good: on the
+			// main flow that was the whole scene hung open, with no `onSceneExit`, the handle still
+			// in the engine's registry and `isRunning()` answering true forever; on a parallel
+			// branch it was a phantom track that `getActiveTracks()` kept counting.
+			//
+			// The guide has always said so — "onInvalidateBlock → scene stops" — and every other
+			// dead end here already does it: a NOTE loop, a port with no wire, a missing target.
+			const fault = this.endFlow();
+			if ( fault ) throw fault.value;
+			return;
+		}
 
 		this.currentBlock = block;
 		this.host.addVisited( block.id );
@@ -403,8 +417,20 @@ export class Track implements Waiter {
 			throw err;
 		}
 
+		const cleanup = combineCleanups( sceneCleanup, globalCleanup );
+
+		// The handler may have closed the flow from inside itself — `scene.cancel()`,
+		// `engine.stop()`, anything that ends this track. Storing the cleanup then hung it on a
+		// block nobody will ever leave again, and whatever it held — a panel, an audio voice —
+		// was never released. The engine HAS left the block, so the cleanup runs now.
+		if ( !this.running || !this.host.isSceneRunning() ) {
+			const fault = runCleanup( cleanup );
+			if ( fault ) throw fault.value;
+			return;
+		}
+
 		// Stored BEFORE any advance runs, so leaving the block finds it.
-		this.previousCleanup = combineCleanups( sceneCleanup, globalCleanup );
+		this.previousCleanup = cleanup;
 
 		syncPhase = false;
 		if ( nextCalled ) {

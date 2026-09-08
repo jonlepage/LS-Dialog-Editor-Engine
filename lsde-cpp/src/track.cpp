@@ -156,6 +156,17 @@ void Track::processBlock(const BlueprintBlock& startingBlock) {
     }
 
     if (!_host.runValidation(block, _previousBlock, _previousCard ? &(*_previousCard) : nullptr)) {
+        // A refusal is a dead end like any other, so it ENDS this track.
+        //
+        // There is no API to resume a refused track - no goto, no retry, and start() refuses a
+        // running scene. Returning silently left the track alive and idle for good: on the main
+        // flow that was the whole scene hung open, with no onSceneExit, the handle still in the
+        // engine's registry and isRunning() answering true forever; on a parallel branch it was a
+        // phantom track getActiveTracks() kept counting.
+        //
+        // Every other dead end here already does it: a NOTE loop, a port with no wire, a missing
+        // target.
+        if (auto fault = endFlow()) std::rethrow_exception(fault);
         return;
     }
 
@@ -260,8 +271,19 @@ void Track::executeBlockHandler(const BlueprintBlock& block) {
         throw;
     }
 
+    auto cleanup = combineCleanups(std::move(sceneCleanup), std::move(globalCleanup));
+
+    // The handler may have closed the flow from inside itself - scene->cancel(), engine.stop(),
+    // anything that ends this track. Storing the cleanup then hung it on a block nobody will ever
+    // leave again, and whatever it held - a panel, an audio voice - was never released. The engine
+    // HAS left the block, so the cleanup runs now.
+    if (!_running || !_host.isSceneRunning()) {
+        if (auto fault = runCleanup(cleanup)) std::rethrow_exception(fault);
+        return;
+    }
+
     // Stored BEFORE any advance runs, so leaving the block finds it.
-    _previousCleanup = combineCleanups(std::move(sceneCleanup), std::move(globalCleanup));
+    _previousCleanup = std::move(cleanup);
 
     state->syncPhase = false;
     if (state->called) {

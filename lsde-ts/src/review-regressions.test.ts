@@ -21,6 +21,14 @@
 //   #10 two handles on one scene ref again — the SET half this time: the second start evicted the
 //       first, which then ran for the rest of the process with nothing able to reach it
 //
+// A third pass found the same shape once more, this time on the one dead end that was not treated
+// as one:
+//
+//   #11 a block refused by onValidateNextBlock stopped its track WITHOUT ending it — the scene
+//       hung open for good, and a refused parallel branch was counted active forever
+//   #12 a handler that closed the flow from inside itself and returned a cleanup: the cleanup was
+//       stored on a block nobody would ever leave again, so it never ran
+//
 // The cross-runtime specs in `tests/*.json` cover the FORMAT. This file covers the ENGINE's own
 // contract, which is why it lives in TypeScript only — the three ports carry the same fixes and
 // their own equivalents.
@@ -247,5 +255,108 @@ it( '#10 the same scene opened twice is tracked and stopped twice', () => {
 
 	expect( first.isRunning() ).toBe( false );
 	expect( second.isRunning() ).toBe( false );
+	expect( e.isRunning() ).toBe( false );
+} );
+
+// ─── #11 — a refused block is a dead end, and dead ends end the flow ─────────
+//
+// `onValidateNextBlock` returning `{ valid: false }` made the track return silently, still marked
+// running. Nothing can restart it: there is no goto, no retry, and `start()` refuses a running
+// scene. So the main flow hung the whole scene open — no `onSceneExit`, `isRunning()` true for
+// ever, the handle still in the engine's registry — and a refused branch stayed in the pool as a
+// track `getActiveTracks()` kept counting.
+//
+// The guide has always described the engine's own flow as "onInvalidateBlock → scene stops". Every
+// other dead end here already did it: a NOTE loop, a port with no wire, a target that is missing.
+
+it( '#11 a block refused on the main flow closes the scene', () => {
+	const e = eng();
+	const seen: string[] = [];
+	let exits = 0;
+	let refused: string | undefined;
+
+	e.onDialog( ( { block, next } ) => { seen.push( block.id ); next(); } );
+	e.onSceneExit( () => { exits++; } );
+	e.onInvalidateBlock( ( { reason } ) => { refused = reason; } );
+	e.onValidateNextBlock( ( { nextBlock } ) =>
+		nextBlock.id === 'DIALOG-002' ? { valid: false, reason: 'no_keycard' } : { valid: true } );
+	e.init( { data: oneScene( [
+		dialog( 'DIALOG-001', { next: [link( 'DIALOG-002' )] } ),
+		dialog( 'DIALOG-002' ),
+	] ) } );
+
+	const h = e.scene( 's1' );
+	h.start();
+
+	expect( seen ).toEqual( ['DIALOG-001'] );
+	expect( refused ).toBe( 'no_keycard' );
+	expect( h.isRunning() ).toBe( false );
+	expect( exits ).toBe( 1 );
+	expect( e.isRunning() ).toBe( false );
+} );
+
+it( '#11b a refused parallel branch stops being counted as a track', () => {
+	const e = eng();
+	e.onDialog( ( { block, next } ) => {
+		if ( block.id === 'MAIN' ) return;   // the main flow parks, so the scene stays open
+		next();
+	} );
+	e.onValidateNextBlock( ( { nextBlock } ) =>
+		nextBlock.id === 'SIDE' ? { valid: false, reason: 'nope' } : { valid: true } );
+	e.init( { data: oneScene( [
+		dialog( 'FORK', { next: [link( 'MAIN' ), link( 'SIDE' )] } ),
+		dialog( 'MAIN' ),
+		dialog( 'SIDE', { props: { isAsync: true } } ),
+	] ) } );
+
+	const h = e.scene( 's1' );
+	h.start();
+
+	expect( h.isRunning() ).toBe( true );
+	expect( h.getActiveTracks() ).toBe( 0 );
+	expect( h.getTrackInfos() ).toEqual( [] );
+} );
+
+// ─── #12 — a cleanup returned after the flow was closed still runs ───────────
+//
+// `scene.cancel()` and `engine.stop()` are callable from inside a handler — the guide shows it.
+// The handler then returns its cleanup as usual, and the engine stored it for a departure that had
+// already happened: the block was never left again, so the panel it opened stayed open and the
+// voice it started kept playing, for the rest of the process.
+
+it( '#12 a handler that cancels its own scene still gets its cleanup run', () => {
+	const cleaned: string[] = [];
+	const e = eng();
+	e.onDialog( ( { block, scene } ) => {
+		if ( block.id === 'DIALOG-001' ) scene.cancel();
+		return () => { cleaned.push( block.id ); };
+	} );
+	e.init( { data: oneScene( [
+		dialog( 'DIALOG-001', { next: [link( 'DIALOG-002' )] } ),
+		dialog( 'DIALOG-002' ),
+	] ) } );
+
+	const h = e.scene( 's1' );
+	h.start();
+
+	expect( h.isRunning() ).toBe( false );
+	expect( cleaned ).toEqual( ['DIALOG-001'] );
+} );
+
+it( '#12b the same through engine.stop()', () => {
+	const cleaned: string[] = [];
+	const e = eng();
+	e.onDialog( ( { block } ) => {
+		if ( block.id === 'DIALOG-001' ) e.stop();
+		return () => { cleaned.push( block.id ); };
+	} );
+	e.init( { data: oneScene( [
+		dialog( 'DIALOG-001', { next: [link( 'DIALOG-002' )] } ),
+		dialog( 'DIALOG-002' ),
+	] ) } );
+
+	e.scene( 's1' ).start();
+
+	expect( cleaned ).toEqual( ['DIALOG-001'] );
 	expect( e.isRunning() ).toBe( false );
 } );

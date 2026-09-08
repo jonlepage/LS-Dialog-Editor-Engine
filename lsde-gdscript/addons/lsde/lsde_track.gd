@@ -148,6 +148,17 @@ func _process_block(starting_block: Dictionary) -> void:
 		return
 
 	if not _host._run_validation(block, _previous_block, _previous_character):
+		# A refusal is a dead end like any other, so it ENDS this track.
+		#
+		# There is no API to resume a refused track — no goto, no retry, and start() refuses a
+		# running scene. Returning silently left the track alive and idle for good: on the main
+		# flow that was the whole scene hung open, with no on_scene_exit, the handle still in the
+		# engine's registry and is_running() answering true forever; on a parallel branch it was a
+		# phantom track get_active_tracks() kept counting.
+		#
+		# Every other dead end here already does it: a NOTE loop, a port with no wire, a missing
+		# target.
+		_end_flow()
 		return
 
 	_current_block = block
@@ -225,8 +236,19 @@ func _execute_block_handler(block: Dictionary) -> void:
 	elif global_handler.is_valid():
 		global_cleanup = global_handler.call(args)
 
+	var cleanup: Callable = LsdeTrack.combine_cleanups(scene_cleanup, global_cleanup)
+
+	# The handler may have closed the flow from inside itself — scene.cancel(), engine.stop(),
+	# anything that ends this track. Storing the cleanup then hung it on a block nobody will ever
+	# leave again, and whatever it held — a panel, an audio voice — was never released. The engine
+	# HAS left the block, so the cleanup runs now.
+	if not _running or not _host._is_scene_running():
+		if cleanup.is_valid():
+			cleanup.call()
+		return
+
 	# Stored BEFORE any advance runs, so leaving the block finds it.
-	_previous_cleanup = LsdeTrack.combine_cleanups(scene_cleanup, global_cleanup)
+	_previous_cleanup = cleanup
 
 	state[1] = false  # sync_phase = false
 	if state[0]:  # next_called

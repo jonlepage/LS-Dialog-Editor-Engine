@@ -129,6 +129,11 @@ namespace LsdeDialogEngine
 
             if (payload.Format != SupportedFormat)
             {
+                // No naming-convention check here, unlike TypeScript and GDScript: those two
+                // are handed the raw payload and can spot an `exported_at` key. This runtime
+                // validates a typed object the game already deserialized, so the original key
+                // names are gone. The file is refused either way — WRONG_NAMING_CONVENTION is a
+                // better message, not a different verdict.
                 errors.Add(new DiagnosticEntry
                 {
                     Code = "INVALID_FORMAT",

@@ -510,3 +510,121 @@ TEST(Robustness, DestroyingARunningHandleLeavesNothingBehind) {
     engine.stop();          // must not touch freed memory
     engine.getCurrentBlocks();
 }
+
+// ─── A refused block is a dead end, and dead ends end the flow ───────────────
+//
+// onValidateNextBlock returning valid:false made the track return silently, still marked running.
+// Nothing can restart it — no goto, no retry, and start() refuses a running scene — so the main
+// flow hung the whole scene open and a refused branch stayed counted as active.
+
+TEST(Robustness, ABlockRefusedOnTheMainFlowClosesTheScene) {
+    std::vector<std::string> seen;
+    int exits = 0;
+    std::string refused;
+
+    auto b1 = dialog("DIALOG-001");
+    wire(b1, "DIALOG-002");
+
+    DialogueEngine engine;
+    ASSERT_TRUE(engine.init({oneScene({b1, dialog("DIALOG-002")})}).errors.empty());
+    registerAllHandlers(engine);
+
+    engine.onDialog([&seen](ISceneHandle*, const BlueprintBlock* b, IDialogContext*, std::function<void()> next) -> CleanupFn {
+        seen.push_back(b->id);
+        next();
+        return {};
+    });
+    engine.onSceneExit([&exits](const SceneLifecycleArgs&) { exits++; });
+    engine.onInvalidateBlock([&refused](const InvalidateBlockArgs& args) { refused = args.reason; });
+    engine.onValidateNextBlock([](const ValidateNextBlockArgs& args) {
+        return args.nextBlock->id == "DIALOG-002" ? ValidationResult::fail("no_keycard")
+                                                  : ValidationResult::ok();
+    });
+
+    auto handle = engine.scene("s1");
+    handle->start();
+
+    EXPECT_EQ(seen, std::vector<std::string>({"DIALOG-001"}));
+    EXPECT_EQ(refused, "no_keycard");
+    EXPECT_FALSE(handle->isRunning());
+    EXPECT_EQ(exits, 1);
+    EXPECT_FALSE(engine.isRunning());
+}
+
+TEST(Robustness, ARefusedParallelBranchStopsBeingCountedAsATrack) {
+    auto fork = dialog("FORK");
+    wire(fork, "MAIN");
+    wire(fork, "SIDE");
+    auto side = dialog("SIDE");
+    side.props["isAsync"] = true;
+
+    DialogueEngine engine;
+    ASSERT_TRUE(engine.init({oneScene({fork, dialog("MAIN"), side})}).errors.empty());
+    registerAllHandlers(engine);
+
+    engine.onDialog([](ISceneHandle*, const BlueprintBlock* b, IDialogContext*, std::function<void()> next) -> CleanupFn {
+        if (b->id == "MAIN") return {};  // the main flow parks
+        next();
+        return {};
+    });
+    engine.onValidateNextBlock([](const ValidateNextBlockArgs& args) {
+        return args.nextBlock->id == "SIDE" ? ValidationResult::fail("nope") : ValidationResult::ok();
+    });
+
+    auto handle = engine.scene("s1");
+    handle->start();
+
+    EXPECT_TRUE(handle->isRunning());
+    EXPECT_EQ(handle->getActiveTracks(), 0);
+    EXPECT_TRUE(handle->getTrackInfos().empty());
+}
+
+// ─── A cleanup returned after the flow was closed still runs ─────────────────
+//
+// scene->cancel() and engine.stop() are callable from inside a handler. The handler then returns
+// its cleanup as usual, and the engine stored it for a departure that had already happened: the
+// block was never left again, so whatever it held was never released.
+
+TEST(Robustness, AHandlerThatCancelsItsOwnSceneStillGetsItsCleanupRun) {
+    std::vector<std::string> cleaned;
+
+    auto b1 = dialog("DIALOG-001");
+    wire(b1, "DIALOG-002");
+
+    DialogueEngine engine;
+    ASSERT_TRUE(engine.init({oneScene({b1, dialog("DIALOG-002")})}).errors.empty());
+    registerAllHandlers(engine);
+    engine.onDialog([&cleaned](ISceneHandle* scene, const BlueprintBlock* b, IDialogContext*, std::function<void()>) -> CleanupFn {
+        std::string id = b->id;
+        if (id == "DIALOG-001") scene->cancel();
+        return [&cleaned, id]() { cleaned.push_back(id); };
+    });
+
+    auto handle = engine.scene("s1");
+    handle->start();
+
+    EXPECT_FALSE(handle->isRunning());
+    EXPECT_EQ(cleaned, std::vector<std::string>({"DIALOG-001"}));
+}
+
+TEST(Robustness, TheSameThroughEngineStop) {
+    std::vector<std::string> cleaned;
+
+    auto b1 = dialog("DIALOG-001");
+    wire(b1, "DIALOG-002");
+
+    DialogueEngine engine;
+    ASSERT_TRUE(engine.init({oneScene({b1, dialog("DIALOG-002")})}).errors.empty());
+    registerAllHandlers(engine);
+    engine.onDialog([&cleaned, &engine](ISceneHandle*, const BlueprintBlock* b, IDialogContext*, std::function<void()>) -> CleanupFn {
+        std::string id = b->id;
+        if (id == "DIALOG-001") engine.stop();
+        return [&cleaned, id]() { cleaned.push_back(id); };
+    });
+
+    auto handle = engine.scene("s1");
+    handle->start();
+
+    EXPECT_EQ(cleaned, std::vector<std::string>({"DIALOG-001"}));
+    EXPECT_FALSE(engine.isRunning());
+}
