@@ -1,7 +1,7 @@
 // LSDE Dialog Engine — Shared helpers
 
 import type {
-	BlueprintBlock, DialogBlock, ChoiceBlock, ConditionBlock, ActionBlock, NoteBlock,
+	BlueprintBlock, DialogBlock, ChoiceBlock, ConditionBlock, RouterBlock, ActionBlock, NoteBlock,
 } from './types.js';
 import { BlockType } from './types.js';
 
@@ -17,6 +17,10 @@ export function isChoiceBlock( block: BlueprintBlock ): block is ChoiceBlock {
 
 export function isConditionBlock( block: BlueprintBlock ): block is ConditionBlock {
 	return block.type === BlockType.Condition;
+}
+
+export function isRouterBlock( block: BlueprintBlock ): block is RouterBlock {
+	return block.type === BlockType.Router;
 }
 
 export function isActionBlock( block: BlueprintBlock ): block is ActionBlock {

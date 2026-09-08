@@ -17,7 +17,7 @@
 
 import type {
 	Block, Card, RuntimeChoiceItem, RuntimeConditionCase,
-	DialogContext, ChoiceContext, ConditionContext, ActionContext,
+	DialogContext, ChoiceContext, ConditionContext, RouterContext, ActionContext,
 } from './types.js';
 
 // ─── Internal extended types (engine-internal state) ─────────────────────────
@@ -37,6 +37,12 @@ export interface InternalConditionContext extends ConditionContext {
 	_globalPrevented: boolean;
 	/** The port the handler picked, overriding what the cases said. */
 	_conditionPort: string | undefined;
+}
+
+export interface InternalRouterContext extends RouterContext {
+	_globalPrevented: boolean;
+	/** Every port the block leaves by, the continuation last. See `pickRouterPorts`. */
+	_routerPorts: string[] | undefined;
 }
 
 export interface InternalActionContext extends ActionContext {
@@ -148,6 +154,33 @@ export function createConditionContext(
 		resolve( port: string ) {
 			ctx._conditionPort = port;
 		},
+		preventGlobalHandler() {
+			ctx._globalPrevented = true;
+		},
+	};
+	return ctx;
+}
+
+/**
+ * A ROUTER's context: the same pre-evaluated cases, and nothing to answer with.
+ *
+ * No `resolve`. By the time a handler could speak, every true case has launched its port and the
+ * continuation is picked — there is no single exit left to override. The handler is an observation
+ * point, which is why the type requires none at all.
+ */
+export function createRouterContext(
+	block: Block,
+	cards: ResolvedCards,
+	cases: RuntimeConditionCase[],
+): InternalRouterContext {
+	const ctx: InternalRouterContext = {
+		_globalPrevented: false,
+		_routerPorts: undefined,
+		character: cards.character,
+		actors: cards.actors,
+		emotion: cards.emotion,
+		intensity: block.intensity,
+		cases,
 		preventGlobalHandler() {
 			ctx._globalPrevented = true;
 		},

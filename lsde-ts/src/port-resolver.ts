@@ -46,6 +46,9 @@ export function resolvePort( input: PortResolutionInput ): PortResolutionResult 
 		case BlockType.Condition:
 			return resolveConditionPort( links, input.conditionPort );
 
+		case BlockType.Router:
+			return resolveRouterPorts( links, input.routerPorts );
+
 		case BlockType.Action:
 			return resolveActionPort( links, input.actionRejected );
 
@@ -96,6 +99,31 @@ function resolveChoicePort( links: Link[], selectedOptionId: string | undefined 
 function resolveConditionPort( links: Link[], conditionPort: string | undefined ): PortResolutionResult {
 	if ( conditionPort === undefined ) return NONE;
 	return { links: onPort( links, conditionPort ) };
+}
+
+/**
+ * A router leaves by SEVERAL ports at once: the `K*` of each true case, then `then` or `catch`.
+ *
+ * Which ports those are was decided before we got here, by the condition evaluator — the same
+ * division of labour as a condition, and for the same reason: only it knows the game's answers.
+ *
+ * Order is preserved, and the continuation is last. That is what lets the traversal keep
+ * `then`/`catch` as the main flow: it takes the first non-async target, and in the arrangement
+ * LSDE recommends the case routes all carry `isAsync`.
+ *
+ * A port with no wire contributes nothing and is not an error — a designer who launched nothing
+ * on a true case simply drew it that way. `undefined` means nothing was decided, so nowhere to go.
+ */
+function resolveRouterPorts( links: Link[], routerPorts: string[] | undefined ): PortResolutionResult {
+	if ( routerPorts === undefined ) return NONE;
+
+	const out: Link[] = [];
+	for ( const port of routerPorts ) {
+		for ( const link of links ) {
+			if ( link.port === port ) out.push( link );
+		}
+	}
+	return { links: out };
 }
 
 /**

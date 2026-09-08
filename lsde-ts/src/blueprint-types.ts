@@ -10,11 +10,12 @@
 // The engine names these types differently in its public API (Blueprints -> BlueprintExport,
 // Scene -> BlueprintScene, ...). Those aliases live in types.ts so this file stays replaceable.
 
-/** What a block is. Decides which optional fields it carries. */
+/** What a block is. Decides which optional fields it carries, and how the engine reads them. condition and router carry the SAME cases and are read in opposite ways: a condition stops at the first true case and leaves by its port (or by default when none matched); a router evaluates EVERY case, launches one parallel track per true case, then always continues - on then when all cases were true, on catch when any was false. A router with no case at all leaves by then, the way Promise.all([]) resolves. */
 export const BlockType = {
 	Dialog: "dialog",
 	Choice: "choice",
 	Condition: "condition",
+	Router: "router",
 	Action: "action",
 	Note: "note",
 } as const;
@@ -70,9 +71,9 @@ export const Ports = {
 	In: "in",
 	/** The default exit of a dialog, and the true exit of an if-style condition. */
 	Out: "out",
-	/** The exit of an action block once its calls succeeded. */
+	/** The nominal exit, on two block types: an action whose calls all succeeded, and a router whose cases were ALL true. */
 	Then: "then",
-	/** The exit of an action block when a call failed. */
+	/** The exception exit, on the same two: an action where a call failed, and a router where at least one case was false. On a router it does NOT cancel anything - the tracks of the true cases are already running, exactly like a Promise.all that rejects. */
 	Catch: "catch",
 	/** The fallback exit of a condition block: no case matched. */
 	Default: "default",
@@ -165,7 +166,7 @@ export interface ConditionTest {
 	join?: ConditionJoin;
 }
 
-/** One case of a condition block: the exit port, and what must hold for it. */
+/** One case of a condition or a router block: the exit port, and what must hold for it. The data is identical on both; only the engine's reading differs - see BlockType. */
 export interface ConditionCase {
 	/** The exit port of this case (K1...), or the block's out when cases share one exit. */
 	port: string;
@@ -213,7 +214,7 @@ export interface Block {
 	props?: PropertyBag;
 	/** Action blocks: what to run, in order. */
 	calls?: ActionCall[];
-	/** Condition blocks: the cases, in evaluation order. */
+	/** Condition AND router blocks: the cases, in evaluation order. */
 	cases?: ConditionCase[];
 	/** Choice blocks: the answers, in display order. */
 	options?: Option[];

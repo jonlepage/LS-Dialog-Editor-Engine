@@ -134,6 +134,45 @@ export function pickPortFromResults(
 }
 
 /**
+ * A ROUTER's exits: the port of every true case, then `then` or `catch`.
+ *
+ * The opposite reading of the same `cases` a condition carries. A condition asks *which one* and
+ * leaves by a single port; a router asks *which ones*, launches each of them, and continues
+ * besides — by `then` when every case held, by `catch` when any did not.
+ *
+ * Three rules this encodes, all of them from the format's own contract:
+ *
+ * - **No break.** Every case is counted, so a false one in the middle does not hide the true ones
+ *   after it. That is the whole difference with a condition.
+ * - **The tally is over CASES, not over ports.** A port carrying several wires launches several
+ *   tracks and still counts as one case — and two cases wired to the same block dispatch it twice.
+ * - **No cases at all → `then`**, the way `Promise.all([])` resolves.
+ *
+ * The continuation is LAST in the list on purpose: the traversal keeps the first non-async target
+ * as the main flow, so `then`/`catch` stays the main flow as long as the case routes are async.
+ *
+ * `catch` cancels nothing. The tracks of the true cases are already running by the time the tally
+ * is read — exactly like a `Promise.all` that rejects while its promises carry on.
+ */
+export function pickRouterPorts(
+	cases: ConditionCase[] | undefined,
+	results: boolean[],
+): string[] {
+	if ( !cases || cases.length === 0 ) return [Ports.Then];
+
+	const ports: string[] = [];
+	let matched = 0;
+	for ( let i = 0; i < cases.length; i++ ) {
+		if ( !results[i] ) continue;
+		ports.push( cases[i]!.port );
+		matched++;
+	}
+
+	ports.push( matched === cases.length ? Ports.Then : Ports.Catch );
+	return ports;
+}
+
+/**
  * Evaluate every case on its own, without picking a port.
  *
  * Handed to a game that wants to show what matched without changing where the flow goes. The

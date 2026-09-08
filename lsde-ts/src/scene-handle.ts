@@ -22,12 +22,13 @@ import { ConditionOperator, Ports } from './types.js';
 import { SceneGraph } from './graph.js';
 import { HandlerRegistry, SceneHandlerRegistry } from './handler-registry.js';
 import {
-	createDialogContext, createChoiceContext, createConditionContext, createActionContext,
+	createDialogContext, createChoiceContext, createConditionContext, createRouterContext,
+	createActionContext,
 	resolveCards, type ResolvedCards,
 } from './block-context.js';
-import { isDialogBlock, isChoiceBlock, isConditionBlock, isActionBlock } from './utils.js';
+import { isDialogBlock, isChoiceBlock, isConditionBlock, isRouterBlock, isActionBlock } from './utils.js';
 import {
-	pickPortFromResults, tagOptionVisibility,
+	pickPortFromResults, pickRouterPorts, tagOptionVisibility,
 	evaluateConditionChain as evaluateConditionChainOf,
 } from './condition-evaluator.js';
 import {
@@ -507,6 +508,23 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 			ctx._conditionPort = pickPortFromResults(
 				block.cases, portPerCase, cases.map( c => c.result === true ),
 			);
+			return ctx;
+		}
+
+		if ( isRouterBlock( block ) ) {
+			// The same pre-evaluation as a condition, read the opposite way: EVERY case counts,
+			// each true one launches its port, and the tally picks `then` or `catch`. So the same
+			// `onResolveCondition` answers a router, once per test, exactly as it answers a
+			// condition — there is no second evaluator and no router-specific hook.
+			const evaluate = this.routingEvaluator();
+			const cases: RuntimeConditionCase[] = ( block.cases ?? [] ).map( c => ( {
+				port: c.port,
+				when: c.when,
+				result: evaluateConditionChainOf( c.when, evaluate ),
+			} ) );
+
+			const ctx = createRouterContext( block, cards, cases );
+			ctx._routerPorts = pickRouterPorts( block.cases, cases.map( c => c.result === true ) );
 			return ctx;
 		}
 

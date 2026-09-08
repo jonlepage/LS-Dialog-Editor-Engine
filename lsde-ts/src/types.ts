@@ -55,6 +55,12 @@ export type DialogBlock = BlockOfType<typeof BlockType.Dialog>;
 export type ChoiceBlock = BlockOfType<typeof BlockType.Choice>;
 /** A switch. Carries `cases`, and exits by `out`/`default` or by a case port (`K1`…). */
 export type ConditionBlock = BlockOfType<typeof BlockType.Condition>;
+/**
+ * A dispatcher. Carries the SAME `cases` as a condition and reads them the opposite way: every
+ * case is evaluated, each true one launches its port, and the flow then always continues — by
+ * `then` when all of them held, by `catch` when any did not.
+ */
+export type RouterBlock = BlockOfType<typeof BlockType.Router>;
 /** A call into the game. Carries `calls`, and exits by `then` or `catch`. */
 export type ActionBlock = BlockOfType<typeof BlockType.Action>;
 /** Designer documentation. Never dispatched — the engine steps over it. */
@@ -294,6 +300,19 @@ export interface ConditionContext extends BaseBlockContext {
 	 * dispatcher. Both are gone: a condition picks one path.
 	 */
 	resolve: ( port: string ) => void;
+}
+
+/**
+ * What a ROUTER handler gets.
+ *
+ * The same pre-evaluated `cases` as a condition, and **no `resolve`**: a router's exits are a
+ * tally, not a choice. Every true case has already launched its port and the continuation is
+ * already picked — `then` when they all held, `catch` otherwise — by the time a handler could
+ * speak. There is nothing left to override, which is also why no handler is required for the type.
+ */
+export interface RouterContext extends BaseBlockContext {
+	/** The block's cases, each with its port and its pre-evaluated `result`. ALL of them ran. */
+	cases: RuntimeConditionCase[];
 }
 
 /** What an ACTION handler gets. */
@@ -697,6 +716,16 @@ export interface PortResolutionInput {
 	selectedOptionId?: string;
 	/** CONDITION only: the port its cases picked — `out`, `default`, or `K1`…. */
 	conditionPort?: string;
+	/**
+	 * ROUTER only: every port it leaves by, in order — the `K*` of each true case, then `then` or
+	 * `catch` LAST.
+	 *
+	 * A list and not one port, because a router does not pick an exit: it launches one per true
+	 * case and continues besides. The continuation comes last so that the traversal, which keeps
+	 * the first non-async target as the main flow, keeps `then`/`catch` when the case routes are
+	 * async — which is the arrangement LSDE recommends and `init()` warns about otherwise.
+	 */
+	routerPorts?: string[];
 	/** ACTION only: `true` when a call failed, so `catch` is tried before `then`. */
 	actionRejected?: boolean;
 	/** DIALOG with `portPerCharacter`: the CARD ID of the speaking actor (`var1`), never an index. */

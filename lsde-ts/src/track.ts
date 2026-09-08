@@ -30,11 +30,13 @@ import type { HandlerRegistry, SceneHandlerRegistry } from './handler-registry.j
 import { resolveHandler } from './handler-registry.js';
 import { resolvePort } from './port-resolver.js';
 import type {
-	InternalDialogContext, InternalChoiceContext, InternalConditionContext, InternalActionContext,
+	InternalDialogContext, InternalChoiceContext, InternalConditionContext,
+	InternalRouterContext, InternalActionContext,
 } from './block-context.js';
 
 export type InternalContext =
-	InternalDialogContext | InternalChoiceContext | InternalConditionContext | InternalActionContext;
+	InternalDialogContext | InternalChoiceContext | InternalConditionContext
+	| InternalRouterContext | InternalActionContext;
 
 /**
  * The id of the track the player is watching. Every other track is numbered from 1.
@@ -468,6 +470,7 @@ export class Track implements Waiter {
 			links: sceneGraph.getOutgoingLinks( block.id ),
 			selectedOptionId: context && '_selectedOptionId' in context ? context._selectedOptionId : undefined,
 			conditionPort: context && '_conditionPort' in context ? context._conditionPort : undefined,
+			routerPorts: context && '_routerPorts' in context ? context._routerPorts : undefined,
 			actionRejected: context && '_actionRejected' in context ? context._actionRejected : undefined,
 			actorPort: context && '_actorPort' in context ? context._actorPort : undefined,
 		} );
