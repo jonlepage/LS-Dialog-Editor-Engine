@@ -2152,3 +2152,33 @@ Les onze pages de guide ont le **même découpage en sections dans les quatre la
 et le chinois ne sont plus en retard sur `block-types`, `blueprints` ni `lifecycle`. Aucune API
 morte, aucun identifiant v1 dans `docs/`. Le site se construit, 417 tests TypeScript, `tsc` propre.
 
+## « Les autres disent-elles la même chose ? »
+
+Le compte de sections identique ne prouve rien sur le contenu. Un comparateur structurel — niveaux
+de titres, extraits `_shared` inclus, blocs de code par langage, conteneurs `:::`, lignes de
+tableau, diagrammes mermaid, liens internes normalisés, et **chaque identifiant entre backticks** —
+a été passé sur les onze pages des quatre langues.
+
+Trois fichiers divergeaient. Deux divergences comptaient :
+
+- **`handlers`** — le japonais et le chinois avaient **une ligne de tableau de plus** : une entrée
+  barrée disant « `onResolveCondition` est déprécié, utilisez `onResolveCondition` », pointant vers
+  `#setchoicefilter`, une ancre supprimée. C'est la ligne que j'avais retirée de l'anglais et du
+  français à la quatrième revue. Ces deux langues décrivaient aussi les overrides de block comme
+  ciblés **par UUID** — le mot qu'un balayage précédent avait éliminé partout ailleurs.
+- **`block-types`** — le **français disait plus que les trois autres** : « l'id de l'option EST le
+  port par lequel le flow sort (`C1`, `C2`…) ». Un fait central du routage v2, absent de l'anglais,
+  du japonais et du chinois. Ajouté aux trois.
+
+Et une trouvaille au passage : le tableau `NativeProperties` de `lifecycle` portait encore l'ancien
+sens de `waitForBlocks` en japonais et en chinois — « avant que ce block progresse » — et le
+français disait « avant d'être **affiché** » là où `block-types` disait déjà « avant d'être
+**dispatché** ». Le même mot partout, maintenant.
+
+Il reste **une** divergence, cosmétique et assumée : le libellé du lien vers `ConditionTest` est
+« conditions » en français, « Conditions » en anglais, « condition » en japonais et en chinois —
+le mot naturel de chaque langue pour la même cible.
+
+La navigation ne peut pas dériver : `localeNav(prefix)` et `guideSidebar(prefix)` la construisent
+depuis une seule définition, avec une table de libellés par locale.
+

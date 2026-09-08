@@ -135,7 +135,7 @@ When the narrative designer assigns a dedicated output per character ([`portPerC
 
 ## CHOICE
 
-A choice block represents a branching point where the player picks a response — a dialogue menu, a list of options. `context.options` contains all available options. When [`onResolveCondition()`](/guide/choice-visibility) is configured, each option is tagged `visible: true | false` — the handler filters and displays whichever it wants. After the player interacts, `selectChoice(optionId)` tells the engine which path to follow, then `next()` advances the flow.
+A choice block represents a branching point where the player picks a response — a dialogue menu, a list of options. `context.options` contains all available options. When [`onResolveCondition()`](/guide/choice-visibility) is configured, each option is tagged `visible: true | false` — the handler filters and displays whichever it wants. After the player interacts, `selectChoice(optionId)` tells the engine which path to follow — **the option id IS the port** the flow leaves by (`C1`, `C2`…) — then `next()` advances the flow.
 
 <!--@include: ../_shared/block-choice.md-->
 

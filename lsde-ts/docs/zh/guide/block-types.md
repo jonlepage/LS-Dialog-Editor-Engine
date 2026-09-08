@@ -16,7 +16,7 @@ dialog block 代表一句台词 — 角色对话、旁白、屏幕文字。engin
 
 ## CHOICE
 
-choice block 是玩家做出选择的分支点 — 对话菜单、选项列表。`context.options` 包含所有可用选项。当配置了 [`onResolveCondition()`](/zh/guide/choice-visibility) 时，每个选项被标记为 `visible: true | false` — handler 过滤并显示想要的选项。玩家交互后，`selectChoice(optionId)` 告诉 engine 走哪条路径，然后 `next()` 推进 flow。
+choice block 是玩家做出选择的分支点 — 对话菜单、选项列表。`context.options` 包含所有可用选项。当配置了 [`onResolveCondition()`](/zh/guide/choice-visibility) 时，每个选项被标记为 `visible: true | false` — handler 过滤并显示想要的选项。玩家交互后，`selectChoice(optionId)` 告诉 engine 走哪条路径 — **option 的 id 就是** flow 离开时所用的 port（`C1`、`C2`…）— 然后 `next()` 推进 flow。
 
 <!--@include: ../../_shared/block-choice.md-->
 

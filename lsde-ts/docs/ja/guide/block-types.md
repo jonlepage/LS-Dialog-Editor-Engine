@@ -16,7 +16,7 @@ dialog block はセリフを表します — キャラクターの会話、ナ�
 
 ## CHOICE
 
-choice block はプレイヤーが選択する分岐点です — ダイアログメニュー、選択肢リスト。`context.options` に全ての選択肢が含まれます。[`onResolveCondition()`](/ja/guide/choice-visibility) が設定されている場合、各選択肢は `visible: true | false` でタグ付けされ、handler が表示する選択肢をフィルタリングします。プレイヤーの操作後、`selectChoice(optionId)` で engine にどのパスを辿るかを伝え、`next()` でフローを進めます。
+choice block はプレイヤーが選択する分岐点です — ダイアログメニュー、選択肢リスト。`context.options` に全ての選択肢が含まれます。[`onResolveCondition()`](/ja/guide/choice-visibility) が設定されている場合、各選択肢は `visible: true | false` でタグ付けされ、handler が表示する選択肢をフィルタリングします。プレイヤーの操作後、`selectChoice(optionId)` で engine にどのパスを辿るかを伝え — **option の id がそのまま出口 port です**（`C1`、`C2`…）— `next()` でフローを進めます。
 
 <!--@include: ../../_shared/block-choice.md-->
 

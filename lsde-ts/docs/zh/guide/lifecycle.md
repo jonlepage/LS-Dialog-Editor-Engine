@@ -83,7 +83,7 @@ v1 会静默吞掉 handler 的异常 — 连日志都没有 — 而同一个 han
 | `portPerCharacter` | `boolean?` | metadata 中每个角色一个输出端口 |
 | `skipIfMissingActor` | `boolean?` | 如果引用的角色不存在则跳过 block |
 | `debug` | `boolean?` | 编辑器调试标志 |
-| `waitForBlocks` | `string[]?` | 此 block 进展前必须已被访问的 block UUID |
+| `waitForBlocks` | `string[]?` | **本 scene 的** block id。在它们全部被访问之前，block 会**在被分发之前**被扣住 |
 | `waitInput` | `boolean?` | 用于显式玩家输入控制的被动标志 |
 
 ## Visual Reference

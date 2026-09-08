@@ -85,7 +85,7 @@ engine が block をディスパッチする方法を制御する実行プロパ
 | `portPerCharacter` | `boolean?` | metadata 内のキャラクターごとに出力ポートを作成 |
 | `skipIfMissingActor` | `boolean?` | 参照されたアクターが不在の場合、block をスキップ |
 | `debug` | `boolean?` | エディタ用デバッグフラグ |
-| `waitForBlocks` | `string[]?` | この block が進行する前に訪問済みでなければならない block の UUID |
+| `waitForBlocks` | `string[]?` | **この scene の** block id。それらがすべて訪問されるまで、block は**ディスパッチされる前に**保持されます |
 | `waitInput` | `boolean?` | 明示的なプレイヤー入力制御用のパッシブフラグ |
 
 ## Visual Reference

@@ -18,13 +18,12 @@ engine 公开以下 handler：
 | [`onInvalidateBlock`](/api-ref/classes/DialogueEngine#oninvalidateblock) | global | 验证失败时的处理 |
 | [`onSceneEnter`](/api-ref/classes/DialogueEngine#onsceneenter) | global / scene | scene 开始 |
 | [`onSceneExit`](/api-ref/classes/DialogueEngine#onsceneexit) | global / scene | scene 结束 |
-| [`onBlock`](/api-ref/interfaces/SceneHandle#onblock) | scene | 按 UUID 覆盖特定 block |
-| [`onDialogId`](/api-ref/interfaces/SceneHandle#ondialogid) | scene | 按 UUID 覆盖特定 DIALOG block（类型安全） |
-| [`onChoiceId`](/api-ref/interfaces/SceneHandle#onchoiceid) | scene | 按 UUID 覆盖特定 CHOICE block（类型安全） |
-| [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | 按 UUID 覆盖特定 CONDITION block（类型安全） |
-| [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | 按 UUID 覆盖特定 ACTION block（类型安全） |
+| [`onBlock`](/api-ref/interfaces/SceneHandle#onblock) | scene | 按 id（`DIALOG-001`）覆盖特定 block |
+| [`onDialogId`](/api-ref/interfaces/SceneHandle#ondialogid) | scene | 按 id 覆盖特定 DIALOG block（类型安全） |
+| [`onChoiceId`](/api-ref/interfaces/SceneHandle#onchoiceid) | scene | 按 id 覆盖特定 CHOICE block（类型安全） |
+| [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | 按 id 覆盖特定 CONDITION block（类型安全） |
+| [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | 按 id 覆盖特定 ACTION block（类型安全） |
 | [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) | global | 统一 condition 解析器（choice 可见性 + condition 预评估） |
-| ~~[`onResolveCondition`](/api-ref/classes/DialogueEngine#setchoicefilter)~~ | global | _已弃用 — 请使用 `onResolveCondition` 代替_ |
 
 `onDialog`、`onChoice` 和 `onAction` 是**必需的** — `start()` 调用时 engine 验证它们是否存在，缺失时抛出描述性错误。当安装了 `onResolveCondition` 时，`onCondition` 是**可选的** — engine 从预评估的 condition 组中自动路由。
 

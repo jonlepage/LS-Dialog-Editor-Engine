@@ -18,13 +18,12 @@ engine は以下の handler を公開しています：
 | [`onInvalidateBlock`](/api-ref/classes/DialogueEngine#oninvalidateblock) | global | バリデーション失敗時の処理 |
 | [`onSceneEnter`](/api-ref/classes/DialogueEngine#onsceneenter) | global / scene | scene の開始 |
 | [`onSceneExit`](/api-ref/classes/DialogueEngine#onsceneexit) | global / scene | scene の終了 |
-| [`onBlock`](/api-ref/interfaces/SceneHandle#onblock) | scene | UUID で特定の block をオーバーライド |
-| [`onDialogId`](/api-ref/interfaces/SceneHandle#ondialogid) | scene | UUID で特定の DIALOG block をオーバーライド（型安全） |
-| [`onChoiceId`](/api-ref/interfaces/SceneHandle#onchoiceid) | scene | UUID で特定の CHOICE block をオーバーライド（型安全） |
-| [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | UUID で特定の CONDITION block をオーバーライド（型安全） |
-| [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | UUID で特定の ACTION block をオーバーライド（型安全） |
+| [`onBlock`](/api-ref/interfaces/SceneHandle#onblock) | scene | id（`DIALOG-001`）で特定の block をオーバーライド |
+| [`onDialogId`](/api-ref/interfaces/SceneHandle#ondialogid) | scene | id で特定の DIALOG block をオーバーライド（型安全） |
+| [`onChoiceId`](/api-ref/interfaces/SceneHandle#onchoiceid) | scene | id で特定の CHOICE block をオーバーライド（型安全） |
+| [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | id で特定の CONDITION block をオーバーライド（型安全） |
+| [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | id で特定の ACTION block をオーバーライド（型安全） |
 | [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) | global | 統合 condition リゾルバー（choice の可視性 + condition の事前評価） |
-| ~~[`onResolveCondition`](/api-ref/classes/DialogueEngine#setchoicefilter)~~ | global | _非推奨 — 代わりに `onResolveCondition` を使用してください_ |
 
 `onDialog`、`onChoice`、`onAction` は**必須**です — `start()` 呼び出し時に engine がその存在を検証し、欠けている場合は記述的なエラーをスローします。`onCondition` は `onResolveCondition` がインストールされている場合は**オプション**です — engine が事前評価された condition グループから自動ルーティングします。
 

@@ -130,6 +130,12 @@ manager matches the number on the writer's screen.
   `RuntimeChoiceItem`, not `RuntimeOption`
 - `integration` still said `context.resolve(true)` routes to port 0 — v1, in every language
 - A function parameter's type value is `dictionaryKey`, not `dictionary`
+- A structural comparison of the four locales — headings, shared includes, code fences, table
+  rows, links, every inline identifier — caught what a section count could not: a struck-out
+  row in the Japanese and Chinese handler tables deprecating `onResolveCondition` in favour of
+  itself, pointing at the removed `setChoiceFilter`; block overrides described as keyed by
+  UUID; `waitForBlocks` still carrying its v1 meaning in those two languages; and the fact
+  that an option's id IS its exit port, which only the French said
 
 ## v0.3.0 (2026-04-01)
 
