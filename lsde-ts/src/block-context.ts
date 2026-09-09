@@ -71,6 +71,7 @@ export function resolveCards(
 	block: Block,
 	lookup: ( cardId: string ) => Card | undefined,
 	pickCharacter: ( ( actors: Card[] ) => Card | undefined ) | undefined,
+	designatedActorId?: string,
 ): ResolvedCards {
 	const actors: Card[] = [];
 	for ( const id of block.actors ?? [] ) {
@@ -79,7 +80,14 @@ export function resolveCards(
 	}
 
 	const emotion = block.emotion ? lookup( block.emotion ) : undefined;
-	const character = pickCharacter ? pickCharacter( actors ) : undefined;
+
+	// `inPortPerCharacter`: the wire named ONE actor, so that is the only one offered. The game is
+	// still asked — it may answer `undefined`, which says the character does not exist — but it
+	// cannot pick a different one, and `actors` stays the whole cast either way.
+	const offered = designatedActorId !== undefined
+		? actors.filter( card => card.id === designatedActorId )
+		: actors;
+	const character = pickCharacter ? pickCharacter( offered ) : undefined;
 
 	return { actors, emotion, character };
 }

@@ -96,6 +96,18 @@ export interface NativeProperties {
 	debug?: boolean;
 	/** One exit port per actor id, `out` as the fallback. */
 	portPerCharacter?: boolean;
+	/**
+	 * One ENTRY port per actor id, `in` as the fallback — the mirror of `portPerCharacter`.
+	 *
+	 * The wire names the speaker: a link's `toPort` carries the CARD ID of the actor the block is
+	 * to be assigned to on that pass. This is what lets several wires reach one block and each
+	 * stand for a different actor — a block alone cannot tell which path brought it.
+	 *
+	 * The engine still ASKS: `onResolveCharacter` is handed that one actor rather than the whole
+	 * cast, and a game that returns `undefined` says the character does not exist. Entering
+	 * through `in` names nobody, and the callback gets the whole list as everywhere else.
+	 */
+	inPortPerCharacter?: boolean;
 	/** Skip the block when its actor is absent at runtime. Passed through. */
 	skipIfMissingActor?: boolean;
 	/** Condition blocks: each case exits by its own port instead of sharing `out`. */
@@ -123,12 +135,12 @@ export interface NativeProperties {
 }
 
 /**
- * The nine ids of {@link NativeProperties}, to sort a `props` bag into natives and the designer's
+ * The ten ids of {@link NativeProperties}, to sort a `props` bag into natives and the designer's
  * own properties. Anything not in here belongs to the game.
  */
 export const NATIVE_PROPERTY_IDS = [
 	'isAsync', 'delay', 'timeout', 'waitInput', 'debug',
-	'portPerCharacter', 'skipIfMissingActor', 'portPerCase', 'waitForBlocks',
+	'portPerCharacter', 'inPortPerCharacter', 'skipIfMissingActor', 'portPerCase', 'waitForBlocks',
 ] as const;
 
 // ─── Runtime tags ────────────────────────────────────────────────────────────

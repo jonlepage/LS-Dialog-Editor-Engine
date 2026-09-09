@@ -14,6 +14,7 @@
 //   dialog     `out`, or one port per actor CARD ID with portPerCharacter — `out` is the fallback
 //   choice     the picked option's id (C1…) — there is no `out` on a choice
 //   condition  `out` (true) and `default` (false), or K1… per case with portPerCase
+//   router     the K1… of EVERY case that held, then `then` (all held) or `catch` (one did not)
 //   action     `then`, and `catch` when a call failed
 //   note       never dispatched; the traversal steps over it
 //

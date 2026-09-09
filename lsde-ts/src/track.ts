@@ -164,15 +164,16 @@ export interface TrackHost {
 	isVisited( blockId: string ): boolean;
 	registerWaitForBlocks( waiter: Waiter, blockIds: string[] ): void;
 
-	createBlockContext( block: BlueprintBlock ): InternalContext | null;
+	createBlockContext( block: BlueprintBlock, entryPort: string ): InternalContext | null;
 	runValidation(
 		block: BlueprintBlock,
+		entryPort: string,
 		fromBlock: BlueprintBlock | null,
 		fromCharacter: Card | undefined,
 	): boolean;
 
 	/** Open a parallel track on `startBlock`. Returns its id. */
-	spawnTrack( startBlock: BlueprintBlock, parentTrackId: number | null ): number;
+	spawnTrack( startBlock: BlueprintBlock, parentTrackId: number | null, entryPort: string ): number;
 	cancelTrack( trackId: number ): CleanupFault;
 	/** This track reached the end of its flow. The scene decides what that means. */
 	trackEnded( track: Track ): CleanupFault;
@@ -204,22 +205,27 @@ export class Track implements Waiter {
 	/** What to resume when a `waitForBlocks` is satisfied. */
 	private pendingAdvance: ( () => void ) | null = null;
 
+	/** The entry port of the wire that opened this track. `in` for the flow the player watches. */
+	private readonly startEntryPort: string;
+
 	constructor(
 		host: TrackHost,
 		startBlock: BlueprintBlock,
 		id: number,
 		parentTrackId: number | null,
+		startEntryPort: string,
 	) {
 		this.host = host;
 		this.startBlock = startBlock;
 		this.id = id;
 		this.parentTrackId = parentTrackId;
 		this.startBlockId = startBlock.id;
+		this.startEntryPort = startEntryPort;
 	}
 
 	/** Begin walking. Must be called after the track is in the scene's pool. */
 	start(): void {
-		this.processBlock( this.startBlock );
+		this.processBlock( this.startBlock, this.startEntryPort );
 	}
 
 	/**
@@ -298,7 +304,7 @@ export class Track implements Waiter {
 	 * 4. **Mark it current and visited.** Visiting it may release another parked track.
 	 * 5. **Fire `onBeforeBlock`**, whose `resolve()` releases the type handler.
 	 */
-	private processBlock( startingBlock: BlueprintBlock ): void {
+	private processBlock( startingBlock: BlueprintBlock, entryPort: string ): void {
 		if ( !this.running || !this.host.isSceneRunning() ) return;
 
 		const sceneGraph = this.host.getSceneGraph();
@@ -320,12 +326,12 @@ export class Track implements Waiter {
 		// Same checkbox, two meanings, and the second one showed the line early.
 		const waitBlocks = natives( block ).waitForBlocks;
 		if ( waitBlocks?.length && !waitBlocks.every( id => this.host.isVisited( id ) ) ) {
-			this.pendingAdvance = () => this.processBlock( block );
+			this.pendingAdvance = () => this.processBlock( block, entryPort );
 			this.host.registerWaitForBlocks( this, waitBlocks );
 			return;
 		}
 
-		if ( !this.host.runValidation( block, this.previousBlock, this.previousCharacter ) ) {
+		if ( !this.host.runValidation( block, entryPort, this.previousBlock, this.previousCharacter ) ) {
 			// A refusal is a dead end like any other, so it ENDS this track.
 			//
 			// There is no API to resume a refused track — no goto, no retry, and `start()` refuses
@@ -357,11 +363,11 @@ export class Track implements Waiter {
 				resolve: () => {
 					if ( resolved ) return;
 					resolved = true;
-					this.executeBlockHandler( block );
+					this.executeBlockHandler( block, entryPort );
 				},
 			} );
 		} else {
-			this.executeBlockHandler( block );
+			this.executeBlockHandler( block, entryPort );
 		}
 	}
 
@@ -372,7 +378,7 @@ export class Track implements Waiter {
 	 * advance happens once both handlers have returned. Otherwise a scene handler calling `next()`
 	 * would move the flow on before the global handler ever ran.
 	 */
-	private executeBlockHandler( block: BlueprintBlock ): void {
+	private executeBlockHandler( block: BlueprintBlock, entryPort: string ): void {
 		// `running` and not just the scene's: a `resolve()` kept in a closure and fired after this
 		// track ended would otherwise restart it on a dead flow.
 		if ( !this.running || !this.host.isSceneRunning() ) return;
@@ -383,7 +389,7 @@ export class Track implements Waiter {
 			this.host.getGlobalRegistry(),
 		);
 
-		const context = this.host.createBlockContext( block );
+		const context = this.host.createBlockContext( block, entryPort );
 		if ( !context ) {
 			this.advanceToNextBlock( block, null );
 			return;
@@ -492,7 +498,7 @@ export class Track implements Waiter {
 		for ( const link of asyncLinks ) {
 			const targetBlock = sceneGraph.getBlock( link.to );
 			if ( targetBlock ) {
-				this.childTrackIds.push( this.host.spawnTrack( targetBlock, this.id ) );
+				this.childTrackIds.push( this.host.spawnTrack( targetBlock, this.id, link.toPort ) );
 			}
 		}
 
@@ -507,7 +513,7 @@ export class Track implements Waiter {
 					this.endFlow();
 					throw fault.value;
 				}
-				this.processBlock( nextBlock );
+				this.processBlock( nextBlock, mainLink.toPort );
 				return;
 			}
 		}

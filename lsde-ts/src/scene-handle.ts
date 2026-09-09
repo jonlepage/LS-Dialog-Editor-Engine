@@ -17,6 +17,7 @@ import type {
 	DialogHandler, ChoiceHandler, ConditionHandler, ActionHandler,
 	SceneLifecycleHandler, TrackInfo,
 	ConditionTest, Card, RuntimeConditionCase,
+	ConditionBlock, RouterBlock,
 } from './types.js';
 import { ConditionOperator, Ports } from './types.js';
 import { SceneGraph } from './graph.js';
@@ -117,7 +118,7 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 
 		// The flow the player watches is a track like any other. The only thing that sets it
 		// apart is what happens when it ends — see `trackEnded`.
-		this.mainTrack = new Track( this, startBlock, MAIN_TRACK_ID, null );
+		this.mainTrack = new Track( this, startBlock, MAIN_TRACK_ID, null, Ports.In );
 		this.tracks.push( this.mainTrack );
 		this.mainTrack.start();
 	}
@@ -221,8 +222,8 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 	/** @internal */ asSceneHandle(): SceneHandle { return this; }
 	/** @internal */ isSceneRunning(): boolean { return this.running; }
 	/** @internal */ isVisited( blockId: string ): boolean { return this.visited.has( blockId ); }
-	/** @internal */ createBlockContext( block: BlueprintBlock ): InternalContext | null {
-		return this.createContext( block );
+	/** @internal */ createBlockContext( block: BlueprintBlock, entryPort: string ): InternalContext | null {
+		return this.createContext( block, entryPort );
 	}
 
 	/**
@@ -253,11 +254,11 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 	}
 
 	/** @internal — Open a parallel track. Returns its id. */
-	spawnTrack( startBlock: BlueprintBlock, parentTrackId: number | null ): number {
+	spawnTrack( startBlock: BlueprintBlock, parentTrackId: number | null, entryPort: string ): number {
 		const id = this.nextTrackId++;
 		// `null` when the main flow opened it — the convention {@link TrackInfo} publishes.
 		const parent = parentTrackId === MAIN_TRACK_ID ? null : parentTrackId;
-		const track = new Track( this, startBlock, id, parent );
+		const track = new Track( this, startBlock, id, parent, entryPort );
 		this.tracks.push( track );
 		track.start();
 		return id;
@@ -306,10 +307,16 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 	 * it only applied to the flow the player was watching, and nothing on screen would have said
 	 * so either.
 	 *
+	 * `entryPort` is the port the wire arrived on, and it is passed for one reason: under
+	 * `inPortPerCharacter` the gate must be asked about the actor the DESIGNER wired, not about
+	 * whichever one the whole cast would have produced. A gate reading "do not enter unless this
+	 * character is here" would otherwise be answered about the wrong character.
+	 *
 	 * @returns `false` when the track must stop rather than dispatch the block.
 	 */
 	runValidation(
 		block: BlueprintBlock,
+		entryPort: string,
 		fromBlock: BlueprintBlock | null,
 		fromCharacter: Card | undefined,
 	): boolean {
@@ -319,7 +326,7 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 		const result = handler( {
 			nextBlock: block,
 			fromBlock,
-			nextContext: { character: this.resolveCardsFor( block ).character },
+			nextContext: { character: this.resolveCardsFor( block, entryPort ).character },
 			fromContext: fromBlock ? { character: fromCharacter } : null,
 			port: null,
 		} );
@@ -466,15 +473,52 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 		return ( test ) => this.evaluateConditionWithHistory( test, resolver );
 	}
 
-	/** Look up the cards a block cites, and let the game pick which actor is speaking. */
-	private resolveCardsFor( block: BlueprintBlock ): ResolvedCards {
-		return resolveCards( block, this.callbacks.getCard, this.getResolveCharacterFn() );
+	/**
+	 * Look up the cards a block cites, and let the game pick which actor is speaking.
+	 *
+	 * With `inPortPerCharacter`, the wire that reached the block named the actor: `entryPort` holds
+	 * a CARD ID instead of `in`, and only that actor is offered to `onResolveCharacter`. The game
+	 * is still the one answering — it may say `undefined` — it simply cannot pick a different
+	 * actor than the one the designer wired.
+	 *
+	 * Without the property, or when the block was entered through `in`, `entryPort` is ignored and
+	 * the whole cast is offered, exactly as before. That is what keeps every existing project — and
+	 * every wire LSDE has ever written with `toPort: "in"` — behaving identically.
+	 */
+	private resolveCardsFor( block: BlueprintBlock, entryPort: string = Ports.In ): ResolvedCards {
+		const designated = natives( block ).inPortPerCharacter === true && entryPort !== Ports.In
+			? entryPort
+			: undefined;
+		return resolveCards( block, this.callbacks.getCard, this.getResolveCharacterFn(), designated );
+	}
+
+	/**
+	 * Evaluate every case of a CONDITION or a ROUTER, before its context is built.
+	 *
+	 * The handler is then handed RESULTS rather than questions, and the exit port is read off these
+	 * same results rather than re-asking the game: each test reaches `onResolveCondition` exactly
+	 * ONE time — whatever the block type, whatever the mode, whichever case matches. That is also
+	 * what makes `onCondition` optional: with a resolver installed the engine already knows where
+	 * it is going, and the handler becomes a place to log or to override.
+	 *
+	 * Written ONCE for both block types on purpose. They ask the same question; only the reading of
+	 * the answer differs, and that belongs to `pickPortFromResults` and `pickRouterPorts`. Two
+	 * copies of an evaluation is precisely how this engine already shipped two bugs — the header of
+	 * `track.ts` tells that story.
+	 */
+	private evaluateCases( block: ConditionBlock | RouterBlock ): RuntimeConditionCase[] {
+		const evaluate = this.routingEvaluator();
+		return ( block.cases ?? [] ).map( c => ( {
+			port: c.port,
+			when: c.when,
+			result: evaluateConditionChainOf( c.when, evaluate ),
+		} ) );
 	}
 
 	// Cards are resolved fresh every time, never cached. This runs for every track, and a cache
 	// would leak one track's actor into another released later by waitForBlocks.
-	private createContext( block: BlueprintBlock ): InternalContext | null {
-		const cards = this.resolveCardsFor( block );
+	private createContext( block: BlueprintBlock, entryPort: string ): InternalContext | null {
+		const cards = this.resolveCardsFor( block, entryPort );
 
 		if ( isDialogBlock( block ) ) {
 			return createDialogContext( block, cards );
@@ -488,41 +532,21 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 		}
 
 		if ( isConditionBlock( block ) ) {
-			const evaluate = this.routingEvaluator();
-			const portPerCase = natives( block ).portPerCase === true;
-
-			// Every case is evaluated up front, so the handler is handed results rather than
-			// questions. With a resolver installed the engine already knows where to go, which is
-			// what makes onCondition optional: the handler becomes a place to log or to override.
-			//
-			// ONCE. The port is then read off these same results rather than re-asking the game:
-			// each test reaches `onResolveCondition` exactly one time, whatever the mode and
-			// whichever case matches.
-			const cases: RuntimeConditionCase[] = ( block.cases ?? [] ).map( c => ( {
-				port: c.port,
-				when: c.when,
-				result: evaluateConditionChainOf( c.when, evaluate ),
-			} ) );
-
+			const cases = this.evaluateCases( block );
 			const ctx = createConditionContext( block, cards, cases );
 			ctx._conditionPort = pickPortFromResults(
-				block.cases, portPerCase, cases.map( c => c.result === true ),
+				block.cases,
+				natives( block ).portPerCase === true,
+				cases.map( c => c.result === true ),
 			);
 			return ctx;
 		}
 
 		if ( isRouterBlock( block ) ) {
-			// The same pre-evaluation as a condition, read the opposite way: EVERY case counts,
-			// each true one launches its port, and the tally picks `then` or `catch`. So the same
-			// `onResolveCondition` answers a router, once per test, exactly as it answers a
-			// condition — there is no second evaluator and no router-specific hook.
-			const evaluate = this.routingEvaluator();
-			const cases: RuntimeConditionCase[] = ( block.cases ?? [] ).map( c => ( {
-				port: c.port,
-				when: c.when,
-				result: evaluateConditionChainOf( c.when, evaluate ),
-			} ) );
-
+			// The same cases, read the opposite way: EVERY case counts, each true one launches its
+			// port, and the tally picks `then` or `catch`. That difference lives entirely in
+			// `pickRouterPorts` — there is no second evaluator and no router-specific hook.
+			const cases = this.evaluateCases( block );
 			const ctx = createRouterContext( block, cards, cases );
 			ctx._routerPorts = pickRouterPorts( block.cases, cases.map( c => c.result === true ) );
 			return ctx;
