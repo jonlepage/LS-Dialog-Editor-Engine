@@ -840,6 +840,13 @@ routing_suites = [
 # it went unnoticed that only parallel tracks read it. A designer who set it on a block of the main
 # flow got nothing, silently, with the checkbox ticked in the editor. It is a property of the
 # BLOCK: "the block waits for these before it advances", in the format's own words.
+#
+# It waits on blocks that have FINISHED, not on blocks that have been reached. Reached was the
+# original rule and it made the property nearly inert in the shape designers actually draw: a fork
+# into two blocks, then a join on both, lifts in the very tick it is registered because the two were
+# dispatched a fraction of a millisecond earlier. A step with NO action is how these suites hold a
+# block open - the handler runs, the block is dispatched, and next() is never called - which is the
+# only way a shared spec can tell the two rules apart.
 
 flow_suites += [
     {
@@ -888,6 +895,84 @@ flow_suites += [
                 {"expect": {"type": "dialog", "blockId": "DIALOG-003"}, "action": {"type": "next"}},
             ],
             "expectedVisited": ["DIALOG-001", "DIALOG-002", "DIALOG-003"],
+        }],
+    },
+    {
+        "id": "wait-for-blocks-waits-for-completion",
+        "description": "A join waits for the awaited block to FINISH, not to be dispatched.",
+        "blueprint": header([scene("s1", [
+            block("DIALOG-001", "dialog", text={"en": "forks and continues"},
+                  next=[wire("out", "DIALOG-002"), wire("out", "DIALOG-003")]),
+            block("DIALOG-002", "dialog", text={"en": "held open"},
+                  props={"isAsync": True}),
+            block("DIALOG-003", "dialog", text={"en": "joins"},
+                  props={"waitForBlocks": ["DIALOG-002"]},
+                  next=[wire("out", "DIALOG-004")]),
+            dlg("DIALOG-004", "after the join"),
+        ])]),
+        "sceneId": "s1",
+        "cases": [
+            {
+                "id": "held-open-keeps-the-join-parked",
+                "description": "DIALOG-002 is dispatched but never advances, so DIALOG-003 waits.",
+                # The discriminating case. DIALOG-002 has been reached - it is in expectedVisited -
+                # and DIALOG-003 is still not dispatched. Under the old rule DIALOG-003 would be in
+                # that list too, having spoken over a block that had not said a word yet.
+                "steps": [
+                    {"expect": {"type": "dialog", "blockId": "DIALOG-001"},
+                     "action": {"type": "next"}},
+                    # No action: the block stays open, exactly like a bubble waiting for a click.
+                    {"expect": {"type": "dialog", "blockId": "DIALOG-002"}},
+                ],
+                "expectedVisited": ["DIALOG-001", "DIALOG-002"],
+                "expectedRunning": True,
+            },
+            {
+                "id": "finishing-it-releases-the-join",
+                "description": "The same graph, with DIALOG-002 allowed to advance.",
+                "steps": [
+                    {"expect": {"type": "dialog", "blockId": "DIALOG-001"},
+                     "action": {"type": "next"}},
+                    {"expect": {"type": "dialog", "blockId": "DIALOG-002"},
+                     "action": {"type": "next"}},
+                    {"expect": {"type": "dialog", "blockId": "DIALOG-003"},
+                     "action": {"type": "next"}},
+                    {"expect": {"type": "dialog", "blockId": "DIALOG-004"},
+                     "action": {"type": "next"}},
+                ],
+                "expectedVisited": [
+                    "DIALOG-001", "DIALOG-002", "DIALOG-003", "DIALOG-004",
+                ],
+            },
+        ],
+    },
+    {
+        "id": "wait-for-blocks-every-id-must-finish",
+        "description": "Two awaited blocks: the join lifts on the LAST one to finish.",
+        "blueprint": header([scene("s1", [
+            block("DIALOG-001", "dialog", text={"en": "forks twice"},
+                  next=[wire("out", "DIALOG-002"), wire("out", "DIALOG-003"),
+                        wire("out", "DIALOG-004")]),
+            block("DIALOG-002", "dialog", text={"en": "finishes at once"},
+                  props={"isAsync": True}),
+            block("DIALOG-003", "dialog", text={"en": "held open"},
+                  props={"isAsync": True}),
+            block("DIALOG-004", "dialog", text={"en": "joins both"},
+                  props={"waitForBlocks": ["DIALOG-002", "DIALOG-003"]}),
+        ])]),
+        "sceneId": "s1",
+        "cases": [{
+            "id": "one-finished-is-not-enough",
+            "steps": [
+                {"expect": {"type": "dialog", "blockId": "DIALOG-001"},
+                 "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-002"},
+                 "action": {"type": "next"}},
+                # Held: DIALOG-004 must stay parked even though DIALOG-002 is done.
+                {"expect": {"type": "dialog", "blockId": "DIALOG-003"}},
+            ],
+            "expectedVisited": ["DIALOG-001", "DIALOG-002", "DIALOG-003"],
+            "expectedRunning": True,
         }],
     },
     {

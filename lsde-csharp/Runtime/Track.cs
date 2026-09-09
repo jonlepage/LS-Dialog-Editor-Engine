@@ -150,6 +150,9 @@ namespace LsdeDialogEngine
 
         void AddVisited(string blockId);
         bool IsVisited(string blockId);
+        /// <summary>The track has LEFT this block: handler returned, port resolved, cleanup run.</summary>
+        void AddCompleted(string blockId);
+        bool IsCompleted(string blockId);
         void RegisterWaitForBlocks(IWaiter waiter, List<string> blockIds);
 
         IBaseBlockContext? CreateBlockContext(BlueprintBlock block);
@@ -307,8 +310,13 @@ namespace LsdeDialogEngine
             // It used to mean two different things depending on where the block sat: a track's
             // FIRST block was held before dispatch, any later one was dispatched and held before
             // advancing. Same checkbox, two meanings, and the second one showed the line early.
+            // It waits on blocks that have FINISHED, not on blocks that have been reached.
+            // Reaching was the old rule and it made the property nearly inert: a join is normally
+            // drawn onto blocks dispatched a fraction of a millisecond earlier, so the wait lifted
+            // in the very tick it was registered and the joining line spoke over the one it had
+            // been told to wait for. MIGRATION-V2.md records the decision.
             var waitBlocks = Natives.WaitForBlocks(block);
-            if (waitBlocks != null && waitBlocks.Count > 0 && !AllVisited(waitBlocks))
+            if (waitBlocks != null && waitBlocks.Count > 0 && !AllCompleted(waitBlocks))
             {
                 var parked = block;
                 _pendingAdvance = () => ProcessBlock(parked);
@@ -518,18 +526,34 @@ namespace LsdeDialogEngine
                 }
             }
 
+            // The block is now DONE, and this is the one place that says so.
+            //
+            // Its handler returned, its exit port is resolved and its cleanup has just run, so a
+            // bubble is off the screen and an audio voice is stopped BEFORE anything waiting on
+            // this block is allowed to speak. Marking it any earlier would let the joining line
+            // play over the one it was told to wait for.
+            //
+            // The cleanup runs here rather than inside EndBranch for the same reason; EndBranch
+            // calls it again and finds nothing, which is what makes that safe.
+            var cleanupFault = RunBlockCleanup();
+            if (cleanupFault != null)
+            {
+                // Same order as a handler that throws: close down first, surface after.
+                EndFlow();
+                throw cleanupFault;
+            }
+
+            _host.AddCompleted(block.Id);
+
+            // Releasing a parked track re-enters the traversal immediately, and a handler there is
+            // allowed to cancel the scene, so the guard is re-read rather than assumed.
+            if (!_running || !_host.IsSceneRunning()) return;
+
             if (continuation != null)
             {
                 var nextBlock = sceneGraph.GetBlock(continuation.To);
                 if (nextBlock != null)
                 {
-                    var fault = RunBlockCleanup();
-                    if (fault != null)
-                    {
-                        // Same order as a handler that throws: close down first, surface after.
-                        EndFlow();
-                        throw fault;
-                    }
                     ProcessBlock(nextBlock);
                     return;
                 }
@@ -597,11 +621,11 @@ namespace LsdeDialogEngine
             return _host.TrackEnded(this);
         }
 
-        private bool AllVisited(List<string> blockIds)
+        private bool AllCompleted(List<string> blockIds)
         {
             foreach (var id in blockIds)
             {
-                if (!_host.IsVisited(id)) return false;
+                if (!_host.IsCompleted(id)) return false;
             }
             return true;
         }

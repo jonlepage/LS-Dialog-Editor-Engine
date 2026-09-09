@@ -30,6 +30,15 @@ namespace LsdeDialogEngine
 
         // ─── Shared by every track of this scene ─────────────────────────
         private readonly HashSet<string> _visited = new HashSet<string>();
+
+        /// <summary>Blocks this scene has FINISHED, which is not the same as blocks it reached.</summary>
+        /// <remarks>A block joins _visited when it is dispatched and _completed when the track
+        /// leaves it: the game called next(), the exit port was resolved and the cleanup has run.
+        /// The two sets answer two different questions, and only one of them is WaitForBlocks.
+        /// It used to be the visited set, which made the property nearly inert -- a join is
+        /// normally drawn onto blocks dispatched a fraction of a millisecond earlier, so the wait
+        /// lifted in the very tick it was registered.</remarks>
+        private readonly HashSet<string> _completed = new HashSet<string>();
         private readonly Dictionary<string, List<string>> _choiceHistory = new Dictionary<string, List<string>>();
         /// <summary>Tracks — the main flow included — parked until a set of blocks has been visited.</summary>
         private readonly Dictionary<IWaiter, List<string>> _pendingWaits = new Dictionary<IWaiter, List<string>>();
@@ -256,20 +265,29 @@ namespace LsdeDialogEngine
         public HandlerRegistry GetGlobalRegistry() => _globalRegistry;
         public ISceneHandle AsSceneHandle() => this;
         public bool IsSceneRunning() => _running;
+        /// <summary>Mark a block reached. Nothing is released by this.</summary>
         public void AddVisited(string blockId)
         {
             _visited.Add(blockId);
+        }
+
+        /// <summary>Mark a block finished, and release anything that was waiting on it.</summary>
+        public void AddCompleted(string blockId)
+        {
+            _completed.Add(blockId);
             if (_pendingWaits.Count > 0)
             {
+                // Collected before notifying: releasing a track re-enters the traversal, which can
+                // park or release others, and mutating the dictionary mid-iteration would throw.
                 var satisfied = new List<IWaiter>();
                 foreach (var kvp in _pendingWaits)
                 {
-                    bool allVisited = true;
+                    bool allCompleted = true;
                     foreach (var u in kvp.Value)
                     {
-                        if (!_visited.Contains(u)) { allVisited = false; break; }
+                        if (!_completed.Contains(u)) { allCompleted = false; break; }
                     }
-                    if (allVisited) satisfied.Add(kvp.Key);
+                    if (allCompleted) satisfied.Add(kvp.Key);
                 }
                 foreach (var waiter in satisfied)
                 {
@@ -330,13 +348,14 @@ namespace LsdeDialogEngine
             return Shutdown();
         }
 
-        /// <summary>Park a track (or the main flow) until every listed block has been visited.</summary>
+        /// <summary>Park a track (or the main flow) until every listed block has FINISHED.</summary>
         public void RegisterWaitForBlocks(IWaiter waiter, List<string> blockIds)
         {
             _pendingWaits[waiter] = blockIds;
         }
 
         public bool IsVisited(string blockId) => _visited.Contains(blockId);
+        public bool IsCompleted(string blockId) => _completed.Contains(blockId);
 
         /// <summary>Run OnValidateNextBlock for a block, and OnInvalidateBlock when it refuses.</summary>
         /// <remarks>Called by BOTH the main flow and every parallel track. It used to live inline

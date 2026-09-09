@@ -98,11 +98,12 @@ public:
     ISceneHandle* asSceneHandle() override;
     bool isSceneRunning() const override;
     void addVisited(const std::string& blockId) override;
+    void addCompleted(const std::string& blockId) override;
     /// Open a parallel track. Returns its id.
     int spawnTrack(const BlueprintBlock& startBlock, int parentTrackId) override;
     /// Cancel a specific track by ID (used for parent->child cascade).
     std::exception_ptr cancelTrack(int trackId) override;
-    /// Park a track - the main flow included - until every listed block has been visited.
+    /// Park a track - the main flow included - until every listed block has FINISHED.
     void registerWaitForBlocks(IWaiter* waiter, const std::vector<std::string>& blockIds) override;
 
     /// A track has nowhere left to go. Retire it, and close the scene once nothing is left that
@@ -139,6 +140,8 @@ public:
 
     /// Check if a block id has been visited in this scene.
     bool isVisited(const std::string& blockId) const override;
+    /// Check if a block id has FINISHED in this scene, which is what a join waits on.
+    bool isCompleted(const std::string& blockId) const override;
     /// Create the appropriate context for a block (Dialog/Choice/Condition/Action).
     std::unique_ptr<IBaseBlockContext> createBlockContext(const BlueprintBlock& block) override;
     /// Record a choice selection in the history for condition evaluation.
@@ -192,8 +195,18 @@ private:
     // ─── Shared by every track of this scene ─────────────────────────
     std::unordered_set<std::string> _visitedSet;
     std::vector<std::string> _visitedOrder;
+
+    /// Blocks this scene has FINISHED, which is not the same as blocks it reached.
+    ///
+    /// A block joins _visitedSet when it is dispatched and _completedSet when the track leaves
+    /// it: the game called next(), the exit port was resolved and the cleanup has run. The two
+    /// answer two different questions, and only one of them is waitForBlocks. It used to be the
+    /// visited set, which made the property nearly inert -- a join is normally drawn onto blocks
+    /// dispatched a fraction of a millisecond earlier, so the wait lifted in the very tick it was
+    /// registered.
+    std::unordered_set<std::string> _completedSet;
     std::unordered_map<std::string, std::vector<std::string>> _choiceHistory;
-    /// Tracks — the main flow included — parked until a set of blocks has been visited.
+    /// Tracks — the main flow included — parked until a set of blocks has FINISHED.
     std::vector<std::pair<IWaiter*, std::vector<std::string>>> _pendingWaits;
 
     // ─── The tracks ──────────────────────────────────────────────────

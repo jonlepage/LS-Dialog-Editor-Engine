@@ -99,7 +99,7 @@ note block 是叙事设计师的便签 — 注释、提醒、上下文。在遍�
 | 字段 | 类型 | 描述 |
 |------|------|------|
 | `isAsync` | `boolean?` | 在这个 block 上**开启一条并行轨道**，而不是继续当前轨道 |
-| `waitForBlocks` | `string[]?` | **本 scene 的** block id。在它们全部被访问之前，block 会**在被分发之前**被扣住 — 不会调用任何 handler |
+| `waitForBlocks` | `string[]?` | **本 scene 的** block id。在它们全部**完成**之前，block 会**在被分发之前**被扣住 — 不会调用任何 handler |
 | `delay` | `number?` | block 播放前的**毫秒数**。由 `onBeforeBlock` 应用，engine 从不应用 |
 | `timeout` | `number?` | **毫秒**。原样传递 — engine 不做任何强制 |
 | `waitInput` | `boolean?` | 等待玩家输入。原样传递，从不解释 |

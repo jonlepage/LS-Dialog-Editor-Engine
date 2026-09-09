@@ -84,7 +84,7 @@ Les neuf propriétés que le **engine** lit, prises dans `props`. Les ids ne peu
 | Champ | Type | Description |
 |-------|------|-------------|
 | `isAsync` | `boolean?` | **Ouvre une piste parallèle** sur ce block au lieu de continuer la piste courante |
-| `waitForBlocks` | `string[]?` | Ids de blocks **de cette scène**. Le block est **retenu avant d'être dispatché** tant qu'ils n'ont pas tous été visités — aucun handler n'est appelé |
+| `waitForBlocks` | `string[]?` | Ids de blocks **de cette scène**. Le block est **retenu avant d'être dispatché** tant qu'ils ne sont pas tous **terminés** — aucun handler n'est appelé |
 | `delay` | `number?` | **MILLISECONDES** avant que le block joue. Appliqué par `onBeforeBlock`, jamais par le engine |
 | `timeout` | `number?` | **MILLISECONDES**. Passé tel quel — le engine n'impose rien |
 | `waitInput` | `boolean?` | Attendre une entrée joueur. Passé tel quel, jamais interprété |

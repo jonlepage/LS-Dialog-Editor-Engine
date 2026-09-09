@@ -218,7 +218,7 @@ static func _validate_scene(scene: Dictionary, errors: Array, warnings: Array) -
 		_validate_waits(path, block, block_ids, warnings)
 
 
-## waitForBlocks names blocks OF THIS SCENE that must have been visited before this one advances.
+## waitForBlocks names blocks OF THIS SCENE that must have FINISHED before this one advances.
 ##
 ## A name that is not in the scene can never be visited, so the block parks for good: on the main
 ## flow that is the whole dialogue stopping with no on_scene_exit, and on a parallel track it is a

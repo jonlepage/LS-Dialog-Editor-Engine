@@ -126,14 +126,20 @@ void SceneHandleImpl::addVisited(const std::string& blockId) {
     if (_visitedSet.insert(blockId).second) {
         _visitedOrder.push_back(blockId);
     }
+}
+
+void SceneHandleImpl::addCompleted(const std::string& blockId) {
+    _completedSet.insert(blockId);
     if (!_pendingWaits.empty()) {
+        // Collected before notifying: releasing a track re-enters the traversal, which can park
+        // or release others, and mutating the vector mid-iteration would invalidate the iterators.
         std::vector<IWaiter*> satisfied;
         for (const auto& entry : _pendingWaits) {
-            bool allVisited = true;
+            bool allCompleted = true;
             for (const auto& u : entry.second) {
-                if (_visitedSet.find(u) == _visitedSet.end()) { allVisited = false; break; }
+                if (_completedSet.find(u) == _completedSet.end()) { allCompleted = false; break; }
             }
-            if (allVisited) satisfied.push_back(entry.first);
+            if (allCompleted) satisfied.push_back(entry.first);
         }
         for (auto* waiter : satisfied) {
             _pendingWaits.erase(
@@ -209,6 +215,10 @@ bool SceneHandleImpl::runValidation(const BlueprintBlock& block, const Blueprint
 
 bool SceneHandleImpl::isVisited(const std::string& blockId) const {
     return _visitedSet.find(blockId) != _visitedSet.end();
+}
+
+bool SceneHandleImpl::isCompleted(const std::string& blockId) const {
+    return _completedSet.find(blockId) != _completedSet.end();
 }
 
 /// A track that ended is stopped, not deleted — see the note in shutdown().

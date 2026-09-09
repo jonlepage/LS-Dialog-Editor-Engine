@@ -151,8 +151,13 @@ void Track::processBlock(const BlueprintBlock& startingBlock) {
     // It used to mean two different things depending on where the block sat: a track's FIRST block
     // was held before dispatch, any later one was dispatched and held before advancing. Same
     // checkbox, two meanings, and the second one showed the line early.
+    // It waits on blocks that have FINISHED, not on blocks that have been reached. Reaching was
+    // the old rule and it made the property nearly inert: a join is normally drawn onto blocks
+    // dispatched a fraction of a millisecond earlier, so the wait lifted in the very tick it was
+    // registered and the joining line spoke over the one it had been told to wait for.
+    // MIGRATION-V2.md records the decision.
     const auto waitBlocks = getNativeProperties(block).waitForBlocks;
-    if (!waitBlocks.empty() && !allVisited(waitBlocks)) {
+    if (!waitBlocks.empty() && !allCompleted(waitBlocks)) {
         const BlueprintBlock* parked = &block;
         _pendingAdvance = [this, parked]() { processBlock(*parked); };
         _host.registerWaitForBlocks(this, waitBlocks);
@@ -359,14 +364,30 @@ void Track::advanceToNextBlock(const BlueprintBlock& block, IBaseBlockContext* c
         }
     }
 
+    // The block is now DONE, and this is the one place that says so.
+    //
+    // Its handler returned, its exit port is resolved and its cleanup has just run, so a bubble is
+    // off the screen and an audio voice is stopped BEFORE anything waiting on this block is allowed
+    // to speak. Marking it any earlier would let the joining line play over the one it was told to
+    // wait for.
+    //
+    // The cleanup runs here rather than inside endBranch for the same reason; endBranch calls it
+    // again and finds nothing, which is what makes that safe.
+    if (auto cleanupFault = runBlockCleanup()) {
+        // Same order as a handler that throws: close down first, surface after.
+        endFlow();
+        std::rethrow_exception(cleanupFault);
+    }
+
+    _host.addCompleted(block.id);
+
+    // Releasing a parked track re-enters the traversal immediately, and a handler there is allowed
+    // to cancel the scene, so the guard is re-read rather than assumed.
+    if (!_running || !_host.isSceneRunning()) return;
+
     if (continuation) {
         auto* nextBlock = sceneGraph.getBlock(continuation->to);
         if (nextBlock) {
-            if (auto fault = runBlockCleanup()) {
-                // Same order as a handler that throws: close down first, surface after.
-                endFlow();
-                std::rethrow_exception(fault);
-            }
             processBlock(*nextBlock);
             return;
         }
@@ -429,9 +450,9 @@ std::exception_ptr Track::retire() {
     return _host.trackEnded(this);
 }
 
-bool Track::allVisited(const std::vector<std::string>& blockIds) const {
+bool Track::allCompleted(const std::vector<std::string>& blockIds) const {
     for (const auto& blockId : blockIds) {
-        if (!_host.isVisited(blockId)) return false;
+        if (!_host.isCompleted(blockId)) return false;
     }
     return true;
 }

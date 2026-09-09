@@ -18,6 +18,15 @@ var _running: bool = false
 # ─── Shared by every track of this scene ──────────────────────────────────
 var _visited: Array = []  # ordered list of visited block ids
 var _visited_set: Dictionary = {}  # fast lookup
+
+## Blocks this scene has FINISHED, which is not the same as blocks it reached.
+##
+## A block joins _visited_set when it is dispatched and _completed_set when the track leaves it:
+## the game called next(), the exit port was resolved and the cleanup has run. The two answer two
+## different questions, and only one of them is waitForBlocks. It used to be the visited set,
+## which made the property nearly inert - a join is normally drawn onto blocks dispatched a
+## fraction of a millisecond earlier, so the wait lifted in the very tick it was registered.
+var _completed_set: Dictionary = {}
 var _choice_history: Dictionary = {}  # {block_id: [option_id, ...]}
 
 # ─── The tracks ───────────────────────────────────────────────────────────
@@ -27,7 +36,7 @@ var _tracks: Array = []
 var _main_track: Variant = null
 ## Auto-incremented track id. LsdeTrack.MAIN_TRACK_ID (0) belongs to the main flow.
 var _next_track_id: int = LsdeTrack.MAIN_TRACK_ID + 1
-## Tracks - and the main flow - parked until a set of blocks has been visited.
+## Tracks - and the main flow - parked until a set of blocks has FINISHED.
 ##
 ## waitForBlocks is a property of the BLOCK: "the block waits for these before it advances", in the
 ## format's own words. Only the parallel copy read it, so a designer who set it on a block of the main flow
@@ -200,20 +209,28 @@ func _get_scene_graph() -> LsdeGraph.SceneGraph:
 func _is_scene_running() -> bool:
 	return _running
 
+## Mark a block reached. Nothing is released by this.
 func _add_visited(block_id: String) -> void:
 	if not _visited_set.has(block_id):
 		_visited.append(block_id)
 		_visited_set[block_id] = true
+
+
+## Mark a block finished, and release anything that was waiting on it.
+func _add_completed(block_id: String) -> void:
+	_completed_set[block_id] = true
 	if _pending_waits.size() > 0:
+		# Collected before notifying: releasing a track re-enters the traversal, which can park or
+		# release others, and mutating the dictionary mid-iteration would skip entries.
 		var satisfied: Array = []
 		for waiter in _pending_waits:
 			var required: Array = _pending_waits[waiter]
-			var all_visited: bool = true
+			var all_completed: bool = true
 			for u in required:
-				if not _visited_set.has(u):
-					all_visited = false
+				if not _completed_set.has(u):
+					all_completed = false
 					break
-			if all_visited:
+			if all_completed:
 				satisfied.append(waiter)
 		for waiter in satisfied:
 			_pending_waits.erase(waiter)
@@ -301,6 +318,10 @@ func _run_validation(block: Dictionary, from_block: Variant, from_character: Var
 
 func _is_visited(block_id: String) -> bool:
 	return _visited_set.has(block_id)
+
+
+func _is_completed(block_id: String) -> bool:
+	return _completed_set.has(block_id)
 
 func _remove_track(track: Variant) -> void:
 	var idx: int = _tracks.find(track)

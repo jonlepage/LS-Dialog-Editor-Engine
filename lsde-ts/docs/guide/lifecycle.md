@@ -85,7 +85,7 @@ Execution properties that control how a block is dispatched by the engine:
 | `portPerCharacter` | `boolean?` | One output port per character in metadata |
 | `skipIfMissingActor` | `boolean?` | Skip block if referenced actor is absent |
 | `debug` | `boolean?` | Debug flag for editor use |
-| `waitForBlocks` | `string[]?` | Block ids **of this scene**. The block is held **before it is dispatched** until every one of them has been visited |
+| `waitForBlocks` | `string[]?` | Block ids **of this scene**. The block is held **before it is dispatched** until every one of them has **finished** |
 | `waitInput` | `boolean?` | Passive flag for explicit player input control |
 
 ## Visual Reference

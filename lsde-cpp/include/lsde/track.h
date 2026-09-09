@@ -30,7 +30,7 @@
 
 namespace lsde {
 
-/// Anything the engine can park until a set of blocks has been visited.
+/// Anything the engine can park until a set of blocks has FINISHED.
 class IWaiter {
 public:
     virtual ~IWaiter() = default;
@@ -103,6 +103,9 @@ public:
 
     virtual void addVisited(const std::string& blockId) = 0;
     virtual bool isVisited(const std::string& blockId) const = 0;
+    /// The track has LEFT this block: handler returned, port resolved, cleanup run.
+    virtual void addCompleted(const std::string& blockId) = 0;
+    virtual bool isCompleted(const std::string& blockId) const = 0;
     virtual void registerWaitForBlocks(IWaiter* waiter, const std::vector<std::string>& blockIds) = 0;
 
     virtual std::unique_ptr<IBaseBlockContext> createBlockContext(const BlueprintBlock& block) = 0;
@@ -143,7 +146,7 @@ public:
 
     const BlueprintBlock* getCurrentBlock() const;
 
-    /// Called once every block this track was waiting on has been visited.
+    /// Called once every block this track was waiting on has FINISHED.
     void notifyWaitSatisfied() override;
 
     /// A read-only snapshot, for a debug view.
@@ -169,7 +172,7 @@ private:
     std::exception_ptr retire();
     /// Run the cleanup of the block being left, once, carrying what it threw.
     std::exception_ptr runBlockCleanup();
-    bool allVisited(const std::vector<std::string>& blockIds) const;
+    bool allCompleted(const std::vector<std::string>& blockIds) const;
 
     ITrackHost& _host;
     const BlueprintBlock* _startBlock;

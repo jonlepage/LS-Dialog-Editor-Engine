@@ -163,8 +163,13 @@ func _process_block(starting_block: Dictionary) -> void:
 	# It used to mean two different things depending on where the block sat: a track's FIRST block
 	# was held before dispatch, any later one was dispatched and held before advancing. Same
 	# checkbox, two meanings, and the second one showed the line early.
+	# It waits on blocks that have FINISHED, not on blocks that have been reached. Reaching was
+	# the old rule and it made the property nearly inert: a join is normally drawn onto blocks
+	# dispatched a fraction of a millisecond earlier, so the wait lifted in the very tick it was
+	# registered and the joining line spoke over the one it had been told to wait for.
+	# MIGRATION-V2.md records the decision.
 	var wait_blocks: Array = LsdeUtils.get_native_properties(block).get("waitForBlocks", [])
-	if wait_blocks.size() > 0 and not _all_visited(wait_blocks):
+	if wait_blocks.size() > 0 and not _all_completed(wait_blocks):
 		_pending_advance = func() -> void: _process_block(block)
 		_host._register_wait_for_blocks(self, wait_blocks)
 		return
@@ -336,10 +341,26 @@ func _advance_to_next_block(block: Dictionary, context: Variant) -> void:
 		if target_block != null:
 			_child_track_ids.append(_host._spawn_track(target_block, id))
 
+	# The block is now DONE, and this is the one place that says so.
+	#
+	# Its handler returned, its exit port is resolved and its cleanup has just run, so a bubble is
+	# off the screen and an audio voice is stopped BEFORE anything waiting on this block is allowed
+	# to speak. Marking it any earlier would let the joining line play over the one it was told to
+	# wait for.
+	#
+	# The cleanup runs here rather than inside _end_branch for the same reason; _end_branch calls
+	# it again and finds nothing, which is what makes that safe.
+	_run_block_cleanup()
+	_host._add_completed(block.get("id", ""))
+
+	# Releasing a parked track re-enters the traversal immediately, and a handler there is allowed
+	# to cancel the scene, so the guard is re-read rather than assumed.
+	if not _running or not _host._is_scene_running():
+		return
+
 	if continuation != null:
 		var next_block: Variant = scene_graph.get_block(continuation.get("to", ""))
 		if next_block != null:
-			_run_block_cleanup()
 			_process_block(next_block)
 			return
 
@@ -398,9 +419,9 @@ func _retire() -> void:
 	_host._track_ended(self)
 
 
-func _all_visited(block_ids: Array) -> bool:
+func _all_completed(block_ids: Array) -> bool:
 	for wait_id in block_ids:
-		if not _host._is_visited(wait_id):
+		if not _host._is_completed(wait_id):
 			return false
 	return true
 

@@ -84,7 +84,7 @@ The nine properties the **engine** reads, taken out of `props`. Ids cannot colli
 | Field | Type | Description |
 |-------|------|-------------|
 | `isAsync` | `boolean?` | **Opens a parallel track** on this block instead of continuing the current one |
-| `waitForBlocks` | `string[]?` | Block ids **of this scene**. The block is **held before it is dispatched** until every one of them has been visited — no handler is called |
+| `waitForBlocks` | `string[]?` | Block ids **of this scene**. The block is **held before it is dispatched** until every one of them has **finished** — no handler is called |
 | `delay` | `number?` | **MILLISECONDS** before the block plays. Applied by `onBeforeBlock`, never by the engine |
 | `timeout` | `number?` | **MILLISECONDS**. Passed through — the engine enforces nothing |
 | `waitInput` | `boolean?` | Wait for player input. Passed through, never interpreted |

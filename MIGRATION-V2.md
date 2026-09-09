@@ -2334,3 +2334,111 @@ même scène.
    ni sortie.
 5. **La spec partagée**, puis C#, C++, GDScript.
 6. **La doc** : `async-tracks.md` et `block-types.md` décrivent l'ancienne règle.
+
+# `waitForBlocks` attend des blocks **terminés**, plus des blocks atteints (2026-09-09)
+
+## Le défaut
+
+Scène `advance-full-demo`, réexportée par Jonathan. `DIALOG-009` s'embranche vers `ACTION-003` et
+`DIALOG-010`, tous deux `isAsync`, puis continue vers `DIALOG-011` qui porte
+`waitForBlocks: ["ACTION-003", "DIALOG-010"]`.
+
+En jeu, `DIALOG-011` s'affichait **avant** que `DIALOG-010` ait fini. l2 coupait la parole à l3, qui
+était encore derrière son `timeout` de 2500 ms.
+
+La cause : le moteur marquait un block « visité » **au dispatch**, avant même d'appeler le handler,
+et `waitForBlocks` lisait cet ensemble. Or l'ordre dans `advanceToNextBlock` est : ouvrir les pistes
+détachées, *puis* traiter la continuation. Donc `ACTION-003` et `DIALOG-010` étaient visités une
+fraction de milliseconde avant que `DIALOG-011` ne s'enregistre — et l'attente se levait dans le
+tick même où elle était posée.
+
+**La propriété était donc quasi inerte dans la forme que les designers dessinent réellement.** Un
+embranchement suivi d'une jonction sur ses deux branches ne joignait rien. Elle ne fonctionnait par
+accident que lorsque le block attendu était sur une autre piste *et* que les `delay` décalaient
+l'affichage — ce qui était le cas ici, ce qui a masqué le problème d'autant plus longtemps.
+
+## La décision
+
+Jonathan, sans ambiguïté : « le propriété attendre pour les blocs on parle de blocs qui sont
+terminés et non pas de blocs qui sont commencé ». C'est aussi la seule lecture qui rend la propriété
+utile — attendre qu'un block soit *atteint* n'apporte rien qu'un fil ne dise déjà.
+
+**Un block est terminé quand la piste l'a quitté** : le jeu a appelé `next()`, le port de sortie est
+résolu, et le **nettoyage du block a tourné**. Ce dernier point n'est pas un détail : marquer le
+block terminé avant son cleanup laisserait la bulle de l3 à l'écran pendant que l2 parle, c'est-à-dire
+exactement le symptôme qu'on corrige.
+
+### Deux ensembles, pas un renommage
+
+| ensemble | rempli quand | lu par |
+|---|---|---|
+| `visited` | le block est **dispatché** | `getVisitedBlocks()` — l'API publique |
+| `completed` | la piste **quitte** le block | `waitForBlocks` |
+
+`getVisitedBlocks()` garde son sens : « ce que le joueur a vu », ce qui inclut un block encore en
+train de parler. Réutiliser cet ensemble pour la jonction aurait cassé une API publique pour régler
+un problème interne.
+
+### Où c'est marqué
+
+Un seul endroit, `advanceToNextBlock`, et dans cet ordre :
+
+```
+resolvePort            → trier les fils
+spawn( détachés )      → ouvrir les pistes parallèles
+runBlockCleanup()      → la bulle quitte l'écran
+addCompleted( block )  → libère ce qui attendait
+garde running/scene    → un handler libéré a pu annuler la scène
+processBlock( suite )  → ou endBranch()
+```
+
+Le `runBlockCleanup()` a été **remonté** hors de la branche `if (continuation)` : les deux chemins
+en avaient besoin avant `addCompleted`. `endBranch()` l'appelle encore et ne trouve rien —
+`previousCleanup` est déjà nul — ce qui rend ce double appel inoffensif.
+
+La garde après `addCompleted` reprend le principe déjà écrit pour les spawns : libérer une piste
+garée rentre immédiatement dans la traversée, et un handler y est autorisé à annuler la scène.
+
+## Ce qui ne change pas
+
+- Le block est toujours retenu **avant** d'être dispatché. Aucun handler n'est appelé, le jeu
+  n'apprend jamais que le block existe tant que l'attente n'est pas levée.
+- Même règle sur **toutes** les pistes, flux principal compris.
+- **Tous** les ids doivent être satisfaits, pas un seul.
+- Le moteur n'invente aucun délai de garde. Une jonction insatisfiable gare la piste pour de bon,
+  et c'est le dessin qui le dit.
+
+## Le nouveau piège
+
+Un block qui attend une entrée du joueur **pour toujours** ne se termine jamais. Sous l'ancienne
+règle une jonction sur un tel block se levait quand même ; maintenant elle gare la piste. C'est
+correct — c'est ce que la jonction demande — mais ça transforme un défaut silencieux en blocage
+visible. `UNKNOWN_WAIT_BLOCK` ne peut pas aider : il vérifie que l'id existe dans la scène, pas
+qu'il sera jamais joué.
+
+## Preuve
+
+Les 451 tests existants passaient **sans modification** après le changement : leurs handlers
+appellent `next()` immédiatement, donc dispatch et terminaison tombent dans le même tick et aucun
+d'eux ne pouvait voir la différence. C'est précisément pourquoi la règle avait survécu si longtemps.
+
+Il a fallu écrire des tests qui **tiennent un block ouvert** — le handler garde `next()` de côté au
+lieu de l'appeler. Dans la spec partagée, c'est un pas **sans `action`** qui produit le même effet.
+
+| | tests | mutation (retour à `isVisited`) |
+|---|---|---|
+| TypeScript | 458/458, `tsc` propre | 4 des 7 nouveaux tests meurent |
+| spec partagée | 29 suites / 36 cas | 2 cas meurent |
+| C# | 114 + 13 + 13 | les 2 cas de spec échouent |
+| C++ | 64/64, zéro avertissement | `CrossLanguage.PlaysEverySceneInTestCases` échoue |
+| GDScript | 175/175 | `visited` attendu `[001, 002]`, obtenu `[001, 002, 003, 004]` |
+
+La sortie GDScript est la plus parlante : sous l'ancienne règle, la jonction jouait **et** continuait
+au-delà, par-dessus le block qu'elle devait attendre.
+
+## Documentation mise à jour
+
+`types.ts`, `types.h`, `Types.cs`, `lsde_types.gd`, `lsde_validator.gd`, `CLAUDE.md`, et les guides
+VitePress `async-tracks`, `block-types`, `lifecycle` dans les quatre locales — en/fr/ja/zh. Les
+sections `async-tracks` portent un encadré d'avertissement nommant le changement de règle, parce
+qu'un projet écrit contre les premières 2.x verra son timing changer.

@@ -20,16 +20,24 @@ This applies to both the main track **and** async tracks — an async track can 
 
 ## waitForBlocks — waiting for another track
 
-`props.waitForBlocks` holds a block until the blocks it names have been visited. It is the join half of the fork `isAsync` opens: a branch runs in parallel, and a block downstream waits for it to have got somewhere before it plays.
+`props.waitForBlocks` holds a block until the blocks it names have **finished**. It is the join half of the fork `isAsync` opens: a branch runs in parallel, and a block downstream waits for it to be **over** before it plays.
+
+**Finished, not reached.** A listed block counts once the flow has **left** it: your game called `next()`, the exit port was resolved, and the block's cleanup has run. So the bubble is off the screen and the audio voice is stopped *before* the joining line is dispatched — which is the whole point of drawing a join.
+
+::: warning A rule that changed
+In the first 2.x releases, being **reached** was enough. That made the property nearly inert in the shape designers actually draw: a fork into two blocks, then a join on both, lifted in the very tick it was registered — the two had been dispatched a fraction of a millisecond earlier — and the joining line spoke over them.
+
+`getVisitedBlocks()` is unaffected: it still lists what the player has been **shown**, which includes a block still mid-sentence.
+:::
 
 **It holds the block BEFORE the block is dispatched.** No handler is called, so your game never learns the block exists until the wait lifts — nothing of it can reach the screen early. That is the engine's decision and not a rendering choice you could make differently: `waitForBlocks` is a native property, the designer ticks it in LSDE, and the engine owes them the behaviour.
 
 The rule is the same on **every** track, the one the player is watching included.
 
 - The ids name blocks **of this scene**. A wire has never crossed a scene boundary.
-- **All** of them must have been visited, not just one.
-- Visiting a block releases everything waiting on it, in turn.
-- A block that is never visited parks its track for good. `init()` reports `UNKNOWN_WAIT_BLOCK` when an id is not a block of the scene at all.
+- **All** of them must have finished, not just one.
+- Finishing a block releases everything waiting on it, in turn.
+- A block that never finishes parks its track for good — and a block waiting on player input forever never finishes. `init()` reports `UNKNOWN_WAIT_BLOCK` when an id is not a block of the scene at all, but it cannot know whether a real one will ever be played.
 
 The sequence for a block carrying both `waitForBlocks` and `delay`:
 

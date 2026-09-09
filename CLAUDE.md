@@ -158,12 +158,17 @@ hold for three of them**, and this is the part that surprises people:
 - **`inPortPerCharacter`** — read on the TARGET too, and it reads the wire's `toPort`: that port is
   a CARD ID, and only that actor is offered to `onResolveCharacter`. The engine still asks; it
   simply cannot be answered with a different actor than the one the designer wired.
-- **`waitForBlocks`** — the join half of that fork. The engine holds the block **before
-  dispatching it**: no handler is called, so the game never learns the block exists until every
-  listed id has been visited. Same rule on EVERY track, the main flow included — it used to be
-  read only by parallel tracks, which made the property silently inert on the main flow, and it
-  used to mean "hold the exit" rather than "hold the block" when it sat anywhere but a track's
-  first block. One rule now, in `track.ts`.
+- **`waitForBlocks`** — the join half of that fork, and it waits on blocks that have
+  **FINISHED**, not on blocks that have been reached. A listed block counts once the flow has LEFT
+  it: `next()` was called, the port was resolved, and its cleanup has run — so the bubble is gone
+  before the joining line is dispatched. Being *reached* was the rule in the first v2 releases and
+  it made the property nearly inert in the shape designers draw: fork into two blocks, join on
+  both, and the wait lifted in the tick it was registered. The scene keeps two sets now, `visited`
+  and `completed`; `getVisitedBlocks()` still publishes the first. The engine holds the block
+  **before dispatching it**, so the game never learns it exists until the wait lifts. Same rule on
+  EVERY track, the main flow included — it used to be read only by parallel tracks, and it used to
+  mean "hold the exit" rather than "hold the block" when it sat anywhere but a track's first block.
+  One rule now, in `track.ts`.
 
 Closing the scene (`handle.cancel()`, or the main track running out of graph) cancels every live
 track. Tracks carry `id` / `parentTrackId` and cancel recursively; `handle.getTrackInfos()` and

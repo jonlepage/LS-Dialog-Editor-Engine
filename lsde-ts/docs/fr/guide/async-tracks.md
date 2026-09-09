@@ -20,16 +20,24 @@ Ceci s'applique au main track **et** aux async tracks — un async track peut cr
 
 ## waitForBlocks — attendre une autre piste
 
-`props.waitForBlocks` retient un bloc tant que les blocs qu'il nomme n'ont pas été visités. C'est la moitié « jonction » de l'embranchement qu'ouvre `isAsync` : une branche part en parallèle, et un bloc en aval attend qu'elle soit arrivée quelque part avant de jouer.
+`props.waitForBlocks` retient un bloc tant que les blocs qu'il nomme ne sont pas **terminés**. C'est la moitié « jonction » de l'embranchement qu'ouvre `isAsync` : une branche part en parallèle, et un bloc en aval attend qu'elle soit **finie** avant de jouer.
+
+**Terminé, pas atteint.** Un bloc listé compte à partir du moment où le flux l'a **quitté** : votre jeu a appelé `next()`, le port de sortie a été résolu, et le nettoyage du bloc a tourné. Donc la bulle est retirée de l'écran et la voix est coupée *avant* que la réplique de jonction ne soit dispatchée — c'est exactement à quoi sert de dessiner une jonction.
+
+::: warning Changement de règle
+Dans les premières versions 2.x, être **atteint** suffisait. Ça rendait la propriété quasi inerte dans la forme que les designers dessinent réellement : un embranchement vers deux blocs, puis une jonction sur les deux, se levait dans le tick même où elle était enregistrée — les deux blocs venaient d'être dispatchés une fraction de milliseconde plus tôt — et la réplique de jonction parlait par-dessus eux.
+
+`getVisitedBlocks()` n'est pas touché : il liste toujours ce que le joueur a **vu**, ce qui inclut un bloc encore en train de parler.
+:::
 
 **Le bloc est retenu AVANT d'être dispatché.** Aucun handler n'est appelé, donc votre jeu n'apprend jamais que le bloc existe tant que l'attente n'est pas levée — rien de lui ne peut arriver à l'écran trop tôt. C'est une décision du moteur, pas un choix d'affichage que vous pourriez faire autrement : `waitForBlocks` est une propriété **native**, le designer la coche dans LSDE, et le moteur la lui doit.
 
 La règle est la même sur **toutes** les pistes, celle que le joueur regarde comprise.
 
 - Les ids nomment des blocs **de cette scène**. Un fil n'a jamais franchi de frontière de scène.
-- Il faut que **tous** aient été visités, pas seulement un.
-- Visiter un bloc libère tout ce qui l'attendait, en chaîne.
-- Un bloc jamais visité gare sa piste pour de bon. `init()` signale `UNKNOWN_WAIT_BLOCK` quand un id n'est pas un bloc de la scène.
+- Il faut que **tous** soient terminés, pas seulement un.
+- Terminer un bloc libère tout ce qui l'attendait, en chaîne.
+- Un bloc qui ne se termine jamais gare sa piste pour de bon — et un bloc qui attend une entrée du joueur pour toujours ne se termine jamais. `init()` signale `UNKNOWN_WAIT_BLOCK` quand un id n'est pas un bloc de la scène, mais il ne peut pas savoir si un bloc réel sera jamais joué.
 
 La séquence pour un bloc portant à la fois `waitForBlocks` et `delay` :
 
@@ -85,7 +93,7 @@ Les async tracks sont conçus pour du contenu qui se déroule *en parallèle* de
 | Cas d'utilisation | Pourquoi ça fonctionne |
 |---|---|
 | Dialogue ambient de NPC ("barks") | Blocks dialog sur un async track — les NPCs commentent ou réagissent pendant que la conversation principale continue |
-| Réactions de personnages synchronisées | Utilisez `waitForBlocks` pour déclencher une réaction quand un block spécifique est atteint |
+| Réactions de personnages synchronisées | Utilisez `waitForBlocks` pour déclencher une réaction quand un block spécifique est **terminé** |
 | Jouer des sons ambient ou de la musique | Block action, pas d'interaction joueur nécessaire |
 | Mouvements de caméra parallèles | Block action, s'exécute en parallèle |
 | Effets avec timing précis | Combinez `waitForBlocks` + `delay` pour un timing précis |

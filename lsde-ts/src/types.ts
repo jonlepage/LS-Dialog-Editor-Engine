@@ -78,7 +78,7 @@ export type NoteBlock = BlockOfType<typeof BlockType.Note>;
  * Most of these are inert: the engine passes `delay`, `timeout`, `debug`, `waitInput`,
  * `portPerCharacter` and `skipIfMissingActor` through untouched and lets the game decide. Two are
  * not: `isAsync` opens a parallel track, and `waitForBlocks` holds a block until the ones it
- * names have been visited.
+ * names have FINISHED.
  *
  * **`delay` and `timeout` are MILLISECONDS in v2.** They were seconds in v1, and nothing will
  * report the difference at runtime — a migrated project turns a 3-second pause into 3 ms.
@@ -113,10 +113,20 @@ export interface NativeProperties {
 	/** Condition blocks: each case exits by its own port instead of sharing `out`. */
 	portPerCase?: boolean;
 	/**
-	 * Block ids OF THIS SCENE that must have been visited before this block STARTS.
+	 * Block ids OF THIS SCENE that must have FINISHED before this block STARTS.
 	 *
 	 * The join half of the fork {@link NativeProperties.isAsync} opens: a branch runs in parallel,
-	 * and a block downstream waits for it to have got somewhere before it plays.
+	 * and a block downstream waits for it to be over before it plays.
+	 *
+	 * **Finished, not reached.** A listed block counts once the flow has LEFT it: the game called
+	 * `next()`, the exit port was resolved, and the block's cleanup has run. So the bubble is off
+	 * the screen and the audio voice is stopped before the joining line is dispatched — which is
+	 * the whole point of drawing a join.
+	 *
+	 * That is a change from the first v2 releases, where being reached was enough. It made the
+	 * property nearly inert in the shape designers actually draw: a fork into two blocks, then a
+	 * join on both, lifted in the very tick it was registered because the two had been dispatched
+	 * a fraction of a millisecond earlier — and the joining line spoke over them.
 	 *
 	 * **The engine holds the block BEFORE dispatching it.** No handler is called, so the game
 	 * never learns the block exists until the wait lifts — nothing of it can reach the screen
@@ -126,10 +136,13 @@ export interface NativeProperties {
 	 *
 	 * The rule is the same on every track, the one the player is watching included.
 	 *
-	 * - **All** the listed blocks must have been visited, not just one.
-	 * - Visiting a block releases everything waiting on it, in turn.
-	 * - A block that is never visited parks its track for good. `init()` reports
-	 *   `UNKNOWN_WAIT_BLOCK` when an id is not a block of the scene at all.
+	 * - **All** the listed blocks must have finished, not just one.
+	 * - Finishing a block releases everything waiting on it, in turn.
+	 * - A block that never finishes parks its track for good — and a block that waits for input
+	 *   forever never finishes. `init()` reports `UNKNOWN_WAIT_BLOCK` when an id is not a block of
+	 *   the scene at all, but it cannot know whether a real one will ever be played.
+	 * - `getVisitedBlocks()` is unaffected: it still lists what the player has been SHOWN, which
+	 *   includes a block still mid-sentence.
 	 */
 	waitForBlocks?: string[];
 }

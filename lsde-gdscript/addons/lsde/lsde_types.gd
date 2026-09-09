@@ -70,7 +70,7 @@ const SUPPORTED_VERSION := 1
 ## can reach the screen early. That is the engine's decision and not a rendering choice a game could
 ## make differently: it is a NATIVE property, the designer ticks it in LSDE, and the engine owes
 ## them the behaviour. The rule is the same on every track, the one the player is watching included.
-## ALL the listed ids must have been visited, not just one, and init() reports UNKNOWN_WAIT_BLOCK
+## ALL the listed ids must have FINISHED, not just one, and init() reports UNKNOWN_WAIT_BLOCK
 ## when one of them is not a block of the scene at all.
 ##
 ## [code]delay[/code] and [code]timeout[/code] are MILLISECONDS in v2. They were seconds in v1, and

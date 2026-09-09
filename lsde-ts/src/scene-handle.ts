@@ -58,6 +58,20 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 
 	// ─── Shared by every track of this scene ─────────────────────────────
 	private readonly visited = new Set<string>();
+
+	/**
+	 * Blocks this scene has FINISHED, which is not the same as blocks it has reached.
+	 *
+	 * A block joins `visited` when it is dispatched and `completed` when the track leaves it — the
+	 * game called `next()`, the exit port was resolved and the block's cleanup has run. The two
+	 * sets answer two different questions and only one of them is `waitForBlocks`.
+	 *
+	 * It used to be the visited set, and that made the property nearly inert: a join is normally
+	 * drawn onto blocks that were dispatched a fraction of a millisecond earlier, so the wait lifted
+	 * in the same tick it was registered. A designer writing « DIALOG-011 waits for DIALOG-010 »
+	 * means "wait until l3 has finished speaking", not "wait until l3 has been given the floor".
+	 */
+	private readonly completed = new Set<string>();
 	private readonly choiceHistory = new Map<string, string[]>();
 	/** Tracks — the main flow included — parked until a set of blocks has been visited. */
 	private readonly pendingWaits = new Map<Waiter, string[]>();
@@ -222,25 +236,36 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 	/** @internal */ asSceneHandle(): SceneHandle { return this; }
 	/** @internal */ isSceneRunning(): boolean { return this.running; }
 	/** @internal */ isVisited( blockId: string ): boolean { return this.visited.has( blockId ); }
+	/** @internal */ isCompleted( blockId: string ): boolean { return this.completed.has( blockId ); }
 	/** @internal */ createBlockContext( block: BlueprintBlock, entryPort: string ): InternalContext | null {
 		return this.createContext( block, entryPort );
 	}
 
 	/**
-	 * @internal — Mark a block visited, and release anything that was waiting on it.
+	 * @internal — Mark a block reached. Nothing is released by this.
 	 *
-	 * The visited set is the scene's, not a track's: `waitForBlocks` is how a branch joins back,
-	 * so a track has to see what the others reached.
+	 * The visited set is what `getVisitedBlocks()` publishes: the blocks the player has been shown.
+	 * Reaching a block is not finishing it, so a join no longer lifts here — see `addCompleted`.
 	 */
 	addVisited( blockId: string ): void {
 		this.visited.add( blockId );
+	}
+
+	/**
+	 * @internal — Mark a block finished, and release anything that was waiting on it.
+	 *
+	 * The set is the scene's, not a track's: `waitForBlocks` is how a branch joins back, so a track
+	 * has to see what the others have finished.
+	 */
+	addCompleted( blockId: string ): void {
+		this.completed.add( blockId );
 		if ( this.pendingWaits.size === 0 ) return;
 
 		// Collected before notifying: releasing a track re-enters the traversal, which can park
 		// or release others, and mutating the map mid-iteration would skip entries.
 		const satisfied: Waiter[] = [];
 		for ( const [waiter, required] of this.pendingWaits ) {
-			if ( required.every( id => this.visited.has( id ) ) ) satisfied.push( waiter );
+			if ( required.every( id => this.completed.has( id ) ) ) satisfied.push( waiter );
 		}
 		for ( const waiter of satisfied ) {
 			this.pendingWaits.delete( waiter );
@@ -248,7 +273,7 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 		}
 	}
 
-	/** @internal — Park a track until every listed block has been visited. */
+	/** @internal — Park a track until every listed block has been FINISHED. */
 	registerWaitForBlocks( waiter: Waiter, blockIds: string[] ): void {
 		this.pendingWaits.set( waiter, blockIds );
 	}

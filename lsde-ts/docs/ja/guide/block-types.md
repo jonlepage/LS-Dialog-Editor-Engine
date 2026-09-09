@@ -103,7 +103,7 @@ native と同じ名前のプロジェクトプロパティを拒否します —
 | フィールド | 型 | 説明 |
 |-------|------|-------------|
 | `isAsync` | `boolean?` | 現在のトラックを続ける代わりに、この block で**並列トラックを開きます** |
-| `waitForBlocks` | `string[]?` | **この scene の** block id。それらがすべて訪問されるまで、block は**ディスパッチされる前に**保持されます — handler は呼ばれません |
+| `waitForBlocks` | `string[]?` | **この scene の** block id。それらがすべて**完了**するまで、block は**ディスパッチされる前に**保持されます — handler は呼ばれません |
 | `delay` | `number?` | block が再生されるまでの**ミリ秒**。`onBeforeBlock` が適用し、engine は決して適用しません |
 | `timeout` | `number?` | **ミリ秒**。そのまま渡されます — engine は何も強制しません |
 | `waitInput` | `boolean?` | プレイヤー入力を待つ。そのまま渡され、解釈されません |

@@ -315,19 +315,26 @@ namespace LsdeDialogEngine
         /// <summary>Condition blocks: each case exits by its own port instead of sharing Out.</summary>
         public bool? PortPerCase { get; set; }
 
-        /// <summary>Block ids OF THIS SCENE that must have been visited before this block STARTS.</summary>
+        /// <summary>Block ids OF THIS SCENE that must have FINISHED before this block STARTS.</summary>
         /// <remarks>The join half of the fork IsAsync opens: a branch runs in parallel, and a block
-        /// downstream waits for it to have got somewhere before it plays.
+        /// downstream waits for it to be over before it plays.
+        /// <para><b>Finished, not reached.</b> A listed block counts once the flow has LEFT it:
+        /// the game called next(), the exit port was resolved, and the cleanup has run. So the
+        /// bubble is off the screen before the joining line is dispatched. Being reached was the
+        /// rule in the first v2 releases and it made the property nearly inert: a fork into two
+        /// blocks, then a join on both, lifted in the very tick it was registered.</para>
         /// <para><b>The engine holds the block BEFORE dispatching it.</b> No handler is called, so
         /// the game never learns the block exists until the wait lifts — nothing of it can reach
         /// the screen early. That is the engine's decision and not a rendering choice a game could
         /// make differently: this is a NATIVE property, the designer ticks it in LSDE, and the
         /// engine owes them the behaviour.</para>
         /// <para>The rule is the same on every track, the one the player is watching included.</para>
-        /// <para>ALL the listed blocks must have been visited, not just one. Visiting a block
-        /// releases everything waiting on it, in turn. A block that is never visited parks its
-        /// track for good — Init() reports UNKNOWN_WAIT_BLOCK when an id is not a block of the
-        /// scene at all.</para></remarks>
+        /// <para>ALL the listed blocks must have FINISHED, not just one. Finishing a block
+        /// releases everything waiting on it, in turn. A block that never finishes parks its
+        /// track for good — and a block waiting on player input forever never finishes. Init()
+        /// reports UNKNOWN_WAIT_BLOCK when an id is not a block of the scene at all, but it cannot
+        /// know whether a real one will ever be played. GetVisitedBlocks() is unaffected: it still
+        /// lists what the player has been SHOWN.</para></remarks>
         public List<string>? WaitForBlocks { get; set; }
     }
 

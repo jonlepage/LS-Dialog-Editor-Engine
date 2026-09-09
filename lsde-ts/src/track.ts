@@ -139,7 +139,7 @@ export function skipNotes( block: BlueprintBlock, sceneGraph: SceneGraph ): Blue
 
 // ─── The scene, seen from a track ────────────────────────────────────────────
 
-/** Anything the engine can park until a set of blocks has been visited. */
+/** Anything the engine can park until a set of blocks has FINISHED. */
 export interface Waiter {
 	notifyWaitSatisfied(): void;
 }
@@ -162,6 +162,9 @@ export interface TrackHost {
 
 	addVisited( blockId: string ): void;
 	isVisited( blockId: string ): boolean;
+	/** The track has LEFT this block: handler returned, port resolved, cleanup run. */
+	addCompleted( blockId: string ): void;
+	isCompleted( blockId: string ): boolean;
 	registerWaitForBlocks( waiter: Waiter, blockIds: string[] ): void;
 
 	createBlockContext( block: BlueprintBlock, entryPort: string ): InternalContext | null;
@@ -337,11 +340,17 @@ export class Track implements Waiter {
 		// engine's decision, not a rendering choice a game could make differently: the property is
 		// native, the designer ticks it in LSDE, and the engine owes them the behaviour.
 		//
-		// It used to mean two different things depending on where the block sat: a track's FIRST
-		// block was held before dispatch, any later one was dispatched and held before advancing.
-		// Same checkbox, two meanings, and the second one showed the line early.
+		// It waits on blocks that have FINISHED, not on blocks that have been reached. Reaching was
+		// the old rule and it made the property nearly inert: a join is normally drawn onto blocks
+		// dispatched a fraction of a millisecond earlier — `DIALOG-009 → [ACTION-003, DIALOG-010]`
+		// then `DIALOG-011` waiting on both — so the wait lifted in the very tick it was
+		// registered, and l2 spoke over l3. `MIGRATION-V2.md` records the decision.
+		//
+		// It also used to mean two different things depending on where the block sat: a track's
+		// FIRST block was held before dispatch, any later one was dispatched and held before
+		// advancing. Same checkbox, two meanings, and the second one showed the line early.
 		const waitBlocks = natives( block ).waitForBlocks;
-		if ( waitBlocks?.length && !waitBlocks.every( id => this.host.isVisited( id ) ) ) {
+		if ( waitBlocks?.length && !waitBlocks.every( id => this.host.isCompleted( id ) ) ) {
 			this.pendingAdvance = () => this.processBlock( block, entryPort );
 			this.host.registerWaitForBlocks( this, waitBlocks );
 			return;
@@ -531,15 +540,31 @@ export class Track implements Waiter {
 			}
 		}
 
+		// The block is now DONE, and this is the one place that says so.
+		//
+		// Its handler returned, its exit port is resolved and its cleanup has just run — so a
+		// bubble is off the screen and an audio voice is stopped BEFORE anything waiting on this
+		// block is allowed to speak. Marking it any earlier would let the joining line play over
+		// the one it was told to wait for, which is the whole reason the rule changed.
+		//
+		// The cleanup runs here rather than inside `endBranch` for the same reason; `endBranch`
+		// calls it again and finds nothing, which is what makes that safe.
+		const cleanupFault = this.runBlockCleanup();
+		if ( cleanupFault ) {
+			// Same order as a handler that throws: close down first, surface after.
+			this.endFlow();
+			throw cleanupFault.value;
+		}
+
+		this.host.addCompleted( block.id );
+
+		// Releasing a parked track re-enters the traversal immediately, and a handler there is
+		// allowed to cancel the scene — so the guard is re-read rather than assumed.
+		if ( !this.running || !this.host.isSceneRunning() ) return;
+
 		if ( continuation ) {
 			const nextBlock = sceneGraph.getBlock( continuation.to );
 			if ( nextBlock ) {
-				const fault = this.runBlockCleanup();
-				if ( fault ) {
-					// Same order as a handler that throws: close down first, surface after.
-					this.endFlow();
-					throw fault.value;
-				}
 				this.processBlock( nextBlock, continuation.toPort );
 				return;
 			}
