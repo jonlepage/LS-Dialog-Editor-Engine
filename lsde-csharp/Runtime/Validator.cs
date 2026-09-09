@@ -1,4 +1,4 @@
-// LSDE Dialog Engine — Init validation + diagnostic report (C# port of validator.ts)
+﻿// LSDE Dialog Engine — Init validation + diagnostic report (C# port of validator.ts)
 //
 // The first thing this file does is refuse a payload it cannot read.
 //
@@ -259,12 +259,10 @@ namespace LsdeDialogEngine
                 });
             }
 
-            var blockById = new Dictionary<string, BlueprintBlock>();
-            foreach (var block in blocks) blockById[block.Id] = block;
 
             foreach (var block in blocks)
             {
-                ValidateLinks(scene, block, blockIds, blockById, errors, warnings);
+                ValidateLinks(scene, block, blockIds, errors);
                 ValidateWaits(scene, block, blockIds, warnings);
             }
         }
@@ -301,15 +299,18 @@ namespace LsdeDialogEngine
             BlueprintScene scene,
             BlueprintBlock block,
             HashSet<string> blockIds,
-            Dictionary<string, BlueprintBlock> blockById,
-            List<DiagnosticEntry> errors,
-            List<DiagnosticEntry> warnings)
+            List<DiagnosticEntry> errors)
         {
             if (block.Next == null || block.Next.Count == 0) return;
 
             // A link's target is relative to the same scene — a wire has never crossed one.
-            var byPort = new Dictionary<string, List<string>>();
-
+            //
+            // Several wires on one port is NOT reported. It used to be, as MULTIPLE_NON_ASYNC_FORK:
+            // "two non-async targets on one port, mark the secondary ones isAsync". The warning was
+            // right about the engine of the day — every wire but the first was detached whatever
+            // the designer had ticked — and it asked them to give up what they had drawn. The
+            // traversal now walks those wires in turn, which is what the drawing said, so there is
+            // nothing left to warn about.
             foreach (var link in block.Next)
             {
                 if (!blockIds.Contains(link.To))
@@ -323,49 +324,7 @@ namespace LsdeDialogEngine
                         BlockId = block.Id,
                     });
                 }
-
-                if (!byPort.TryGetValue(link.Port, out var group))
-                {
-                    group = new List<string>();
-                    byPort[link.Port] = group;
-                }
-                group.Add(link.To);
             }
-
-            // One port, several wires: the first non-async target becomes the main flow and the
-            // rest run as parallel tracks. Two non-async targets on one port means the second
-            // silently never becomes the main track — almost always a wiring mistake.
-            foreach (var pair in byPort)
-            {
-                if (pair.Value.Count <= 1) continue;
-
-                int nonAsyncCount = 0;
-                foreach (var to in pair.Value)
-                {
-                    if (!blockById.TryGetValue(to, out var target) || !IsAsync(target)) nonAsyncCount++;
-                }
-
-                if (nonAsyncCount > 1)
-                {
-                    warnings.Add(new DiagnosticEntry
-                    {
-                        Code = "MULTIPLE_NON_ASYNC_FORK",
-                        Message = $"{DescribeBlock(block)} port \"{pair.Key}\" has {pair.Value.Count} "
-                                  + $"outgoing links with {nonAsyncCount} non-async targets. "
-                                  + "Mark the secondary ones isAsync.",
-                        SceneId = scene.Scene,
-                        BlockId = block.Id,
-                    });
-                }
-            }
-        }
-
-        private static bool IsAsync(BlueprintBlock block)
-        {
-            return block.Props != null
-                && block.Props.TryGetValue("isAsync", out var value)
-                && value is bool flag
-                && flag;
         }
 
         private static void CrossValidate(

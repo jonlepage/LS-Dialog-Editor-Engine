@@ -161,7 +161,14 @@ private:
     void executeBlockHandler(const BlueprintBlock& block);
     void advanceToNextBlock(const BlueprintBlock& block, IBaseBlockContext* context);
     /// This track has nowhere left to go. Its cleanup runs, then the scene is told.
+    /// This branch has nowhere left to go: hand over to the queue, or stop.
+    std::exception_ptr endBranch();
+    /// Stop for good, DROPPING whatever was still owed.
     std::exception_ptr endFlow();
+    /// The track is done; the scene decides what its ending means.
+    std::exception_ptr retire();
+    /// Run the cleanup of the block being left, once, carrying what it threw.
+    std::exception_ptr runBlockCleanup();
     bool allVisited(const std::vector<std::string>& blockIds) const;
 
     ITrackHost& _host;
@@ -178,6 +185,21 @@ private:
     CleanupFn _previousCleanup;
     /// What to resume when a waitForBlocks is satisfied.
     std::function<void()> _pendingAdvance;
+
+    /// The wires this track still owes, in the order it will walk them.
+    ///
+    /// A port may carry several wires. The ones whose target is isAsync open their own track; the
+    /// others are THIS track's to walk, one after the other — so they queue here, and the track
+    /// picks the next one up when the branch it is on runs out of graph.
+    ///
+    /// New wires go in at the FRONT. A designer reading their own graph expects a branch to finish
+    /// before its sibling starts: A to [B, C], and B to [D, E], plays B, D, E, then C — not
+    /// B, D, C, E. Front insertion is what makes the walk depth-first, which is how the graph
+    /// reads on screen.
+    ///
+    /// Links are held BY VALUE: they are copied out of a PortResolutionResult that dies with the
+    /// call that produced it.
+    std::vector<Link> _queue;
     /// The context of the block being dispatched, alive for as long as the block is.
     std::unique_ptr<IBaseBlockContext> _ownedContext;
     /// The natives handed to onBeforeBlock. Shared, because a game may defer its resolve().

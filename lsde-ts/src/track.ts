@@ -22,7 +22,7 @@
 // history, the handler registries, the pending waits. A track owns only its own position.
 
 import type {
-	BlueprintBlock, SceneHandle, CleanupFn, Card, NativeProperties, TrackInfo,
+	BlueprintBlock, SceneHandle, CleanupFn, Card, NativeProperties, TrackInfo, Link,
 } from './types.js';
 import { BlockType } from './types.js';
 import type { SceneGraph } from './graph.js';
@@ -205,6 +205,20 @@ export class Track implements Waiter {
 	/** What to resume when a `waitForBlocks` is satisfied. */
 	private pendingAdvance: ( () => void ) | null = null;
 
+	/**
+	 * The wires this track still owes, in the order it will walk them.
+	 *
+	 * A port may carry several wires. The ones whose target is `isAsync` open their own track; the
+	 * others are THIS track's to walk, one after the other — so they queue here, and the track
+	 * picks the next one up when the branch it is on runs out of graph.
+	 *
+	 * New wires go in at the FRONT. A designer reading their own graph expects a branch to finish
+	 * before its sibling starts: `A → [B, C]` then `B → [D, E]` plays B, D, E, then C — not
+	 * B, D, C, E. Front insertion is what makes the walk depth-first, which is how the graph reads
+	 * on screen.
+	 */
+	private readonly queue: Link[] = [];
+
 	/** The entry port of the wire that opened this track. `in` for the flow the player watches. */
 	private readonly startEntryPort: string;
 
@@ -244,6 +258,7 @@ export class Track implements Waiter {
 
 		this.currentBlock = null;
 		this.pendingAdvance = null;
+		this.queue.length = 0;
 		for ( const childId of this.childTrackIds ) {
 			// Evaluated FIRST, then kept — see the note in `SceneHandleImpl.shutdown()`.
 			const childFault = this.host.cancelTrack( childId );
@@ -311,7 +326,8 @@ export class Track implements Waiter {
 
 		const block = skipNotes( startingBlock, sceneGraph );
 		if ( !block ) {
-			const fault = this.endFlow();
+			// The end of THIS branch, not of the track: whatever is queued is still owed.
+			const fault = this.endBranch();
 			if ( fault ) throw fault.value;
 			return;
 		}
@@ -458,11 +474,18 @@ export class Track implements Waiter {
 	}
 
 	/**
-	 * Leave a block: pick the outgoing links, open a track per parallel target, follow the rest.
+	 * Leave a block: open a track per parallel target, walk the rest one after the other.
 	 *
-	 * The FIRST non-async target continues this track; every other resolved link opens one. A port
-	 * with several non-async targets is a `MULTIPLE_NON_ASYNC_FORK` warning at init, and here the
-	 * second one simply never becomes the continuation.
+	 * A port may carry several wires, and each one's TARGET says how it is walked:
+	 *
+	 * - **`isAsync`** — it opens its own track and runs beside this one.
+	 * - **not `isAsync`** — it belongs to THIS track. The first becomes the continuation; the
+	 *   others queue up and are walked when the continuation runs out of graph.
+	 *
+	 * That second line is what `isAsync` used to be unable to say. Every wire but the first was
+	 * detached whether the designer had ticked the box or not, so on a secondary wire the property
+	 * was INERT: ticked or not, the target ran beside. The engine now honours it — ticked means
+	 * beside, unticked means in turn — and `MIGRATION-V2.md` records the whole decision.
 	 */
 	private advanceToNextBlock( block: BlueprintBlock, context: InternalContext | null ): void {
 		if ( !this.running || !this.host.isSceneRunning() ) return;
@@ -481,66 +504,104 @@ export class Track implements Waiter {
 			actorPort: context && '_actorPort' in context ? context._actorPort : undefined,
 		} );
 
-		let mainLink: ( typeof resolution.links )[number] | null = null;
-		const asyncLinks: typeof resolution.links = [];
+		let continuation: Link | null = null;
+		const detached: Link[] = [];
+		const queued: Link[] = [];
 
+		// Sorted first, acted on after. Opening a track runs its handler immediately, and a handler
+		// is allowed to cancel the scene — so nothing here may depend on state a spawn could change.
 		for ( const link of resolution.links ) {
 			const targetBlock = sceneGraph.getBlock( link.to );
+			// A wire to a block that is not in this scene: the validator reports it as BROKEN_LINK
+			// at init, and the traversal simply has nowhere to go.
 			if ( !targetBlock ) continue;
 
-			if ( !mainLink && !natives( targetBlock ).isAsync ) {
-				mainLink = link;
-			} else {
-				asyncLinks.push( link );
-			}
+			if ( natives( targetBlock ).isAsync ) detached.push( link );
+			else if ( !continuation ) continuation = link;
+			else queued.push( link );
 		}
 
-		for ( const link of asyncLinks ) {
+		// In front of what was already owed: this block's own siblings come before an ancestor's.
+		if ( queued.length > 0 ) this.queue.unshift( ...queued );
+
+		for ( const link of detached ) {
 			const targetBlock = sceneGraph.getBlock( link.to );
 			if ( targetBlock ) {
 				this.childTrackIds.push( this.host.spawnTrack( targetBlock, this.id, link.toPort ) );
 			}
 		}
 
-		if ( mainLink ) {
-			const nextBlock = sceneGraph.getBlock( mainLink.to );
+		if ( continuation ) {
+			const nextBlock = sceneGraph.getBlock( continuation.to );
 			if ( nextBlock ) {
-				const cleanupToRun = this.previousCleanup;
-				this.previousCleanup = null;
-				const fault = runCleanup( cleanupToRun );
+				const fault = this.runBlockCleanup();
 				if ( fault ) {
 					// Same order as a handler that throws: close down first, surface after.
 					this.endFlow();
 					throw fault.value;
 				}
-				this.processBlock( nextBlock, mainLink.toPort );
+				this.processBlock( nextBlock, continuation.toPort );
 				return;
 			}
 		}
 
-		const fault = this.endFlow();
+		const fault = this.endBranch();
 		if ( fault ) throw fault.value;
 	}
 
 	/**
-	 * This track has nowhere left to go.
+	 * This branch has nowhere left to go — hand over to the queue, or stop.
 	 *
-	 * Its own cleanup runs, then the scene is told. Whether that ends the scene or just retires a
-	 * branch is the scene's call — a track does not know which one it is.
+	 * The block's cleanup runs FIRST, before the next wire is picked up: leaving a block is leaving
+	 * a block, whether the track carries on or not. Hanging on to it until the queue emptied would
+	 * keep a panel open, or an audio voice alive, through everything that came after it.
+	 */
+	private endBranch(): CleanupFault {
+		const fault = this.runBlockCleanup();
+		const sceneGraph = this.host.getSceneGraph();
+
+		while ( this.queue.length > 0 ) {
+			const link = this.queue.shift()!;
+			const target = sceneGraph.getBlock( link.to );
+			if ( !target ) continue;
+			this.processBlock( target, link.toPort );
+			return fault;
+		}
+
+		return fault ?? this.retire();
+	}
+
+	/**
+	 * Stop this track for good, DROPPING whatever it still owed.
+	 *
+	 * For the ends that are not a branch running out of graph: `onValidateNextBlock` refusing a
+	 * block, a handler throwing, a cleanup throwing. All three say the flow is over — the guide has
+	 * always read `onInvalidateBlock` as "the scene stops" — so the queue goes with it. Playing the
+	 * next wire after the game refused this one would be answering a "no" with "then try that".
+	 */
+	private endFlow(): CleanupFault {
+		const fault = this.runBlockCleanup();
+		return fault ?? this.retire();
+	}
+
+	/**
+	 * The track is done. Its cleanup has already run; the scene decides what its ending means.
 	 *
 	 * Child tracks SURVIVE: they live independently in the pool, and only an explicit `cancel()`
 	 * cascades to them.
 	 */
-	private endFlow(): CleanupFault {
-		const cleanup = this.previousCleanup;
-		this.previousCleanup = null;
-		const fault = runCleanup( cleanup );
-
+	private retire(): CleanupFault {
 		this.running = false;
 		this.currentBlock = null;
 		this.pendingAdvance = null;
+		this.queue.length = 0;
+		return this.host.trackEnded( this );
+	}
 
-		const hostFault = this.host.trackEnded( this );
-		return fault ?? hostFault;
+	/** Run the cleanup of the block this track is leaving, once, and carry what it threw. */
+	private runBlockCleanup(): CleanupFault {
+		const cleanup = this.previousCleanup;
+		this.previousCleanup = null;
+		return runCleanup( cleanup );
 	}
 }

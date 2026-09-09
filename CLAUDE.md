@@ -143,15 +143,21 @@ Without `preventGlobalHandler()`, both fire in sequence: scene first, then globa
 
 ### Async tracks — where NativeProperties stop being inert
 
-The nine natives live in `block.props`, mixed in with the writer's own properties — ids cannot
+The ten natives live in `block.props`, mixed in with the writer's own properties — ids cannot
 collide, so `NATIVE_PROPERTY_IDS` is what tells them apart. The rule "natives are data, not
 behavior" holds for `delay`, `timeout`, `waitInput`, `debug`, `portPerCharacter`,
 `skipIfMissingActor` and `portPerCase` — the engine passes them through untouched. **It does not
-hold for two of them**, and this is the part that surprises people:
+hold for three of them**, and this is the part that surprises people:
 
-- **`isAsync`** — in `Track.advanceToNextBlock`, the first non-async target continues THIS track;
-  every other resolved link opens a parallel `Track`. A port with several non-async targets is a
-  `MULTIPLE_NON_ASYNC_FORK` warning at init.
+- **`isAsync`** — read on the TARGET of a wire, in `Track.advanceToNextBlock`. Ticked, the target
+  opens a parallel `Track` and runs beside this one; unticked, it belongs to THIS track — the
+  first becomes the continuation, the others **queue** and are walked when the continuation runs
+  out of graph. Every wire but the first used to be detached whichever way the box was ticked, so
+  on a secondary wire the property was inert; `MULTIPLE_NON_ASYNC_FORK` warned about it and asked
+  the designer to give up the drawing. Both are gone. `MIGRATION-V2.md` holds the decision.
+- **`inPortPerCharacter`** — read on the TARGET too, and it reads the wire's `toPort`: that port is
+  a CARD ID, and only that actor is offered to `onResolveCharacter`. The engine still asks; it
+  simply cannot be answered with a different actor than the one the designer wired.
 - **`waitForBlocks`** — the join half of that fork. The engine holds the block **before
   dispatching it**: no handler is called, so the game never learns the block exists until every
   listed id has been visited. Same rule on EVERY track, the main flow included — it used to be

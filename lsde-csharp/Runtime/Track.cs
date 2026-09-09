@@ -1,4 +1,4 @@
-// LSDE Dialog Engine — one track walking the graph (C# port of track.ts)
+﻿// LSDE Dialog Engine — one track walking the graph (C# port of track.ts)
 //
 // This is THE traversal. There is one of it, and every track uses it: the one the player is
 // watching and every parallel branch IsAsync opens. A track is a cursor — it knows which block it
@@ -189,6 +189,16 @@ namespace LsdeDialogEngine
         /// <summary>What to resume when a WaitForBlocks is satisfied.</summary>
         private Action? _pendingAdvance;
 
+        /// <summary>The wires this track still owes, in the order it will walk them.</summary>
+        /// <remarks>A port may carry several wires. The ones whose target is IsAsync open their
+        /// own track; the others are THIS track's to walk, one after the other — so they queue
+        /// here, and the track picks the next one up when the branch it is on runs out of graph.
+        /// <para>New wires go in at the FRONT. A designer reading their own graph expects a branch
+        /// to finish before its sibling starts: A then [B, C], and B then [D, E], plays B, D, E,
+        /// then C — not B, D, C, E. Front insertion is what makes the walk depth-first, which is
+        /// how the graph reads on screen.</para></remarks>
+        private readonly List<Link> _queue = new List<Link>();
+
         internal Track(ITrackHost host, BlueprintBlock startBlock, int id, int? parentTrackId)
         {
             _host = host;
@@ -218,6 +228,7 @@ namespace LsdeDialogEngine
 
             _currentBlock = null;
             _pendingAdvance = null;
+            _queue.Clear();
             foreach (var childId in _childTrackIds)
             {
                 // Evaluated FIRST, then kept — see the note in SceneHandleImpl.Shutdown().
@@ -281,7 +292,8 @@ namespace LsdeDialogEngine
             var block = NoteWalk.SkipNotes(startingBlock, sceneGraph);
             if (block == null)
             {
-                var deadEnd = EndFlow();
+                // The end of THIS branch, not of the track: whatever is queued is still owed.
+                var deadEnd = EndBranch();
                 if (deadEnd != null) throw deadEnd;
                 return;
             }
@@ -450,9 +462,13 @@ namespace LsdeDialogEngine
         /// <summary>
         /// Leave a block: pick the outgoing links, open a track per parallel target, follow the rest.
         /// </summary>
-        /// <remarks>The FIRST non-async target continues this track; every other resolved link
-        /// opens one. A port with several non-async targets is a MULTIPLE_NON_ASYNC_FORK warning at
-        /// init, and here the second one simply never becomes the continuation.</remarks>
+        /// <remarks>A port may carry several wires, and each one's TARGET says how it is walked:
+        /// IsAsync opens its own track and runs beside this one; anything else belongs to THIS
+        /// track — the first becomes the continuation, the others queue up and are walked when the
+        /// continuation runs out of graph.
+        /// <para>That second line is what IsAsync used to be unable to say. Every wire but the
+        /// first was detached whether the designer had ticked the box or not, so on a secondary
+        /// wire the property was INERT. MIGRATION-V2.md records the whole decision.</para></remarks>
         private void AdvanceToNextBlock(BlueprintBlock block, IBaseBlockContext? context)
         {
             if (!_running || !_host.IsSceneRunning()) return;
@@ -471,25 +487,29 @@ namespace LsdeDialogEngine
                 ActorPort = (context as InternalDialogContext)?.ActorPort,
             });
 
-            Link? mainLink = null;
-            var asyncLinks = new List<Link>();
+            Link? continuation = null;
+            var detached = new List<Link>();
+            var queued = new List<Link>();
 
+            // Sorted first, acted on after. Opening a track runs its handler immediately, and a
+            // handler may cancel the scene — so nothing here may depend on what a spawn changed.
             foreach (var link in resolution.Links)
             {
                 var targetBlock = sceneGraph.GetBlock(link.To);
+                // A wire to a block that is not in this scene: init() reports it as BROKEN_LINK,
+                // and the traversal simply has nowhere to go.
                 if (targetBlock == null) continue;
 
-                if (mainLink == null && !Natives.IsAsync(targetBlock))
-                {
-                    mainLink = link;
-                }
-                else
-                {
-                    asyncLinks.Add(link);
-                }
+                if (Natives.IsAsync(targetBlock)) detached.Add(link);
+                else if (continuation == null) continuation = link;
+                else queued.Add(link);
             }
 
-            foreach (var link in asyncLinks)
+            // In front of what was already owed: this block's own siblings come before an
+            // ancestor's.
+            if (queued.Count > 0) _queue.InsertRange(0, queued);
+
+            foreach (var link in detached)
             {
                 var targetBlock = sceneGraph.GetBlock(link.To);
                 if (targetBlock != null)
@@ -498,14 +518,12 @@ namespace LsdeDialogEngine
                 }
             }
 
-            if (mainLink != null)
+            if (continuation != null)
             {
-                var nextBlock = sceneGraph.GetBlock(mainLink.To);
+                var nextBlock = sceneGraph.GetBlock(continuation.To);
                 if (nextBlock != null)
                 {
-                    var cleanupToRun = _previousCleanup;
-                    _previousCleanup = null;
-                    var fault = Cleanups.Run(cleanupToRun);
+                    var fault = RunBlockCleanup();
                     if (fault != null)
                     {
                         // Same order as a handler that throws: close down first, surface after.
@@ -517,29 +535,66 @@ namespace LsdeDialogEngine
                 }
             }
 
-            var endFault = EndFlow();
+            var endFault = EndBranch();
             if (endFault != null) throw endFault;
         }
 
-        /// <summary>
-        /// This track has nowhere left to go.
-        /// </summary>
-        /// <remarks>Its own cleanup runs, then the scene is told. Whether that ends the scene or
-        /// just retires a branch is the scene's call — a track does not know which one it is.
-        /// <para>Child tracks SURVIVE: they live independently in the pool, and only an explicit
-        /// Cancel() cascades to them.</para></remarks>
-        private Exception? EndFlow()
+        /// <summary>This branch has nowhere left to go — hand over to the queue, or stop.</summary>
+        /// <remarks>The block's cleanup runs FIRST, before the next wire is picked up: leaving a
+        /// block is leaving a block, whether the track carries on or not. Hanging on to it until
+        /// the queue emptied would keep a panel open, or an audio voice alive, through everything
+        /// that came after it.</remarks>
+        private Exception? EndBranch()
+        {
+            var fault = RunBlockCleanup();
+            var sceneGraph = _host.GetSceneGraph();
+
+            while (_queue.Count > 0)
+            {
+                var link = _queue[0];
+                _queue.RemoveAt(0);
+                var target = sceneGraph.GetBlock(link.To);
+                if (target == null) continue;
+                ProcessBlock(target);
+                return fault;
+            }
+
+            return fault ?? Retire();
+        }
+
+        /// <summary>Run the cleanup of the block this track is leaving, once, carrying what it
+        /// threw.</summary>
+        private Exception? RunBlockCleanup()
         {
             var cleanup = _previousCleanup;
             _previousCleanup = null;
-            var fault = Cleanups.Run(cleanup);
+            return Cleanups.Run(cleanup);
+        }
 
+        /// <summary>Stop this track for good, DROPPING whatever it still owed.</summary>
+        /// <remarks>For the ends that are not a branch running out of graph: OnValidateNextBlock
+        /// refusing a block, a handler throwing, a cleanup throwing. All three say the flow is
+        /// over — the guide has always read OnInvalidateBlock as "the scene stops" — so the queue
+        /// goes with it. Playing the next wire after the game refused this one would be answering
+        /// a no with "then try that".</remarks>
+        private Exception? EndFlow()
+        {
+            var fault = RunBlockCleanup();
+            return fault ?? Retire();
+        }
+
+        /// <summary>The track is done. Its cleanup has already run; the scene decides what its
+        /// ending means.</summary>
+        /// <remarks>Child tracks SURVIVE: they live independently in the pool, and only an
+        /// explicit Cancel() cascades to them.</remarks>
+        private Exception? Retire()
+        {
             _running = false;
             _currentBlock = null;
             _pendingAdvance = null;
+            _queue.Clear();
 
-            var hostFault = _host.TrackEnded(this);
-            return fault ?? hostFault;
+            return _host.TrackEnded(this);
         }
 
         private bool AllVisited(List<string> blockIds)

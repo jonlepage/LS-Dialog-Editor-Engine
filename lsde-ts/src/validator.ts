@@ -240,12 +240,8 @@ function validateScene(
 		} );
 	}
 
-	// Built once for the whole scene: `validateLinks` needs it to tell an async target from a
-	// non-async one, and rebuilding it per block made init O(blocks²).
-	const blockById = new Map( blocks.map( b => [b.id, b] ) );
-
 	for ( const block of blocks ) {
-		validateLinks( scene, block, blockIds, blockById, errors, warnings );
+		validateLinks( scene, block, blockIds, errors );
 		validateWaits( scene, block, blockIds, warnings );
 	}
 }
@@ -284,44 +280,23 @@ function validateLinks(
 	scene: Scene,
 	block: Block,
 	blockIds: Set<string>,
-	blockById: Map<string, Block>,
 	errors: DiagnosticEntry[],
-	warnings: DiagnosticEntry[],
 ): void {
 	if ( !block.next || block.next.length === 0 ) return;
 
 	// A link's target is relative to the same scene — a wire has never crossed one.
-	const byPort = new Map<string, string[]>();
-
+	//
+	// Several wires on one port is NOT reported. It used to be, as `MULTIPLE_NON_ASYNC_FORK`:
+	// "two non-async targets on one port, mark the secondary ones isAsync". The warning was right
+	// about the engine of the day — every wire but the first was detached whatever the designer had
+	// ticked — and it asked them to give up what they had drawn. The traversal now walks those
+	// wires in turn, which is what the drawing said, so there is nothing left to warn about.
 	for ( const link of block.next ) {
 		if ( !blockIds.has( link.to ) ) {
 			errors.push( {
 				code: 'BROKEN_LINK',
 				message: `${ describeBlock( block ) } links from port "${ link.port }" to "${ link.to }", `
 					+ `which is not a block of scene "${ scene.scene }".`,
-				sceneId: scene.scene,
-				blockId: block.id,
-			} );
-		}
-		const group = byPort.get( link.port );
-		if ( group ) { group.push( link.to ); }
-		else { byPort.set( link.port, [link.to] ); }
-	}
-
-	// One port, several wires: the first non-async target becomes the main flow and the rest run
-	// as parallel tracks. Two non-async targets on one port means the second silently never
-	// becomes the main track — almost always a wiring mistake rather than an intent.
-	for ( const [port, targets] of byPort ) {
-		if ( targets.length <= 1 ) continue;
-		let nonAsyncCount = 0;
-		for ( const to of targets ) {
-			if ( blockById.get( to )?.props?.isAsync !== true ) nonAsyncCount++;
-		}
-		if ( nonAsyncCount > 1 ) {
-			warnings.push( {
-				code: 'MULTIPLE_NON_ASYNC_FORK',
-				message: `${ describeBlock( block ) } port "${ port }" has ${ targets.length } outgoing links `
-					+ `with ${ nonAsyncCount } non-async targets. Mark the secondary ones isAsync.`,
 				sceneId: scene.scene,
 				blockId: block.id,
 			} );

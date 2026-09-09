@@ -2182,3 +2182,155 @@ le mot naturel de chaque langue pour la même cible.
 La navigation ne peut pas dériver : `localeNav(prefix)` et `guideSidebar(prefix)` la construisent
 depuis une seule définition, avec une table de libellés par locale.
 
+
+---
+
+# `isAsync` était mort sur un fil secondaire — la file d'attente (2026-09-08)
+
+Décidé avec Jonathan le soir du 8 septembre 2026, après trois heures de test sur la scène
+`condition-dispatch`. **Rien n'est encore implémenté** : cette section est la décision et le
+recensement, écrits avant le code pour que la conversation ne soit pas à refaire.
+
+## Le défaut, dans sa forme la plus simple
+
+Aucun Router, aucune condition. Un dialogue, deux suites :
+
+```
+DIALOG-012   ──out──►  DIALOG-013
+             ──out──►  DIALOG-014
+```
+
+Aucun des trois ne porte `isAsync`. Ce qu'un narrative designer attend en dessinant ça :
+DIALOG-012, puis DIALOG-013, puis DIALOG-014.
+
+Ce que le moteur fait : DIALOG-012, puis **DIALOG-013 et DIALOG-014 en même temps**.
+
+`Track.advanceToNextBlock` prend le **premier** fil dont la cible n'est pas `isAsync` comme
+continuation, et **détache tous les autres** — cochés ou non :
+
+```ts
+if ( !mainLink && !natives( targetBlock ).isAsync ) mainLink = link;
+else                                                asyncLinks.push( link );
+```
+
+Donc sur DIALOG-014, `isAsync` **ne fait rien**. Coché : piste à côté. Décoché : piste à côté.
+La case est inerte, et le narrative designer la manipule en croyant décider.
+
+C'est le même défaut que `waitForBlocks` inerte sur le flux principal, et pour la même raison :
+une native que le moteur reçoit et n'honore pas. Le validator émet bien
+`MULTIPLE_NON_ASYNC_FORK` — mais son message dit « marque les secondaires isAsync », c'est-à-dire
+*renonce à ce que tu voulais*, au lieu de faire ce qui était demandé.
+
+## La règle
+
+```
+isAsync coché    →  le bloc part sur une NOUVELLE piste, à côté
+isAsync décoché  →  le bloc entre dans la FILE de la piste courante, joué à son tour
+```
+
+Une piste n'a plus une seule continuation : elle a une file. Arrivée au bout d'un fil, au lieu de
+mourir, elle prend le suivant. File vide, elle meurt.
+
+**Le port par défaut passe toujours en dernier.** Sur un ROUTER, les routes `K*` d'abord, `then`
+ou `catch` ensuite. C'est ce que Jonathan a formulé comme `[[async…],[K2],[K3]].then`.
+
+Ce que cette formulation évite, et c'est tout l'intérêt : le Router n'a **pas** à camper. Il ne
+surveille aucune branche, ne tient aucun registre, n'attend aucune promesse. C'est la piste
+courante qui garde une file — donc « une seule piste bloquante » (§ 6 de `ROUTER-PARADIGME.md`)
+reste vrai, et le `Promise.all` que le § 7 a reporté reste reporté.
+
+## L'ordre dans la file — un nombre décimal sur le fil
+
+Décision de Jonathan. Deux fils sur un même port n'ont aujourd'hui **aucun ordre exprimable** :
+un `Link` porte `port`, `to`, `toPort`, et rien d'autre. Le seul ordre existant est celui du
+tableau `next`, invisible dans l'éditeur.
+
+LSDE portera donc un nombre décimal sur le fil — `0.1`, `0.2` — affiché sur la carte, modifiable.
+On joue du plus petit au plus grand. Le narrative designer voit l'ordre et le change s'il ne lui
+plaît pas ; le moteur trie, sans rien inventer.
+
+Écarté : l'index du tableau (invisible, et un déplacement de fil le change sans le dire) et une
+« priorité » entière (deux fils à la même priorité ramènent la question).
+
+## Les scénarios, tous
+
+Ce que la règle donne, block source par block source. **F** = la file de la piste courante,
+**P** = une piste ouverte à côté.
+
+### Un fil sortant
+
+| cible | aujourd'hui | avec la règle |
+|---|---|---|
+| décochée | la piste continue dessus | **inchangé** |
+| cochée | la piste courante meurt, une piste s'ouvre | **inchangé** |
+
+Le second cas est un piège en soi : `isAsync` sur un fil unique n'a aucun effet visible, sauf que
+le numéro de piste change et que la piste courante se termine. À signaler au designer, pas à
+corriger — c'est ce que la native dit.
+
+### Plusieurs fils sur le port résolu
+
+| cibles | aujourd'hui | avec la règle |
+|---|---|---|
+| toutes décochées | la 1re continue, **les autres détachées** | **F : toutes, dans l'ordre décimal** |
+| toutes cochées | P pour chacune, la piste meurt | **inchangé** |
+| mixte | la 1re décochée continue, le reste détaché | **P pour les cochées, F pour les décochées** |
+
+Vrai pour **chaque** type de block, sans exception : le port `out` d'un DIALOG, un port d'acteur
+avec `portPerCharacter`, le port `C1…` d'un CHOICE, `out`/`default` d'une CONDITION, `K*` avec
+`portPerCase`, `then`/`catch` d'une ACTION. Une seule règle, à un seul endroit.
+
+### ROUTER
+
+| cas | avec la règle |
+|---|---|
+| cas vrais, cibles décochées | F : `K1`, `K2`, `K3`, **puis** `then` |
+| cas vrais, cibles cochées | P : `K1` `K2` `K3` ; la piste continue par `then` tout de suite |
+| mixte | P pour les cochées, F pour les décochées, `then` en dernier |
+| aucun cas vrai | `catch` seul — rien dans la file |
+| zéro cas déclaré | `then` seul (§ 5, le vide est vrai) |
+| `then`/`catch` non branché | fin de la piste après la file — un port sans fil reste une fin |
+
+C'est aussi ce qui aligne le moteur sur l'aperçu de LSDE, qui détache déjà tous les ports de cas
+et garde `then`/`catch` comme continuation. Les deux montraient des pistes différentes sur la
+même scène.
+
+## Les pièges, et ce qu'on en fait
+
+1. **Une route bloquante qui n'appelle jamais `next()` gèle la fin de la scène.** Le reste de la
+   file et le port par défaut n'arrivent jamais. C'est la conséquence directe et voulue de la
+   règle — un `timeout` oublié sur un bloc de la file coûte la fin du dialogue. Diagnostic à
+   `init()` plutôt que garde-fou au runtime : le moteur ne doit pas inventer un délai.
+
+2. **Un fil de la file qui remonte vers son block source** re-remplit la file. Il faut décider si
+   la file est bornée. Rappel du précédent : une boucle de NOTE faisait un `StackOverflowException`
+   qui tuait le process Unity, et la réponse a été « une boucle finit le flux, comme n'importe
+   quelle fin ». Même réponse ici, probablement.
+
+3. **`waitForBlocks` sur un block encore dans la file.** La piste qui attend ne peut pas avancer,
+   et le block attendu n'est pas encore joué. `SceneHandleImpl.trackEnded` couvre déjà le cas —
+   toutes les pistes parquées, aucune ne peut avancer, la scène se ferme — mais il faut un test.
+
+4. **Un même block joué deux fois par la file.** Deux fils vers le même block, c'est deux
+   contextes, deux cleanups, deux `next` distincts. Vécu ce soir sur DIALOG-009 : la démo keyait
+   ses bulles sur `block.id`, le second dispatch écrasait le premier, et la piste dont le `next`
+   avait disparu attendait un clic qui ne pouvait plus venir. **C'est un piège pour le jeu**, pas
+   pour le moteur — mais la doc doit le dire, parce que la file va le rendre courant.
+
+5. **`handle.cancel()` pendant que la file est pleine.** La file se vide avec la piste, sans jouer
+   ce qui restait.
+
+6. **L'ordre des cleanups.** Aujourd'hui le cleanup d'un block tourne quand la piste le quitte.
+   Avec une file, quitter le dernier block d'un fil ne termine plus la piste : elle enchaîne. Le
+   cleanup doit tourner au même moment qu'avant — en quittant le block — pas à la fin de la file.
+
+## Ce qu'il reste à faire
+
+1. **TS** : la file dans `Track`, `advanceToNextBlock` qui répartit P et F, `endFlow` qui pioche
+   avant de mourir. Plus les tests exhaustifs des tableaux ci-dessus.
+2. **Le tri décimal** — quand LSDE exportera le champ. En attendant, l'ordre du tableau `next`.
+3. **Retirer `MULTIPLE_NON_ASYNC_FORK`** : deux cibles décochées ne sont plus une faute.
+4. **Ajouter le diagnostic du piège 1** : une file dont un block n'a ni `timeout`, ni `waitInput`,
+   ni sortie.
+5. **La spec partagée**, puis C#, C++, GDScript.
+6. **La doc** : `async-tracks.md` et `block-types.md` décrivent l'ancienne règle.

@@ -258,8 +258,12 @@ static func _validate_links(
 		return
 
 	# A link's target is relative to the same scene — a wire has never crossed one.
-	var by_port: Dictionary = {}
-
+	#
+	# Several wires on one port is NOT reported. It used to be, as MULTIPLE_NON_ASYNC_FORK:
+	# "two non-async targets on one port, mark the secondary ones isAsync". The warning was right
+	# about the engine of the day — every wire but the first was detached whatever the designer had
+	# ticked — and it asked them to give up what they had drawn. The traversal now walks those
+	# wires in turn, which is what the drawing said, so there is nothing left to warn about.
 	for link in links:
 		var to: String = link.get("to", "")
 		var port: String = link.get("port", "")
@@ -273,40 +277,6 @@ static func _validate_links(
 				"sceneId": scene_path,
 				"blockId": block.get("id", ""),
 			})
-
-		if not by_port.has(port):
-			by_port[port] = []
-		by_port[port].append(to)
-
-	# One port, several wires: the first non-async target becomes the main flow and the rest run as
-	# parallel tracks. Two non-async targets on one port means the second silently never becomes
-	# the main track — almost always a wiring mistake rather than an intent.
-	for port in by_port.keys():
-		var targets: Array = by_port[port]
-		if targets.size() <= 1:
-			continue
-
-		var non_async: int = 0
-		for to in targets:
-			var target: Variant = block_ids.get(to)
-			if target == null or not _is_async(target):
-				non_async += 1
-
-		if non_async > 1:
-			warnings.append({
-				"code": "MULTIPLE_NON_ASYNC_FORK",
-				"message": "%s port \"%s\" has %d outgoing links with %d non-async targets. Mark the secondary ones isAsync." % [
-					_describe_block(block), port, targets.size(), non_async,
-				],
-				"sceneId": scene_path,
-				"blockId": block.get("id", ""),
-			})
-
-static func _is_async(block: Dictionary) -> bool:
-	var props: Variant = block.get("props")
-	if not props is Dictionary:
-		return false
-	return props.get("isAsync") == true
 
 static func _cross_validate(data: Dictionary, check: Dictionary, warnings: Array) -> void:
 	var known_functions: Variant = check.get("functions")

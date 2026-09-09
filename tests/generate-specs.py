@@ -665,17 +665,17 @@ validation_suites = [
         "cases": [{"id": "warned", "expectedErrors": [], "expectedWarnings": ["NO_START_BLOCK"]}],
     },
     {
-        "id": "multiple-non-async-fork",
-        "description": "One port, two non-async targets: the second never becomes the main track.",
+        "id": "two-non-async-targets-is-not-a-fault",
+        "description": "One port, two non-async targets: they are walked in turn. Nothing to report.",
         "blueprint": header([scene("s1", [
             dlg("DIALOG-001", "Fork", next=[wire("out", "DIALOG-002"), wire("out", "DIALOG-003")]),
             dlg("DIALOG-002", "A"), dlg("DIALOG-003", "B"),
         ])]),
-        "cases": [{"id": "warned", "expectedErrors": [], "expectedWarnings": ["MULTIPLE_NON_ASYNC_FORK"]}],
+        "cases": [{"id": "clean", "expectedErrors": [], "expectedWarnings": []}],
     },
     {
         "id": "async-fork-is-fine",
-        "description": "The same fork with the extra target marked isAsync raises nothing.",
+        "description": "The same fork with the extra target marked isAsync raises nothing either.",
         "blueprint": header([scene("s1", [
             dlg("DIALOG-001", "Fork", next=[wire("out", "DIALOG-002"), wire("out", "DIALOG-003")]),
             dlg("DIALOG-002", "A"),
@@ -976,6 +976,80 @@ validation_suites += [
                   props={"waitForBlocks": ["DIALOG-404"]}),
         ])]),
         "cases": [{"id": "warned", "expectedErrors": [], "expectedWarnings": ["UNKNOWN_WAIT_BLOCK"]}],
+    },
+]
+
+# One port, several wires: the target's isAsync says whether it runs BESIDE this track or IN TURN
+# on it. Every wire but the first used to be detached whichever way the box was ticked, so on a
+# secondary wire the property was inert. MIGRATION-V2.md holds the decision.
+flow_suites += [
+    {
+        "id": "wire-queue-walked-in-turn",
+        "description": "Two non-async targets on one port: the second is walked after the first, not beside it.",
+        "blueprint": header([scene("s1", [
+            dlg("DIALOG-001", "Fork", next=[wire("out", "DIALOG-002"), wire("out", "DIALOG-003")]),
+            dlg("DIALOG-002", "Second"),
+            dlg("DIALOG-003", "Third"),
+        ])]),
+        "sceneId": "s1",
+        "cases": [{
+            "id": "one-after-the-other",
+            "steps": [
+                {"expect": {"type": "dialog", "blockId": "DIALOG-001", "text": "Fork"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-002", "text": "Second"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-003", "text": "Third"}, "action": {"type": "next"}},
+            ],
+            "expectedVisited": ["DIALOG-001", "DIALOG-002", "DIALOG-003"],
+            "expectedCleanupCalls": 3,
+        }],
+    },
+    {
+        "id": "wire-queue-depth-first",
+        "description": "A branch and everything under it finish before its sibling starts.",
+        "blueprint": header([scene("s1", [
+            dlg("DIALOG-001", "A", next=[wire("out", "DIALOG-002"), wire("out", "DIALOG-004")]),
+            dlg("DIALOG-002", "B", next=[wire("out", "DIALOG-003")]),
+            dlg("DIALOG-003", "C"),
+            dlg("DIALOG-004", "Z"),
+        ])]),
+        "sceneId": "s1",
+        "cases": [{
+            "id": "b-and-its-branch-then-z",
+            "steps": [
+                {"expect": {"type": "dialog", "blockId": "DIALOG-001", "text": "A"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-002", "text": "B"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-003", "text": "C"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-004", "text": "Z"}, "action": {"type": "next"}},
+            ],
+            "expectedVisited": ["DIALOG-001", "DIALOG-002", "DIALOG-003", "DIALOG-004"],
+            "expectedCleanupCalls": 4,
+        }],
+    },
+    {
+        "id": "wire-queue-mixed",
+        "description": "An isAsync target runs beside; the non-async ones stay this track's, in order.",
+        "blueprint": header([scene("s1", [
+            dlg("DIALOG-001", "A", next=[
+                wire("out", "DIALOG-002"), wire("out", "DIALOG-003"), wire("out", "DIALOG-004"),
+            ]),
+            dlg("DIALOG-002", "B"),
+            dlg("DIALOG-003", "Beside", props={"isAsync": True}),
+            dlg("DIALOG-004", "C"),
+        ])]),
+        "sceneId": "s1",
+        "cases": [{
+            "id": "beside-first-then-the-queue",
+            # The parallel track is opened while the wires are being sorted, so it is dispatched
+            # before the continuation; B and C then follow on this track, in file order.
+            "steps": [
+                {"expect": {"type": "dialog", "blockId": "DIALOG-001", "text": "A"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-003", "text": "Beside"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-002", "text": "B"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-004", "text": "C"}, "action": {"type": "next"}},
+            ],
+            "expectedVisited": ["DIALOG-001", "DIALOG-003", "DIALOG-002", "DIALOG-004"],
+            "expectedCleanupCalls": 4,
+        }],
     },
 ]
 

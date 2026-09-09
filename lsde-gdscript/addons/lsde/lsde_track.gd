@@ -50,6 +50,17 @@ var _previous_cleanup: Callable
 ## What to resume when a waitForBlocks is satisfied.
 var _pending_advance: Callable
 
+## The wires this track still owes, in the order it will walk them.
+##
+## A port may carry several wires. The ones whose target is isAsync open their own track; the
+## others are THIS track's to walk, one after the other — so they queue here, and the track picks
+## the next one up when the branch it is on runs out of graph.
+##
+## New wires go in at the FRONT. A designer reading their own graph expects a branch to finish
+## before its sibling starts: A to [B, C], and B to [D, E], plays B, D, E, then C — not B, D, C, E.
+## Front insertion is what makes the walk depth-first, which is how the graph reads on screen.
+var _queue: Array = []
+
 
 func _init(host: Object, start_block: Dictionary, track_id: int, parent_id: int) -> void:
 	_host = host
@@ -77,6 +88,7 @@ func cancel() -> void:
 
 	_current_block = null
 	_pending_advance = Callable()
+	_queue.clear()
 	for child_id in _child_track_ids:
 		_host._cancel_track(child_id)
 	_child_track_ids.clear()
@@ -138,7 +150,8 @@ func _process_block(starting_block: Dictionary) -> void:
 
 	var skipped: Variant = LsdeTrack.skip_notes(starting_block, scene_graph)
 	if skipped == null:
-		_end_flow()
+		# The end of THIS branch, not of the track: whatever is queued is still owed.
+		_end_branch()
 		return
 	var block: Dictionary = skipped
 
@@ -264,11 +277,15 @@ func _execute_block_handler(block: Dictionary) -> void:
 		_advance_to_next_block(block, context)
 
 
-## Leave a block: pick the outgoing links, open a track per parallel target, follow the rest.
+## Leave a block: open a track per parallel target, walk the rest one after the other.
 ##
-## The FIRST non-async target continues this track; every other resolved link opens one. A port
-## with several non-async targets is a MULTIPLE_NON_ASYNC_FORK warning at init, and here the second
-## one simply never becomes the continuation.
+## A port may carry several wires, and each one's TARGET says how it is walked: isAsync opens its
+## own track and runs beside this one; anything else belongs to THIS track — the first becomes the
+## continuation, the others queue up and are walked when the continuation runs out of graph.
+##
+## That second line is what isAsync used to be unable to say. Every wire but the first was detached
+## whether the designer had ticked the box or not, so on a secondary wire the property was INERT.
+## MIGRATION-V2.md records the whole decision.
 func _advance_to_next_block(block: Dictionary, context: Variant) -> void:
 	if not _running or not _host._is_scene_running():
 		return
@@ -291,52 +308,92 @@ func _advance_to_next_block(block: Dictionary, context: Variant) -> void:
 
 	var resolved_links: Array = LsdePortResolver.resolve_port(input)
 
-	var main_link: Variant = null
-	var async_links: Array = []
+	var continuation: Variant = null
+	var detached: Array = []
+	var queued: Array = []
 
+	# Sorted first, acted on after. Opening a track runs its handler immediately, and a handler may
+	# cancel the scene — so nothing here may depend on state a spawn could change.
 	for link in resolved_links:
 		var target_block: Variant = scene_graph.get_block(link.get("to", ""))
+		# A wire to a block that is not in this scene: init() reports it as BROKEN_LINK, and the
+		# traversal simply has nowhere to go.
 		if target_block == null:
 			continue
-		if main_link == null and not LsdeTrack.is_async_block(target_block):
-			main_link = link
+		if LsdeTrack.is_async_block(target_block):
+			detached.append(link)
+		elif continuation == null:
+			continuation = link
 		else:
-			async_links.append(link)
+			queued.append(link)
 
-	for link in async_links:
+	# In front of what was already owed: this block's own siblings come before an ancestor's.
+	for i in range(queued.size() - 1, -1, -1):
+		_queue.insert(0, queued[i])
+
+	for link in detached:
 		var target_block: Variant = scene_graph.get_block(link.get("to", ""))
 		if target_block != null:
 			_child_track_ids.append(_host._spawn_track(target_block, id))
 
-	if main_link != null:
-		var next_block: Variant = scene_graph.get_block(main_link.get("to", ""))
+	if continuation != null:
+		var next_block: Variant = scene_graph.get_block(continuation.get("to", ""))
 		if next_block != null:
-			var cleanup_to_run: Callable = _previous_cleanup
-			_previous_cleanup = Callable()
-			if cleanup_to_run.is_valid():
-				cleanup_to_run.call()
+			_run_block_cleanup()
 			_process_block(next_block)
 			return
 
-	_end_flow()
+	_end_branch()
 
 
-## This track has nowhere left to go.
+## This branch has nowhere left to go — hand over to the queue, or stop.
 ##
-## Its own cleanup runs, then the scene is told. Whether that ends the scene or just retires a
-## branch is the scene's call — a track does not know which one it is.
-##
-## Child tracks SURVIVE: they live independently in the pool, and only an explicit cancel()
-## cascades to them.
-func _end_flow() -> void:
+## The block's cleanup runs FIRST, before the next wire is picked up: leaving a block is leaving a
+## block, whether the track carries on or not. Hanging on to it until the queue emptied would keep
+## a panel open, or an audio voice alive, through everything that came after it.
+func _end_branch() -> void:
+	_run_block_cleanup()
+	var scene_graph: LsdeGraph.SceneGraph = _host._get_scene_graph()
+
+	while not _queue.is_empty():
+		var link: Dictionary = _queue.pop_front()
+		var target: Variant = scene_graph.get_block(link.get("to", ""))
+		if target == null:
+			continue
+		_process_block(target)
+		return
+
+	_retire()
+
+
+## Run the cleanup of the block this track is leaving, once.
+func _run_block_cleanup() -> void:
 	var cleanup: Callable = _previous_cleanup
 	_previous_cleanup = Callable()
 	if cleanup.is_valid():
 		cleanup.call()
 
+
+## Stop this track for good, DROPPING whatever it still owed.
+##
+## For the ends that are not a branch running out of graph: on_validate_next_block refusing a
+## block, a handler failing. Both say the flow is over — the guide has always read
+## on_invalidate_block as "the scene stops" — so the queue goes with it. Playing the next wire
+## after the game refused this one would be answering a no with "then try that".
+func _end_flow() -> void:
+	_run_block_cleanup()
+	_retire()
+
+
+## The track is done. Its cleanup has already run; the scene decides what its ending means.
+##
+## Child tracks SURVIVE: they live independently in the pool, and only an explicit cancel()
+## cascades to them.
+func _retire() -> void:
 	_running = false
 	_current_block = null
 	_pending_advance = Callable()
+	_queue.clear()
 
 	_host._track_ended(self)
 

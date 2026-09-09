@@ -92,6 +92,11 @@ export function condition( id: string, cases: ConditionCase[], opts: BlockOption
 	return { ...base( id, 'condition', opts ), cases } as Block;
 }
 
+/** A ROUTER: the same `cases` as a condition, read the opposite way. Exits by `then` / `catch`. */
+export function router( id: string, cases: ConditionCase[], opts: BlockOptions = {} ): Block {
+	return { ...base( id, 'router', opts ), cases } as Block;
+}
+
 export function action( id: string, calls: ActionCall[] = [], opts: BlockOptions = {} ): Block {
 	return { ...base( id, 'action', opts ), calls } as Block;
 }
@@ -103,8 +108,12 @@ export function note( id: string, opts: BlockOptions = {} ): Block {
 // ─── Wires ───────────────────────────────────────────────────────────────────
 
 /** A wire on a port. `out` for a dialog, `then`/`catch` for an action, `C1`/`K1`… otherwise. */
-export function link( to: string, port = 'out' ): Link {
-	return { port, to, toPort: 'in' };
+/**
+ * One wire. `toPort` is the target's ENTRY port — `in`, or a card id when the target carries
+ * `inPortPerCharacter`, in which case that actor is the one speaking the line.
+ */
+export function link( to: string, port = 'out', toPort = 'in' ): Link {
+	return { port, to, toPort };
 }
 
 /** Several wires on the same port — the fork case. */

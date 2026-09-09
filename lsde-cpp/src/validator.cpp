@@ -42,13 +42,6 @@ std::string describeBlock(const BlueprintBlock& block) {
     return "Block " + block.id;
 }
 
-bool isAsync(const BlueprintBlock& block) {
-    auto it = block.props.find("isAsync");
-    if (it == block.props.end()) return false;
-    const bool* flag = std::get_if<bool>(&it->second);
-    return flag != nullptr && *flag;
-}
-
 /// waitForBlocks names blocks OF THIS SCENE that must have been visited before this one advances.
 ///
 /// A name that is not in the scene can never be visited, so the block parks for good: on the main
@@ -77,47 +70,22 @@ void validateLinks(
     const BlueprintScene& scene,
     const BlueprintBlock& block,
     const std::unordered_set<std::string>& blockIds,
-    const std::unordered_map<std::string, const BlueprintBlock*>& blockById,
-    std::vector<DiagnosticEntry>& errors,
-    std::vector<DiagnosticEntry>& warnings) {
+    std::vector<DiagnosticEntry>& errors) {
     if (block.next.empty()) return;
 
     // A link's target is relative to the same scene — a wire has never crossed one.
-    // std::map keeps the ports in a stable order, so two runs report the same thing.
-    std::map<std::string, std::vector<std::string>> byPort;
-
+    //
+    // Several wires on one port is NOT reported. It used to be, as MULTIPLE_NON_ASYNC_FORK:
+    // "two non-async targets on one port, mark the secondary ones isAsync". The warning was right
+    // about the engine of the day — every wire but the first was detached whatever the designer had
+    // ticked — and it asked them to give up what they had drawn. The traversal now walks those
+    // wires in turn, which is what the drawing said, so there is nothing left to warn about.
     for (const auto& link : block.next) {
         if (blockIds.count(link.to) == 0) {
             errors.push_back(DiagnosticEntry{
                 "BROKEN_LINK",
                 describeBlock(block) + " links from port \"" + link.port + "\" to \"" + link.to
                     + "\", which is not a block of scene \"" + scene.scene + "\".",
-                scene.scene,
-                block.id,
-            });
-        }
-        byPort[link.port].push_back(link.to);
-    }
-
-    // One port, several wires: the first non-async target becomes the main flow and the rest run
-    // as parallel tracks. Two non-async targets on one port means the second silently never
-    // becomes the main track — almost always a wiring mistake rather than an intent.
-    for (const auto& entry : byPort) {
-        if (entry.second.size() <= 1) continue;
-
-        int nonAsyncCount = 0;
-        for (const auto& to : entry.second) {
-            auto target = blockById.find(to);
-            if (target == blockById.end() || !isAsync(*target->second)) nonAsyncCount++;
-        }
-
-        if (nonAsyncCount > 1) {
-            warnings.push_back(DiagnosticEntry{
-                "MULTIPLE_NON_ASYNC_FORK",
-                describeBlock(block) + " port \"" + entry.first + "\" has "
-                    + std::to_string(entry.second.size()) + " outgoing links with "
-                    + std::to_string(nonAsyncCount)
-                    + " non-async targets. Mark the secondary ones isAsync.",
                 scene.scene,
                 block.id,
             });
@@ -137,7 +105,6 @@ void validateScene(
     // A block id is unique inside its scene and nowhere else: the counter restarts at 1 in every
     // scene, so DIALOG-001 in two scenes is not a collision, it is the normal case.
     std::unordered_set<std::string> blockIds;
-    std::unordered_map<std::string, const BlueprintBlock*> blockById;
 
     for (const auto& block : scene.blocks) {
         if (!blockIds.insert(block.id).second) {
@@ -148,7 +115,6 @@ void validateScene(
                 block.id,
             });
         }
-        blockById[block.id] = &block;
     }
 
     // The scene names its own entry, so there is no such thing as two start blocks.
@@ -170,7 +136,7 @@ void validateScene(
     }
 
     for (const auto& block : scene.blocks) {
-        validateLinks(scene, block, blockIds, blockById, errors, warnings);
+        validateLinks(scene, block, blockIds, errors);
         validateWaits(scene, block, blockIds, warnings);
     }
 }

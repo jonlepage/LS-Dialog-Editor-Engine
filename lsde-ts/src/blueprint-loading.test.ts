@@ -312,7 +312,11 @@ describe( 'the entry block', () => {
 
 describe( 'the fork rule', () => {
 
-	it( 'warns when one port has two non-async targets', () => {
+	// Two wires on one port used to be `MULTIPLE_NON_ASYNC_FORK`: "the second silently never
+	// becomes the main track, mark it isAsync". The warning described the engine of the day
+	// faithfully, and asked the designer to give up the drawing. The traversal now walks those
+	// wires in turn — `branch-queue.test.ts` pins that — so the diagnostic is gone, not renamed.
+	it( 'says nothing about two non-async targets on one port', () => {
 		const data = load( SINGLE_FILE );
 		const block = data.scenes[0]!.blocks.find( b => b.id === 'DIALOG-001' )!;
 		block.next = [
@@ -322,10 +326,11 @@ describe( 'the fork rule', () => {
 
 		const report = validateBlueprint( { data } );
 
-		expect( report.warnings.map( w => w.code ) ).toContain( 'MULTIPLE_NON_ASYNC_FORK' );
+		expect( report.errors ).toEqual( [] );
+		expect( report.warnings ).toEqual( [] );
 	} );
 
-	it( 'stays quiet when the extra targets are async', () => {
+	it( 'says nothing either when the extra target is async', () => {
 		const data = load( SINGLE_FILE );
 		const block = data.scenes[0]!.blocks.find( b => b.id === 'DIALOG-001' )!;
 		block.next = [
@@ -336,7 +341,7 @@ describe( 'the fork rule', () => {
 
 		const report = validateBlueprint( { data } );
 
-		expect( report.warnings.map( w => w.code ) ).not.toContain( 'MULTIPLE_NON_ASYNC_FORK' );
+		expect( report.warnings ).toEqual( [] );
 	} );
 
 	it( 'does not confuse two different ports of the same block', () => {

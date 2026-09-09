@@ -1017,8 +1017,8 @@
       ]
     },
     {
-      "id": "multiple-non-async-fork",
-      "description": "One port, two non-async targets: the second never becomes the main track.",
+      "id": "two-non-async-targets-is-not-a-fault",
+      "description": "One port, two non-async targets: they are walked in turn. Nothing to report.",
       "blueprint": {
         "format": "lsde-blueprints",
         "version": 1,
@@ -1139,17 +1139,15 @@
       },
       "cases": [
         {
-          "id": "warned",
+          "id": "clean",
           "expectedErrors": [],
-          "expectedWarnings": [
-            "MULTIPLE_NON_ASYNC_FORK"
-          ]
+          "expectedWarnings": []
         }
       ]
     },
     {
       "id": "async-fork-is-fine",
-      "description": "The same fork with the extra target marked isAsync raises nothing.",
+      "description": "The same fork with the extra target marked isAsync raises nothing either.",
       "blueprint": {
         "format": "lsde-blueprints",
         "version": 1,
