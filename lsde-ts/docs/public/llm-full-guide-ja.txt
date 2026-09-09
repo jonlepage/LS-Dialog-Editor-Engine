@@ -73,6 +73,37 @@ engine は `BlueprintExport` オブジェクトを受け取ります（ファイ
 
 <!--@include: ../../_shared/getting-started-validation.md-->
 
+### 17 個の診断
+
+**エラー — payload は拒否され、何も再生されません。** `errors` は空ではなく、`engine.scene()` は何も返せません。
+
+| コード | 何が起きたか |
+|---|---|
+| `MISSING_DATA` | `init()` に `data` が渡されていません |
+| `MISMATCHED_EXPORTS` | 別々のエクスポート由来のファイルが混在しています — `project` か `exportedAt` が一致しません。1 回のエクスポートのファイルだけを渡してください |
+| `WRONG_NAMING_CONVENTION` | `snake_case` または `PascalCase` でエクスポートされています。engine が読むのは camelCase です。プロジェクト設定 › エクスポーター › 命名規則 |
+| `INVALID_FORMAT` | `format` が `lsde-blueprints` ではありません。C# と C++ は上のケースでもこれを報告します：型付きオブジェクトを検証するため、元のキー名はすでに失われています |
+| `UNSUPPORTED_FORMAT_VERSION` | `version` が `1` ではありません。LSDE 1.6 のままのプロジェクトは engine 0.3.x に属します — 二重リーダーはありません |
+| `NO_SCENES` | payload に scene が 1 つもありません |
+| `DUPLICATE_SCENE` | 2 つの scene が path または安定 id を共有しています |
+| `MISSING_SCENE_PATH` | scene に path がありません |
+| `DUPLICATE_BLOCK_ID` | **同一** scene の 2 つの block が id を共有しています。scene をまたぐ場合は正当かつ想定どおりです — block は (scene, id) です |
+| `INVALID_START_BLOCK` | scene が、自分の block ではないものを開始 block として指しています |
+| `BROKEN_LINK` | ワイヤーが scene に存在しない block を指しています。トラバーサルには行き先がありません |
+
+**警告 — 再生はされますが、何かが静かに動きません。** 読んでください。どれもノイズではありません。
+
+| コード | 何を失うか |
+|---|---|
+| `NO_START_BLOCK` | scene に開始 block がないため、`start()` に始める場所がありません |
+| `UNKNOWN_WAIT_BLOCK` | `waitForBlocks` の id が scene の block ではないため、そのトラックは**永久に**停留します。検証はそれ以上進めません：実在する id でも再生されないことはあり得ます |
+| `UNKNOWN_FUNCTION` | action が `check.functions` に無い関数 id を呼んでいます |
+| `UNKNOWN_DICTIONARY` | condition が `check.dictionaries` に無い辞書 id をテストしています |
+| `UNKNOWN_DICTIONARY_ENTRY` | 辞書は既知ですが、エントリキーが未知です |
+| `UNKNOWN_CARD` | block が `check.cards` に無いアクターカードの**名前**を指しています |
+
+最後の 4 つは `check` を渡したときにだけ現れます — 渡さなければ engine には比較する相手がありません。
+
 ================================================================================
 
 # Blueprint と Scene
@@ -222,10 +253,10 @@ native と同じ名前のプロジェクトプロパティを拒否します —
 | フィールド | 型 | 説明 |
 |-------|------|-------------|
 | `isAsync` | `boolean?` | 現在のトラックを続ける代わりに、この block で**並列トラックを開きます** |
-| `waitForBlocks` | `string[]?` | **この scene の** block id。それらがすべて訪問されるまで、block は**ディスパッチされる前に**保持されます — handler は呼ばれません |
+| `waitForBlocks` | `string[]?` | **この scene の** block id。それらがすべて**完了**するまで、block は**ディスパッチされる前に**保持されます — handler は呼ばれません |
 | `delay` | `number?` | block が再生されるまでの**ミリ秒**。`onBeforeBlock` が適用し、engine は決して適用しません |
-| `timeout` | `number?` | **ミリ秒**。そのまま渡されます — engine は何も強制しません |
-| `waitInput` | `boolean?` | プレイヤー入力を待つ。そのまま渡され、解釈されません |
+| `timeout` | `number?` | セリフを言い終えたあと block が画面に**残るミリ秒**。そのあと自分から離れます — block のオートアドバンス。**`waitInput` より優先**。そのまま渡され、engine は何も強制しません |
+| `waitInput` | `boolean?` | プレイヤー入力を待つ。そのまま渡され、解釈されません — **`timeout` が優先します** |
 | `debug` | `boolean?` | エディタ用デバッグフラグ。そのまま渡されます |
 | `portPerCharacter` | `boolean?` | block は `out` ではなく、actor の **card id で名付けられた port** から出ます |
 | `skipIfMissingActor` | `boolean?` | そのまま渡されます — 判断はゲーム側です |
@@ -234,6 +265,15 @@ native と同じ名前のプロジェクトプロパティを拒否します —
 > WARNING:
 v1 では秒でした。そして**実行時にそれを知らせるものは何もありません**：移行したプロジェクトでは
 3 秒の間が 3 ミリ秒になります。
+
+> TIP:
+カウントダウンはセリフが**言い終わった**時点から始まります。block が到着した時点ではありません。ライターが設定するのは、最後の文字が打ち終わった（あるいは最後の音節が発声された）あとにそのセリフが画面に**残る**時間で、そのあと block は自分から離れます。
+
+到着から数えるのは、読んで自然なのに再生すると間違っている類の誤りです：120 文字のセリフに 2500 ms を設定すると、文の途中で切れます。
+
+これは **`waitInput` より優先され**、即座に離れる挙動よりも優先されます。三つはいずれも block を「いつ」離れるかを言っており、ライターがカードに書いたものが最も具体的な答えです。したがってクリックは**表示を早送りする**ことしかできず、block を追い出すことはできません — 自分の時間を演じているセリフを押しても意味がなく、早送りには意味があります。そしてその早送りがカウントダウンを起動します。
+
+そして block を離れることがそれを**完了**と記すので、`timeout` はその block を名指す [`waitForBlocks`](/ja/guide/async-tracks) を解除するものでもあります。
 
 これら九つのうち、走査を変えるのは**二つ**だけです：`isAsync` と `waitForBlocks`。残りの七つは
 そのままゲームに渡され、どう扱うかはゲームが決めます。
@@ -369,14 +409,17 @@ engine.onChoice(({ block, context, next }) => {
     next();
   };
 
+  // `timeout` is MILLISECONDS in v2 — no × 1000 — and on a CHOICE it is counted from
+  // the moment the options are readable. It still has to SELECT one: an option id IS the
+  // exit port, so a choice left without selectChoice() resolves to no link at all.
   if (timeout) {
-    const timer = setTimeout(() => resolve(visible[0]), timeout * 1000);
-    ui.showOptions(visible, (optionId) => {
+    const timer = setTimeout(() => resolve(offered[0]), timeout);
+    ui.showOptions(offered, (optionId) => {
       clearTimeout(timer);
-      resolve(visible.find(c => c.id === optionId));
+      resolve(offered.find(c => c.id === optionId));
     });
   } else {
-    ui.showOptions(visible, (optionId) => resolve(visible.find(c => c.id === optionId)));
+    ui.showOptions(offered, (optionId) => resolve(offered.find(c => c.id === optionId)));
   }
 });
 ```

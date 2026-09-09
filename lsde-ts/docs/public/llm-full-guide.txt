@@ -73,6 +73,37 @@ The engine consumes a `BlueprintExport` object, not a file. You can load your bl
 
 <!--@include: ../_shared/getting-started-validation.md-->
 
+### The seventeen diagnostics
+
+**Errors — the payload is refused and nothing plays.** `errors` is non-empty and `engine.scene()` has nothing to hand you.
+
+| Code | What happened |
+|---|---|
+| `MISSING_DATA` | No `data` was passed to `init()` |
+| `MISMATCHED_EXPORTS` | Several files merged that come from different exports — `project` or `exportedAt` disagree. Pass the files of ONE export |
+| `WRONG_NAMING_CONVENTION` | Exported in `snake_case` or `PascalCase`; the engine reads camelCase. Project settings › Exporters › Naming convention |
+| `INVALID_FORMAT` | `format` is not `lsde-blueprints`. It is also what C# and C++ report for the case above: they validate a typed object, so the original key names are already gone |
+| `UNSUPPORTED_FORMAT_VERSION` | `version` is not `1`. A project still on LSDE 1.6 belongs on engine 0.3.x — there is no dual reader |
+| `NO_SCENES` | The payload carries no scene |
+| `DUPLICATE_SCENE` | Two scenes share a path or a stable id |
+| `MISSING_SCENE_PATH` | A scene has no path |
+| `DUPLICATE_BLOCK_ID` | Two blocks of the SAME scene share an id. Across scenes it is legal and expected — a block is (scene, id) |
+| `INVALID_START_BLOCK` | The scene names a start block that is not one of its blocks |
+| `BROKEN_LINK` | A wire points at a block that is not in the scene. The traversal would simply have nowhere to go |
+
+**Warnings — it plays, and something will quietly not work.** Read them; none of them is noise.
+
+| Code | What it costs you |
+|---|---|
+| `NO_START_BLOCK` | The scene has no start block, so `start()` has nowhere to begin |
+| `UNKNOWN_WAIT_BLOCK` | A `waitForBlocks` id is not a block of the scene, so that track parks **for good**. The check cannot go further: an id that does exist may still never be played |
+| `UNKNOWN_FUNCTION` | An action calls a function id your `check.functions` does not list |
+| `UNKNOWN_DICTIONARY` | A condition tests a dictionary id your `check.dictionaries` does not list |
+| `UNKNOWN_DICTIONARY_ENTRY` | The dictionary is known, the entry key is not |
+| `UNKNOWN_CARD` | A block cites an actor card NAME your `check.cards` does not list |
+
+The last four only appear when you pass `check` — without it the engine has nothing to compare against.
+
 ================================================================================
 
 # Blueprints & Scenes
@@ -203,10 +234,10 @@ The nine properties the **engine** reads, taken out of `props`. Ids cannot colli
 | Field | Type | Description |
 |-------|------|-------------|
 | `isAsync` | `boolean?` | **Opens a parallel track** on this block instead of continuing the current one |
-| `waitForBlocks` | `string[]?` | Block ids **of this scene**. The block is **held before it is dispatched** until every one of them has been visited — no handler is called |
+| `waitForBlocks` | `string[]?` | Block ids **of this scene**. The block is **held before it is dispatched** until every one of them has **finished** — no handler is called |
 | `delay` | `number?` | **MILLISECONDS** before the block plays. Applied by `onBeforeBlock`, never by the engine |
-| `timeout` | `number?` | **MILLISECONDS**. Passed through — the engine enforces nothing |
-| `waitInput` | `boolean?` | Wait for player input. Passed through, never interpreted |
+| `timeout` | `number?` | **MILLISECONDS** the block STAYS after its line has been said, then it leaves on its own — an auto-advance for blocks. **Outranks `waitInput`**. Passed through; the engine enforces nothing |
+| `waitInput` | `boolean?` | Wait for player input. Passed through, never interpreted — **outranked by `timeout`** |
 | `debug` | `boolean?` | Debug flag for the editor. Passed through |
 | `portPerCharacter` | `boolean?` | The block leaves by a port **named by the actor's card id**, instead of `out` |
 | `skipIfMissingActor` | `boolean?` | Passed through — the game decides |
@@ -214,6 +245,15 @@ The nine properties the **engine** reads, taken out of `props`. Ids cannot colli
 
 > WARNING:
 They were seconds in v1, and **nothing reports the change at runtime**: a migrated project turns a 3-second pause into 3 ms.
+
+> TIP:
+The countdown starts when the line has been **said**, not when the block arrived. What the writer sets is how long it STAYS on screen after its last character is typed (or its last syllable spoken); then the block leaves on its own.
+
+Counting from arrival is the mistake that reads naturally and plays wrong: 2500 ms on a 120-character line truncates it mid-sentence.
+
+It **outranks `waitInput`**, and it outranks leaving immediately. All three say WHEN the block is left, and the one the writer put on the card is the most specific answer. So a click may only **hurry the reveal**, never dismiss the block — pressing a line that plays its own time makes no sense, speeding it up does, and the hurried reveal is what arms the countdown.
+
+And since leaving a block is what marks it **finished**, a `timeout` is also what releases a [`waitForBlocks`](/guide/async-tracks) that names it.
 
 Only **two** of these change anything about the traversal: `isAsync` and `waitForBlocks`. The other seven are handed to the game untouched.
 
@@ -348,14 +388,17 @@ engine.onChoice(({ block, context, next }) => {
     next();
   };
 
+  // `timeout` is MILLISECONDS in v2 — no × 1000 — and on a CHOICE it is counted from
+  // the moment the options are readable. It still has to SELECT one: an option id IS the
+  // exit port, so a choice left without selectChoice() resolves to no link at all.
   if (timeout) {
-    const timer = setTimeout(() => resolve(visible[0]), timeout * 1000);
-    ui.showOptions(visible, (optionId) => {
+    const timer = setTimeout(() => resolve(offered[0]), timeout);
+    ui.showOptions(offered, (optionId) => {
       clearTimeout(timer);
-      resolve(visible.find(c => c.id === optionId));
+      resolve(offered.find(c => c.id === optionId));
     });
   } else {
-    ui.showOptions(visible, (optionId) => resolve(visible.find(c => c.id === optionId)));
+    ui.showOptions(offered, (optionId) => resolve(offered.find(c => c.id === optionId)));
   }
 });
 ```

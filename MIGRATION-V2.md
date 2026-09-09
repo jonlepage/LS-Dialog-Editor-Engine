@@ -2516,3 +2516,40 @@ où ce contrat pouvait vivre. C'est pour ça que la correction est presque enti�
 minuteur dessus, et le clic global n'accélère plus que le texte — une bulle à `timeout` ne peut
 plus être congédiée. Les trois autres démos (`condition-dispatch`, `multi-tracks`, `simple-action`)
 comptent encore depuis l'arrivée du block ; à faire.
+
+# Relevé de fin d'audit TypeScript et documentation (2026-09-09)
+
+Mesuré, pas recopié — les compteurs des README étaient tous faux (417, 133, 168, et « 52 cas dans
+46 suites », qui inversait les deux nombres).
+
+| runtime | tests | mesure |
+|---|---|---|
+| TypeScript | **461 / 461** | 18 fichiers, `tsc --noEmit` propre |
+| C# | **140 / 140** | 114 + 13 (System.Text.Json) + 13 (Newtonsoft) |
+| C++ | **64 / 64** | ctest, zéro avertissement de build |
+| GDScript | **175 / 175** | Godot 4.6 headless |
+| spec partagée | **52 suites / 59 cas** | 29/36 flow, 16/16 validation, 7/7 routing |
+
+## Ce que l'audit a trouvé, et corrigé
+
+- **Les dix-sept diagnostics n'étaient documentés nulle part.** `init()` rend un `DiagnosticReport`
+  et le guide montrait comment passer `check`, sans jamais dire quels codes reviennent ni quoi en
+  faire. Ajouté dans « Getting Started » des quatre locales, séparé en onze erreurs qui refusent le
+  payload et six avertissements qui laissent jouer. Le seul code qui apparaissait quelque part était
+  `UNKNOWN_WAIT_BLOCK`, et seulement parce que la section précédente de ce journal l'y avait mis.
+- **`DiagnosticEntry.code` citait `NO_ENTRY_BLOCK` et `ORPHAN_CONNECTION`** — deux codes de la v1
+  qui n'existent plus. Remplacé par de vrais exemples, avec la raison pour laquelle le champ reste
+  un `string` : TS et GDScript peuvent dire `WRONG_NAMING_CONVENTION`, C# et C++ ne voient qu'un
+  objet typé et rendent `INVALID_FORMAT` pour le même fichier.
+- Compteurs de tests des quatre README remis d'aplomb.
+
+## Ce qui est vérifié sain
+
+- `generate-specs.py` regénère les trois JSON à l'identique : la spec partagée est en phase.
+- Les 13 pages du guide existent dans les 4 locales, et `vitepress build` passe — donc aucun lien
+  mort après les vingt fichiers touchés par la révision de `timeout`.
+- Aucun `TODO` dans le moteur. Les deux restants sont dans `playground-fake-game-engine.ts`, exclu
+  du build publié : ce sont des notes de l'auteur.
+- Les mentions de la v1 encore présentes dans `src/` sont toutes des commentaires qui expliquent ce
+  qui a été retiré — `fromPortIndex`, `filterVisibleChoices`, `MULTIPLE_NON_ASYNC_FORK`, le mode
+  dispatcher. Rien de vivant.

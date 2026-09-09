@@ -73,6 +73,37 @@ engine 接收 `BlueprintExport` 对象，而非文件。您可以使用平台适
 
 <!--@include: ../../_shared/getting-started-validation.md-->
 
+### 十七种诊断
+
+**错误 —— payload 被拒绝，什么都不会播放。** `errors` 非空，`engine.scene()` 也无从交付。
+
+| 代码 | 发生了什么 |
+|---|---|
+| `MISSING_DATA` | 没有向 `init()` 传入 `data` |
+| `MISMATCHED_EXPORTS` | 合并了来自不同导出的多个文件 —— `project` 或 `exportedAt` 不一致。请一次只传一个导出的文件 |
+| `WRONG_NAMING_CONVENTION` | 以 `snake_case` 或 `PascalCase` 导出；engine 读取的是 camelCase。项目设置 › 导出器 › 命名约定 |
+| `INVALID_FORMAT` | `format` 不是 `lsde-blueprints`。C# 和 C++ 对上一种情况也报告这个：它们校验的是已反序列化的类型化对象，原始键名早已丢失 |
+| `UNSUPPORTED_FORMAT_VERSION` | `version` 不是 `1`。仍在 LSDE 1.6 的项目属于 engine 0.3.x —— 没有双读取器 |
+| `NO_SCENES` | payload 里没有任何 scene |
+| `DUPLICATE_SCENE` | 两个 scene 共用了 path 或稳定 id |
+| `MISSING_SCENE_PATH` | 某个 scene 没有 path |
+| `DUPLICATE_BLOCK_ID` | **同一** scene 里两个 block 共用 id。跨 scene 则合法且正常 —— 一个 block 是 (scene, id) |
+| `INVALID_START_BLOCK` | scene 指定的起始 block 并不属于它 |
+| `BROKEN_LINK` | 有连线指向 scene 中不存在的 block。遍历将无处可去 |
+
+**警告 —— 能播放，但有东西会静默失效。** 请阅读它们，没有一条是噪音。
+
+| 代码 | 你会失去什么 |
+|---|---|
+| `NO_START_BLOCK` | scene 没有起始 block，`start()` 无处开始 |
+| `UNKNOWN_WAIT_BLOCK` | 某个 `waitForBlocks` id 不是本 scene 的 block，于是那条轨道**永久**停留。检查无法更进一步：一个确实存在的 id 也可能永远不会被播放 |
+| `UNKNOWN_FUNCTION` | 某个 action 调用了 `check.functions` 未列出的函数 id |
+| `UNKNOWN_DICTIONARY` | 某个 condition 测试了 `check.dictionaries` 未列出的字典 id |
+| `UNKNOWN_DICTIONARY_ENTRY` | 字典已知，条目键未知 |
+| `UNKNOWN_CARD` | 某个 block 引用了 `check.cards` 未列出的角色卡**名称** |
+
+最后四条只在你传入 `check` 时出现 —— 不传，engine 就没有可比对的东西。
+
 ================================================================================
 
 # Blueprint 与 Scene
@@ -218,10 +249,10 @@ note block 是叙事设计师的便签 — 注释、提醒、上下文。在遍�
 | 字段 | 类型 | 描述 |
 |------|------|------|
 | `isAsync` | `boolean?` | 在这个 block 上**开启一条并行轨道**，而不是继续当前轨道 |
-| `waitForBlocks` | `string[]?` | **本 scene 的** block id。在它们全部被访问之前，block 会**在被分发之前**被扣住 — 不会调用任何 handler |
+| `waitForBlocks` | `string[]?` | **本 scene 的** block id。在它们全部**完成**之前，block 会**在被分发之前**被扣住 — 不会调用任何 handler |
 | `delay` | `number?` | block 播放前的**毫秒数**。由 `onBeforeBlock` 应用，engine 从不应用 |
-| `timeout` | `number?` | **毫秒**。原样传递 — engine 不做任何强制 |
-| `waitInput` | `boolean?` | 等待玩家输入。原样传递，从不解释 |
+| `timeout` | `number?` | 台词说完之后 block **留在屏幕上的毫秒数**，随后自己离开 — block 的自动推进。**优先于 `waitInput`**。原样传递，engine 不做任何强制 |
+| `waitInput` | `boolean?` | 等待玩家输入。原样传递，从不解释 — **`timeout` 优先于它** |
 | `debug` | `boolean?` | 编辑器调试标志。原样传递 |
 | `portPerCharacter` | `boolean?` | block 从以 actor 的 **card id 命名的 port** 出去，而不是 `out` |
 | `skipIfMissingActor` | `boolean?` | 原样传递 — 由游戏决定 |
@@ -229,6 +260,15 @@ note block 是叙事设计师的便签 — 注释、提醒、上下文。在遍�
 
 > WARNING:
 它们在 v1 中是秒，而**运行时没有任何东西会提示这个变化**：迁移过来的项目会把 3 秒的停顿变成 3 毫秒。
+
+> TIP:
+倒计时从台词**已经说完**时开始，而不是 block 到达时。作者设定的是它在最后一个字打完（或最后一个音节念完）之后**留在**屏幕上的时间，然后 block 自己离开。
+
+从到达开始计时是那种读起来自然、跑起来错误的做法：一句 120 字的台词配 2500 ms，会在句子中间被截断。
+
+它**优先于 `waitInput`**，也优先于立即离开。三者都在说 block 何时被离开，而作者写在卡片上的那个是最具体的答案。所以点击只能**加快显示**，永远不能把 block 打发走 —— 去催一句正在演自己时间的台词没有意义，加快它才有；而这次加快正是启动倒计时的动作。
+
+又因为离开一个 block 正是把它标记为**已完成**，所以 `timeout` 也是释放指名它的 [`waitForBlocks`](/zh/guide/async-tracks) 的那一步。
 
 这九个之中，只有**两个**会改变遍历：`isAsync` 和 `waitForBlocks`。其余七个原样交给游戏，由游戏决定
 拿它们做什么。
@@ -364,14 +404,17 @@ engine.onChoice(({ block, context, next }) => {
     next();
   };
 
+  // `timeout` is MILLISECONDS in v2 — no × 1000 — and on a CHOICE it is counted from
+  // the moment the options are readable. It still has to SELECT one: an option id IS the
+  // exit port, so a choice left without selectChoice() resolves to no link at all.
   if (timeout) {
-    const timer = setTimeout(() => resolve(visible[0]), timeout * 1000);
-    ui.showOptions(visible, (optionId) => {
+    const timer = setTimeout(() => resolve(offered[0]), timeout);
+    ui.showOptions(offered, (optionId) => {
       clearTimeout(timer);
-      resolve(visible.find(c => c.id === optionId));
+      resolve(offered.find(c => c.id === optionId));
     });
   } else {
-    ui.showOptions(visible, (optionId) => resolve(visible.find(c => c.id === optionId)));
+    ui.showOptions(offered, (optionId) => resolve(offered.find(c => c.id === optionId)));
   }
 });
 ```

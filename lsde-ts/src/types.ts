@@ -218,7 +218,15 @@ export interface RuntimeConditionCase {
 
 /** Single diagnostic entry (error or warning). */
 export interface DiagnosticEntry {
-	/** Machine-readable error/warning code (e.g. "NO_ENTRY_BLOCK", "ORPHAN_CONNECTION"). */
+	/**
+	 * Machine-readable code, e.g. `BROKEN_LINK` or `UNKNOWN_WAIT_BLOCK`.
+	 *
+	 * The seventeen the engine emits are listed in the Getting Started guide, split into the
+	 * eleven that refuse the payload and the six that let it play. It is a `string` and not a
+	 * union on purpose: a runtime is allowed to add one — TypeScript and GDScript read the raw
+	 * payload and can say `WRONG_NAMING_CONVENTION`, where C# and C++ only ever see a typed
+	 * object and report `INVALID_FORMAT` for the same file.
+	 */
 	code: string;
 	/** Human-readable description of the issue. */
 	message: string;

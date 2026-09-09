@@ -20,3 +20,35 @@ engine は `BlueprintExport` オブジェクトを受け取ります（ファイ
 
 <!--@include: ../../_shared/getting-started-validation.md-->
 
+### 17 個の診断
+
+**エラー — payload は拒否され、何も再生されません。** `errors` は空ではなく、`engine.scene()` は何も返せません。
+
+| コード | 何が起きたか |
+|---|---|
+| `MISSING_DATA` | `init()` に `data` が渡されていません |
+| `MISMATCHED_EXPORTS` | 別々のエクスポート由来のファイルが混在しています — `project` か `exportedAt` が一致しません。1 回のエクスポートのファイルだけを渡してください |
+| `WRONG_NAMING_CONVENTION` | `snake_case` または `PascalCase` でエクスポートされています。engine が読むのは camelCase です。プロジェクト設定 › エクスポーター › 命名規則 |
+| `INVALID_FORMAT` | `format` が `lsde-blueprints` ではありません。C# と C++ は上のケースでもこれを報告します：型付きオブジェクトを検証するため、元のキー名はすでに失われています |
+| `UNSUPPORTED_FORMAT_VERSION` | `version` が `1` ではありません。LSDE 1.6 のままのプロジェクトは engine 0.3.x に属します — 二重リーダーはありません |
+| `NO_SCENES` | payload に scene が 1 つもありません |
+| `DUPLICATE_SCENE` | 2 つの scene が path または安定 id を共有しています |
+| `MISSING_SCENE_PATH` | scene に path がありません |
+| `DUPLICATE_BLOCK_ID` | **同一** scene の 2 つの block が id を共有しています。scene をまたぐ場合は正当かつ想定どおりです — block は (scene, id) です |
+| `INVALID_START_BLOCK` | scene が、自分の block ではないものを開始 block として指しています |
+| `BROKEN_LINK` | ワイヤーが scene に存在しない block を指しています。トラバーサルには行き先がありません |
+
+**警告 — 再生はされますが、何かが静かに動きません。** 読んでください。どれもノイズではありません。
+
+| コード | 何を失うか |
+|---|---|
+| `NO_START_BLOCK` | scene に開始 block がないため、`start()` に始める場所がありません |
+| `UNKNOWN_WAIT_BLOCK` | `waitForBlocks` の id が scene の block ではないため、そのトラックは**永久に**停留します。検証はそれ以上進めません：実在する id でも再生されないことはあり得ます |
+| `UNKNOWN_FUNCTION` | action が `check.functions` に無い関数 id を呼んでいます |
+| `UNKNOWN_DICTIONARY` | condition が `check.dictionaries` に無い辞書 id をテストしています |
+| `UNKNOWN_DICTIONARY_ENTRY` | 辞書は既知ですが、エントリキーが未知です |
+| `UNKNOWN_CARD` | block が `check.cards` に無いアクターカードの**名前**を指しています |
+
+最後の 4 つは `check` を渡したときにだけ現れます — 渡さなければ engine には比較する相手がありません。
+
+

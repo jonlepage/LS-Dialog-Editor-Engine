@@ -263,7 +263,7 @@ engine.OnDialog(args => {
 
 ## Cross-Language Conformance
 
-52 shared cases, in 46 suites, run by all four runtimes: **52/52 passing**.
+59 shared cases, in 52 suites, run by all four runtimes: **59/59 passing**.
 
 ---
 
