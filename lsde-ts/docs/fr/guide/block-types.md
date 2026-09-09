@@ -86,8 +86,8 @@ Les neuf propriétés que le **engine** lit, prises dans `props`. Les ids ne peu
 | `isAsync` | `boolean?` | **Ouvre une piste parallèle** sur ce block au lieu de continuer la piste courante |
 | `waitForBlocks` | `string[]?` | Ids de blocks **de cette scène**. Le block est **retenu avant d'être dispatché** tant qu'ils ne sont pas tous **terminés** — aucun handler n'est appelé |
 | `delay` | `number?` | **MILLISECONDES** avant que le block joue. Appliqué par `onBeforeBlock`, jamais par le engine |
-| `timeout` | `number?` | **MILLISECONDES**. Passé tel quel — le engine n'impose rien |
-| `waitInput` | `boolean?` | Attendre une entrée joueur. Passé tel quel, jamais interprété |
+| `timeout` | `number?` | **MILLISECONDES** pendant lesquelles le block RESTE après que sa réplique a été dite, puis il repart de lui-même — une auto-avance pour les blocks. **Prime sur `waitInput`**. Passé tel quel ; le engine n'impose rien |
+| `waitInput` | `boolean?` | Attendre une entrée joueur. Passé tel quel, jamais interprété — **`timeout` prime sur lui** |
 | `debug` | `boolean?` | Flag de debug pour l'éditeur. Passé tel quel |
 | `portPerCharacter` | `boolean?` | Le block sort par un port **nommé par l'id de card** de l'acteur, au lieu de `out` |
 | `skipIfMissingActor` | `boolean?` | Passé tel quel — c'est le jeu qui décide |
@@ -95,6 +95,16 @@ Les neuf propriétés que le **engine** lit, prises dans `props`. Les ids ne peu
 
 ::: warning `delay` et `timeout` sont en MILLISECONDES en v2
 Ils étaient en secondes en v1, et **rien ne le signale à l'exécution** : un projet migré transforme une pause de 3 secondes en 3 ms.
+:::
+
+::: tip `timeout` est une auto-avance pour les blocks — on compte depuis la FIN de la réplique
+Le compte à rebours part quand la réplique a été **dite**, pas quand le block est arrivé. Ce que l'auteur règle, c'est le temps qu'elle RESTE à l'écran une fois son dernier caractère tapé (ou sa dernière syllabe prononcée) ; ensuite le block repart de lui-même.
+
+Compter depuis l'arrivée est l'erreur qui se lit bien et qui joue mal : 2500 ms sur une réplique de 120 caractères la tronquent au milieu.
+
+Il **prime sur `waitInput`**, et il prime sur le départ immédiat. Les trois disent QUAND on quitte le block, et celui que l'auteur a écrit sur la carte est la réponse la plus précise. Un clic ne peut donc qu'**accélérer la révélation**, jamais congédier le block — presser une réplique qui joue son temps n'a pas de sens, l'accélérer en a un, et c'est cette accélération qui arme le compte à rebours.
+
+Et comme quitter un block est ce qui le marque **terminé**, un `timeout` est aussi ce qui libère un [`waitForBlocks`](/fr/guide/async-tracks) qui le nomme.
 :::
 
 Seules **deux** de ces propriétés changent quelque chose au parcours : `isAsync` et `waitForBlocks`. Les sept autres sont transmises intactes au jeu, qui décide de ce qu'il en fait.

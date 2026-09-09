@@ -129,14 +129,17 @@ engine.onChoice(({ block, context, next }) => {
     next();
   };
 
+  // `timeout` is MILLISECONDS in v2 — no × 1000 — and on a CHOICE it is counted from
+  // the moment the options are readable. It still has to SELECT one: an option id IS the
+  // exit port, so a choice left without selectChoice() resolves to no link at all.
   if (timeout) {
-    const timer = setTimeout(() => resolve(visible[0]), timeout * 1000);
-    ui.showOptions(visible, (optionId) => {
+    const timer = setTimeout(() => resolve(offered[0]), timeout);
+    ui.showOptions(offered, (optionId) => {
       clearTimeout(timer);
-      resolve(visible.find(c => c.id === optionId));
+      resolve(offered.find(c => c.id === optionId));
     });
   } else {
-    ui.showOptions(visible, (optionId) => resolve(visible.find(c => c.id === optionId)));
+    ui.showOptions(offered, (optionId) => resolve(offered.find(c => c.id === optionId)));
   }
 });
 ```

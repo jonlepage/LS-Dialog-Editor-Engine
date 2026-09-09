@@ -286,7 +286,10 @@ namespace LsdeDialogEngine
     /// name — so telling them apart is a lookup against NativePropertyIds, not a guess.</para>
     /// <para>Most are inert: Delay, Timeout, Debug, WaitInput, PortPerCharacter and
     /// SkipIfMissingActor are passed through untouched. Two are not: IsAsync spawns a parallel
-    /// track, and WaitForBlocks parks one until its blocks are seen.</para>
+    /// track, and WaitForBlocks parks one until its blocks have FINISHED.</para>
+    /// <para><b>Inert is not the same as free.</b> A writer who fills a field in expects a
+    /// behaviour, and the doc on each property below says which one. Timeout is the one that is
+    /// easy to implement backwards, so read it before wiring a timer.</para>
     /// <para><b>Delay and Timeout are MILLISECONDS in v2.</b> They were seconds in v1, and nothing
     /// reports the difference at runtime: a migrated project turns a 3-second pause into 3 ms.</para></summary>
     public class NativeProperties
@@ -297,10 +300,28 @@ namespace LsdeDialogEngine
         /// <summary>MILLISECONDS to wait before the block runs. Applied by OnBeforeBlock, not by the engine.</summary>
         public double? Delay { get; set; }
 
-        /// <summary>MILLISECONDS the block may take. Passed through — the engine enforces nothing.</summary>
+        /// <summary>MILLISECONDS the block STAYS once its line has been said — an auto-advance
+        /// for blocks.
+        /// <para><b>The countdown starts at the END of the reveal, not when the block is
+        /// dispatched.</b> What the writer sets is how long the line remains on screen after its
+        /// last character has been typed (or its last syllable spoken), and then the block leaves
+        /// on its own. Counting from arrival instead cuts the line in half whenever the text takes
+        /// longer to reveal than the timeout allows — a 2500 ms timeout on a 120-character line
+        /// truncates it mid-sentence.</para>
+        /// <para><b>It overrides WaitInput and it overrides leaving immediately.</b> All three say
+        /// WHEN the block is left, and the one the writer put on the card is the most specific
+        /// answer. So a click no longer dismisses the block: it may only HURRY the reveal to its
+        /// end, which is what arms the countdown.</para>
+        /// <para>Leaving the block is also what marks it FINISHED, so on a block listed in a
+        /// WaitForBlocks elsewhere, this is the property that releases the join.</para>
+        /// <para>The engine enforces none of it — no timers, no game loop. The game arms the
+        /// countdown, and this is the behaviour the writer is owed when they fill the field.</para>
+        /// </summary>
         public double? Timeout { get; set; }
 
-        /// <summary>Wait for player input or a game signal. Passed through, never interpreted.</summary>
+        /// <summary>Wait for player input or a game signal instead of leaving on its own. Passed
+        /// through, never interpreted — and outranked by Timeout, which says the block plays its
+        /// own time and cannot be dismissed early.</summary>
         public bool? WaitInput { get; set; }
 
         /// <summary>Editor debug flag. Passed through.</summary>

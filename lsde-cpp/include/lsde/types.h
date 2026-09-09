@@ -240,7 +240,11 @@ struct RuntimeConditionCase {
 ///
 /// Most are inert: delay, timeout, debug, waitInput, portPerCharacter and skipIfMissingActor are
 /// passed through untouched. Two are not: isAsync spawns a parallel track, and waitForBlocks parks
-/// one until its blocks are seen.
+/// one until its blocks have FINISHED.
+///
+/// **Inert is not the same as free.** A writer who fills a field in expects a behaviour, and the
+/// doc on each field below says which one. timeout is the one that is easy to implement backwards,
+/// so read it before wiring a timer.
 ///
 /// **delay and timeout are MILLISECONDS in v2.** They were seconds in v1, and nothing reports the
 /// difference at runtime: a migrated project turns a 3-second pause into 3 ms.
@@ -249,9 +253,28 @@ struct NativeProperties {
     std::optional<bool> isAsync;
     /// MILLISECONDS to wait before the block runs. Applied by onBeforeBlock, not by the engine.
     std::optional<double> delay;
-    /// MILLISECONDS the block may take. Passed through — the engine enforces nothing.
+    /// MILLISECONDS the block STAYS once its line has been said - an auto-advance for blocks.
+    ///
+    /// **The countdown starts at the END of the reveal, not when the block is dispatched.** What
+    /// the writer sets is how long the line remains on screen after its last character has been
+    /// typed (or its last syllable spoken), and then the block leaves on its own. Counting from
+    /// arrival instead cuts the line in half whenever the text takes longer to reveal than the
+    /// timeout allows - a 2500 ms timeout on a 120-character line truncates it mid-sentence.
+    ///
+    /// **It overrides waitInput and it overrides leaving immediately.** All three say WHEN the
+    /// block is left, and the one the writer put on the card is the most specific answer. So a
+    /// click no longer dismisses the block: it may only HURRY the reveal to its end, which is what
+    /// arms the countdown.
+    ///
+    /// Leaving the block is also what marks it FINISHED, so on a block listed in a waitForBlocks
+    /// elsewhere, this is the property that releases the join.
+    ///
+    /// The engine enforces none of it - no timers, no game loop. The game arms the countdown, and
+    /// this is the behaviour the writer is owed when they fill the field.
     std::optional<double> timeout;
-    /// Wait for player input or a game signal. Passed through, never interpreted.
+    /// Wait for player input or a game signal instead of leaving on its own. Passed through, never
+    /// interpreted - and outranked by timeout, which says the block plays its own time and cannot
+    /// be dismissed early.
     std::optional<bool> waitInput;
     /// Editor debug flag. Passed through.
     std::optional<bool> debug;

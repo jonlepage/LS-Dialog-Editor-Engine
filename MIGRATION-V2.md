@@ -2442,3 +2442,77 @@ au-delà, par-dessus le block qu'elle devait attendre.
 VitePress `async-tracks`, `block-types`, `lifecycle` dans les quatre locales — en/fr/ja/zh. Les
 sections `async-tracks` portent un encadré d'avertissement nommant le changement de règle, parce
 qu'un projet écrit contre les premières 2.x verra son timing changer.
+
+# `timeout` compte depuis la FIN de la réplique, pas depuis son arrivée (2026-09-09)
+
+## Le défaut
+
+La doc disait, dans les quatre runtimes et les quatre locales : « MILLISECONDES. Passé tel quel —
+le engine n'impose rien. » C'est vrai et c'est inutilisable : ça ne dit pas *à partir de quand* on
+compte, et la lecture naturelle — depuis l'arrivée du block — est la mauvaise.
+
+Le jeu de démonstration l'avait implémentée dans ce sens. Résultat sur `DIALOG-010`, `timeout`
+2500 ms sur une réplique de ~120 caractères : le minuteur partait au dispatch, donc la bulle se
+fermait **au milieu de la phrase**, et le `waitForBlocks` de `DIALOG-011` était libéré aussi tôt.
+Les exemples `_shared/` du guide faisaient pire : `props.timeout * 1000`, un reste de la v1 où la
+propriété était en secondes.
+
+## La décision de Jonathan
+
+> « La philosophie d'un timeout, c'est quelque chose qui dit : après que le texte est terminé,
+> continue ou ferme après x ms. C'est un peu comme un auto-advance, mais pour les blocs. »
+
+> « le 2500ms timeout doit commencer après la fin du texte ! pas au moment où le bloc affiche mais
+> après que le message est terminé. C'est le timer avec la fin du block et qu'on considère comme le
+> block terminé, on devrait donc voir le message rester 2500 ms avant de se fermer, ce qui va
+> trigger la suite ! »
+
+Trois règles, et elles tiennent ensemble :
+
+1. **Le compte à rebours s'arme à la FIN de la révélation.** Ce que l'auteur règle est le temps que
+   la réplique RESTE à l'écran une fois dite.
+2. **`timeout` prime sur `waitInput` et sur le départ immédiat.** Les trois disent QUAND on quitte
+   le block ; celui écrit sur la carte est la réponse la plus précise. Un clic ne peut donc
+   qu'**accélérer** la révélation — et c'est cette accélération qui arme le minuteur.
+3. **Quitter le block est ce qui le marque terminé**, donc un `timeout` est aussi ce qui libère un
+   `waitForBlocks` qui le nomme. C'est le lien direct avec la section précédente de ce journal.
+
+Le cas du block CHOICE est le seul laissé de côté : il n'a pas de réplique à révéler, donc le
+compte part quand les options sont lisibles. Ce n'était pas dans la décision, c'est la lecture
+conservatrice.
+
+En le documentant, un second défaut est sorti, et il touchait **tous** les exemples de choix :
+sur expiration ils appelaient `next()` **sans** `selectChoice()`. Or `resolveChoicePort` rend
+`NONE` sans sélection — l'id d'une option EST le port de sortie — donc la branche mourait en
+silence. Corrigé partout : un `timeout` sur un CHOICE doit encore choisir, et la première option
+offerte est la réponse usuelle.
+
+## Ce que le moteur fait de tout ça
+
+**Rien, et c'est voulu.** `timeout` reste une donnée : pas de minuteur, pas de boucle de jeu, le
+moteur ne le lit nulle part. C'est le jeu qui arme le compte. Mais « inerte » ne veut pas dire
+« libre » : un auteur qui remplit un champ attend un comportement, et la doc est le seul endroit
+où ce contrat pouvait vivre. C'est pour ça que la correction est presque entièrement documentaire.
+
+## Où
+
+- **Types des quatre runtimes** : `types.ts`, `types.h`, `Types.cs`, `lsde_types.gd`. Le paragraphe
+  d'introduction gagne un « inert is not the same as free », et `waitInput` dit maintenant qu'il
+  est dominé. Au passage, `types.h`, `Types.cs` et `lsde_types.gd` disaient encore que
+  `waitForBlocks` attend des blocks « seen » / « visited » — corrigé en FINISHED.
+- **Guides VitePress, quatre locales** : la ligne de tableau de `timeout` dans `block-types` et
+  `lifecycle`, plus un encadré `::: tip` complet sous l'avertissement des millisecondes.
+- **Exemples partagés `_shared/`** (inclus dans les quatre locales, donc corrigés une seule fois) :
+  `block-dialog` réécrit en TS/C#/C++/GDScript avec `timeout` testé EN PREMIER ;
+  `integration-dialog`, `integration-complete` et `integration-choice` perdent le `* 1000` et
+  arment après la révélation ; `block-choice` gagne la note sur le cas du choix. Deux défauts
+  préexistants trouvés en passant et corrigés : un `const text = ...getLocalizedText(text)` qui
+  n'aurait jamais compilé, et un `choices.show(visible, …)` où la variable s'appelle `offered`.
+- **`CLAUDE.md`**, section « Async tracks — where NativeProperties stop being inert ».
+
+## Le jeu de démonstration
+
+`LSDEDE-DEMO-TS` applique les trois règles : la bulle expose `onRevealComplete`, le handler arme le
+minuteur dessus, et le clic global n'accélère plus que le texte — une bulle à `timeout` ne peut
+plus être congédiée. Les trois autres démos (`condition-dispatch`, `multi-tracks`, `simple-action`)
+comptent encore depuis l'arrivée du block ; à faire.

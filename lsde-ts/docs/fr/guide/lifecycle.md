@@ -83,7 +83,7 @@ Propriétés d'exécution qui contrôlent comment un block est dispatché par le
 |-------|------|-------------|
 | `isAsync` | `boolean?` | Exécuter sur un track async parallèle |
 | `delay` | `number?` | **MILLISECONDES** avant que le block joue. Appliqué par `onBeforeBlock`, jamais par le engine |
-| `timeout` | `number?` | **MILLISECONDES**. Passé tel quel — le engine n'impose rien |
+| `timeout` | `number?` | **MILLISECONDES** pendant lesquelles le block RESTE après que sa réplique a été dite, puis il repart de lui-même — une auto-avance pour les blocks. **Prime sur `waitInput`**. Passé tel quel ; le engine n'impose rien |
 | `portPerCharacter` | `boolean?` | Un port de sortie par personnage dans metadata |
 | `skipIfMissingActor` | `boolean?` | Sauter le block si l'acteur référencé est absent |
 | `debug` | `boolean?` | Flag de debug pour l'éditeur |

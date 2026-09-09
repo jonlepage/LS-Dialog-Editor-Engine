@@ -24,10 +24,17 @@ registerChoiceHandler(engine: DialogueEngine) {
       return btn;
     });
 
-    // optional: auto-advance after a timeout (skip the choice)
+    // Optional. On a CHOICE there is no line to reveal, so the countdown starts once
+    // the options are on screen and readable. MILLISECONDS in v2 — no × 1000.
+    //
+    // It must still SELECT one: an option id IS the exit port, so a choice left without
+    // selectChoice() resolves to NO link and the branch dies silently.
     let timer: Phaser.Time.TimerEvent | null = null;
     if (props?.timeout) {
-      timer = this.time.delayedCall(props.timeout * 1000, () => next());
+      timer = this.time.delayedCall(props.timeout, () => {
+        if (offered.length > 0) selectChoice(offered[0].id);
+        next();
+      });
     }
 
     // cleanup: destroy spawned buttons when the engine moves on

@@ -80,6 +80,10 @@ export type NoteBlock = BlockOfType<typeof BlockType.Note>;
  * not: `isAsync` opens a parallel track, and `waitForBlocks` holds a block until the ones it
  * names have FINISHED.
  *
+ * **Inert is not the same as free.** A writer who fills a field in expects a behaviour, and the
+ * doc on each property below says which one. `timeout` is the one that is easy to implement
+ * backwards, so read it before wiring a timer.
+ *
  * **`delay` and `timeout` are MILLISECONDS in v2.** They were seconds in v1, and nothing will
  * report the difference at runtime — a migrated project turns a 3-second pause into 3 ms.
  */
@@ -88,9 +92,34 @@ export interface NativeProperties {
 	isAsync?: boolean;
 	/** Milliseconds to wait before the block runs. Applied by `onBeforeBlock`, not by the engine. */
 	delay?: number;
-	/** Milliseconds the block may take. Passed through — the engine enforces nothing. */
+	/**
+	 * MILLISECONDS the block STAYS once its line has been said — an auto-advance for blocks.
+	 *
+	 * **The countdown starts at the END of the reveal, not when the block is dispatched.** What
+	 * the writer sets is how long the line remains on screen after its last character has been
+	 * typed (or its last syllable spoken), and then the block leaves on its own. Counting from
+	 * arrival instead cuts the line in half whenever the text takes longer to reveal than the
+	 * timeout allows — a 2500 ms timeout on a 120-character line truncates it mid-sentence.
+	 *
+	 * **It overrides {@link NativeProperties.waitInput} and it overrides leaving immediately.**
+	 * All three say WHEN the block is left, and the one the writer put on the card is the most
+	 * specific answer. So a click no longer dismisses the block: it may only HURRY the reveal to
+	 * its end, which is what arms the countdown. Pressing a line that plays its own time makes no
+	 * sense; speeding it up does.
+	 *
+	 * Leaving the block is also what marks it FINISHED, so on a block listed in a
+	 * {@link NativeProperties.waitForBlocks} elsewhere, this is the property that releases the
+	 * join.
+	 *
+	 * The engine enforces none of it — no timers, no game loop, nothing is read here. The game
+	 * arms the countdown, and this is the behaviour the writer is owed when they fill the field.
+	 */
 	timeout?: number;
-	/** Wait for player input or a game signal. Passed through, never interpreted. */
+	/**
+	 * Wait for player input or a game signal instead of leaving on its own. Passed through, never
+	 * interpreted — and outranked by {@link NativeProperties.timeout}, which says the block plays
+	 * its own time and cannot be dismissed early.
+	 */
 	waitInput?: boolean;
 	/** Editor debug flag. Passed through. */
 	debug?: boolean;

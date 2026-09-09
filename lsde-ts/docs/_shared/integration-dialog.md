@@ -20,23 +20,28 @@ export class DialogueUI extends Phaser.Scene {
     params.engine.onDialog(({ block, context, next }) => {
       const { text, props } = block;
       const { character, resolveCharacterPort } = context;
-      const text = LsdeUtils.getLocalizedText(text);
+      const line = LsdeUtils.getLocalizedText(text);
 
       character && resolveCharacterPort(character.id);
 
-      panel.show(text, character?.name);
+      panel.show(line, character?.name);
 
-      // next() signals the engine this block is done
-      // store it — the player advances via input
+      // next() signals the engine this block is done — store it, the pointer calls it
       this.pendingNext = next;
 
-      // auto-advance after a delay (cinematics, tutorials)
+      // `timeout` outranks waitInput and outranks leaving at once, so a line that
+      // carries one cannot be dismissed by input: the click only hurries the reveal.
+      this.dismissableByInput = !props?.timeout;
+
+      // auto-advance for blocks (cinematics, tutorials)
       let timer: Phaser.Time.TimerEvent | null = null;
       if (props?.timeout) {
-        timer = this.time.delayedCall(
-          props.timeout * 1000,
-          () => this.advance(),
-        );
+        // MILLISECONDS in v2 — do NOT multiply by 1000, that was v1. And the countdown
+        // starts once the line has been SAID: `timeout` is how long it STAYS on screen
+        // afterwards. Arming it on arrival truncates any line slower to reveal.
+        panel.onRevealComplete(() => {
+          timer = this.time.delayedCall(props.timeout, () => this.leaveBlock());
+        });
       }
 
       // cleanup: runs when the engine moves on or the scene is cancelled
@@ -48,7 +53,15 @@ export class DialogueUI extends Phaser.Scene {
     });
   }
 
+  /** What the pointer calls. A line still revealing takes the click as "show me the
+   *  rest"; a line on a `timeout` plays its own time and never leaves this way. */
   private advance() {
+    if (!this.panel.revealComplete) { this.panel.skipReveal(); return; }
+    if (!this.dismissableByInput) return;
+    this.leaveBlock();
+  }
+
+  private leaveBlock() {
     if (this.pendingNext) { this.pendingNext(); this.pendingNext = null; }
   }
 

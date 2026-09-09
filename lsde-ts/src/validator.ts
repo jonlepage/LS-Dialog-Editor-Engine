@@ -247,9 +247,9 @@ function validateScene(
 }
 
 /**
- * `waitForBlocks` names blocks OF THIS SCENE that must have been visited before this one advances.
+ * `waitForBlocks` names blocks OF THIS SCENE that must have FINISHED before this one is dispatched.
  *
- * A name that is not in the scene can never be visited, so the block parks for good: on the main
+ * A name that is not in the scene can never finish, so the block parks for good: on the main
  * flow that is the whole dialogue stopping with no `onSceneExit`, and on a parallel track it is a
  * branch that silently never finishes. Neither shows up anywhere at runtime, which is why it is
  * said here — a warning, not an error: the rest of the scene still plays.

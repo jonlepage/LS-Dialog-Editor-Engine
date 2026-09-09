@@ -14,9 +14,18 @@ engine.onChoice(({ block, context, next }) => {
     .then((selected) => selectChoice(selected))
     .finally(() => next());
 
-  // Optional: if the writer set a timeout on this block. MILLISECONDS in v2.
+  // Optional: if the writer set a timeout on this block. MILLISECONDS in v2, and a
+  // CHOICE has no line to reveal, so the countdown starts once the options are readable.
+  //
+  // It must still SELECT one. An option id IS the exit port, so a choice left without
+  // `selectChoice()` resolves to NO link at all and the branch dies silently — the
+  // engine has nothing to follow. Picking the first offered option is the usual answer;
+  // a `when` on it lets the writer decide which one that is.
   if (natives.timeout) {
-    const timeout = game.wait(natives.timeout).then(() => next());
+    const timeout = game.wait(natives.timeout).then(() => {
+      if (offered.length > 0) selectChoice(offered[0].id);
+      next();
+    });
     dialog.finally(() => timeout.cancel());
   }
 
@@ -37,9 +46,14 @@ engine.OnChoice(args => {
         args.Next();
     });
 
-    // Optional: if the writer set a timeout on this block. MILLISECONDS in v2.
+    // Optional: MILLISECONDS in v2, counted from the moment the options are readable.
+    // It must still SELECT one: an option id IS the exit port, so a choice left without
+    // SelectChoice() resolves to NO link and the branch dies silently.
     if (natives.Timeout is { } timeout)
-        Game.Wait(timeout).Then(() => args.Next());
+        Game.Wait(timeout).Then(() => {
+            if (offered.Count > 0) args.Context.SelectChoice(offered[0].Id);
+            args.Next();
+        });
 
     return () => dialog.Destroy();
 });
@@ -59,9 +73,16 @@ engine.onChoice([&game](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
         next();
     });
 
-    // Optional: if the writer set a timeout on this block. MILLISECONDS in v2.
+    // Optional: MILLISECONDS in v2, counted from the moment the options are readable.
+    // It must still SELECT one: an option id IS the exit port, so a choice left without
+    // selectChoice() resolves to NO link and the branch dies silently.
     auto natives = lsde::getNativeProperties(*block);
-    if (natives.timeout) game.wait(*natives.timeout).then([next]() { next(); });
+    if (natives.timeout) {
+        game.wait(*natives.timeout).then([ctx, next, offered]() {
+            if (!offered.empty()) ctx->selectChoice(offered.front()->id);
+            next();
+        });
+    }
 
     return [dialog]() { dialog->destroy(); };
 });
@@ -83,7 +104,10 @@ engine.on_choice(func(args):
     ctx.select_choice(selected)
     args["next"].call()
 
-    # Optional: natives.get("timeout") is in MILLISECONDS. Use a Timer node.
+    # Optional: natives.get("timeout") is in MILLISECONDS. Use a Timer node, started
+    # once the options are readable. It must still SELECT one: an option id IS the exit
+    # port, so a choice left without select_choice() resolves to NO link and the branch
+    # dies silently.
 
     return func(): dialog.destroy()
 )

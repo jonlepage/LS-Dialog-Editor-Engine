@@ -81,12 +81,12 @@ engine が block をディスパッチする方法を制御する実行プロパ
 |-------|------|-------------|
 | `isAsync` | `boolean?` | 並列 async トラックで実行 |
 | `delay` | `number?` | block が再生されるまでの**ミリ秒**。`onBeforeBlock` が適用し、engine は決して適用しません |
-| `timeout` | `number?` | **ミリ秒**。そのまま渡されます — engine は何も強制しません |
+| `timeout` | `number?` | セリフを言い終えたあと block が画面に**残るミリ秒**。そのあと自分から離れます — block のオートアドバンス。**`waitInput` より優先**。そのまま渡され、engine は何も強制しません |
 | `portPerCharacter` | `boolean?` | metadata 内のキャラクターごとに出力ポートを作成 |
 | `skipIfMissingActor` | `boolean?` | 参照されたアクターが不在の場合、block をスキップ |
 | `debug` | `boolean?` | エディタ用デバッグフラグ |
 | `waitForBlocks` | `string[]?` | **この scene の** block id。それらがすべて**完了**するまで、block は**ディスパッチされる前に**保持されます |
-| `waitInput` | `boolean?` | 明示的なプレイヤー入力制御用のパッシブフラグ |
+| `waitInput` | `boolean?` | 明示的なプレイヤー入力制御用のパッシブフラグ — **`timeout` が優先します** |
 
 ## Visual Reference
 

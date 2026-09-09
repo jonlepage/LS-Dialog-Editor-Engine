@@ -23,17 +23,24 @@ export class DialogueUI extends Phaser.Scene {
     params.engine.onDialog(({ block, context, next }) => {
       const { text, props } = block;
       const { character, resolveCharacterPort } = context;
-      const text = LsdeUtils.getLocalizedText(text);
+      const line = LsdeUtils.getLocalizedText(text);
 
       character && resolveCharacterPort(character.id);
 
-      dialog.show(text, character?.name);
+      dialog.show(line, character?.name);
       this.pendingNext = next;
 
-      // auto-advance after a delay (cinematics, tutorials)
+      // `timeout` outranks waitInput: a line carrying one plays its own time and the
+      // click may only hurry its reveal, never dismiss it.
+      this.dismissableByInput = !props?.timeout;
+
+      // auto-advance for blocks. MILLISECONDS in v2 — no × 1000 — and counted from the
+      // moment the line has been SAID, not from the moment the block arrived.
       let timer: Phaser.Time.TimerEvent | null = null;
       if (props?.timeout) {
-        timer = this.time.delayedCall(props.timeout * 1000, () => this.advance());
+        dialog.onRevealComplete(() => {
+          timer = this.time.delayedCall(props.timeout, () => this.leaveBlock());
+        });
       }
 
       return () => { dialog.hide(); this.pendingNext = null; timer?.destroy(); };
@@ -45,14 +52,21 @@ export class DialogueUI extends Phaser.Scene {
       const { choices: items, selectChoice } = context;
       const offered = items.filter(c => c.visible !== false);
 
-      const buttons = choices.show(visible, (optionId) => {
+      const buttons = choices.show(offered, (optionId) => {
         selectChoice(optionId);
         next();
       });
 
+      // On a CHOICE there is no line to reveal, so the countdown starts once the options
+      // are on screen and readable. MILLISECONDS in v2 — no × 1000. And it must still
+      // SELECT one: an option id IS the exit port, so a choice left without selectChoice()
+      // resolves to NO link and the branch dies silently.
       let timer: Phaser.Time.TimerEvent | null = null;
       if (props?.timeout) {
-        timer = this.time.delayedCall(props.timeout * 1000, () => next());
+        timer = this.time.delayedCall(props.timeout, () => {
+          if (offered.length > 0) selectChoice(offered[0].id);
+          next();
+        });
       }
 
       return () => { choices.hide(buttons); timer?.destroy(); };
@@ -75,7 +89,15 @@ export class DialogueUI extends Phaser.Scene {
     });
   }
 
+  /** What the pointer calls. A line still revealing takes the click as "show me the
+   *  rest"; a line on a `timeout` plays its own time and never leaves this way. */
   private advance() {
+    if (!this.dialog.revealComplete) { this.dialog.skipReveal(); return; }
+    if (!this.dismissableByInput) return;
+    this.leaveBlock();
+  }
+
+  private leaveBlock() {
     if (this.pendingNext) { this.pendingNext(); this.pendingNext = null; }
   }
 

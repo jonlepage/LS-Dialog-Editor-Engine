@@ -64,7 +64,7 @@ const SUPPORTED_VERSION := 1
 ##
 ## [code]isAsync[/code] opens a parallel track.
 ##
-## [code]waitForBlocks[/code] holds a block until the ones it names have been visited — the join
+## [code]waitForBlocks[/code] holds a block until the ones it names have FINISHED — the join
 ## half of the fork isAsync opens. [b]The engine holds the block BEFORE dispatching it.[/b] No
 ## handler is called, so the game never learns the block exists until the wait lifts; nothing of it
 ## can reach the screen early. That is the engine's decision and not a rendering choice a game could
@@ -75,6 +75,20 @@ const SUPPORTED_VERSION := 1
 ##
 ## [code]delay[/code] and [code]timeout[/code] are MILLISECONDS in v2. They were seconds in v1, and
 ## nothing reports the difference at runtime: a migrated project turns a 3-second pause into 3 ms.
+##
+## [b]Inert is not the same as free.[/b] A writer who fills a field in expects a behaviour, and
+## [code]timeout[/code] is the one that is easy to implement backwards:
+##
+## [code]timeout[/code] is the MILLISECONDS a block STAYS once its line has been said — an
+## auto-advance for blocks. [b]The countdown starts at the END of the reveal, not when the block is
+## dispatched.[/b] What the writer sets is how long the line remains on screen after its last
+## character has been typed, and then the block leaves on its own. Counting from arrival instead
+## cuts the line in half whenever the text takes longer to reveal than the timeout allows.
+## [b]It outranks waitInput and it outranks leaving immediately[/b] — all three say WHEN the block
+## is left, and the one written on the card is the most specific answer. So a click no longer
+## dismisses the block: it may only HURRY the reveal to its end, which is what arms the countdown.
+## Leaving the block is also what marks it FINISHED, so this is what releases a waitForBlocks that
+## names it. The engine enforces none of it; the game arms the countdown.
 const NATIVE_PROPERTY_IDS := [
 	"isAsync", "delay", "timeout", "waitInput", "debug",
 	"portPerCharacter", "skipIfMissingActor", "portPerCase", "waitForBlocks",

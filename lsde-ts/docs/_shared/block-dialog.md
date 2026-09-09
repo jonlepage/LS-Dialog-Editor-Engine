@@ -3,7 +3,7 @@
 engine.onDialog(({ block, context, next }) => {
   const { text, props } = block;
   const { character, resolveCharacterPort } = context;
-  const text = game.getLocalizedText(text);
+  const line = game.getLocalizedText(text);
   const emotion = game.getCharacterEmotion(character);
 
   character && resolveCharacterPort(character.id);
@@ -11,17 +11,22 @@ engine.onDialog(({ block, context, next }) => {
   game.moveCameraToCharacter(character);
   game.animateCharacter(character, emotion);
 
-  const dialog = game.createDialog(text, character, emotion);
-  const shouldWaitInput = game.shouldWaitPlayerInputForDialog(props);
+  const dialog = game.createDialog(line, character, emotion);
 
-  // next() tells the engine this block is done — call it when the player
-  // dismisses the dialog or when the text animation finishes on its own
-  if (shouldWaitInput) {
+  // next() tells the engine this block is done. WHEN to call it is answered by three
+  // natives, and `timeout` comes FIRST because it outranks the other two: all three
+  // say when the block is left, and the card is the most specific answer.
+  if (props?.timeout) {
+    // MILLISECONDS, and the countdown starts when the line has been SAID — `timeout`
+    // is how long it STAYS on screen afterwards. Arming it on arrival truncates any
+    // line slower to reveal than the timeout allows.
+    dialog.onRevealComplete(() => game.wait(props.timeout).then(() => next()));
+    // A click may HURRY that reveal; it may not dismiss a line that plays its own time.
+    dialog.onInput(() => dialog.skipReveal(), { once: true });
+  } else if (game.shouldWaitPlayerInputForDialog(props)) {
     dialog.onInput(() => next(), { once: true });
   } else {
-    dialog.then(() =>
-      game.wait(props?.timeout ?? 0).then(() => next()),
-    );
+    dialog.onRevealComplete(() => next());
   }
 
   // cleanup: runs when the engine moves to the next block
@@ -46,15 +51,24 @@ engine.OnDialog(args => {
     Game.AnimateCharacter(ch, emotion);
 
     var dialog = Game.CreateDialog(text, ch, emotion);
-    var shouldWaitInput = Game.ShouldWaitPlayerInputForDialog(block.NativeProperties);
+    var natives = block.NativeProperties;
 
-    // next() tells the engine this block is done — call it when the player
-    // dismisses the dialog or when the text animation finishes on its own
-    if (shouldWaitInput)
+    // next() tells the engine this block is done. Timeout comes FIRST: it outranks
+    // WaitInput and it outranks leaving at once. All three say when the block is left,
+    // and the one the writer put on the card is the most specific answer.
+    if (natives?.Timeout > 0) {
+        // MILLISECONDS, and the countdown starts when the line has been SAID — Timeout
+        // is how long it STAYS on screen afterwards. Arming it on arrival truncates any
+        // line slower to reveal than the timeout allows.
+        dialog.OnRevealComplete(() =>
+            Game.Wait(natives.Timeout.Value).Then(() => next()));
+        // A click may HURRY that reveal; it may not dismiss a line playing its own time.
+        dialog.OnInput(() => dialog.SkipReveal(), once: true);
+    } else if (Game.ShouldWaitPlayerInputForDialog(natives)) {
         dialog.OnInput(() => next(), once: true);
-    else
-        dialog.Then(() =>
-            Game.Wait(block.NativeProperties?.Timeout ?? 0).Then(() => next()));
+    } else {
+        dialog.OnRevealComplete(() => next());
+    }
 
     // cleanup: runs when the engine moves to the next block
     return () => {
@@ -75,17 +89,25 @@ engine.onDialog([&game](auto* scene, auto* block, auto* ctx, auto next) -> Clean
     game.animateCharacter(ch, emotion);
 
     auto* dialog = game.createDialog(text, ch, emotion);
-    auto shouldWaitInput = game.shouldWaitPlayerInputForDialog(block->props);
+    auto natives = lsde::getNativeProperties(*block);
 
-    // next() tells the engine this block is done — call it when the player
-    // dismisses the dialog or when the text animation finishes on its own
-    if (shouldWaitInput) {
+    // next() tells the engine this block is done. timeout comes FIRST: it outranks
+    // waitInput and it outranks leaving at once. All three say when the block is left,
+    // and the one the writer put on the card is the most specific answer.
+    if (natives.timeout.value_or(0) > 0) {
+        // MILLISECONDS, and the countdown starts when the line has been SAID - timeout
+        // is how long it STAYS on screen afterwards. Arming it on arrival truncates any
+        // line slower to reveal than the timeout allows.
+        const auto stayMs = *natives.timeout;
+        dialog->onRevealComplete([&game, next, stayMs]() {
+            game.wait(stayMs).then([next]() { next(); });
+        });
+        // A click may HURRY that reveal; it may not dismiss a line playing its own time.
+        dialog->onInput([dialog]() { dialog->skipReveal(); });
+    } else if (game.shouldWaitPlayerInputForDialog(block->props)) {
         dialog->onInput([next]() { next(); });
     } else {
-        dialog->then([&game, next, block]() {
-            game.wait(block->props ? block->props->timeout.value_or(0) : 0)
-                .then([next]() { next(); });
-        });
+        dialog->onRevealComplete([next]() { next(); });
     }
 
     // cleanup: runs when the engine moves to the next block
@@ -111,15 +133,24 @@ engine.on_dialog(func(args):
     game.animate_character(ch, emotion)
 
     var dialog = game.create_dialog(text, ch, emotion)
-    var should_wait = game.should_wait_player_input(block.get("props"))
+    var natives = block.get("props", {})
+    var stay_ms = natives.get("timeout", 0)
 
-    # next_fn.call() tells the engine this block is done — call it when the player
-    # dismisses the dialog or when the text animation finishes on its own
-    if should_wait:
+    # next_fn.call() tells the engine this block is done. timeout comes FIRST: it
+    # outranks waitInput and it outranks leaving at once. All three say when the block
+    # is left, and the one written on the card is the most specific answer.
+    if stay_ms > 0:
+        # A click may HURRY the reveal; it may not dismiss a line playing its own time.
+        dialog.on_input(func(): dialog.skip_reveal(), true)
+        # MILLISECONDS, counted from the moment the line has been SAID — stay_ms is how
+        # long it REMAINS on screen afterwards, never how long it has to be said in.
+        await dialog.reveal_finished
+        await game.wait(stay_ms)
+        next_fn.call()
+    elif game.should_wait_player_input(natives):
         dialog.on_input(func(): next_fn.call(), true)
     else:
-        await dialog.wait()
-        await game.wait(block.get("props", {}).get("timeout", 0))
+        await dialog.reveal_finished
         next_fn.call()
 
     # cleanup: runs when the engine moves to the next block

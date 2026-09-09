@@ -149,6 +149,16 @@ behavior" holds for `delay`, `timeout`, `waitInput`, `debug`, `portPerCharacter`
 `skipIfMissingActor` and `portPerCase` — the engine passes them through untouched. **It does not
 hold for three of them**, and this is the part that surprises people:
 
+Data is not the same as free. **`timeout` is the one that is easy to implement backwards**, and
+the docs now say so in all four locales: it is the MILLISECONDS a block STAYS once its line has
+been **said** — an auto-advance for blocks — so the countdown is armed at the END of the reveal,
+never on arrival. It outranks `waitInput` and it outranks leaving at once (all three answer WHEN
+the block is left, and the card is the most specific answer), so a click may only HURRY the
+reveal, never dismiss the block. And since leaving a block is what marks it finished, a `timeout`
+is what releases a `waitForBlocks` naming it. Counting from arrival truncates any line slower to
+type than the timeout allows — 2500 ms on a 120-character line cuts it mid-sentence — and that is
+exactly the defect the demo game shipped.
+
 - **`isAsync`** — read on the TARGET of a wire, in `Track.advanceToNextBlock`. Ticked, the target
   opens a parallel `Track` and runs beside this one; unticked, it belongs to THIS track — the
   first becomes the continuation, the others **queue** and are walked when the continuation runs

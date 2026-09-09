@@ -86,8 +86,8 @@ The nine properties the **engine** reads, taken out of `props`. Ids cannot colli
 | `isAsync` | `boolean?` | **Opens a parallel track** on this block instead of continuing the current one |
 | `waitForBlocks` | `string[]?` | Block ids **of this scene**. The block is **held before it is dispatched** until every one of them has **finished** — no handler is called |
 | `delay` | `number?` | **MILLISECONDS** before the block plays. Applied by `onBeforeBlock`, never by the engine |
-| `timeout` | `number?` | **MILLISECONDS**. Passed through — the engine enforces nothing |
-| `waitInput` | `boolean?` | Wait for player input. Passed through, never interpreted |
+| `timeout` | `number?` | **MILLISECONDS** the block STAYS after its line has been said, then it leaves on its own — an auto-advance for blocks. **Outranks `waitInput`**. Passed through; the engine enforces nothing |
+| `waitInput` | `boolean?` | Wait for player input. Passed through, never interpreted — **outranked by `timeout`** |
 | `debug` | `boolean?` | Debug flag for the editor. Passed through |
 | `portPerCharacter` | `boolean?` | The block leaves by a port **named by the actor's card id**, instead of `out` |
 | `skipIfMissingActor` | `boolean?` | Passed through — the game decides |
@@ -95,6 +95,16 @@ The nine properties the **engine** reads, taken out of `props`. Ids cannot colli
 
 ::: warning `delay` and `timeout` are MILLISECONDS in v2
 They were seconds in v1, and **nothing reports the change at runtime**: a migrated project turns a 3-second pause into 3 ms.
+:::
+
+::: tip `timeout` is an auto-advance for blocks — count from the END of the line
+The countdown starts when the line has been **said**, not when the block arrived. What the writer sets is how long it STAYS on screen after its last character is typed (or its last syllable spoken); then the block leaves on its own.
+
+Counting from arrival is the mistake that reads naturally and plays wrong: 2500 ms on a 120-character line truncates it mid-sentence.
+
+It **outranks `waitInput`**, and it outranks leaving immediately. All three say WHEN the block is left, and the one the writer put on the card is the most specific answer. So a click may only **hurry the reveal**, never dismiss the block — pressing a line that plays its own time makes no sense, speeding it up does, and the hurried reveal is what arms the countdown.
+
+And since leaving a block is what marks it **finished**, a `timeout` is also what releases a [`waitForBlocks`](/guide/async-tracks) that names it.
 :::
 
 Only **two** of these change anything about the traversal: `isAsync` and `waitForBlocks`. The other seven are handed to the game untouched.

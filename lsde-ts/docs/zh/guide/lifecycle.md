@@ -79,12 +79,12 @@ v1 会静默吞掉 handler 的异常 — 连日志都没有 — 而同一个 han
 |-------|------|-------------|
 | `isAsync` | `boolean?` | 在并行异步轨道上执行 |
 | `delay` | `number?` | block 播放前的**毫秒数**。由 `onBeforeBlock` 应用，engine 从不应用 |
-| `timeout` | `number?` | **毫秒**。原样传递 — engine 不做任何强制 |
+| `timeout` | `number?` | 台词说完之后 block **留在屏幕上的毫秒数**，随后自己离开 — block 的自动推进。**优先于 `waitInput`**。原样传递，engine 不做任何强制 |
 | `portPerCharacter` | `boolean?` | metadata 中每个角色一个输出端口 |
 | `skipIfMissingActor` | `boolean?` | 如果引用的角色不存在则跳过 block |
 | `debug` | `boolean?` | 编辑器调试标志 |
 | `waitForBlocks` | `string[]?` | **本 scene 的** block id。在它们全部**完成**之前，block 会**在被分发之前**被扣住 |
-| `waitInput` | `boolean?` | 用于显式玩家输入控制的被动标志 |
+| `waitInput` | `boolean?` | 用于显式玩家输入控制的被动标志 — **`timeout` 优先于它** |
 
 ## Visual Reference
 

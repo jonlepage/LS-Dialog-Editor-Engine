@@ -81,7 +81,7 @@ Execution properties that control how a block is dispatched by the engine:
 |-------|------|-------------|
 | `isAsync` | `boolean?` | Execute on a parallel async track |
 | `delay` | `number?` | **MILLISECONDS** before the block plays. Applied by `onBeforeBlock`, never by the engine |
-| `timeout` | `number?` | **MILLISECONDS**. Passed through — the engine enforces nothing |
+| `timeout` | `number?` | **MILLISECONDS** the block STAYS after its line has been said, then it leaves on its own — an auto-advance for blocks. **Outranks `waitInput`**. Passed through; the engine enforces nothing |
 | `portPerCharacter` | `boolean?` | One output port per character in metadata |
 | `skipIfMissingActor` | `boolean?` | Skip block if referenced actor is absent |
 | `debug` | `boolean?` | Debug flag for editor use |

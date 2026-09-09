@@ -101,8 +101,8 @@ note block 是叙事设计师的便签 — 注释、提醒、上下文。在遍�
 | `isAsync` | `boolean?` | 在这个 block 上**开启一条并行轨道**，而不是继续当前轨道 |
 | `waitForBlocks` | `string[]?` | **本 scene 的** block id。在它们全部**完成**之前，block 会**在被分发之前**被扣住 — 不会调用任何 handler |
 | `delay` | `number?` | block 播放前的**毫秒数**。由 `onBeforeBlock` 应用，engine 从不应用 |
-| `timeout` | `number?` | **毫秒**。原样传递 — engine 不做任何强制 |
-| `waitInput` | `boolean?` | 等待玩家输入。原样传递，从不解释 |
+| `timeout` | `number?` | 台词说完之后 block **留在屏幕上的毫秒数**，随后自己离开 — block 的自动推进。**优先于 `waitInput`**。原样传递，engine 不做任何强制 |
+| `waitInput` | `boolean?` | 等待玩家输入。原样传递，从不解释 — **`timeout` 优先于它** |
 | `debug` | `boolean?` | 编辑器调试标志。原样传递 |
 | `portPerCharacter` | `boolean?` | block 从以 actor 的 **card id 命名的 port** 出去，而不是 `out` |
 | `skipIfMissingActor` | `boolean?` | 原样传递 — 由游戏决定 |
@@ -110,6 +110,16 @@ note block 是叙事设计师的便签 — 注释、提醒、上下文。在遍�
 
 ::: warning 在 v2 中 `delay` 和 `timeout` 的单位是**毫秒**
 它们在 v1 中是秒，而**运行时没有任何东西会提示这个变化**：迁移过来的项目会把 3 秒的停顿变成 3 毫秒。
+:::
+
+::: tip `timeout` 是 block 的自动推进 —— 从台词**说完**那一刻开始计时
+倒计时从台词**已经说完**时开始，而不是 block 到达时。作者设定的是它在最后一个字打完（或最后一个音节念完）之后**留在**屏幕上的时间，然后 block 自己离开。
+
+从到达开始计时是那种读起来自然、跑起来错误的做法：一句 120 字的台词配 2500 ms，会在句子中间被截断。
+
+它**优先于 `waitInput`**，也优先于立即离开。三者都在说 block 何时被离开，而作者写在卡片上的那个是最具体的答案。所以点击只能**加快显示**，永远不能把 block 打发走 —— 去催一句正在演自己时间的台词没有意义，加快它才有；而这次加快正是启动倒计时的动作。
+
+又因为离开一个 block 正是把它标记为**已完成**，所以 `timeout` 也是释放指名它的 [`waitForBlocks`](/zh/guide/async-tracks) 的那一步。
 :::
 
 这九个之中，只有**两个**会改变遍历：`isAsync` 和 `waitForBlocks`。其余七个原样交给游戏，由游戏决定
