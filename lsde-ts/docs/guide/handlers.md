@@ -27,6 +27,8 @@ The engine exposes the following handlers:
 
 `onDialog`, `onChoice`, and `onAction` are **required** — the engine validates their presence when `start()` is called and throws a descriptive error if any are missing. `onCondition` is **optional** when `onResolveCondition` is installed — the engine auto-routes from pre-evaluated condition groups.
 
+A ROUTER block has **no handler** and needs none: the engine evaluates every case, launches the port of each true one and continues by `then` (all held) or `catch` (one did not) on its own. To observe one, use `handle.onBlock(id)` — see [The Router Block](/guide/router).
+
 <!--@include: ../_shared/handler-basic.md-->
 
 ## Two-Tier Handler System

@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
 #include <fstream>
+#include <iostream>
 #include <algorithm>
 
 #include <lsde/engine.h>
@@ -48,6 +49,21 @@ struct RunState {
     int stepIndex = 0;
     int cleanupCalls = 0;
 };
+
+/// What the suite hands to init(): one payload, or the files of a per-scene export.
+InitOptions optionsOf(const TestSuite& suite) {
+    InitOptions options;
+    if (suite.blueprintFiles) options.files = *suite.blueprintFiles;
+    else options.data = suite.blueprint;
+    return options;
+}
+
+/// An empty file list means "no data at all" in the three other runtimes. Here a payload struct
+/// always exists, so there is nothing empty to hand over: the case cannot be expressed, and the
+/// runner says so rather than passing a default struct and calling INVALID_FORMAT a match.
+bool unexpressibleHere(const TestSuite& suite) {
+    return suite.blueprintFiles && suite.blueprintFiles->empty();
+}
 
 void executeStepAction(
     const std::optional<StepAction>& action,
@@ -124,6 +140,12 @@ CleanupFn dispatch(
         }
     }
 
+    if (step->expect.characterId) {
+        const Card* character = context->character();
+        EXPECT_NE(character, nullptr) << "block " << block->id << " has no character";
+        if (character != nullptr) EXPECT_EQ(*step->expect.characterId, character->id);
+    }
+
     state.stepIndex++;
     executeStepAction(step->action, context, next);
     return [&state]() { state.cleanupCalls++; };
@@ -131,7 +153,7 @@ CleanupFn dispatch(
 
 void runFlowCase(const TestSuite& suite, const TestCase& testCase) {
     DialogueEngine engine;
-    auto report = engine.init({suite.blueprint});
+    auto report = engine.init(optionsOf(suite));
     ASSERT_TRUE(report.errors.empty())
         << "suite " << suite.id << " failed to load: " << report.errors[0].message;
 
@@ -177,7 +199,7 @@ void runFlowCase(const TestSuite& suite, const TestCase& testCase) {
 
 void runValidationCase(const TestSuite& suite, const TestCase& testCase) {
     DialogueEngine engine;
-    auto report = engine.init({suite.blueprint});
+    auto report = engine.init(optionsOf(suite));
 
     auto codesOf = [](const std::vector<DiagnosticEntry>& entries) {
         std::vector<std::string> codes;
@@ -251,6 +273,10 @@ TEST(CrossLanguage, ReportsWhatTestInitValidationExpects) {
     ASSERT_FALSE(spec.suites.empty());
 
     for (const auto& suite : spec.suites) {
+        if (unexpressibleHere(suite)) {
+            std::cout << "  [skipped] " << suite.id << ": an empty file list cannot be expressed in C++\n";
+            continue;
+        }
         for (const auto& testCase : suite.cases) {
             SCOPED_TRACE(suite.id + " / " + testCase.id);
             runValidationCase(suite, testCase);

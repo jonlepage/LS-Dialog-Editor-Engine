@@ -21,6 +21,13 @@ func _init() -> void:
 		"res://tests/test_condition_evaluator.gd",
 		"res://tests/test_on_resolve_condition.gd",
 		"res://tests/test_robustness.gd",
+		"res://tests/test_router.gd",
+		"res://tests/test_in_port_per_character.gd",
+		"res://tests/test_handler_tiers.gd",
+		"res://tests/test_track_info.gd",
+		"res://tests/test_validation_hook.gd",
+		"res://tests/test_engine_facade.gd",
+		"res://tests/test_lsde_utils.gd",
 	]:
 		var suite: RefCounted = load(suite_path).new()
 		var result: Dictionary = suite.run()
@@ -91,6 +98,12 @@ func _execute_action(action: Variant, context: Variant, next_fn: Callable) -> vo
 			context.resolve_character_port(action.get("cardId", ""))
 			next_fn.call()
 
+## What the suite hands to init(): one payload, or the files of a per-scene export.
+func _options_of(suite: Dictionary) -> Dictionary:
+	if suite.has("blueprintFiles"):
+		return {"files": suite["blueprintFiles"]}
+	return {"data": suite["blueprint"]}
+
 func _assert_eq(actual: Variant, expected: Variant, msg: String) -> bool:
 	if actual != expected:
 		print("  FAIL: %s — expected %s, got %s" % [msg, str(expected), str(actual)])
@@ -113,7 +126,7 @@ func _run_flow_tests(filename: String) -> void:
 
 func _run_single_flow_test(suite: Dictionary, tc: Dictionary, display_name: String) -> bool:
 	var engine: LsdeDialogueEngine = LsdeDialogueEngine.new()
-	var report: Dictionary = engine.init({"data": suite["blueprint"]})
+	var report: Dictionary = engine.init(_options_of(suite))
 	if report["errors"].size() > 0:
 		print("  FAIL: %s — init errors: %s" % [display_name, str(report["errors"])])
 		return false
@@ -159,6 +172,12 @@ func _run_single_flow_test(suite: Dictionary, tc: Dictionary, display_name: Stri
 					offered += 1
 			if offered != expect["visibleOptionCount"]:
 				failures.append("visibleOptionCount expected %d, got %d" % [expect["visibleOptionCount"], offered])
+
+		if expect.get("characterId") != null:
+			var character: Variant = context.character
+			var character_id: Variant = character.get("id") if character != null else null
+			if character_id != expect["characterId"]:
+				failures.append("characterId expected %s, got %s" % [str(expect["characterId"]), str(character_id)])
 
 		state[0] += 1
 		_execute_action(step.get("action"), context, next_fn)
@@ -224,7 +243,7 @@ func _run_validation_tests(filename: String) -> void:
 
 func _run_single_validation_test(suite: Dictionary, tc: Dictionary, display_name: String) -> bool:
 	var engine: LsdeDialogueEngine = LsdeDialogueEngine.new()
-	var report: Dictionary = engine.init({"data": suite["blueprint"]})
+	var report: Dictionary = engine.init(_options_of(suite))
 	var ok: bool = true
 
 	var codes_of: Callable = func(entries: Array) -> Array:

@@ -13,6 +13,11 @@ extends RefCounted
 const BLOCK_DIALOG := "dialog"
 const BLOCK_CHOICE := "choice"
 const BLOCK_CONDITION := "condition"
+## A dispatcher. Carries the SAME cases as a condition and reads them the opposite way: every case
+## is evaluated, each true one launches its port, and the flow then always continues — by
+## [code]then[/code] when all of them held, by [code]catch[/code] when any did not. A router with
+## no case at all leaves by [code]then[/code], the way Promise.all([]) resolves.
+const BLOCK_ROUTER := "router"
 const BLOCK_ACTION := "action"
 const BLOCK_NOTE := "note"
 
@@ -38,9 +43,12 @@ const ROLE_PLACES := "places"
 const PORT_IN := "in"
 ## The default exit of a dialog, and the true exit of an if-style condition.
 const PORT_OUT := "out"
-## The exit of an action block once its calls succeeded.
+## The nominal exit, on two block types: an action whose calls all succeeded, and a router whose
+## cases were ALL true.
 const PORT_THEN := "then"
-## The exit of an action block when a call failed.
+## The exception exit, on the same two: an action where a call failed, and a router where at least
+## one case was false. On a router it does NOT cancel anything — the tracks of the true cases are
+## already running, exactly like a Promise.all that rejects.
 const PORT_CATCH := "catch"
 ## The fallback exit of a condition block: no case matched.
 const PORT_DEFAULT := "default"
@@ -56,13 +64,19 @@ const SUPPORTED_FORMAT := "lsde-blueprints"
 ## The format version this engine reads. Bumps only when the payload contract changes.
 const SUPPORTED_VERSION := 1
 
-## The nine ids of the native properties, to sort a [code]props[/code] bag into natives and the
+## The ten ids of the native properties, to sort a [code]props[/code] bag into natives and the
 ## writer's own properties. Anything not in here belongs to the game.
 ##
 ## Ids cannot collide — LSDE refuses a project property that takes a native name — so telling them
-## apart is a lookup, not a guess. Most are inert; only two mean anything to the traversal:
+## apart is a lookup, not a guess. Most are inert; only three mean anything to the traversal:
 ##
 ## [code]isAsync[/code] opens a parallel track.
+##
+## [code]inPortPerCharacter[/code] makes the wire name the actor: a link's [code]toPort[/code]
+## carries the CARD ID of the actor the block is to be assigned to on that pass, and only that
+## actor is offered to on_resolve_character. The engine still ASKS — a game that returns null says
+## the character does not exist. Entering through [code]in[/code] names nobody, and the callback
+## gets the whole cast as everywhere else.
 ##
 ## [code]waitForBlocks[/code] holds a block until the ones it names have FINISHED — the join
 ## half of the fork isAsync opens. [b]The engine holds the block BEFORE dispatching it.[/b] No
@@ -91,5 +105,5 @@ const SUPPORTED_VERSION := 1
 ## names it. The engine enforces none of it; the game arms the countdown.
 const NATIVE_PROPERTY_IDS := [
 	"isAsync", "delay", "timeout", "waitInput", "debug",
-	"portPerCharacter", "skipIfMissingActor", "portPerCase", "waitForBlocks",
+	"portPerCharacter", "inPortPerCharacter", "skipIfMissingActor", "portPerCase", "waitForBlocks",
 ]

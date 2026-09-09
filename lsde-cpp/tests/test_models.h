@@ -25,6 +25,8 @@ struct StepExpect {
     std::optional<std::string> blockId;
     std::optional<std::string> text;
     std::optional<int> visibleOptionCount;
+    /// The card id context->character() must carry — what inPortPerCharacter is about.
+    std::optional<std::string> characterId;
 };
 
 struct StepAction {
@@ -71,7 +73,10 @@ struct TestCase {
 struct TestSuite {
     std::string id;
     std::string description;
+    /// One payload. Left empty when the suite loads several files instead.
     BlueprintExport blueprint;
+    /// The files of a per-scene export, handed to init() as `files`. Replaces `blueprint`.
+    std::optional<std::vector<BlueprintExport>> blueprintFiles;
     /// The scene to play — a path or the stable id. Absent in the validation specs.
     std::optional<std::string> sceneId;
     std::optional<std::string> locale;

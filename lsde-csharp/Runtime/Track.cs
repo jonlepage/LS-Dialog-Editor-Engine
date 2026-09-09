@@ -80,7 +80,8 @@ namespace LsdeDialogEngine
     /// <remarks>v2 has one bag: natives and the writer's own properties share Props, keyed by bare
     /// id. Ids cannot collide — LSDE refuses a project property that takes a native name — so
     /// reading a native is a plain lookup. Only two of them mean anything here: IsAsync opens a
-    /// track, WaitForBlocks holds one. The rest are passed through untouched.</remarks>
+    /// track, WaitForBlocks holds one. InPortPerCharacter is read by the scene, when it resolves
+    /// the cards. The rest are passed through untouched.</remarks>
     internal static class Natives
     {
         internal static NativeProperties Of(BlueprintBlock block) => LsdeUtils.GetNativeProperties(block);
@@ -155,11 +156,13 @@ namespace LsdeDialogEngine
         bool IsCompleted(string blockId);
         void RegisterWaitForBlocks(IWaiter waiter, List<string> blockIds);
 
-        IBaseBlockContext? CreateBlockContext(BlueprintBlock block);
-        bool RunValidation(BlueprintBlock block, BlueprintBlock? fromBlock, Card? fromCharacter);
+        /// <summary>Build the context of a block. entryPort is the port the wire arrived on — a CARD
+        /// ID under InPortPerCharacter, "in" otherwise.</summary>
+        IBaseBlockContext? CreateBlockContext(BlueprintBlock block, string entryPort);
+        bool RunValidation(BlueprintBlock block, string entryPort, BlueprintBlock? fromBlock, Card? fromCharacter);
 
-        /// <summary>Open a parallel track on startBlock. Returns its id.</summary>
-        int SpawnTrack(BlueprintBlock startBlock, int? parentTrackId);
+        /// <summary>Open a parallel track on startBlock, entered through entryPort. Returns its id.</summary>
+        int SpawnTrack(BlueprintBlock startBlock, int? parentTrackId, string entryPort);
         Exception? CancelTrack(int trackId);
 
         /// <summary>This track reached the end of its flow. The scene decides what that means.</summary>
@@ -202,19 +205,23 @@ namespace LsdeDialogEngine
         /// how the graph reads on screen.</para></remarks>
         private readonly List<Link> _queue = new List<Link>();
 
-        internal Track(ITrackHost host, BlueprintBlock startBlock, int id, int? parentTrackId)
+        /// <summary>The entry port of the wire that opened this track. "in" for the flow the player watches.</summary>
+        private readonly string _startEntryPort;
+
+        internal Track(ITrackHost host, BlueprintBlock startBlock, int id, int? parentTrackId, string startEntryPort)
         {
             _host = host;
             _startBlock = startBlock;
             Id = id;
             ParentTrackId = parentTrackId;
             StartBlockId = startBlock.Id;
+            _startEntryPort = startEntryPort;
         }
 
         /// <summary>Begin walking. Must be called after the track is in the scene's pool.</summary>
         internal void Start()
         {
-            ProcessBlock(_startBlock);
+            ProcessBlock(_startBlock, _startEntryPort);
         }
 
         /// <summary>Stop this track and every track it opened.</summary>
@@ -286,7 +293,7 @@ namespace LsdeDialogEngine
         /// <para>3. Ask OnValidateNextBlock. The game's gate; a refusal stops this track.</para>
         /// <para>4. Mark it current and visited, which may release another parked track.</para>
         /// <para>5. Fire OnBeforeBlock, whose Resolve() releases the type handler.</para></remarks>
-        private void ProcessBlock(BlueprintBlock startingBlock)
+        private void ProcessBlock(BlueprintBlock startingBlock, string entryPort)
         {
             if (!_running || !_host.IsSceneRunning()) return;
 
@@ -319,12 +326,12 @@ namespace LsdeDialogEngine
             if (waitBlocks != null && waitBlocks.Count > 0 && !AllCompleted(waitBlocks))
             {
                 var parked = block;
-                _pendingAdvance = () => ProcessBlock(parked);
+                _pendingAdvance = () => ProcessBlock(parked, entryPort);
                 _host.RegisterWaitForBlocks(this, waitBlocks);
                 return;
             }
 
-            if (!_host.RunValidation(block, _previousBlock, _previousCharacter))
+            if (!_host.RunValidation(block, entryPort, _previousBlock, _previousCharacter))
             {
                 // A refusal is a dead end like any other, so it ENDS this track.
                 //
@@ -361,13 +368,13 @@ namespace LsdeDialogEngine
                     {
                         if (resolvedOnce) return;
                         resolvedOnce = true;
-                        ExecuteBlockHandler(block);
+                        ExecuteBlockHandler(block, entryPort);
                     }
                 });
             }
             else
             {
-                ExecuteBlockHandler(block);
+                ExecuteBlockHandler(block, entryPort);
             }
         }
 
@@ -377,7 +384,7 @@ namespace LsdeDialogEngine
         /// <remarks>Next() is guarded and deferred: called during the handler it only raises a
         /// flag, and the advance happens once both handlers have returned. Otherwise a scene
         /// handler calling Next() would move the flow on before the global handler ever ran.</remarks>
-        private void ExecuteBlockHandler(BlueprintBlock block)
+        private void ExecuteBlockHandler(BlueprintBlock block, string entryPort)
         {
             // Running and not just the scene's: a Resolve() kept in a closure and fired after this
             // track ended would otherwise restart it on a dead flow.
@@ -388,7 +395,7 @@ namespace LsdeDialogEngine
                 _host.GetSceneRegistry(),
                 _host.GetGlobalRegistry());
 
-            var context = _host.CreateBlockContext(block);
+            var context = _host.CreateBlockContext(block, entryPort);
             if (context == null)
             {
                 AdvanceToNextBlock(block, null);
@@ -491,6 +498,7 @@ namespace LsdeDialogEngine
                 Links = sceneGraph.GetOutgoingLinks(block.Id),
                 SelectedOptionId = (context as InternalChoiceContext)?.SelectedOptionId,
                 ConditionPort = (context as InternalConditionContext)?.ConditionPort,
+                RouterPorts = (context as InternalRouterContext)?.RouterPorts,
                 ActionRejected = (context as InternalActionContext)?.ActionRejected,
                 ActorPort = (context as InternalDialogContext)?.ActorPort,
             });
@@ -522,7 +530,7 @@ namespace LsdeDialogEngine
                 var targetBlock = sceneGraph.GetBlock(link.To);
                 if (targetBlock != null)
                 {
-                    _childTrackIds.Add(_host.SpawnTrack(targetBlock, Id));
+                    _childTrackIds.Add(_host.SpawnTrack(targetBlock, Id, link.ToPort));
                 }
             }
 
@@ -554,7 +562,7 @@ namespace LsdeDialogEngine
                 var nextBlock = sceneGraph.GetBlock(continuation.To);
                 if (nextBlock != null)
                 {
-                    ProcessBlock(nextBlock);
+                    ProcessBlock(nextBlock, continuation.ToPort);
                     return;
                 }
             }
@@ -579,7 +587,7 @@ namespace LsdeDialogEngine
                 _queue.RemoveAt(0);
                 var target = sceneGraph.GetBlock(link.To);
                 if (target == null) continue;
-                ProcessBlock(target);
+                ProcessBlock(target, link.ToPort);
                 return fault;
             }
 

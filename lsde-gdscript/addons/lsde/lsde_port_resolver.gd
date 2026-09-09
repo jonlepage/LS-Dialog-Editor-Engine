@@ -14,6 +14,7 @@
 ##   dialog     "out", or one port per actor CARD ID with portPerCharacter — "out" is the fallback
 ##   choice     the picked option's id (C1…) — there is no "out" on a choice
 ##   condition  "out" (true) and "default" (false), or K1… per case with portPerCase
+##   router     the K1… of EVERY case that held, then "then" (all held) or "catch" (one did not)
 ##   action     "then", and "catch" when a call failed
 ##   note       never dispatched; the traversal steps over it
 ## [/codeblock]
@@ -40,6 +41,8 @@ static func resolve_port(input: Dictionary) -> Array:
 			return _resolve_choice_port(links, input.get("selectedOptionId"))
 		LsdeTypes.BLOCK_CONDITION:
 			return _resolve_condition_port(links, input.get("conditionPort"))
+		LsdeTypes.BLOCK_ROUTER:
+			return _resolve_router_ports(links, input.get("routerPorts"))
 		LsdeTypes.BLOCK_ACTION:
 			return _resolve_action_port(links, input.get("actionRejected"))
 		LsdeTypes.BLOCK_NOTE:
@@ -84,6 +87,28 @@ static func _resolve_condition_port(links: Array, condition_port: Variant) -> Ar
 	if condition_port == null:
 		return []
 	return _on_port(links, condition_port)
+
+## A router leaves by SEVERAL ports at once: the K* of each true case, then "then" or "catch".
+##
+## Which ports those are was decided before we got here, by the condition evaluator — the same
+## division of labour as a condition, and for the same reason: only it knows the game's answers.
+##
+## Order is preserved, and the continuation is last. That is what lets the traversal keep
+## then/catch as the main flow: it takes the first non-async target, and in the arrangement LSDE
+## recommends the case routes all carry isAsync.
+##
+## A port with no wire contributes nothing and is not an error — a writer who launched nothing on
+## a true case simply drew it that way. [code]null[/code] means nothing was decided, so nowhere to
+## go.
+static func _resolve_router_ports(links: Array, router_ports: Variant) -> Array:
+	if router_ports == null:
+		return []
+	var matches: Array = []
+	for port in router_ports:
+		for link in links:
+			if link.get("port", "") == port:
+				matches.append(link)
+	return matches
 
 ## An action leaves by "then" once its calls went through, and by "catch" when one failed.
 ##

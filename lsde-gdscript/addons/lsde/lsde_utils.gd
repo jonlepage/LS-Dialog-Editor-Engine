@@ -27,6 +27,9 @@ static func is_choice_block(block: Dictionary) -> bool:
 static func is_condition_block(block: Dictionary) -> bool:
 	return block.get("type", "") == LsdeTypes.BLOCK_CONDITION
 
+static func is_router_block(block: Dictionary) -> bool:
+	return block.get("type", "") == LsdeTypes.BLOCK_ROUTER
+
 static func is_action_block(block: Dictionary) -> bool:
 	return block.get("type", "") == LsdeTypes.BLOCK_ACTION
 
@@ -164,6 +167,12 @@ static func evaluate_condition_cases(cases: Array, port_per_case: bool, evaluato
 ## Each case on its own, in order — to show what matched without changing where the flow goes.
 static func evaluate_each_case(cases: Array, evaluator: Callable) -> Array:
 	return LsdeConditionEvaluator.evaluate_each_case(cases, evaluator)
+
+## The exits of a ROUTER, from case results already computed: the port of every true case, then
+## "then" when they all held or "catch" when one did not — always last. The router's reading of
+## the same cases a condition carries.
+static func pick_router_ports(cases: Array, results: Array) -> Array:
+	return LsdeConditionEvaluator.pick_router_ports(cases, results)
 
 ## Tag every option of a choice with whether its `when` holds, returning them ALL.
 ## Replaces the v1 filter_visible_choices, which shortened the list and took away the ability to

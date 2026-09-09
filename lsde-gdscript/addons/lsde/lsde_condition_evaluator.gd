@@ -101,6 +101,42 @@ static func pick_port_from_results(cases: Array, port_per_case: bool, results: A
 	return LsdeTypes.PORT_OUT
 
 
+## A ROUTER's exits: the port of every true case, then "then" or "catch".
+##
+## The opposite reading of the same [code]cases[/code] a condition carries. A condition asks
+## [i]which one[/i] and leaves by a single port; a router asks [i]which ones[/i], launches each of
+## them, and continues besides — by "then" when every case held, by "catch" when any did not.
+##
+## Three rules this encodes, all of them from the format's own contract:
+##
+## [b]No break.[/b] Every case is counted, so a false one in the middle does not hide the true ones
+## after it. That is the whole difference with a condition.
+##
+## [b]The tally is over CASES, not over ports.[/b] A port carrying several wires launches several
+## tracks and still counts as one case — and two cases wired to the same block dispatch it twice.
+##
+## [b]No cases at all → "then"[/b], the way Promise.all([]) resolves.
+##
+## The continuation is LAST in the list on purpose: the traversal keeps the first non-async target
+## as the main flow, so then/catch stays the main flow as long as the case routes are async.
+## "catch" cancels nothing: the tracks of the true cases are already running by the time the tally
+## is read.
+static func pick_router_ports(cases: Array, results: Array) -> Array:
+	if cases.size() == 0:
+		return [LsdeTypes.PORT_THEN]
+
+	var ports: Array = []
+	var matched: int = 0
+	for i in range(cases.size()):
+		if i >= results.size() or not results[i]:
+			continue
+		ports.append(cases[i].get("port", ""))
+		matched += 1
+
+	ports.append(LsdeTypes.PORT_THEN if matched == cases.size() else LsdeTypes.PORT_CATCH)
+	return ports
+
+
 ## Evaluate every case on its own, without picking a port.
 ##
 ## Handed to a game that wants to show what matched without changing where the flow goes. The

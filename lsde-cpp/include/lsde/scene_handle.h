@@ -99,8 +99,9 @@ public:
     bool isSceneRunning() const override;
     void addVisited(const std::string& blockId) override;
     void addCompleted(const std::string& blockId) override;
-    /// Open a parallel track. Returns its id.
-    int spawnTrack(const BlueprintBlock& startBlock, int parentTrackId) override;
+    /// Open a parallel track, entered through entryPort. Returns its id.
+    int spawnTrack(const BlueprintBlock& startBlock, int parentTrackId,
+                   const std::string& entryPort) override;
     /// Cancel a specific track by ID (used for parent->child cascade).
     std::exception_ptr cancelTrack(int trackId) override;
     /// Park a track - the main flow included - until every listed block has FINISHED.
@@ -134,16 +135,22 @@ public:
     /// has the keycard" - was bypassed the moment a branch was marked isAsync. Nothing in the
     /// hook's contract said it only applied to the flow the player was watching.
     ///
+    /// `entryPort` is the port the wire arrived on, and it is passed for one reason: under
+    /// inPortPerCharacter the gate must be asked about the actor the DESIGNER wired, not about
+    /// whichever one the whole cast would have produced. A gate reading "do not enter unless this
+    /// character is here" would otherwise be answered about the wrong character.
+    ///
     /// Returns false when the caller must stop rather than dispatch the block.
-    bool runValidation(const BlueprintBlock& block, const BlueprintBlock* fromBlock,
-                       const Card* fromCharacter) override;
+    bool runValidation(const BlueprintBlock& block, const std::string& entryPort,
+                       const BlueprintBlock* fromBlock, const Card* fromCharacter) override;
 
     /// Check if a block id has been visited in this scene.
     bool isVisited(const std::string& blockId) const override;
     /// Check if a block id has FINISHED in this scene, which is what a join waits on.
     bool isCompleted(const std::string& blockId) const override;
-    /// Create the appropriate context for a block (Dialog/Choice/Condition/Action).
-    std::unique_ptr<IBaseBlockContext> createBlockContext(const BlueprintBlock& block) override;
+    /// Create the appropriate context for a block (Dialog/Choice/Condition/Router/Action).
+    std::unique_ptr<IBaseBlockContext> createBlockContext(const BlueprintBlock& block,
+                                                          const std::string& entryPort) override;
     /// Record a choice selection in the history for condition evaluation.
     void recordChoice(const std::string& blockId, const std::string& optionId);
     /// Evaluate a condition with choice history support. Non-choice conditions delegate to fallbackEvaluator.
@@ -162,12 +169,34 @@ private:
         const std::function<bool(const ConditionTest&)>& fallbackEvaluator);
     void fireSceneEnter();
     void fireSceneExit();
-    std::unique_ptr<IBaseBlockContext> createContext(const BlueprintBlock& block);
+    std::unique_ptr<IBaseBlockContext> createContext(const BlueprintBlock& block,
+                                                     const std::string& entryPort);
     /// Returns the scene-level resolver if set, otherwise the engine-level resolver.
     ResolveCharacterFn getResolveCharacterFn() const;
-    /// Tag each choice with visible = true/false based on the installed resolver.
+
     /// Look up the cards a block cites, and let the game pick which actor is speaking.
-    ResolvedCards resolveCardsFor(const BlueprintBlock& block) const;
+    ///
+    /// With inPortPerCharacter, the wire that reached the block named the actor: `entryPort`
+    /// holds a CARD ID instead of "in", and only that actor is offered to onResolveCharacter. The
+    /// game is still the one answering — it may say nullptr — it simply cannot pick a different
+    /// actor than the one the designer wired.
+    ///
+    /// Without the property, or when the block was entered through "in", `entryPort` is ignored
+    /// and the whole cast is offered, exactly as before. That is what keeps every existing project
+    /// — and every wire LSDE has ever written with toPort "in" — behaving identically.
+    ResolvedCards resolveCardsFor(const BlueprintBlock& block,
+                                  const std::string& entryPort = Ports::In) const;
+
+    /// Evaluate every case of a CONDITION or a ROUTER, before its context is built.
+    ///
+    /// The handler is then handed RESULTS rather than questions, and the exit port is read off
+    /// these same results rather than re-asking the game: each test reaches onResolveCondition
+    /// exactly ONE time — whatever the block type, whatever the mode, whichever case matches. That
+    /// is also what makes onCondition optional.
+    ///
+    /// Written ONCE for both block types on purpose. They ask the same question; only the reading
+    /// of the answer differs, and that belongs to pickPortFromResults and pickRouterPorts.
+    std::vector<RuntimeConditionCase> evaluateCases(const BlueprintBlock& block);
 
     /// The evaluator that ROUTES a condition block. Always present.
     ///

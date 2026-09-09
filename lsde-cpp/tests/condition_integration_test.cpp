@@ -255,6 +255,26 @@ TEST(OptionVisibility, LeavesVisibleUnsetWithNoEvaluator) {
     EXPECT_FALSE(tagged[0].visible.has_value());
 }
 
+// ─── The router's reading of the same cases ──────────────────────────────────
+
+TEST(RouterPorts, EveryTrueCaseThenThenWhenAllHeld) {
+    std::vector<ConditionCase> cases = {whenCase("K1"), whenCase("K2"), whenCase("K3")};
+    EXPECT_EQ(pickRouterPorts(cases, {true, true, true}),
+              std::vector<std::string>({"K1", "K2", "K3", Ports::Then}));
+}
+
+TEST(RouterPorts, NoBreakAFalseCaseHidesNothingAndTheExitIsCatch) {
+    std::vector<ConditionCase> cases = {whenCase("K1"), whenCase("K2"), whenCase("K3")};
+    EXPECT_EQ(pickRouterPorts(cases, {true, false, true}),
+              std::vector<std::string>({"K1", "K3", Ports::Catch}));
+    EXPECT_EQ(pickRouterPorts(cases, {false, false, false}),
+              std::vector<std::string>({Ports::Catch}));
+}
+
+TEST(RouterPorts, NoCasesAtAllIsThenLikePromiseAllOfNothing) {
+    EXPECT_EQ(pickRouterPorts({}, {}), std::vector<std::string>({Ports::Then}));
+}
+
 // ─── The reserved choice dictionary ──────────────────────────────────────────
 
 TEST(ChoiceDictionary, RecognisesATestThatReadsAPastAnswer) {

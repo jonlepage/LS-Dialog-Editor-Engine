@@ -1,8 +1,5 @@
 # The Router Block
 
-> **Coming.** The contract is settled; the block is not implemented in the engine yet. This page
-> describes what it will do, and is not in the site menu yet.
-
 A Router **launches every route whose condition is met**, waits for the ones that block, then says
 whether all of them were.
 
@@ -130,7 +127,12 @@ engine.onResolveCondition((test) => {
 
 The engine decides which ports leave and picks `then` or `catch`. Nothing to route by hand.
 
-The observation handler (`onRouter`) is not settled yet. It will be optional.
+There is **no `onRouter` handler**, and none is needed: by the time a handler could speak, every
+true case has launched its port and the continuation is picked — there is nothing left to answer.
+`start()` does not require one. To watch a router — log what matched, drive a debug view — use
+`handle.onBlock(id)`: its context carries the pre-evaluated `cases`, ALL of them, and no `resolve`.
+
+<!--@include: ../_shared/block-router.md-->
 
 ## Pitfalls
 

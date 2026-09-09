@@ -78,9 +78,8 @@ namespace LsdeDialogEngine
         /// <summary>
         /// Validate a blueprint payload, and optionally cross-check it against what the game declares.
         /// <para>Structural checks: the format header, scene paths, block id uniqueness <b>within a
-        /// scene</b>, the entry block, link targets, and the fork rule (at most one non-async target
-        /// per port). With Check, also warns about functions, dictionaries and cards the game does
-        /// not know.</para>
+        /// scene</b>, the entry block, link targets, and the blocks a WaitForBlocks names. With
+        /// Check, also warns about functions, dictionaries and cards the game does not know.</para>
         /// <para>Errors mean the payload will not play correctly; warnings mean it will, but
         /// something looks wrong.</para>
         /// </summary>
@@ -267,8 +266,8 @@ namespace LsdeDialogEngine
             }
         }
 
-        /// <summary>WaitForBlocks names blocks OF THIS SCENE that must be visited before this one advances.</summary>
-        /// <remarks>A name that is not in the scene can never be visited, so the block parks for
+        /// <summary>WaitForBlocks names blocks OF THIS SCENE that must have FINISHED before this one is dispatched.</summary>
+        /// <remarks>A name that is not in the scene can never finish, so the block parks for
         /// good: on the main flow that is the whole dialogue stopping with no OnSceneExit, and on a
         /// parallel track it is a branch that silently never finishes. Neither shows up anywhere at
         /// runtime, which is why it is said here — a warning, not an error: the rest still plays.</remarks>

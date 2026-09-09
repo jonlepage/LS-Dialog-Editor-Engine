@@ -37,11 +37,16 @@ namespace LsdeDialogEngine
         /// <para>An id with no card is dropped rather than reported: a payload citing a card that
         /// is not in its own tables is an exporter bug, and the traversal is not where a game
         /// should learn about it — Init() is.</para>
+        /// <para>InPortPerCharacter: when the wire named ONE actor, designatedActorId is that card
+        /// id and it is the only one offered to pickCharacter. The game is still asked — it may
+        /// answer null, which says the character does not exist — but it cannot pick a different
+        /// one, and Actors stays the whole cast either way.</para>
         /// </summary>
         public static ResolvedCards Resolve(
             BlueprintBlock block,
             Func<string, Card?> lookup,
-            Func<List<Card>, Card?>? pickCharacter)
+            Func<List<Card>, Card?>? pickCharacter,
+            string? designatedActorId = null)
         {
             var cards = new ResolvedCards();
 
@@ -55,7 +60,17 @@ namespace LsdeDialogEngine
             }
 
             cards.Emotion = string.IsNullOrEmpty(block.Emotion) ? null : lookup(block.Emotion!);
-            cards.Character = pickCharacter?.Invoke(cards.Actors);
+
+            var offered = cards.Actors;
+            if (designatedActorId != null)
+            {
+                offered = new List<Card>();
+                foreach (var card in cards.Actors)
+                {
+                    if (card.Id == designatedActorId) offered.Add(card);
+                }
+            }
+            cards.Character = pickCharacter?.Invoke(offered);
 
             return cards;
         }
@@ -153,6 +168,27 @@ namespace LsdeDialogEngine
         }
 
         public void Resolve(string port) => ConditionPort = port;
+    }
+
+    /// <summary>A ROUTER's context: the same pre-evaluated cases, and nothing to answer with.</summary>
+    /// <remarks>No Resolve. By the time a handler could speak, every true case has launched its
+    /// port and the continuation is picked — there is no single exit left to override. The handler
+    /// is an observation point, which is why the type requires none at all.</remarks>
+    internal class InternalRouterContext : InternalBlockContext, IRouterContext
+    {
+        /// <summary>Every port the block leaves by, the continuation last. See PickRouterPorts.</summary>
+        internal List<string>? RouterPorts;
+
+        public IReadOnlyList<RuntimeConditionCase> Cases { get; }
+
+        internal InternalRouterContext(
+            BlueprintBlock block,
+            ResolvedCards cards,
+            List<RuntimeConditionCase> cases)
+            : base(block, cards)
+        {
+            Cases = cases;
+        }
     }
 
     internal class InternalActionContext : InternalBlockContext, IActionContext

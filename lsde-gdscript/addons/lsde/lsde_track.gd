@@ -61,18 +61,22 @@ var _pending_advance: Callable
 ## Front insertion is what makes the walk depth-first, which is how the graph reads on screen.
 var _queue: Array = []
 
+## The entry port of the wire that opened this track. "in" for the flow the player watches.
+var _start_entry_port: String = LsdeTypes.PORT_IN
 
-func _init(host: Object, start_block: Dictionary, track_id: int, parent_id: int) -> void:
+
+func _init(host: Object, start_block: Dictionary, track_id: int, parent_id: int, start_entry_port: String) -> void:
 	_host = host
 	_start_block = start_block
 	id = track_id
 	parent_track_id = parent_id
 	start_block_id = start_block.get("id", "")
+	_start_entry_port = start_entry_port
 
 
 ## Begin walking. Must be called after the track is in the scene's pool.
 func start() -> void:
-	_process_block(_start_block)
+	_process_block(_start_block, _start_entry_port)
 
 
 ## Stop this track and every track it opened.
@@ -142,7 +146,7 @@ func get_track_info() -> Dictionary:
 ## 3. Ask on_validate_next_block. The game's gate; a refusal stops this track.
 ## 4. Mark it current and visited, which may release another parked track.
 ## 5. Fire on_before_block, whose resolve() releases the type handler.
-func _process_block(starting_block: Dictionary) -> void:
+func _process_block(starting_block: Dictionary, entry_port: String) -> void:
 	if not _running or not _host._is_scene_running():
 		return
 
@@ -170,11 +174,11 @@ func _process_block(starting_block: Dictionary) -> void:
 	# MIGRATION-V2.md records the decision.
 	var wait_blocks: Array = LsdeUtils.get_native_properties(block).get("waitForBlocks", [])
 	if wait_blocks.size() > 0 and not _all_completed(wait_blocks):
-		_pending_advance = func() -> void: _process_block(block)
+		_pending_advance = func() -> void: _process_block(block, entry_port)
 		_host._register_wait_for_blocks(self, wait_blocks)
 		return
 
-	if not _host._run_validation(block, _previous_block, _previous_character):
+	if not _host._run_validation(block, entry_port, _previous_block, _previous_character):
 		# A refusal is a dead end like any other, so it ENDS this track.
 		#
 		# There is no API to resume a refused track — no goto, no retry, and start() refuses a
@@ -201,14 +205,14 @@ func _process_block(starting_block: Dictionary) -> void:
 			if resolved_once[0]:
 				return
 			resolved_once[0] = true
-			_execute_block_handler(block)
+			_execute_block_handler(block, entry_port)
 		registry.before_block_handler.call({
 			"block": block, "scene": _host,
 			"context": {"nativeProperties": LsdeUtils.get_native_properties(block)},
 			"resolve": resolve_fn
 		})
 	else:
-		_execute_block_handler(block)
+		_execute_block_handler(block, entry_port)
 
 
 ## Run the handlers for a block, then leave when the game says so.
@@ -216,7 +220,7 @@ func _process_block(starting_block: Dictionary) -> void:
 ## next() is guarded and deferred: called during the handler it only raises a flag, and the advance
 ## happens once both handlers have returned. Otherwise a scene handler calling next() would move
 ## the flow on before the global handler ever ran.
-func _execute_block_handler(block: Dictionary) -> void:
+func _execute_block_handler(block: Dictionary, entry_port: String) -> void:
 	# `_running` and not just the scene's: a resolve() kept in a closure and fired after this track
 	# ended would otherwise restart it on a dead flow.
 	if not _running or not _host._is_scene_running():
@@ -226,7 +230,7 @@ func _execute_block_handler(block: Dictionary) -> void:
 		block.get("type", ""), block.get("id", ""),
 		_host._get_scene_registry(), _host._get_global_registry())
 
-	var context: Variant = _host._create_block_context(block)
+	var context: Variant = _host._create_block_context(block, entry_port)
 	if context == null:
 		_advance_to_next_block(block, null)
 		return
@@ -306,6 +310,8 @@ func _advance_to_next_block(block: Dictionary, context: Variant) -> void:
 		input["selectedOptionId"] = context.selected_option_id
 	if context is LsdeBlockContext.ConditionContext:
 		input["conditionPort"] = context.condition_port
+	if context is LsdeBlockContext.RouterContext:
+		input["routerPorts"] = context.router_ports
 	if context is LsdeBlockContext.ActionContext:
 		input["actionRejected"] = context.action_rejected
 	if context is LsdeBlockContext.DialogContext:
@@ -339,7 +345,7 @@ func _advance_to_next_block(block: Dictionary, context: Variant) -> void:
 	for link in detached:
 		var target_block: Variant = scene_graph.get_block(link.get("to", ""))
 		if target_block != null:
-			_child_track_ids.append(_host._spawn_track(target_block, id))
+			_child_track_ids.append(_host._spawn_track(target_block, id, link.get("toPort", LsdeTypes.PORT_IN)))
 
 	# The block is now DONE, and this is the one place that says so.
 	#
@@ -361,7 +367,7 @@ func _advance_to_next_block(block: Dictionary, context: Variant) -> void:
 	if continuation != null:
 		var next_block: Variant = scene_graph.get_block(continuation.get("to", ""))
 		if next_block != null:
-			_process_block(next_block)
+			_process_block(next_block, continuation.get("toPort", LsdeTypes.PORT_IN))
 			return
 
 	_end_branch()
@@ -381,7 +387,7 @@ func _end_branch() -> void:
 		var target: Variant = scene_graph.get_block(link.get("to", ""))
 		if target == null:
 			continue
-		_process_block(target)
+		_process_block(target, link.get("toPort", LsdeTypes.PORT_IN))
 		return
 
 	_retire()

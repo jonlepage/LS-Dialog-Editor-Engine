@@ -27,9 +27,11 @@ engine.on_resolve_character(func(chars: Array) -> Variant:
     return chars[0] if not chars.is_empty() else null
 )
 
-# Choice visibility filter (optional — tags each choice with visible)
+# The single game-state evaluator: it tags option visibility AND pre-evaluates condition cases.
+# A test on the reserved `choice` dictionary never reaches it — the engine answers those from
+# the choice history it kept during the scene.
 engine.on_resolve_condition(func(test: Dictionary) -> bool:
-    return GameState.evaluate(condition)
+    return GameState.evaluate(test)
 )
 
 # ─── 4 Required Handlers ────────────────────────────────────────
@@ -100,7 +102,7 @@ In Godot, store the `next` callable and trigger it from your UI signals:
 ```gdscript
 engine.on_dialog(func(args: Dictionary) -> Callable:
     var text = LsdeUtils.get_localized_text(args["block"].get("text", {}))
-    var ch = args["context"].character()
+    var ch = args["context"].character
 
     dialogue_label.text = "%s: %s" % [ch.get("name", "") if ch else "", text]
     dialogue_panel.visible = true
@@ -179,12 +181,14 @@ All 4 type handlers are **required** — the engine will throw if a scene starts
 | `engine.on_condition(handler)` | Handle CONDITION blocks. **Optional** when `on_resolve_condition` is installed; `ctx.resolve(port)` takes a PORT NAME. |
 | `engine.on_action(handler)` | Handle ACTION blocks. Developer **must** call `ctx.resolve()` or `ctx.reject()`. Leaves by `then` or `catch`. |
 
+A ROUTER block has **no handler** and needs none: the engine evaluates every case, launches the port of each true one and continues by `then` (all held) or `catch` (one did not) on its own. To observe one, use `handle.on_block(id)` — its `RouterContext` carries the pre-evaluated `cases` and no `resolve()`.
+
 ### Optional Handlers
 
 | Method | Description |
 |--------|-------------|
 | `engine.on_resolve_character(fn)` | Character resolver. Default: first character in the list. |
-
+| `engine.on_resolve_condition(fn)` | Unified condition resolver (choice visibility + condition pre-evaluation). |
 | `engine.on_before_block(handler)` | Pre-execution gate. Must call `resolve()` to continue. |
 | `engine.on_validate_next_block(handler)` | Validate before entering a block. |
 | `engine.on_invalidate_block(handler)` | Called when a block fails validation. |
@@ -239,7 +243,8 @@ Blueprint data stays as native `Dictionary` from `JSON.parse_string()`. Access f
 ```gdscript
 var block_type: String = block["type"]       # "dialog"
 var label: String = block.get("label", "")
-var is_async: bool = block.get("nativeProperties", {}).get("isAsync", false)
+# Natives and the writer's own properties share ONE bag, `props`, keyed by bare id.
+var is_async: bool = LsdeUtils.get_native_properties(block).get("isAsync", false)
 ```
 
 ### Utilities (`LsdeUtils`)
@@ -250,6 +255,7 @@ var is_async: bool = block.get("nativeProperties", {}).get("isAsync", false)
 | `LsdeUtils.is_dialog_block(block)` | Type guard: true if block is a DIALOG block. |
 | `LsdeUtils.is_choice_block(block)` | Type guard: true if block is a CHOICE block. |
 | `LsdeUtils.is_condition_block(block)` | Type guard: true if block is a CONDITION block. |
+| `LsdeUtils.is_router_block(block)` | Type guard: true if block is a ROUTER block. |
 | `LsdeUtils.is_action_block(block)` | Type guard: true if block is an ACTION block. |
 | `LsdeUtils.is_note_block(block)` | Type guard: true if block is a NOTE block. |
 | `LsdeUtils.get_block_label(block)` | How to name a block on screen: `label`, else the designer `note`, else the id. |
@@ -263,13 +269,14 @@ var is_async: bool = block.get("nativeProperties", {}).get("isAsync", false)
 | `LsdeUtils.evaluate_condition_chain(tests, evaluator)` | Evaluate an AND/OR chain, left to right, no precedence. Absent or empty = `true`. |
 | `LsdeUtils.evaluate_condition_cases(cases, port_per_case, evaluator)` | The exit port of a condition block: `out`/`default`, or `K1`… with `portPerCase`. |
 | `LsdeUtils.evaluate_each_case(cases, evaluator)` | Each case on its own, in order — to show what matched without changing the routing. |
+| `LsdeUtils.pick_router_ports(cases, results)` | The exits of a ROUTER from results already computed: every true case's port, then `then` or `catch` LAST. |
 | `LsdeUtils.tag_option_visibility(options, evaluator)` | Tag every option with whether its `when` holds, returning them ALL. |
 
 ---
 
 ## Cross-Language Conformance
 
-59 shared cases, in 52 suites, run by all four runtimes: **59/59 passing**.
+81 shared cases, in 72 suites, run by all four runtimes: **81/81 passing**.
 
 ---
 

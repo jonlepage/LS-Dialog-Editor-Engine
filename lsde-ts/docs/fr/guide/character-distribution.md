@@ -1,8 +1,5 @@
 # Distribuer les personnages
 
-> **`inPortPerCharacter` est à venir.** Le contrat est figé, la propriété n'est pas encore lue par
-> le moteur. Le reste de cette page décrit le comportement actuel.
-
 Un bloc porte une **liste** d'acteurs — `actors`. Le moteur **n'en élit aucun**.
 
 C'est délibéré : LSDE refuse de dire si l'ordre de la liste veut dire « qui parle » ou « qui est

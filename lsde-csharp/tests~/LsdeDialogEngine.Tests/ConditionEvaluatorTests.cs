@@ -270,6 +270,35 @@ namespace LsdeDialogEngine.Tests
 
         // ─── The reserved choice dictionary ──────────────────────────────────
 
+        // ─── The router's reading of the same cases ──────────────────────────
+
+        [Fact]
+        public void Router_EveryTrueCaseThenThenWhenAllHeld()
+        {
+            var cases = new List<ConditionCase> { Build.Case("K1"), Build.Case("K2"), Build.Case("K3") };
+            Assert.Equal(new List<string> { "K1", "K2", "K3", Ports.Then },
+                ConditionEvaluator.PickRouterPorts(cases, new List<bool> { true, true, true }));
+        }
+
+        [Fact]
+        public void Router_NoBreakAFalseCaseHidesNothingAndTheExitIsCatch()
+        {
+            var cases = new List<ConditionCase> { Build.Case("K1"), Build.Case("K2"), Build.Case("K3") };
+            Assert.Equal(new List<string> { "K1", "K3", Ports.Catch },
+                ConditionEvaluator.PickRouterPorts(cases, new List<bool> { true, false, true }));
+            Assert.Equal(new List<string> { Ports.Catch },
+                ConditionEvaluator.PickRouterPorts(cases, new List<bool> { false, false, false }));
+        }
+
+        [Fact]
+        public void Router_NoCasesAtAllIsThenLikePromiseAllOfNothing()
+        {
+            Assert.Equal(new List<string> { Ports.Then },
+                ConditionEvaluator.PickRouterPorts(new List<ConditionCase>(), new List<bool>()));
+            Assert.Equal(new List<string> { Ports.Then },
+                ConditionEvaluator.PickRouterPorts(null, new List<bool>()));
+        }
+
         [Fact]
         public void RecognisesATestThatReadsAPastAnswer()
         {

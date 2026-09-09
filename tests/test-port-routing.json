@@ -1011,6 +1011,426 @@
           ]
         }
       ]
+    },
+    {
+      "id": "router-all-true-in-turn",
+      "description": "Every case true, routes not isAsync: K1, K2, K3 in turn, then the continuation - the order of the resolved ports, never the order of the file.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "ROUTER-001",
+                "key": "__blueprints__.s1.ROUTER-001",
+                "type": "router",
+                "cases": [
+                  {
+                    "port": "K1",
+                    "when": [
+                      {
+                        "dict": "switches",
+                        "entry": "door_unlocked",
+                        "op": "equals",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "port": "K2",
+                    "when": [
+                      {
+                        "dict": "switches",
+                        "entry": "met_vesk",
+                        "op": "equals",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "port": "K3",
+                    "when": [
+                      {
+                        "dict": "variables",
+                        "entry": "credits",
+                        "op": "greaterOrEqual",
+                        "value": 50
+                      }
+                    ]
+                  }
+                ],
+                "next": [
+                  {
+                    "port": "then",
+                    "to": "DIALOG-004",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "catch",
+                    "to": "DIALOG-005",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "K1",
+                    "to": "DIALOG-001",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "K2",
+                    "to": "DIALOG-002",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "K3",
+                    "to": "DIALOG-003",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "Route one",
+                  "fr": "Route one"
+                }
+              },
+              {
+                "id": "DIALOG-002",
+                "key": "__blueprints__.s1.DIALOG-002",
+                "type": "dialog",
+                "text": {
+                  "en": "Route two",
+                  "fr": "Route two"
+                }
+              },
+              {
+                "id": "DIALOG-003",
+                "key": "__blueprints__.s1.DIALOG-003",
+                "type": "dialog",
+                "text": {
+                  "en": "Route three",
+                  "fr": "Route three"
+                }
+              },
+              {
+                "id": "DIALOG-004",
+                "key": "__blueprints__.s1.DIALOG-004",
+                "type": "dialog",
+                "text": {
+                  "en": "All of them held",
+                  "fr": "All of them held"
+                }
+              },
+              {
+                "id": "DIALOG-005",
+                "key": "__blueprints__.s1.DIALOG-005",
+                "type": "dialog",
+                "text": {
+                  "en": "One did not",
+                  "fr": "One did not"
+                }
+              }
+            ],
+            "start": "ROUTER-001"
+          }
+        ]
+      },
+      "sceneId": "s1",
+      "cases": [
+        {
+          "id": "k1-k2-k3-then-then",
+          "steps": [
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-001"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-002"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-003"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-004"
+              },
+              "action": {
+                "type": "next"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "ROUTER-001",
+            "DIALOG-001",
+            "DIALOG-002",
+            "DIALOG-003",
+            "DIALOG-004"
+          ],
+          "expectedCleanupCalls": 4
+        }
+      ]
+    },
+    {
+      "id": "router-unwired-case-port",
+      "description": "A true case with no wire contributes nothing, and is not an error.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "ROUTER-001",
+                "key": "__blueprints__.s1.ROUTER-001",
+                "type": "router",
+                "cases": [
+                  {
+                    "port": "K1",
+                    "when": [
+                      {
+                        "dict": "switches",
+                        "entry": "door_unlocked",
+                        "op": "equals",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "port": "K2",
+                    "when": [
+                      {
+                        "dict": "switches",
+                        "entry": "met_vesk",
+                        "op": "equals",
+                        "value": true
+                      }
+                    ]
+                  }
+                ],
+                "next": [
+                  {
+                    "port": "K1",
+                    "to": "DIALOG-001",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "then",
+                    "to": "DIALOG-004",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "Route one",
+                  "fr": "Route one"
+                }
+              },
+              {
+                "id": "DIALOG-004",
+                "key": "__blueprints__.s1.DIALOG-004",
+                "type": "dialog",
+                "text": {
+                  "en": "All of them held",
+                  "fr": "All of them held"
+                }
+              }
+            ],
+            "start": "ROUTER-001"
+          }
+        ]
+      },
+      "sceneId": "s1",
+      "cases": [
+        {
+          "id": "k1-then-then",
+          "steps": [
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-001"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-004"
+              },
+              "action": {
+                "type": "next"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "ROUTER-001",
+            "DIALOG-001",
+            "DIALOG-004"
+          ]
+        }
+      ]
     }
   ]
 }

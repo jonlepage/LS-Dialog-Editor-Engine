@@ -24,8 +24,18 @@ extends RefCounted
 ## own tables is an exporter bug, and the traversal is not where a game should learn about it —
 ## init() is.
 ##
+## inPortPerCharacter: when the wire named ONE actor, [code]designated_actor_id[/code] is that card
+## id and it is the only one offered to [code]pick_character[/code]. The game is still asked — it
+## may answer null, which says the character does not exist — but it cannot pick a different one,
+## and [code]actors[/code] stays the whole cast either way.
+##
 ## Returns { actors: Array, emotion: Variant, character: Variant }.
-static func resolve_cards(block: Dictionary, lookup: Callable, pick_character: Variant) -> Dictionary:
+static func resolve_cards(
+	block: Dictionary,
+	lookup: Callable,
+	pick_character: Variant,
+	designated_actor_id: Variant = null
+) -> Dictionary:
 	var actors: Array = []
 	for id in block.get("actors", []):
 		var card: Variant = lookup.call(id)
@@ -39,7 +49,13 @@ static func resolve_cards(block: Dictionary, lookup: Callable, pick_character: V
 
 	var character: Variant = null
 	if pick_character is Callable and pick_character.is_valid():
-		character = pick_character.call(actors)
+		var offered: Array = actors
+		if designated_actor_id != null:
+			offered = []
+			for card in actors:
+				if card.get("id") == designated_actor_id:
+					offered.append(card)
+		character = pick_character.call(offered)
 
 	return {"actors": actors, "emotion": emotion, "character": character}
 
@@ -129,6 +145,22 @@ class ConditionContext extends BaseContext:
 	## dispatcher. Both are gone: a condition picks one path.
 	func resolve(port: String) -> void:
 		condition_port = port
+
+## Context for ROUTER block handlers.
+##
+## No resolve. By the time a handler could speak, every true case has launched its port and the
+## continuation is picked — there is no single exit left to override. The handler is an
+## observation point, which is why the type requires none at all: the engine dispatches nothing and
+## advances on its own. A game that wants to watch one router still can, through on_block(id).
+class RouterContext extends BaseContext:
+	## Every port the block leaves by, the continuation last. See pick_router_ports.
+	var router_ports: Variant = null
+	## The block's cases, each with its port and its pre-evaluated result. ALL of them ran.
+	var cases: Array = []
+
+	func _init(block: Dictionary, cards: Dictionary, runtime_cases: Array) -> void:
+		super(block, cards)
+		cases = runtime_cases
 
 ## Context for ACTION block handlers.
 class ActionContext extends BaseContext:

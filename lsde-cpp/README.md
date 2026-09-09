@@ -56,18 +56,18 @@ int main() {
     engine.setLocale("en");
 
     // Character resolver (optional — default: first character in list)
-    engine.onResolveCharacter([](const std::vector<BlockCharacter>& chars) -> const BlockCharacter* {
+    engine.onResolveCharacter([](const std::vector<Card>& chars) -> const Card* {
         return chars.empty() ? nullptr : &chars[0];
     });
 
     // Unified condition resolver — handles choice visibility + condition block pre-evaluation.
     // choice: conditions are handled internally by the engine via choice history.
-    engine.onResolveCondition([](const ExportCondition& cond) -> bool {
+    engine.onResolveCondition([](const ConditionTest& test) -> bool {
         return true; // delegate to your game state
     });
 
     // ─── 4 Required Handlers ─────────────────────────────────────────
-    engine.onDialog([](ISceneHandle*, const DialogBlock* block, IDialogContext* ctx,
+    engine.onDialog([](ISceneHandle*, const BlueprintBlock* block, IDialogContext* ctx,
                        std::function<void()> next) -> CleanupFn {
         auto* ch = ctx->character();
         auto text = LsdeUtils::GetLocalizedText(block->text);
@@ -76,10 +76,11 @@ int main() {
         return {}; // or return a cleanup function
     });
 
-    engine.onChoice([](ISceneHandle*, const ChoiceBlock* block, IChoiceContext* ctx,
+    engine.onChoice([](ISceneHandle*, const BlueprintBlock* block, IChoiceContext* ctx,
                        std::function<void()> next) -> CleanupFn {
-        const auto& choices = ctx->choices();
-        for (const auto& c : choices) {
+        // EVERY option is handed over, tagged — never a shortened list. `visible` unset means
+        // UNKNOWN, not hidden.
+        for (const auto& c : ctx->options()) {
             if (!c.visible.has_value() || c.visible.value()) {
                 // The option id IS its exit port (C1, C2…), so hand it straight back.
                 ctx->selectChoice(c.id);
@@ -92,21 +93,19 @@ int main() {
 
     // onCondition is OPTIONAL when onResolveCondition is installed: the engine already knows which
     // port the cases picked. Keep it to log what matched, or to override with a PORT NAME.
-    engine.onCondition([](ISceneHandle*, const ConditionBlock* block, IConditionContext* ctx,
+    engine.onCondition([](ISceneHandle*, const BlueprintBlock* block, IConditionContext* ctx,
                           std::function<void()> next) -> CleanupFn {
         for (const auto& c : ctx->cases())
-            if (c.result.value_or(false)) { std::cout << block->id << " -> " << c.port << "
-"; break; }
+            if (c.result.value_or(false)) { std::cout << block->id << " -> " << c.port << "\n"; break; }
         // ctx->resolve("K2");  // override, by port name
         next();
         return {};
     });
 
-    engine.onAction([](ISceneHandle*, const ActionBlock* block, IActionContext* ctx,
+    engine.onAction([](ISceneHandle*, const BlueprintBlock* block, IActionContext* ctx,
                        std::function<void()> next) -> CleanupFn {
         for (const auto& call : ctx->calls())
-            std::cout << "Call: " << call.fn << "
-";
+            std::cout << "Call: " << call.fn << "\n";
         ctx->resolve();   // or ctx->reject(err) to leave by `catch`
         next();
         return {};
@@ -215,6 +214,8 @@ All 4 type handlers are **required** — the engine will throw if a scene starts
 | `engine.onCondition(handler)` | Handle CONDITION blocks. **Optional** when `onResolveCondition` is installed; `ctx->resolve(port)` takes a PORT NAME. |
 | `engine.onAction(handler)` | Handle ACTION blocks. Developer **must** call `ctx->resolve()` or `ctx->reject()`. Leaves by `then` or `catch`. |
 
+A ROUTER block has **no handler** and needs none: the engine evaluates every case, launches the port of each true one and continues by `then` (all held) or `catch` (one did not) on its own. To observe one, use `handle->onBlock(id)` — a `dynamic_cast<IRouterContext*>` of the context carries the pre-evaluated `cases()` and no `resolve()`.
+
 ### Optional Handlers
 
 | Method | Description |
@@ -256,10 +257,10 @@ All 4 type handlers are **required** — the engine will throw if a scene starts
 
 ### Handler Signature
 
-Every type handler receives `(ISceneHandle*, const TBlock*, TContext*, std::function<void()> next)` and returns `CleanupFn`:
+Every type handler receives `(ISceneHandle*, const BlueprintBlock*, TContext*, std::function<void()> next)` and returns `CleanupFn` — v2 has ONE block struct, narrowed by its `type` field, and the context is what says which handler you are in:
 
 ```cpp
-engine.onDialog([](ISceneHandle* scene, const DialogBlock* block,
+engine.onDialog([](ISceneHandle* scene, const BlueprintBlock* block,
                    IDialogContext* ctx, std::function<void()> next) -> CleanupFn {
     // Display dialogue...
     next(); // Advance to next block
@@ -284,6 +285,7 @@ engine.onDialog([](ISceneHandle* scene, const DialogBlock* block,
 | `LsdeUtils::IsDialogBlock(block)` | Type guard: true if block is a `DialogBlock`. |
 | `LsdeUtils::IsChoiceBlock(block)` | Type guard: true if block is a `ChoiceBlock`. |
 | `LsdeUtils::IsConditionBlock(block)` | Type guard: true if block is a `ConditionBlock`. |
+| `LsdeUtils::IsRouterBlock(block)` | Type guard: true if block is a ROUTER block. |
 | `LsdeUtils::IsActionBlock(block)` | Type guard: true if block is an `ActionBlock`. |
 | `LsdeUtils::IsNoteBlock(block)` | Type guard: true if block is a `NoteBlock`. |
 | `lsde::getBlockLabel(block)` | How to name a block on screen: `label`, else the designer `note`, else the id. |
@@ -297,13 +299,14 @@ engine.onDialog([](ISceneHandle* scene, const DialogBlock* block,
 | `LsdeUtils::EvaluateConditionChain(tests, evaluator)` | Evaluate an AND/OR chain, left to right, no precedence. Absent or empty = `true`. |
 | `LsdeUtils::EvaluateConditionCases(cases, portPerCase, evaluator)` | The exit port of a condition block: `out`/`default`, or `K1`… with `portPerCase`. |
 | `LsdeUtils::EvaluateEachCase(cases, evaluator)` | Each case on its own, in order — to show what matched without changing the routing. |
+| `LsdeUtils::PickRouterPorts(cases, results)` | The exits of a ROUTER from results already computed: every true case's port, then `then` or `catch` LAST. |
 | `LsdeUtils::TagOptionVisibility(options, evaluator)` | Tag every option with whether its `when` holds, returning them ALL. |
 
 ---
 
 ## Cross-Language Conformance
 
-59 shared cases, in 52 suites, run by all four runtimes: **59/59 passing**.
+81 shared cases, in 72 suites, run by all four runtimes: **81/81 passing** — all but one: an empty per-scene file list cannot be expressed here (a payload struct always exists), and the C++ runner says so instead of pretending.
 
 ---
 

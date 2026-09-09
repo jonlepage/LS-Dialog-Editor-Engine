@@ -20,7 +20,7 @@ export type { ConditionEvaluator } from './condition-evaluator.js';
 export type {
 	// The engine's names for the payload types, plus what it adds on top
 	BlueprintExport, BlueprintScene, BlueprintBlock, BlueprintConnection, BlockOfType,
-	DialogBlock, ChoiceBlock, ConditionBlock, ActionBlock, NoteBlock,
+	DialogBlock, ChoiceBlock, ConditionBlock, RouterBlock, ActionBlock, NoteBlock,
 	RuntimeChoiceItem, RuntimeConditionCase, NativeProperties,
 
 	// Engine types
@@ -29,7 +29,7 @@ export type {
 	ValidationResult, CleanupFn, TrackInfo,
 
 	// Context types
-	BaseBlockContext, DialogContext, ChoiceContext, ConditionContext, ActionContext,
+	BaseBlockContext, DialogContext, ChoiceContext, ConditionContext, RouterContext, ActionContext,
 	BeforeBlockContext, SceneContext,
 
 	// Handler types

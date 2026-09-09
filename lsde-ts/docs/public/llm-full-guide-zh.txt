@@ -152,7 +152,7 @@ Function 描述游戏能够执行的操作 — `set_flag`、`play_sound`、`give
 
 block 是对话场景的构建单元 — 编辑器图中的每个节点都是一个 block。engine 将流程从一个 block 路由到下一个，并为每种类型调用对应的 handler。
 
-共有 5 种类型：**Dialog**、**Choice**、**Condition**、**Action** 和 **Note**。前四种是内容 block，各有专用的 handler（`onDialog`、`onChoice`、`onCondition`、`onAction`）— 四个都是**必需的**，在调用 `start()` 时验证。Note block 会被自动跳过。
+共有 6 种类型：**Dialog**、**Choice**、**Condition**、**Router**、**Action** 和 **Note**。Dialog、Choice、Condition 和 Action 是内容 block，各有专用的 handler（`onDialog`、`onChoice`、`onCondition`、`onAction`）— 四个都是**必需的**，在调用 `start()` 时验证。Router 没有 handler：engine 自己分发它。Note block 会被自动跳过。
 
 handler 分为两个层级：**global handler**（注册在 engine 上）覆盖所有 scene，对大多数游戏来说足够。**scene handler**（注册在 [`SceneHandle`](/api-ref/interfaces/SceneHandle) 上）可以为特定 scene 补充或覆盖 global handler。详见 [Handlers](/zh/guide/handlers)。
 
@@ -203,6 +203,18 @@ dictionary 为保留字 **`choice`** 的测试查询玩家已经给出的答案�
 
 <!--@include: ../../_shared/block-condition.md-->
 
+## ROUTER
+
+router block 携带与 condition **相同的 `cases`**，但反过来读。condition 问的是*哪一个*成立，然后从单一 port 出去；router 问的是*哪些*成立：它对**每一个** case 求值，为每个为真的 case 启动其 port，然后总是继续 —— 全部成立走 `then`，任何一个不成立走 `catch`。一个 case 都没有的 router 从 `then` 出去，就像 `Promise.all([])` 会 resolve 一样。
+
+它的 `K*` 路由和任何其他 port 一样被走过：`isAsync` 的目标开启自己的轨道，其余的依次走过，而后续放在**最后**。`catch` 不取消任何东西 —— 为真的 case 的轨道已经在跑了。
+
+**没有 `onRouter` handler**，`start()` 也不要求它：engine 自己分发 router。要观察一个，用 `handle.on_block(id)` / `handle.onBlock(id)`。
+
+<!--@include: ../../_shared/block-router.md-->
+
+完整契约与图示见 [Router block](/zh/guide/router)；router 的路由通常命名的入口端口 `inPortPerCharacter` 见 [分配角色](/zh/guide/character-distribution)。
+
 ## ACTION
 
 action block 在游戏中触发副作用 — 给予物品、播放音效、设置标志。`context.calls` 携带这些调用：
@@ -224,7 +236,7 @@ note block 是叙事设计师的便签 — 注释、提醒、上下文。在遍�
 |------|------|------|
 | `id` | `string` | **相对于所在 scene** 的标识 — `DIALOG-002`。id 会在不同 scene 之间重复。 |
 | `key` | `string` | 本地化文件所持有的完整 i18n key |
-| `type` | `BlockType` | `dialog`、`choice`、`condition`、`action` 或 `note` |
+| `type` | `BlockType` | `dialog`、`choice`、`condition`、`router`、`action` 或 `note` |
 | `label` | `string?` | writer 填写时的可读名称 |
 | `parentLabels` | `string[]?` | 编辑器中的父文件夹层级 |
 | `note` | `string?` | writer 的备注 |
@@ -234,7 +246,7 @@ note block 是叙事设计师的便签 — 注释、提醒、上下文。在遍�
 | `text` | `TextByLocale?` | inline 导出模式下按 locale 的文本 |
 | `props` | `PropertyBag?` | **同一个袋子**：native 与 writer 自己的属性，以裸 id 共存 |
 | `options` | `Option[]?` | 仅 CHOICE |
-| `cases` | `ConditionCase[]?` | 仅 CONDITION |
+| `cases` | `ConditionCase[]?` | CONDITION 与 ROUTER — 同样的数据，反向读取 |
 | `calls` | `ActionCall[]?` | 仅 ACTION |
 | `next` | `Link[]?` | **block 的出线。** v2 中没有 connection 表 |
 
@@ -243,7 +255,7 @@ note block 是叙事设计师的便签 — 注释、提醒、上下文。在遍�
 
 ### NativeProperties
 
-**engine** 从 `props` 中读取的九个属性。id 不会冲突 — LSDE 会拒绝与 native 同名的项目属性 — 所以
+**engine** 从 `props` 中读取的十个属性。id 不会冲突 — LSDE 会拒绝与 native 同名的项目属性 — 所以
 区分它们只是一次查找。
 
 | 字段 | 类型 | 描述 |
@@ -255,6 +267,7 @@ note block 是叙事设计师的便签 — 注释、提醒、上下文。在遍�
 | `waitInput` | `boolean?` | 等待玩家输入。原样传递，从不解释 — **`timeout` 优先于它** |
 | `debug` | `boolean?` | 编辑器调试标志。原样传递 |
 | `portPerCharacter` | `boolean?` | block 从以 actor 的 **card id 命名的 port** 出去，而不是 `out` |
+| `inPortPerCharacter` | `boolean?` | 接线**指名 actor**：link 的 `toPort` 是一个 card id，只有这个 actor 会被提供给 `onResolveCharacter`。见 [分配角色](/zh/guide/character-distribution) |
 | `skipIfMissingActor` | `boolean?` | 原样传递 — 由游戏决定 |
 | `portPerCase` | `boolean?` | CONDITION：每个 case 从**自己的 port**（`K1`…）出去，而不是共用 `out` |
 
@@ -270,7 +283,7 @@ note block 是叙事设计师的便签 — 注释、提醒、上下文。在遍�
 
 又因为离开一个 block 正是把它标记为**已完成**，所以 `timeout` 也是释放指名它的 [`waitForBlocks`](/zh/guide/async-tracks) 的那一步。
 
-这九个之中，只有**两个**会改变遍历：`isAsync` 和 `waitForBlocks`。其余七个原样交给游戏，由游戏决定
+这十个之中，只有**三个**会改变遍历：`isAsync`、`waitForBlocks` 和 `inPortPerCharacter`。其余七个原样交给游戏，由游戏决定
 拿它们做什么。
 
 ================================================================================
@@ -675,6 +688,8 @@ engine 公开以下 handler：
 | [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) | global | 统一 condition 解析器（choice 可见性 + condition 预评估） |
 
 `onDialog`、`onChoice` 和 `onAction` 是**必需的** — `start()` 调用时 engine 验证它们是否存在，缺失时抛出描述性错误。当安装了 `onResolveCondition` 时，`onCondition` 是**可选的** — engine 从预评估的 condition 组中自动路由。
+
+ROUTER block **没有 handler**，也不需要：engine 自己对每个 case 求值，为每个为真的 case 启动其端口，并走 `then`（全部成立）或 `catch`（有一个不成立）继续。要观察它，用 `handle.onBlock(id)` —— 见 [Router block](/zh/guide/router)。
 
 <!--@include: ../../_shared/handler-basic.md-->
 

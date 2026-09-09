@@ -32,6 +32,9 @@ namespace LsdeDialogEngine
         /// <summary>True when the block is a condition.</summary>
         public static bool IsConditionBlock(BlueprintBlock block) => block.Type == BlockType.Condition;
 
+        /// <summary>True when the block is a router.</summary>
+        public static bool IsRouterBlock(BlueprintBlock block) => block.Type == BlockType.Router;
+
         /// <summary>True when the block is an action.</summary>
         public static bool IsActionBlock(BlueprintBlock block) => block.Type == BlockType.Action;
 
@@ -136,6 +139,7 @@ namespace LsdeDialogEngine
             natives.WaitInput = ReadBool(block.Props, "waitInput");
             natives.Debug = ReadBool(block.Props, "debug");
             natives.PortPerCharacter = ReadBool(block.Props, "portPerCharacter");
+            natives.InPortPerCharacter = ReadBool(block.Props, "inPortPerCharacter");
             natives.SkipIfMissingActor = ReadBool(block.Props, "skipIfMissingActor");
             natives.PortPerCase = ReadBool(block.Props, "portPerCase");
             natives.WaitForBlocks = ReadStringList(block.Props, "waitForBlocks");
@@ -195,6 +199,14 @@ namespace LsdeDialogEngine
         public static List<bool> EvaluateEachCase(List<ConditionCase>? cases, Func<ConditionTest, bool> evaluator)
         {
             return ConditionEvaluator.EvaluateEachCase(cases, evaluator);
+        }
+
+        /// <summary>The exits of a ROUTER, from case results already computed: the port of every
+        /// true case, then "then" when they all held or "catch" when one did not — always last. The
+        /// router's reading of the same Cases a condition carries.</summary>
+        public static List<string> PickRouterPorts(List<ConditionCase>? cases, List<bool> results)
+        {
+            return ConditionEvaluator.PickRouterPorts(cases, results);
         }
 
         /// <summary>Tag every option of a choice with whether its When holds, returning them ALL.

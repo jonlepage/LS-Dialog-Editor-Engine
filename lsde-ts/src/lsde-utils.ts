@@ -10,9 +10,11 @@
 
 import type { Block, ConditionTest, TextByLocale, PropertyBag, NativeProperties } from './types.js';
 import { NATIVE_PROPERTY_IDS, Ports } from './types.js';
-import { isDialogBlock, isChoiceBlock, isConditionBlock, isActionBlock, isNoteBlock } from './utils.js';
 import {
-	evaluateConditionChain, evaluateConditionCases, evaluateEachCase,
+	isDialogBlock, isChoiceBlock, isConditionBlock, isRouterBlock, isActionBlock, isNoteBlock,
+} from './utils.js';
+import {
+	evaluateConditionChain, evaluateConditionCases, evaluateEachCase, pickRouterPorts,
 	tagOptionVisibility, isChoiceTest,
 } from './condition-evaluator.js';
 
@@ -41,6 +43,8 @@ export class LsdeUtils {
 	static isChoiceBlock = isChoiceBlock;
 	/** Returns `true` if the block is a condition. */
 	static isConditionBlock = isConditionBlock;
+	/** Returns `true` if the block is a router. */
+	static isRouterBlock = isRouterBlock;
 	/** Returns `true` if the block is an action. */
 	static isActionBlock = isActionBlock;
 	/** Returns `true` if the block is a note. */
@@ -181,6 +185,13 @@ export class LsdeUtils {
 
 	/** Each case on its own, in order — to show what matched without changing where the flow goes. */
 	static evaluateEachCase = evaluateEachCase;
+
+	/**
+	 * The exits of a ROUTER, from case results already computed: the port of every true case, then
+	 * `then` when they all held or `catch` when one did not — always last. The router's reading of
+	 * the same `cases` a condition carries.
+	 */
+	static pickRouterPorts = pickRouterPorts;
 
 	/**
 	 * Tag every option of a choice with whether its `when` holds, returning them ALL.

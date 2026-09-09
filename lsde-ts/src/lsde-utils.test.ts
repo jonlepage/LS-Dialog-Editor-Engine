@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { LsdeUtils, type LocaleTable } from './lsde-utils.js';
-import { dialog, choice, option, choiceTest, test as t } from './test-builders.js';
+import { dialog, choice, router, option, choiceTest, whenCase, test as t } from './test-builders.js';
 
 beforeEach( () => { LsdeUtils.locale = null; } );
 
@@ -151,16 +151,16 @@ describe( 'sorting the props bag', () => {
 		expect( LsdeUtils.getCustomProperties( waiting ) ).toEqual( {} );
 	} );
 
-	it( 'knows the nine natives and nothing else', () => {
+	it( 'knows the ten natives and nothing else', () => {
 		const all = dialog( 'DIALOG-004', {
 			props: {
 				isAsync: true, delay: 1, timeout: 2, waitInput: true, debug: true,
-				portPerCharacter: true, skipIfMissingActor: true, portPerCase: true,
-				waitForBlocks: ['X'] as never,
+				portPerCharacter: true, inPortPerCharacter: true, skipIfMissingActor: true,
+				portPerCase: true, waitForBlocks: ['X'] as never,
 				somethingElse: 'mine',
 			},
 		} );
-		expect( Object.keys( LsdeUtils.getNativeProperties( all ) ) ).toHaveLength( 9 );
+		expect( Object.keys( LsdeUtils.getNativeProperties( all ) ) ).toHaveLength( 10 );
 		expect( LsdeUtils.getCustomProperties( all ) ).toEqual( { somethingElse: 'mine' } );
 	} );
 } );
@@ -185,6 +185,14 @@ describe( 'condition helpers', () => {
 		expect( LsdeUtils.evaluateEachCase( [{ port: 'K1' }], always ) ).toEqual( [true] );
 		expect( LsdeUtils.tagOptionVisibility( [option( 'C1' )], always )[0]!.visible ).toBe( true );
 	} );
+
+	it( 're-exposes the router reading of the same cases', () => {
+		// Every true case, then the continuation LAST: `then` when they all held, `catch` otherwise.
+		const cases = [whenCase( 'K1' ), whenCase( 'K2' )];
+		expect( LsdeUtils.pickRouterPorts( cases, [true, true] ) ).toEqual( ['K1', 'K2', 'then'] );
+		expect( LsdeUtils.pickRouterPorts( cases, [true, false] ) ).toEqual( ['K1', 'catch'] );
+		expect( LsdeUtils.pickRouterPorts( [], [] ) ).toEqual( ['then'] );
+	} );
 } );
 
 describe( 'type guards', () => {
@@ -192,6 +200,8 @@ describe( 'type guards', () => {
 	it( 'are re-exposed on the utility class', () => {
 		expect( LsdeUtils.isDialogBlock( dialog( 'DIALOG-001' ) ) ).toBe( true );
 		expect( LsdeUtils.isChoiceBlock( choice( 'CHOICE-001', [] ) ) ).toBe( true );
+		expect( LsdeUtils.isRouterBlock( router( 'ROUTER-001', [] ) ) ).toBe( true );
+		expect( LsdeUtils.isConditionBlock( router( 'ROUTER-001', [] ) ) ).toBe( false );
 		expect( LsdeUtils.isDialogBlock( choice( 'CHOICE-001', [] ) ) ).toBe( false );
 	} );
 } );

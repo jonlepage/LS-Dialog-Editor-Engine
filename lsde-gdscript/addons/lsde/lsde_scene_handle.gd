@@ -54,7 +54,8 @@ func _init(scene_graph: LsdeGraph.SceneGraph, global_registry: LsdeHandlerRegist
 # ─── Public API ───────────────────────────────────────────────────────────
 
 ## Start the scene flow from the entry block.
-## Validates that all 4 mandatory handlers are registered — asserts if any are missing.
+## Asserts when a type handler the scene needs is missing. on_condition is optional once
+## on_resolve_condition is installed, and a ROUTER block needs no handler at all.
 func start() -> void:
 	if _running:
 		return
@@ -77,7 +78,7 @@ func start() -> void:
 		# the traversal walked the whole graph dispatching nothing. An invisible dialogue that
 		# reported no error at all. The other three runtimes throw; here the scene simply does
 		# not start, and says why.
-		push_error("Cannot start scene — missing required handler(s): %s.\nRegister all 4 handlers before starting:\n  engine.on_dialog(handler)\n  engine.on_choice(handler)\n  engine.on_condition(handler)\n  engine.on_action(handler)" % ", ".join(missing))
+		push_error("Cannot start scene — missing required handler(s): %s.\nRegister handlers before starting:\n  engine.on_dialog(handler)\n  engine.on_choice(handler)\n  engine.on_condition(handler)\n  engine.on_action(handler)\nNote: on_condition is optional when engine.on_resolve_condition() is installed." % ", ".join(missing))
 		return
 
 	_running = true
@@ -92,7 +93,7 @@ func start() -> void:
 
 	# The flow the player watches is a track like any other. The only thing that sets it apart is
 	# what happens when it ends — see _track_ended.
-	_main_track = LsdeTrack.new(self, start_block, LsdeTrack.MAIN_TRACK_ID, -1)
+	_main_track = LsdeTrack.new(self, start_block, LsdeTrack.MAIN_TRACK_ID, -1, LsdeTypes.PORT_IN)
 	_tracks.append(_main_track)
 	_main_track.start()
 
@@ -236,13 +237,13 @@ func _add_completed(block_id: String) -> void:
 			_pending_waits.erase(waiter)
 			waiter.notify_wait_satisfied()
 
-## Open a parallel track. Returns its id.
-func _spawn_track(start_block: Dictionary, parent_track_id: int) -> int:
+## Open a parallel track, entered through entry_port. Returns its id.
+func _spawn_track(start_block: Dictionary, parent_track_id: int, entry_port: String) -> int:
 	var track_id: int = _next_track_id
 	_next_track_id += 1
 	# -1 when the main flow opened it — the convention get_track_infos publishes.
 	var parent: int = -1 if parent_track_id == LsdeTrack.MAIN_TRACK_ID else parent_track_id
-	var track: LsdeTrack = LsdeTrack.new(self, start_block, track_id, parent)
+	var track: LsdeTrack = LsdeTrack.new(self, start_block, track_id, parent, entry_port)
 	_tracks.append(track)
 	track.start()
 	return track_id
@@ -294,15 +295,20 @@ func _register_wait_for_blocks(waiter: Variant, block_ids: Array) -> void:
 ## said it only applied to the flow the player was watching, and nothing on screen would have told
 ## anyone.
 ##
+## entry_port is the port the wire arrived on, and it is passed for one reason: under
+## inPortPerCharacter the gate must be asked about the actor the DESIGNER wired, not about
+## whichever one the whole cast would have produced. A gate reading "do not enter unless this
+## character is here" would otherwise be answered about the wrong character.
+##
 ## Returns false when the caller must stop rather than dispatch the block.
-func _run_validation(block: Dictionary, from_block: Variant, from_character: Variant) -> bool:
+func _run_validation(block: Dictionary, entry_port: String, from_block: Variant, from_character: Variant) -> bool:
 	if not _global_registry.validate_next_block_handler.is_valid():
 		return true
 
 	var from_ctx: Variant = {"character": from_character} if from_block != null else null
 	var result: Dictionary = _global_registry.validate_next_block_handler.call({
 		"nextBlock": block, "fromBlock": from_block,
-		"nextContext": {"character": _resolve_cards_for(block).get("character")},
+		"nextContext": {"character": _resolve_cards_for(block, entry_port).get("character")},
 		"fromContext": from_ctx,
 		"port": null
 	})
@@ -335,9 +341,10 @@ func _parallel_tracks() -> Array:
 			result.append(track)
 	return result
 
-## Create the appropriate context for a block.
-func _create_block_context(block: Dictionary) -> Variant:
-	return _create_context(block)
+## Create the appropriate context for a block. entry_port is the port the wire arrived on — a CARD
+## ID under inPortPerCharacter, "in" otherwise.
+func _create_block_context(block: Dictionary, entry_port: String) -> Variant:
+	return _create_context(block, entry_port)
 
 ## Record a choice selection in the history.
 func _record_choice(block_id: String, option_id: String) -> void:
@@ -407,11 +414,52 @@ func _visibility_evaluator() -> Variant:
 		return _evaluate_condition_with_history(test, resolver)
 
 ## Look up the cards a block cites, and let the game pick which actor is speaking.
-func _resolve_cards_for(block: Dictionary) -> Dictionary:
+##
+## With inPortPerCharacter, the wire that reached the block named the actor: entry_port holds a
+## CARD ID instead of "in", and only that actor is offered to on_resolve_character. The game is
+## still the one answering — it may say null — it simply cannot pick a different actor than the
+## one the designer wired.
+##
+## Without the property, or when the block was entered through "in", entry_port is ignored and the
+## whole cast is offered, exactly as before. That is what keeps every existing project — and every
+## wire LSDE has ever written with toPort "in" — behaving identically.
+func _resolve_cards_for(block: Dictionary, entry_port: String = LsdeTypes.PORT_IN) -> Dictionary:
 	var lookup: Callable = func(_id: String) -> Variant: return null
 	if _callbacks.has("get_card"):
 		lookup = _callbacks["get_card"]
-	return LsdeBlockContext.resolve_cards(block, lookup, _get_resolve_character_fn())
+	var natives: Dictionary = LsdeUtils.get_native_properties(block)
+	var designated: Variant = null
+	if natives.get("inPortPerCharacter", false) == true and entry_port != LsdeTypes.PORT_IN:
+		designated = entry_port
+	return LsdeBlockContext.resolve_cards(block, lookup, _get_resolve_character_fn(), designated)
+
+
+## Evaluate every case of a CONDITION or a ROUTER, before its context is built.
+##
+## The handler is then handed RESULTS rather than questions, and the exit port is read off these
+## same results rather than re-asking the game: each test reaches on_resolve_condition exactly ONE
+## time — whatever the block type, whatever the mode, whichever case matches. That is also what
+## makes on_condition optional.
+##
+## Written ONCE for both block types on purpose. They ask the same question; only the reading of
+## the answer differs, and that belongs to pick_port_from_results and pick_router_ports.
+func _evaluate_cases(block: Dictionary) -> Array:
+	var evaluate: Callable = _routing_evaluator()
+	var cases: Array = []
+	for raw_case in block.get("cases", []):
+		cases.append({
+			"port": raw_case.get("port", ""),
+			"when": raw_case.get("when"),
+			"result": LsdeConditionEvaluator.evaluate_condition_chain(raw_case.get("when"), evaluate),
+		})
+	return cases
+
+
+static func _results_of(cases: Array) -> Array:
+	var results: Array = []
+	for c in cases:
+		results.append(c["result"] == true)
+	return results
 
 # ─── Scene lifecycle ──────────────────────────────────────────────────────
 
@@ -455,11 +503,10 @@ func _get_resolve_character_fn() -> Callable:
 		return _callbacks["get_resolve_character"].call()
 	return func(chars: Array) -> Variant: return chars[0] if chars.size() > 0 else null
 
-# Cards are resolved fresh every time, never cached. This runs for the main track AND for async
-# tracks (through _create_block_context), and a cache would leak the main track's actor into a
-# track released later by waitForBlocks.
-func _create_context(block: Dictionary) -> Variant:
-	var cards: Dictionary = _resolve_cards_for(block)
+# Cards are resolved fresh every time, never cached. This runs for every track, and a cache would
+# leak one track's actor into another released later by waitForBlocks.
+func _create_context(block: Dictionary, entry_port: String) -> Variant:
+	var cards: Dictionary = _resolve_cards_for(block, entry_port)
 
 	match block.get("type", ""):
 		LsdeTypes.BLOCK_DIALOG:
@@ -473,32 +520,24 @@ func _create_context(block: Dictionary) -> Variant:
 			return LsdeBlockContext.ChoiceContext.new(block, cards, options, on_choice_selected)
 
 		LsdeTypes.BLOCK_CONDITION:
-			var evaluate: Callable = _routing_evaluator()
-			var natives: Dictionary = LsdeUtils.get_native_properties(block)
-			var port_per_case: bool = natives.get("portPerCase", false) == true
-			var raw_cases: Array = block.get("cases", [])
-
 			# Every case is evaluated up front, so the handler is handed results rather than
 			# questions. With a resolver installed the engine already knows where to go, which is
 			# what makes on_condition optional: the handler becomes a log or override hook.
-			var cases: Array = []
-			for raw_case in raw_cases:
-				cases.append({
-					"port": raw_case.get("port", ""),
-					"when": raw_case.get("when"),
-					"result": LsdeConditionEvaluator.evaluate_condition_chain(raw_case.get("when"), evaluate),
-				})
-
-			# ONCE. The port is read off these same results rather than re-asking the game: each
-			# test reaches on_resolve_condition exactly one time, whatever the mode and whichever
-			# case matches.
-			var results: Array = []
-			for c in cases:
-				results.append(c["result"] == true)
-
+			var cases: Array = _evaluate_cases(block)
+			var port_per_case: bool = LsdeUtils.get_native_properties(block).get("portPerCase", false) == true
 			var ctx := LsdeBlockContext.ConditionContext.new(block, cards, cases)
 			ctx.condition_port = LsdeConditionEvaluator.pick_port_from_results(
-				raw_cases, port_per_case, results)
+				block.get("cases", []), port_per_case, _results_of(cases))
+			return ctx
+
+		LsdeTypes.BLOCK_ROUTER:
+			# The same cases, read the opposite way: EVERY case counts, each true one launches its
+			# port, and the tally picks then or catch. That difference lives entirely in
+			# pick_router_ports — there is no second evaluator and no router-specific hook.
+			var cases: Array = _evaluate_cases(block)
+			var ctx := LsdeBlockContext.RouterContext.new(block, cards, cases)
+			ctx.router_ports = LsdeConditionEvaluator.pick_router_ports(
+				block.get("cases", []), _results_of(cases))
 			return ctx
 
 		LsdeTypes.BLOCK_ACTION:

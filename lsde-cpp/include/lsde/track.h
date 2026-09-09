@@ -108,12 +108,16 @@ public:
     virtual bool isCompleted(const std::string& blockId) const = 0;
     virtual void registerWaitForBlocks(IWaiter* waiter, const std::vector<std::string>& blockIds) = 0;
 
-    virtual std::unique_ptr<IBaseBlockContext> createBlockContext(const BlueprintBlock& block) = 0;
-    virtual bool runValidation(const BlueprintBlock& block, const BlueprintBlock* fromBlock,
-                               const Card* fromCharacter) = 0;
+    /// Build the context of a block. `entryPort` is the port the wire arrived on — a CARD ID
+    /// under inPortPerCharacter, "in" otherwise.
+    virtual std::unique_ptr<IBaseBlockContext> createBlockContext(const BlueprintBlock& block,
+                                                                  const std::string& entryPort) = 0;
+    virtual bool runValidation(const BlueprintBlock& block, const std::string& entryPort,
+                               const BlueprintBlock* fromBlock, const Card* fromCharacter) = 0;
 
-    /// Open a parallel track on startBlock. Returns its id.
-    virtual int spawnTrack(const BlueprintBlock& startBlock, int parentTrackId) = 0;
+    /// Open a parallel track on startBlock, entered through entryPort. Returns its id.
+    virtual int spawnTrack(const BlueprintBlock& startBlock, int parentTrackId,
+                           const std::string& entryPort) = 0;
     virtual std::exception_ptr cancelTrack(int trackId) = 0;
     /// This track reached the end of its flow. The scene decides what that means.
     virtual std::exception_ptr trackEnded(Track* track) = 0;
@@ -124,7 +128,8 @@ public:
 /// One cursor walking the graph. The main flow is one of these, with id 0.
 class Track : public IWaiter {
 public:
-    Track(ITrackHost& host, const BlueprintBlock& startBlock, int id, int parentTrackId);
+    Track(ITrackHost& host, const BlueprintBlock& startBlock, int id, int parentTrackId,
+          std::string startEntryPort);
 
     /// Begin walking. Must be called after the track is in the scene's pool.
     void start();
@@ -160,8 +165,8 @@ public:
     const std::string startBlockId;
 
 private:
-    void processBlock(const BlueprintBlock& startingBlock);
-    void executeBlockHandler(const BlueprintBlock& block);
+    void processBlock(const BlueprintBlock& startingBlock, const std::string& entryPort);
+    void executeBlockHandler(const BlueprintBlock& block, const std::string& entryPort);
     void advanceToNextBlock(const BlueprintBlock& block, IBaseBlockContext* context);
     /// This track has nowhere left to go. Its cleanup runs, then the scene is told.
     /// This branch has nowhere left to go: hand over to the queue, or stop.
@@ -203,6 +208,8 @@ private:
     /// Links are held BY VALUE: they are copied out of a PortResolutionResult that dies with the
     /// call that produced it.
     std::vector<Link> _queue;
+    /// The entry port of the wire that opened this track. "in" for the flow the player watches.
+    const std::string _startEntryPort;
     /// The context of the block being dispatched, alive for as long as the block is.
     std::unique_ptr<IBaseBlockContext> _ownedContext;
     /// The natives handed to onBeforeBlock. Shared, because a game may defer its resolve().

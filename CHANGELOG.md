@@ -18,8 +18,20 @@ manager matches the number on the writer's screen.
   has ever carried; cross-scene links have never existed in any version.
 - **A block is identified by (scene, id).** Ids repeat across scenes on purpose — `DIALOG-001`
   legitimately exists in several — so there is no global block index anywhere in the engine.
-- **One `props` bag.** The nine native properties sit in `block.props` alongside the writer's own.
+- **One `props` bag.** The ten native properties sit in `block.props` alongside the writer's own.
   `NATIVE_PROPERTY_IDS` is exported so you can tell them apart by lookup rather than by guessing.
+- **A sixth block type: `router`.** It carries the SAME `cases` as a condition and reads them the
+  opposite way — every case is evaluated, each true one launches its own port (`K1`…), and the flow
+  then always continues: by `then` when they all held, by `catch` when any did not, and the
+  continuation comes LAST so `then`/`catch` stay the main flow when the case routes are `isAsync`.
+  No case at all leaves by `then`, the way `Promise.all([])` resolves. A router has **no type
+  handler** and `start()` requires none; `handle.onBlock( id )` observes one through a router
+  context that carries `cases` and no `resolve`.
+- **`inPortPerCharacter`, the mirror of `portPerCharacter`.** A link's `toPort` carries a CARD ID,
+  and the target block is assigned to that one actor on that pass — which is what lets several
+  wires reach one block and each stand for a different speaker. The engine still ASKS:
+  `onResolveCharacter` is handed that single actor instead of the whole cast. Entering through
+  `in` names nobody and the callback gets the cast, as everywhere else.
 - **The emotion belongs to the block**, not to each actor. `actors` is a cast of card ids.
 - **`delay` and `timeout` are MILLISECONDS.** They were seconds in v1, and nothing in a payload
   reports the change — a v1 timer copied across will run a thousand times too short.
@@ -29,7 +41,8 @@ manager matches the number on the writer's screen.
 - **Condition blocks have exactly two modes.** Without `portPerCase`, every case must hold → `out`,
   otherwise `default`. With `portPerCase: true`, the first case that holds takes its own port
   (`K1`…), otherwise `default`. The third mode — the dispatcher, which fired every matching case at
-  once — is removed. `context.resolve()` takes a PORT NAME.
+  once — is removed from the condition block: what replaced it is the ROUTER, a block type of its
+  own. `context.resolve()` takes a PORT NAME.
 - **`setChoiceFilter()` and `filterVisibleChoices()` are removed**, not deprecated.
   `engine.onResolveCondition()` is the single game-state evaluator: the engine tags every option
   with `visible` and hands you ALL of them. Filter on `visible !== false` — an option whose test

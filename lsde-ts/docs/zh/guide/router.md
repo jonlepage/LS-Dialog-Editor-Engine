@@ -1,7 +1,5 @@
 # Router block
 
-> **即将推出。** 契约已确定，但尚未在 engine 中实现。本页描述它将会做什么，暂未加入站点菜单。
-
 Router **启动所有条件已满足的路由**，等待其中会阻塞的那些，然后告诉你这些条件是否全部满足。
 
 它是**前置条件派发器** block：「把已经就位的全部启动，然后告诉我是否全部就位。」
@@ -126,7 +124,12 @@ engine.onResolveCondition((test) => {
 
 哪些端口发车、走 `then` 还是 `catch`，都由 engine 决定。没有需要你手工分流的东西。
 
-观察用 handler（`onRouter`）尚未确定。它将是可选的。
+**没有 `onRouter` handler**，也不需要：等到 handler 能开口时，每个为真的 case 都已经启动了自己的端口，
+后续也已经选定 —— 没有剩下任何要回答的东西。`start()` 不要求它。要观察一个 Router —— 记录哪些
+条件成立、驱动一个调试视图 —— 用 `handle.onBlock(id)`：它的 context 携带预先求值的 `cases`，
+**全部**，而且没有 `resolve`。
+
+<!--@include: ../../_shared/block-router.md-->
 
 ## 陷阱
 

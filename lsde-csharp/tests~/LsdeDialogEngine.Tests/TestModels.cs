@@ -19,7 +19,12 @@ namespace LsdeDialogEngine.Tests
     {
         public string Id { get; set; } = "";
         public string Description { get; set; } = "";
-        public BlueprintExport Blueprint { get; set; } = new();
+
+        /// <summary>One payload. Null when the suite loads several files instead.</summary>
+        public BlueprintExport? Blueprint { get; set; }
+
+        /// <summary>The files of a per-scene export, handed to Init() as Files. Replaces Blueprint.</summary>
+        public List<BlueprintExport>? BlueprintFiles { get; set; }
 
         /// <summary>The scene to play — a path or the stable id. Absent in the validation specs.</summary>
         public string? SceneId { get; set; }
@@ -78,6 +83,9 @@ namespace LsdeDialogEngine.Tests
         public string? BlockId { get; set; }
         public string? Text { get; set; }
         public int? VisibleOptionCount { get; set; }
+
+        /// <summary>The card id Context.Character must carry — what InPortPerCharacter is about.</summary>
+        public string? CharacterId { get; set; }
     }
 
     public class StepAction

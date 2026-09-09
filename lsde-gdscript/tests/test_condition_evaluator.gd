@@ -174,6 +174,24 @@ func _test_leaves_visible_absent_with_no_evaluator() -> void:
 	_assert_eq(tagged.size(), 1, "option still handed back")
 	_assert_false(tagged[0].has("visible"), "no resolver → visible unset")
 
+# ─── The router's reading of the same cases ───────────────────────────────
+
+func _test_router_every_true_case_then_then_when_all_held() -> void:
+	var cases: Array = [_case("K1"), _case("K2"), _case("K3")]
+	_assert_eq(LsdeConditionEvaluator.pick_router_ports(cases, [true, true, true]),
+		["K1", "K2", "K3", "then"], "every case, then then")
+
+func _test_router_no_break_a_false_case_hides_nothing() -> void:
+	var cases: Array = [_case("K1"), _case("K2"), _case("K3")]
+	_assert_eq(LsdeConditionEvaluator.pick_router_ports(cases, [true, false, true]),
+		["K1", "K3", "catch"], "K3 still counted after a false K2, exit is catch")
+	_assert_eq(LsdeConditionEvaluator.pick_router_ports(cases, [false, false, false]),
+		["catch"], "nothing held → catch alone")
+
+func _test_router_no_cases_at_all_is_then() -> void:
+	_assert_eq(LsdeConditionEvaluator.pick_router_ports([], []), ["then"],
+		"the empty tally is then, like Promise.all of nothing")
+
 # ─── The reserved choice dictionary ───────────────────────────────────────
 
 func _test_recognises_a_choice_test() -> void:
@@ -200,6 +218,9 @@ func run() -> Dictionary:
 	_test_catch_all_shadows_everything_below()
 	_test_switch_mode_stops_asking_once_a_case_holds()
 	_test_the_dispatcher_is_gone()
+	_test_router_every_true_case_then_then_when_all_held()
+	_test_router_no_break_a_false_case_hides_nothing()
+	_test_router_no_cases_at_all_is_then()
 	_test_hands_back_every_option_tagged()
 	_test_leaves_visible_absent_with_no_evaluator()
 	_test_recognises_a_choice_test()

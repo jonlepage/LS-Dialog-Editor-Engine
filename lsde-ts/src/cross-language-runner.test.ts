@@ -29,7 +29,10 @@ interface SpecFile {
 interface Suite {
 	id: string;
 	description: string;
-	blueprint: Blueprints;
+	/** One payload. Absent when the suite loads several files instead. */
+	blueprint?: Blueprints;
+	/** The files of a per-scene export, handed to `init()` as a list. Replaces `blueprint`. */
+	blueprintFiles?: Blueprints[];
 	/** The scene to play — a path or the stable id. Absent in the validation specs. */
 	sceneId?: string;
 	locale?: string;
@@ -60,6 +63,8 @@ interface Step {
 		blockId?: string;
 		text?: string;
 		visibleOptionCount?: number;
+		/** The card id `context.character` must carry — what `inPortPerCharacter` is about. */
+		characterId?: string;
 	};
 	action?: {
 		type: 'next' | 'selectChoice' | 'resolveCondition' | 'resolveAction' | 'rejectAction' | 'resolveCharacterPort';
@@ -83,6 +88,11 @@ const testsDir = resolve( __dirname, '../../tests' );
 
 function loadSpec( filename: string ): SpecFile {
 	return JSON.parse( readFileSync( resolve( testsDir, filename ), 'utf-8' ) ) as SpecFile;
+}
+
+/** What the suite hands to `init()`: one payload, or the files of a per-scene export. */
+function payloadOf( suite: Suite ): Blueprints | Blueprints[] {
+	return suite.blueprintFiles ?? suite.blueprint!;
 }
 
 /**
@@ -142,7 +152,7 @@ function runFlowSpec( filename: string ): void {
 				for ( const tc of suite.cases ) {
 					it( tc.id + ( tc.description ? ` — ${ tc.description }` : '' ), () => {
 						const engine = new DialogueEngine();
-						const report = engine.init( { data: suite.blueprint } );
+						const report = engine.init( { data: payloadOf( suite ) } );
 						expect( report.errors ).toEqual( [] );
 
 						engine.setLocale( suite.locale ?? 'en' );
@@ -182,6 +192,10 @@ function runFlowSpec( filename: string ): void {
 									const offered = ( context as ChoiceContext ).options
 										.filter( o => o.visible !== false );
 									expect( offered ).toHaveLength( step.expect.visibleOptionCount );
+								}
+
+								if ( step.expect.characterId !== undefined ) {
+									expect( context.character?.id ).toBe( step.expect.characterId );
 								}
 
 								stepIndex++;
@@ -230,7 +244,7 @@ function runValidationSpec( filename: string ): void {
 			describe( `${ suite.id } — ${ suite.description }`, () => {
 				for ( const tc of suite.cases ) {
 					it( tc.id + ( tc.description ? ` — ${ tc.description }` : '' ), () => {
-						const report = new DialogueEngine().init( { data: suite.blueprint } );
+						const report = new DialogueEngine().init( { data: payloadOf( suite ) } );
 
 						if ( tc.expectedErrors ) {
 							const codes = report.errors.map( e => e.code );

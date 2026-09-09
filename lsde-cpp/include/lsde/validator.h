@@ -9,8 +9,8 @@ namespace lsde {
 /// Validate a blueprint payload, and optionally cross-check it against what the game declares.
 ///
 /// Structural checks: the format header, scene paths, block id uniqueness **within a scene**, the
-/// entry block, link targets, and the fork rule (at most one non-async target per port). With
-/// `check`, also warns about functions, dictionaries and cards the game does not know.
+/// entry block, link targets, and the blocks a `waitForBlocks` names. With `check`, also warns
+/// about functions, dictionaries and cards the game does not know.
 ///
 /// Errors mean the payload will not play correctly; warnings mean it will, but something looks
 /// wrong. The header is read FIRST and a mismatch is fatal: a file the engine cannot read must be

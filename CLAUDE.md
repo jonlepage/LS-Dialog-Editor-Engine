@@ -106,7 +106,7 @@ types → validator → graph → condition-evaluator → port-resolver
 | `scene-handle.ts` | `SceneHandleImpl` — the scene: public API, Tier 2 overrides, and everything its tracks SHARE (visited set, choice history, pending waits). It does not walk the graph. |
 | `port-resolver.ts` | **Critical**: must be byte-for-byte equivalent across runtimes. Pure function. |
 | `handler-registry.ts` | Handler resolution priority. |
-| `condition-evaluator.ts` | Left-to-right AND/OR chains, **no operator precedence**. |
+| `condition-evaluator.ts` | Left-to-right AND/OR chains, **no operator precedence** — and the two readings of a block's `cases`: `pickPortFromResults` (a CONDITION picks one port) and `pickRouterPorts` (a ROUTER launches every true case, then `then`/`catch` LAST). |
 | `graph.ts` | Block indexing by (scene, id). No global block index — ids repeat across scenes. |
 | `validator.ts` | `init()` diagnostics → `DiagnosticReport`. Reads `format`/`version` FIRST. |
 | `block-context.ts` | Per-block-type contexts, and `resolveCards()` for `actors` / `emotion`. |
@@ -200,7 +200,11 @@ one of them.
   callback. See `handle.getChoiceHistory()` / `getChoice(id)` / `evaluateCondition(test)`.
 - **Two condition modes, and only two.** `portPerCase` absent: every case must hold → `out`, else
   `default`. `portPerCase: true`: the first case that holds takes its own port (`K1`…), else
-  `default`. A case with no `when` is always true. The **dispatcher is gone**.
+  `default`. A case with no `when` is always true. The **dispatcher is gone** — what replaced it is
+  the **ROUTER**, the sixth block type: the same `cases`, read the opposite way (every true case
+  launches its port, then `then` when all held / `catch` otherwise, continuation LAST). A router
+  has **no type handler** and `start()` requires none; `handle.onBlock(id)` observes it through a
+  `RouterContext` that carries `cases` and no `resolve`. Same in all four runtimes since 2026-09-09.
 - `onCondition` is optional when a resolver is installed: the engine already knows the exit port,
   and the handler becomes a logging/override hook. `context.resolve()` takes a PORT NAME.
 - `setChoiceFilter()` and `filterVisibleChoices()` are **removed**, not deprecated.

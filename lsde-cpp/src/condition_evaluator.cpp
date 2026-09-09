@@ -76,6 +76,23 @@ std::string pickPortFromResults(
     return Ports::Out;
 }
 
+std::vector<std::string> pickRouterPorts(
+    const std::vector<ConditionCase>& cases,
+    const std::vector<bool>& results) {
+    if (cases.empty()) return {Ports::Then};
+
+    std::vector<std::string> ports;
+    size_t matched = 0;
+    for (size_t i = 0; i < cases.size(); ++i) {
+        if (i >= results.size() || !results[i]) continue;
+        ports.push_back(cases[i].port);
+        matched++;
+    }
+
+    ports.push_back(matched == cases.size() ? Ports::Then : Ports::Catch);
+    return ports;
+}
+
 std::vector<bool> evaluateEachCase(
     const std::vector<ConditionCase>& cases,
     const ConditionEvaluatorFn& evaluator) {

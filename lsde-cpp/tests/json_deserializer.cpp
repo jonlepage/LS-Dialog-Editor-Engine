@@ -28,6 +28,7 @@ void from_json(const nlohmann::json& j, StepExpect& v) {
     j.at("type").get_to(v.type);
     v.blockId = optString(j, "blockId");
     v.text = optString(j, "text");
+    v.characterId = optString(j, "characterId");
     auto count = j.find("visibleOptionCount");
     if (count != j.end() && !count->is_null()) v.visibleOptionCount = count->get<int>();
 }
@@ -96,7 +97,10 @@ void from_json(const nlohmann::json& j, TestSuite& v) {
     auto description = j.find("description");
     if (description != j.end() && description->is_string()) description->get_to(v.description);
 
-    v.blueprint = j.at("blueprint").get<lsde::BlueprintExport>();
+    auto blueprint = j.find("blueprint");
+    if (blueprint != j.end() && !blueprint->is_null()) v.blueprint = blueprint->get<lsde::BlueprintExport>();
+    auto files = j.find("blueprintFiles");
+    if (files != j.end() && files->is_array()) v.blueprintFiles = files->get<std::vector<lsde::BlueprintExport>>();
     v.sceneId = optString(j, "sceneId");
     v.locale = optString(j, "locale");
 

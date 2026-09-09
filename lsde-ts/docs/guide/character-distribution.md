@@ -1,8 +1,5 @@
 # Distributing characters
 
-> **`inPortPerCharacter` is coming.** The contract is settled; the property is not read by the
-> engine yet. The rest of this page describes today's behaviour.
-
 A block carries a **list** of actors — `actors`. The engine **elects none of them**.
 
 That is deliberate: LSDE refuses to say whether the order of the list means "who speaks" or "who is

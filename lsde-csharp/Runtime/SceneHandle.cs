@@ -80,8 +80,9 @@ namespace LsdeDialogEngine
             {
                 throw new InvalidOperationException(
                     $"Cannot start scene — missing required handler(s): {string.Join(", ", missing)}.\n" +
-                    "Register all 4 handlers before starting:\n" +
-                    "  engine.OnDialog(handler)\n  engine.OnChoice(handler)\n  engine.OnCondition(handler)\n  engine.OnAction(handler)");
+                    "Register handlers before starting:\n" +
+                    "  engine.OnDialog(handler)\n  engine.OnChoice(handler)\n  engine.OnCondition(handler)\n  engine.OnAction(handler)\n" +
+                    "Note: OnCondition is optional when engine.OnResolveCondition() is installed.");
             }
 
             _running = true;
@@ -99,7 +100,7 @@ namespace LsdeDialogEngine
 
             // The flow the player watches is a track like any other. The only thing that sets it
             // apart is what happens when it ends — see TrackEnded.
-            _mainTrack = new Track(this, startBlock, Track.MainTrackId, null);
+            _mainTrack = new Track(this, startBlock, Track.MainTrackId, null, Ports.In);
             _tracks.Add(_mainTrack);
             _mainTrack.Start();
         }
@@ -297,13 +298,13 @@ namespace LsdeDialogEngine
             }
         }
 
-        /// <summary>Open a parallel track. Returns its id.</summary>
-        public int SpawnTrack(BlueprintBlock startBlock, int? parentTrackId)
+        /// <summary>Open a parallel track, entered through entryPort. Returns its id.</summary>
+        public int SpawnTrack(BlueprintBlock startBlock, int? parentTrackId, string entryPort)
         {
             var id = _nextTrackId++;
             // null when the main flow opened it — the convention TrackInfo publishes.
             var parent = parentTrackId == Track.MainTrackId ? (int?)null : parentTrackId;
-            var track = new Track(this, startBlock, id, parent);
+            var track = new Track(this, startBlock, id, parent, entryPort);
             _tracks.Add(track);
             track.Start();
             return id;
@@ -363,8 +364,12 @@ namespace LsdeDialogEngine
         /// unless the player has the keycard" — was bypassed the moment a branch was marked
         /// IsAsync. Nothing in the hook's contract said it only applied to the flow the player was
         /// watching, and nothing on screen would have told anyone.</remarks>
+        /// <para>entryPort is the port the wire arrived on, and it is passed for one reason: under
+        /// InPortPerCharacter the gate must be asked about the actor the DESIGNER wired, not about
+        /// whichever one the whole cast would have produced. A gate reading "do not enter unless
+        /// this character is here" would otherwise be answered about the wrong character.</para>
         /// <returns>false when the caller must stop rather than dispatch the block.</returns>
-        public bool RunValidation(BlueprintBlock block, BlueprintBlock? fromBlock, Card? fromCharacter)
+        public bool RunValidation(BlueprintBlock block, string entryPort, BlueprintBlock? fromBlock, Card? fromCharacter)
         {
             var handler = _globalRegistry.ValidateNextBlockHandler;
             if (handler == null) return true;
@@ -373,7 +378,7 @@ namespace LsdeDialogEngine
             {
                 NextBlock = block,
                 FromBlock = fromBlock,
-                NextContext = new ValidateNextBlockContext { Character = ResolveCardsFor(block).Character },
+                NextContext = new ValidateNextBlockContext { Character = ResolveCardsFor(block, entryPort).Character },
                 FromContext = fromBlock != null ? new ValidateNextBlockContext { Character = fromCharacter } : null,
                 Port = null
             });
@@ -403,9 +408,9 @@ namespace LsdeDialogEngine
             return result;
         }
 
-        public IBaseBlockContext? CreateBlockContext(BlueprintBlock block)
+        public IBaseBlockContext? CreateBlockContext(BlueprintBlock block, string entryPort)
         {
-            return CreateContext(block);
+            return CreateContext(block, entryPort);
         }
 
         private void RecordChoice(string blockId, string optionId)
@@ -530,18 +535,61 @@ namespace LsdeDialogEngine
         }
 
         /// <summary>Look up the cards a block cites, and let the game pick which actor is speaking.</summary>
-        private ResolvedCards ResolveCardsFor(BlueprintBlock block)
+        /// <remarks>With InPortPerCharacter, the wire that reached the block named the actor:
+        /// entryPort holds a CARD ID instead of "in", and only that actor is offered to
+        /// OnResolveCharacter. The game is still the one answering — it may say null — it simply
+        /// cannot pick a different actor than the one the designer wired.
+        /// <para>Without the property, or when the block was entered through "in", entryPort is
+        /// ignored and the whole cast is offered, exactly as before. That is what keeps every
+        /// existing project — and every wire LSDE has ever written with ToPort "in" — behaving
+        /// identically.</para></remarks>
+        private ResolvedCards ResolveCardsFor(BlueprintBlock block, string entryPort = Ports.In)
         {
             Func<string, Card?> lookup = _callbacks.GetCard ?? (_ => null);
-            return ResolvedCards.Resolve(block, lookup, GetResolveCharacterFn());
+            var designated = Natives.Of(block).InPortPerCharacter == true && entryPort != Ports.In
+                ? entryPort
+                : null;
+            return ResolvedCards.Resolve(block, lookup, GetResolveCharacterFn(), designated);
         }
 
-        // Cards are resolved fresh every time, never cached. This runs for the main track AND for
-        // async tracks (through CreateBlockContext), and a cache would leak the main track's actor
-        // into a track released later by WaitForBlocks.
-        private IBaseBlockContext? CreateContext(BlueprintBlock block)
+        /// <summary>Evaluate every case of a CONDITION or a ROUTER, before its context is built.</summary>
+        /// <remarks>The handler is then handed RESULTS rather than questions, and the exit port is
+        /// read off these same results rather than re-asking the game: each test reaches
+        /// OnResolveCondition exactly ONE time — whatever the block type, whatever the mode,
+        /// whichever case matches. That is also what makes OnCondition optional: with a resolver
+        /// installed the engine already knows where it is going, and the handler becomes a place
+        /// to log or to override.
+        /// <para>Written ONCE for both block types on purpose. They ask the same question; only the
+        /// reading of the answer differs, and that belongs to PickPortFromResults and
+        /// PickRouterPorts.</para></remarks>
+        private List<RuntimeConditionCase> EvaluateCases(BlueprintBlock block)
         {
-            var cards = ResolveCardsFor(block);
+            var evaluate = RoutingEvaluator();
+            var cases = new List<RuntimeConditionCase>();
+            foreach (var conditionCase in block.Cases ?? new List<ConditionCase>())
+            {
+                cases.Add(new RuntimeConditionCase
+                {
+                    Port = conditionCase.Port,
+                    When = conditionCase.When,
+                    Result = ConditionEvaluator.EvaluateConditionChain(conditionCase.When, evaluate),
+                });
+            }
+            return cases;
+        }
+
+        private static List<bool> ResultsOf(List<RuntimeConditionCase> cases)
+        {
+            var results = new List<bool>();
+            foreach (var c in cases) results.Add(c.Result == true);
+            return results;
+        }
+
+        // Cards are resolved fresh every time, never cached. This runs for every track, and a cache
+        // would leak one track's actor into another released later by WaitForBlocks.
+        private IBaseBlockContext? CreateContext(BlueprintBlock block, string entryPort)
+        {
+            var cards = ResolveCardsFor(block, entryPort);
 
             switch (block.Type)
             {
@@ -556,32 +604,22 @@ namespace LsdeDialogEngine
 
                 case BlockType.Condition:
                 {
-                    var evaluate = RoutingEvaluator();
-                    bool portPerCase = Natives.Of(block).PortPerCase == true;
-
-                    // Every case is evaluated up front, so the handler is handed results rather
-                    // than questions. With a resolver installed the engine already knows where to
-                    // go, which is what makes OnCondition optional: the handler becomes a place to
-                    // log or to override.
-                    var cases = new List<RuntimeConditionCase>();
-                    foreach (var conditionCase in block.Cases ?? new List<ConditionCase>())
-                    {
-                        cases.Add(new RuntimeConditionCase
-                        {
-                            Port = conditionCase.Port,
-                            When = conditionCase.When,
-                            // ONCE. The port is read off these same results rather than re-asking
-                            // the game: each test reaches OnResolveCondition exactly one time,
-                            // whatever the mode and whichever case matches.
-                            Result = ConditionEvaluator.EvaluateConditionChain(conditionCase.When, evaluate),
-                        });
-                    }
-
+                    var cases = EvaluateCases(block);
                     var ctx = new InternalConditionContext(block, cards, cases);
-                    var caseResults = new List<bool>();
-                    foreach (var c in cases) caseResults.Add(c.Result == true);
                     ctx.ConditionPort = ConditionEvaluator.PickPortFromResults(
-                        block.Cases, portPerCase, caseResults);
+                        block.Cases, Natives.Of(block).PortPerCase == true, ResultsOf(cases));
+                    return ctx;
+                }
+
+                case BlockType.Router:
+                {
+                    // The same cases, read the opposite way: EVERY case counts, each true one
+                    // launches its port, and the tally picks then or catch. That difference lives
+                    // entirely in PickRouterPorts — there is no second evaluator and no
+                    // router-specific hook.
+                    var cases = EvaluateCases(block);
+                    var ctx = new InternalRouterContext(block, cards, cases);
+                    ctx.RouterPorts = ConditionEvaluator.PickRouterPorts(block.Cases, ResultsOf(cases));
                     return ctx;
                 }
 

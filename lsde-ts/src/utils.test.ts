@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { isDialogBlock, isChoiceBlock, isConditionBlock, isActionBlock, isNoteBlock } from './utils.js';
+import {
+	isDialogBlock, isChoiceBlock, isConditionBlock, isRouterBlock, isActionBlock, isNoteBlock,
+} from './utils.js';
 import type { BlueprintBlock } from './types.js';
 
 // v2 block types are lowercase. A payload still carrying 'DIALOG' matches no guard at all, which
@@ -9,6 +11,7 @@ const baseBlock = { id: 'DIALOG-001', key: '__blueprints__.s1.DIALOG-001' };
 const dialogBlock = { ...baseBlock, type: 'dialog' } as BlueprintBlock;
 const choiceBlock = { ...baseBlock, type: 'choice' } as BlueprintBlock;
 const conditionBlock = { ...baseBlock, type: 'condition' } as BlueprintBlock;
+const routerBlock = { ...baseBlock, type: 'router' } as BlueprintBlock;
 const actionBlock = { ...baseBlock, type: 'action' } as BlueprintBlock;
 const noteBlock = { ...baseBlock, type: 'note' } as BlueprintBlock;
 const v1Block = { ...baseBlock, type: 'DIALOG' } as unknown as BlueprintBlock;
@@ -28,6 +31,14 @@ describe( 'type guards', () => {
 	it( 'isConditionBlock narrows correctly', () => {
 		expect( isConditionBlock( conditionBlock ) ).toBe( true );
 		expect( isConditionBlock( dialogBlock ) ).toBe( false );
+	} );
+
+	it( 'isRouterBlock narrows correctly', () => {
+		expect( isRouterBlock( routerBlock ) ).toBe( true );
+		// A router carries the same `cases` as a condition and is NOT one: the two are read in
+		// opposite ways, and a guard that confused them would route a dispatcher as a switch.
+		expect( isRouterBlock( conditionBlock ) ).toBe( false );
+		expect( isConditionBlock( routerBlock ) ).toBe( false );
 	} );
 
 	it( 'isActionBlock narrows correctly', () => {

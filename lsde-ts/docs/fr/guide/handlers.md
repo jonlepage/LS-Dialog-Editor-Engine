@@ -27,6 +27,8 @@ Le engine expose les handlers suivants :
 
 Les **quatre** handlers de type — `onDialog`, `onChoice`, `onCondition`, `onAction` — sont requis : le engine valide leur présence à l'appel de `start()` et lève une erreur nommant ceux qui manquent. Seule exception, `onCondition` devient **facultatif** dès que `onResolveCondition` est installé : le engine connaît alors déjà le port de sortie, et le handler ne sert plus qu'à journaliser ou à forcer une sortie.
 
+Un block ROUTER n'a **pas de handler** et n'en a pas besoin : le engine évalue chaque cas, lance le port de chaque cas vrai et continue tout seul par `then` (tous ont tenu) ou `catch` (un a manqué). Pour l'observer, `handle.onBlock(id)` — voir [Le bloc Router](/fr/guide/router).
+
 <!--@include: ../../_shared/handler-basic.md-->
 
 ## Two-Tier Handler System

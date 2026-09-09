@@ -6,7 +6,7 @@ using System.Collections.Generic;
 namespace LsdeDialogEngine
 {
     /// <summary>LSDE Dialog Engine — callback-driven graph dispatcher.</summary>
-    public class DialogueEngine
+    public class DialogueEngine : IDialogueEngine
     {
         private BlueprintGraph? _graph;
         private readonly HandlerRegistry _globalRegistry = new HandlerRegistry();

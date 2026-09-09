@@ -24,6 +24,13 @@ add_executable(lsde_tests
     json_loader_test.cpp
     condition_integration_test.cpp
     robustness_test.cpp
+    router_test.cpp
+    in_port_per_character_test.cpp
+    handler_tiers_test.cpp
+    track_info_test.cpp
+    validation_hook_test.cpp
+    engine_facade_test.cpp
+    lsde_utils_test.cpp
 )
 
 target_link_libraries(lsde_tests PRIVATE

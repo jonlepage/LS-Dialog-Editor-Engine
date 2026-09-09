@@ -74,6 +74,14 @@ namespace LsdeDialogEngine.Tests
             return (suite, testCase);
         }
 
+        /// <summary>What the suite hands to Init(): one payload, or the files of a per-scene export.</summary>
+        protected static InitOptions OptionsOf(TestSuite suite)
+        {
+            return suite.BlueprintFiles != null
+                ? new InitOptions { Files = suite.BlueprintFiles }
+                : new InitOptions { Data = suite.Blueprint! };
+        }
+
         /// <summary>
         /// The game's answer to one comparison, from the suite's stateBridge.
         /// <para>A test on the reserved "choice" dictionary never gets here — the engine answers
@@ -111,7 +119,7 @@ namespace LsdeDialogEngine.Tests
             var (suite, testCase) = Find(filename, suiteId, caseId);
 
             var engine = new DialogueEngine();
-            var report = engine.Init(new InitOptions { Data = suite.Blueprint });
+            var report = engine.Init(OptionsOf(suite));
             Assert.Empty(report.Errors);
 
             engine.SetLocale(suite.Locale ?? "en");
@@ -150,6 +158,11 @@ namespace LsdeDialogEngine.Tests
                 {
                     var offered = cc.Options.Where(o => o.Visible != false).ToList();
                     Assert.Equal(step.Expect.VisibleOptionCount!.Value, offered.Count);
+                }
+
+                if (step.Expect.CharacterId != null)
+                {
+                    Assert.Equal(step.Expect.CharacterId, context.Character?.Id);
                 }
 
                 stepIndex++;
@@ -231,7 +244,7 @@ namespace LsdeDialogEngine.Tests
         public void ReportsWhatItShould(string filename, string suiteId, string caseId)
         {
             var (suite, testCase) = Find(filename, suiteId, caseId);
-            var report = new DialogueEngine().Init(new InitOptions { Data = suite.Blueprint });
+            var report = new DialogueEngine().Init(OptionsOf(suite));
 
             if (testCase.ExpectedErrors != null)
             {

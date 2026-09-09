@@ -20,7 +20,7 @@ namespace lsde {
 ///   engine.onResolveCharacter([](auto& chars) { return chars.empty() ? nullptr : &chars[0]; });
 ///   engine.onDialog([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn { next(); return {}; });
 ///   engine.onChoice([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn { next(); return {}; });
-///   engine.onCondition([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn { ctx->resolve(true); next(); return {}; });
+///   engine.onCondition([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn { next(); return {}; });
 ///   engine.onAction([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn { ctx->resolve(); next(); return {}; });
 ///   auto handle = engine.scene(sceneRef);
 ///   handle->start();

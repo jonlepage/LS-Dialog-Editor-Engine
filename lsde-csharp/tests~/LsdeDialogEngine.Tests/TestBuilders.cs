@@ -67,6 +67,14 @@ namespace LsdeDialogEngine.Tests
             return block;
         }
 
+        /// <summary>A ROUTER: the same cases as a condition, read the opposite way. Exits by then / catch.</summary>
+        internal static BlueprintBlock Router(string id, params ConditionCase[] cases)
+        {
+            var block = Base(id, BlockType.Router);
+            block.Cases = new List<ConditionCase>(cases);
+            return block;
+        }
+
         internal static BlueprintBlock Action(string id, params ActionCall[] calls)
         {
             var block = Base(id, BlockType.Action);
@@ -81,6 +89,15 @@ namespace LsdeDialogEngine.Tests
         {
             block.Next ??= new List<Link>();
             block.Next.Add(new Link { Port = port, To = to, ToPort = "in" });
+            return block;
+        }
+
+        /// <summary>Add one outgoing wire naming the target's ENTRY port — a card id when the target
+        /// carries InPortPerCharacter, in which case that actor is the one speaking the line.</summary>
+        internal static BlueprintBlock WireTo(this BlueprintBlock block, string to, string port, string toPort)
+        {
+            block.Next ??= new List<Link>();
+            block.Next.Add(new Link { Port = port, To = to, ToPort = toPort });
             return block;
         }
 

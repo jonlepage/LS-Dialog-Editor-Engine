@@ -47,6 +47,8 @@ inline bool isDialogBlock(const BlueprintBlock& b) { return b.type == BlockType:
 inline bool isChoiceBlock(const BlueprintBlock& b) { return b.type == BlockType::Choice; }
 /// True when the block is a condition.
 inline bool isConditionBlock(const BlueprintBlock& b) { return b.type == BlockType::Condition; }
+/// True when the block is a router.
+inline bool isRouterBlock(const BlueprintBlock& b) { return b.type == BlockType::Router; }
 /// True when the block is an action.
 inline bool isActionBlock(const BlueprintBlock& b) { return b.type == BlockType::Action; }
 /// True when the block is a note.
@@ -113,6 +115,7 @@ inline NativeProperties getNativeProperties(const BlueprintBlock& block) {
     natives.waitInput = readBool("waitInput");
     natives.debug = readBool("debug");
     natives.portPerCharacter = readBool("portPerCharacter");
+    natives.inPortPerCharacter = readBool("inPortPerCharacter");
     natives.skipIfMissingActor = readBool("skipIfMissingActor");
     natives.portPerCase = readBool("portPerCase");
 
@@ -152,6 +155,7 @@ public:
     static bool IsDialogBlock(const BlueprintBlock& b) { return isDialogBlock(b); }
     static bool IsChoiceBlock(const BlueprintBlock& b) { return isChoiceBlock(b); }
     static bool IsConditionBlock(const BlueprintBlock& b) { return isConditionBlock(b); }
+    static bool IsRouterBlock(const BlueprintBlock& b) { return isRouterBlock(b); }
     static bool IsActionBlock(const BlueprintBlock& b) { return isActionBlock(b); }
     static bool IsNoteBlock(const BlueprintBlock& b) { return isNoteBlock(b); }
 
@@ -260,6 +264,16 @@ public:
         const ConditionEvaluatorFn* evaluator)
     {
         return tagOptionVisibility(options, evaluator);
+    }
+
+    /// The exits of a ROUTER, from case results already computed: the port of every true case,
+    /// then "then" when they all held or "catch" when one did not — always last. The router's
+    /// reading of the same cases a condition carries.
+    static std::vector<std::string> PickRouterPorts(
+        const std::vector<ConditionCase>& cases,
+        const std::vector<bool>& results)
+    {
+        return pickRouterPorts(cases, results);
     }
 };
 

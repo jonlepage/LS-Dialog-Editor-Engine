@@ -14,6 +14,7 @@
 //   dialog     "out", or one port per actor CARD ID with PortPerCharacter — "out" is the fallback
 //   choice     the picked option's id (C1…) — there is no "out" on a choice
 //   condition  "out" (true) and "default" (false), or K1… per case with PortPerCase
+//   router     the K1… of EVERY case that held, then "then" (all held) or "catch" (one did not)
 //   action     "then", and "catch" when a call failed
 //   note       never dispatched; the traversal steps over it
 //
@@ -49,6 +50,9 @@ namespace LsdeDialogEngine
 
                 case BlockType.Condition:
                     return ResolveConditionPort(links, input.ConditionPort);
+
+                case BlockType.Router:
+                    return ResolveRouterPorts(links, input.RouterPorts);
 
                 case BlockType.Action:
                     return ResolveActionPort(links, input.ActionRejected);
@@ -105,6 +109,33 @@ namespace LsdeDialogEngine
         {
             if (conditionPort == null) return PortResolutionResult.None;
             return new PortResolutionResult(OnPort(links, conditionPort));
+        }
+
+        /// <summary>
+        /// A router leaves by SEVERAL ports at once: the K* of each true case, then "then" or "catch".
+        /// <para>Which ports those are was decided before we got here, by the condition evaluator —
+        /// the same division of labour as a condition, and for the same reason: only it knows the
+        /// game's answers.</para>
+        /// <para>Order is preserved, and the continuation is last. That is what lets the traversal
+        /// keep then/catch as the main flow: it takes the first non-async target, and in the
+        /// arrangement LSDE recommends the case routes all carry IsAsync.</para>
+        /// <para>A port with no wire contributes nothing and is not an error — a writer who launched
+        /// nothing on a true case simply drew it that way. Null means nothing was decided, so
+        /// nowhere to go.</para>
+        /// </summary>
+        private static PortResolutionResult ResolveRouterPorts(List<Link> links, List<string>? routerPorts)
+        {
+            if (routerPorts == null) return PortResolutionResult.None;
+
+            var matches = new List<Link>();
+            foreach (var port in routerPorts)
+            {
+                foreach (var link in links)
+                {
+                    if (link.Port == port) matches.Add(link);
+                }
+            }
+            return new PortResolutionResult(matches);
         }
 
         /// <summary>

@@ -21,7 +21,7 @@ dotnet add package LsdeDialogEngine.SystemTextJson    # .NET 5+ / Godot .NET
 
 ### Unity (alternative)
 
-Copy the `src/LsdeDialogEngine/` folder into your Unity project's `Assets/Plugins/` directory. Install `com.unity.nuget.newtonsoft-json` via Unity Package Manager for JSON parsing.
+Copy the `Runtime/` folder into your Unity project's `Assets/Plugins/` directory. Install `com.unity.nuget.newtonsoft-json` via Unity Package Manager for JSON parsing.
 
 ## Quick Start
 
@@ -182,6 +182,8 @@ All 4 type handlers are **required** — the engine will throw if a scene starts
 | `engine.OnCondition(handler)` | Handle CONDITION blocks. **Optional** when `OnResolveCondition` is installed. |
 | `engine.OnAction(handler)` | Handle ACTION blocks. Developer **must** call `context.Resolve()` or `context.Reject()`. |
 
+A ROUTER block has **no handler** and needs none: the engine evaluates every case, launches the port of each true one and continues by `then` (all held) or `catch` (one did not) on its own. To observe one, use `handle.OnBlock(id)` — its `IRouterContext` carries the pre-evaluated `Cases` and no `Resolve()`.
+
 ### Optional Handlers
 
 | Method | Description |
@@ -244,6 +246,7 @@ engine.OnDialog(args => {
 | `LsdeUtils.IsDialogBlock(block)` | Type guard: true if block is a `DialogBlock`. |
 | `LsdeUtils.IsChoiceBlock(block)` | Type guard: true if block is a `ChoiceBlock`. |
 | `LsdeUtils.IsConditionBlock(block)` | Type guard: true if block is a `ConditionBlock`. |
+| `LsdeUtils.IsRouterBlock(block)` | Type guard: true if block is a ROUTER block. |
 | `LsdeUtils.IsActionBlock(block)` | Type guard: true if block is an `ActionBlock`. |
 | `LsdeUtils.IsNoteBlock(block)` | Type guard: true if block is a `NoteBlock`. |
 | `LsdeUtils.GetBlockLabel(block)` | How to name a block on screen: `Label`, else the designer `Note`, else the id. |
@@ -257,13 +260,14 @@ engine.OnDialog(args => {
 | `LsdeUtils.EvaluateConditionChain(tests, evaluator)` | Evaluate an AND/OR chain, left to right, no precedence. Absent or empty = `true`. |
 | `LsdeUtils.EvaluateConditionCases(cases, portPerCase, evaluator)` | The exit port of a condition block: `out`/`default`, or `K1`… with `PortPerCase`. |
 | `LsdeUtils.EvaluateEachCase(cases, evaluator)` | Each case on its own, in order — to show what matched without changing the routing. |
+| `LsdeUtils.PickRouterPorts(cases, results)` | The exits of a ROUTER from results already computed: every true case's port, then `then` or `catch` LAST. |
 | `LsdeUtils.TagOptionVisibility(options, evaluator)` | Tag every option with whether its `When` holds, returning them ALL. |
 
 ---
 
 ## Cross-Language Conformance
 
-59 shared cases, in 52 suites, run by all four runtimes: **59/59 passing**.
+81 shared cases, in 72 suites, run by all four runtimes: **81/81 passing**.
 
 ---
 

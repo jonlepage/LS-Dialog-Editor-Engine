@@ -27,6 +27,8 @@ engine は以下の handler を公開しています：
 
 `onDialog`、`onChoice`、`onAction` は**必須**です — `start()` 呼び出し時に engine がその存在を検証し、欠けている場合は記述的なエラーをスローします。`onCondition` は `onResolveCondition` がインストールされている場合は**オプション**です — engine が事前評価された condition グループから自動ルーティングします。
 
+ROUTER block に handler は**なく**、必要でもありません：engine はすべての case を評価し、真の case それぞれの port を起動し、`then`（すべて成立）か `catch`（一つでも不成立）で自分で続行します。観測するには `handle.onBlock(id)` を使います — [Router block](/ja/guide/router) を参照。
+
 <!--@include: ../../_shared/handler-basic.md-->
 
 ## Two-Tier Handler System

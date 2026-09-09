@@ -127,6 +127,41 @@ namespace LsdeDialogEngine
             return Ports.Out;
         }
 
+        /// <summary>A ROUTER's exits: the port of every true case, then "then" or "catch".</summary>
+        /// <remarks>The opposite reading of the same Cases a condition carries. A condition asks
+        /// <i>which one</i> and leaves by a single port; a router asks <i>which ones</i>, launches
+        /// each of them, and continues besides — by "then" when every case held, by "catch" when
+        /// any did not.
+        /// <para>Three rules this encodes, all of them from the format's own contract:</para>
+        /// <para><b>No break.</b> Every case is counted, so a false one in the middle does not hide
+        /// the true ones after it. That is the whole difference with a condition.</para>
+        /// <para><b>The tally is over CASES, not over ports.</b> A port carrying several wires
+        /// launches several tracks and still counts as one case — and two cases wired to the same
+        /// block dispatch it twice.</para>
+        /// <para><b>No cases at all → "then"</b>, the way Promise.all([]) resolves.</para>
+        /// <para>The continuation is LAST in the list on purpose: the traversal keeps the first
+        /// non-async target as the main flow, so then/catch stays the main flow as long as the case
+        /// routes are async. "catch" cancels nothing: the tracks of the true cases are already
+        /// running by the time the tally is read.</para></remarks>
+        public static List<string> PickRouterPorts(
+            List<ConditionCase>? cases,
+            List<bool> results)
+        {
+            if (cases == null || cases.Count == 0) return new List<string> { Ports.Then };
+
+            var ports = new List<string>();
+            int matched = 0;
+            for (int i = 0; i < cases.Count; i++)
+            {
+                if (i >= results.Count || !results[i]) continue;
+                ports.Add(cases[i].Port);
+                matched++;
+            }
+
+            ports.Add(matched == cases.Count ? Ports.Then : Ports.Catch);
+            return ports;
+        }
+
         /// <summary>Evaluate every case on its own, without picking a port.</summary>
         /// <remarks>Handed to a game that wants to show what matched without changing where the
         /// flow goes. The engine fills Cases[i].Result with the same rule, then reads the exit port

@@ -1625,6 +1625,746 @@
           ]
         }
       ]
+    },
+    {
+      "id": "router-loads-clean",
+      "description": "A router, and wires whose toPort is a card id, load with no error and no warning.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "ROUTER-001",
+                "key": "__blueprints__.s1.ROUTER-001",
+                "type": "router",
+                "cases": [
+                  {
+                    "port": "K1",
+                    "when": [
+                      {
+                        "dict": "switches",
+                        "entry": "door_unlocked",
+                        "op": "equals",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "port": "K2",
+                    "when": [
+                      {
+                        "dict": "switches",
+                        "entry": "met_vesk",
+                        "op": "equals",
+                        "value": true
+                      }
+                    ]
+                  }
+                ],
+                "next": [
+                  {
+                    "port": "K1",
+                    "to": "DIALOG-001",
+                    "toPort": "var1"
+                  },
+                  {
+                    "port": "K2",
+                    "to": "DIALOG-001",
+                    "toPort": "var2"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "Me too",
+                  "fr": "Me too"
+                },
+                "actors": [
+                  "var1",
+                  "var2"
+                ],
+                "props": {
+                  "isAsync": true,
+                  "inPortPerCharacter": true
+                }
+              }
+            ],
+            "start": "ROUTER-001"
+          }
+        ]
+      },
+      "cases": [
+        {
+          "id": "clean",
+          "expectedErrors": [],
+          "expectedWarnings": [],
+          "expectedStats": {
+            "sceneCount": 1,
+            "blockCount": 2,
+            "connectionCount": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "per-scene-files-merged",
+      "description": "Two files of one export stack their scenes behind one header.",
+      "blueprintFiles": [
+        {
+          "format": "lsde-blueprints",
+          "version": 1,
+          "generator": {
+            "app": "LSDE",
+            "version": "2.0.3"
+          },
+          "exportedAt": "2026-09-07T00:00:00.000Z",
+          "project": "Conformance",
+          "locales": [
+            "en",
+            "fr"
+          ],
+          "referenceLocale": "en",
+          "dictionaries": [
+            {
+              "id": "switches",
+              "valueType": "boolean",
+              "entries": [
+                "door_unlocked",
+                "met_vesk"
+              ]
+            },
+            {
+              "id": "variables",
+              "valueType": "number",
+              "entries": [
+                "credits",
+                "trust"
+              ]
+            }
+          ],
+          "functions": [
+            {
+              "id": "play_music",
+              "params": [
+                {
+                  "name": "track",
+                  "type": "string"
+                }
+              ]
+            },
+            {
+              "id": "give_item",
+              "params": [
+                {
+                  "name": "item",
+                  "type": "string"
+                }
+              ]
+            }
+          ],
+          "cards": [
+            {
+              "id": "var1",
+              "name": "kael",
+              "role": "characters"
+            },
+            {
+              "id": "var2",
+              "name": "nora",
+              "role": "characters"
+            },
+            {
+              "id": "var3",
+              "name": "afraid",
+              "role": "emotions"
+            }
+          ],
+          "scenes": [
+            {
+              "scene": "first",
+              "id": "sc_first",
+              "blocks": [
+                {
+                  "id": "DIALOG-001",
+                  "key": "__blueprints__.s1.DIALOG-001",
+                  "type": "dialog",
+                  "text": {
+                    "en": "In first",
+                    "fr": "In first"
+                  }
+                }
+              ],
+              "start": "DIALOG-001"
+            }
+          ]
+        },
+        {
+          "format": "lsde-blueprints",
+          "version": 1,
+          "generator": {
+            "app": "LSDE",
+            "version": "2.0.3"
+          },
+          "exportedAt": "2026-09-07T00:00:00.000Z",
+          "project": "Conformance",
+          "locales": [
+            "en",
+            "fr"
+          ],
+          "referenceLocale": "en",
+          "dictionaries": [
+            {
+              "id": "switches",
+              "valueType": "boolean",
+              "entries": [
+                "door_unlocked",
+                "met_vesk"
+              ]
+            },
+            {
+              "id": "variables",
+              "valueType": "number",
+              "entries": [
+                "credits",
+                "trust"
+              ]
+            }
+          ],
+          "functions": [
+            {
+              "id": "play_music",
+              "params": [
+                {
+                  "name": "track",
+                  "type": "string"
+                }
+              ]
+            },
+            {
+              "id": "give_item",
+              "params": [
+                {
+                  "name": "item",
+                  "type": "string"
+                }
+              ]
+            }
+          ],
+          "cards": [
+            {
+              "id": "var1",
+              "name": "kael",
+              "role": "characters"
+            },
+            {
+              "id": "var2",
+              "name": "nora",
+              "role": "characters"
+            },
+            {
+              "id": "var3",
+              "name": "afraid",
+              "role": "emotions"
+            }
+          ],
+          "scenes": [
+            {
+              "scene": "second",
+              "id": "sc_second",
+              "blocks": [
+                {
+                  "id": "DIALOG-001",
+                  "key": "__blueprints__.s1.DIALOG-001",
+                  "type": "dialog",
+                  "text": {
+                    "en": "In second",
+                    "fr": "In second"
+                  }
+                }
+              ],
+              "start": "DIALOG-001"
+            }
+          ]
+        }
+      ],
+      "cases": [
+        {
+          "id": "counts-both-scenes",
+          "expectedErrors": [],
+          "expectedWarnings": [],
+          "expectedStats": {
+            "sceneCount": 2,
+            "blockCount": 2,
+            "connectionCount": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "per-scene-files-mismatched",
+      "description": "Pieces of two different exports are refused by name.",
+      "blueprintFiles": [
+        {
+          "format": "lsde-blueprints",
+          "version": 1,
+          "generator": {
+            "app": "LSDE",
+            "version": "2.0.3"
+          },
+          "exportedAt": "2026-09-07T00:00:00.000Z",
+          "project": "Conformance",
+          "locales": [
+            "en",
+            "fr"
+          ],
+          "referenceLocale": "en",
+          "dictionaries": [
+            {
+              "id": "switches",
+              "valueType": "boolean",
+              "entries": [
+                "door_unlocked",
+                "met_vesk"
+              ]
+            },
+            {
+              "id": "variables",
+              "valueType": "number",
+              "entries": [
+                "credits",
+                "trust"
+              ]
+            }
+          ],
+          "functions": [
+            {
+              "id": "play_music",
+              "params": [
+                {
+                  "name": "track",
+                  "type": "string"
+                }
+              ]
+            },
+            {
+              "id": "give_item",
+              "params": [
+                {
+                  "name": "item",
+                  "type": "string"
+                }
+              ]
+            }
+          ],
+          "cards": [
+            {
+              "id": "var1",
+              "name": "kael",
+              "role": "characters"
+            },
+            {
+              "id": "var2",
+              "name": "nora",
+              "role": "characters"
+            },
+            {
+              "id": "var3",
+              "name": "afraid",
+              "role": "emotions"
+            }
+          ],
+          "scenes": [
+            {
+              "scene": "first",
+              "id": "sc_first",
+              "blocks": [
+                {
+                  "id": "DIALOG-001",
+                  "key": "__blueprints__.s1.DIALOG-001",
+                  "type": "dialog",
+                  "text": {
+                    "en": "In first",
+                    "fr": "In first"
+                  }
+                }
+              ],
+              "start": "DIALOG-001"
+            }
+          ]
+        },
+        {
+          "format": "lsde-blueprints",
+          "version": 1,
+          "generator": {
+            "app": "LSDE",
+            "version": "2.0.3"
+          },
+          "exportedAt": "2026-09-08T00:00:00.000Z",
+          "project": "Conformance",
+          "locales": [
+            "en",
+            "fr"
+          ],
+          "referenceLocale": "en",
+          "dictionaries": [
+            {
+              "id": "switches",
+              "valueType": "boolean",
+              "entries": [
+                "door_unlocked",
+                "met_vesk"
+              ]
+            },
+            {
+              "id": "variables",
+              "valueType": "number",
+              "entries": [
+                "credits",
+                "trust"
+              ]
+            }
+          ],
+          "functions": [
+            {
+              "id": "play_music",
+              "params": [
+                {
+                  "name": "track",
+                  "type": "string"
+                }
+              ]
+            },
+            {
+              "id": "give_item",
+              "params": [
+                {
+                  "name": "item",
+                  "type": "string"
+                }
+              ]
+            }
+          ],
+          "cards": [
+            {
+              "id": "var1",
+              "name": "kael",
+              "role": "characters"
+            },
+            {
+              "id": "var2",
+              "name": "nora",
+              "role": "characters"
+            },
+            {
+              "id": "var3",
+              "name": "afraid",
+              "role": "emotions"
+            }
+          ],
+          "scenes": [
+            {
+              "scene": "second",
+              "id": "sc_second",
+              "blocks": [
+                {
+                  "id": "DIALOG-001",
+                  "key": "__blueprints__.s1.DIALOG-001",
+                  "type": "dialog",
+                  "text": {
+                    "en": "In second",
+                    "fr": "In second"
+                  }
+                }
+              ],
+              "start": "DIALOG-001"
+            }
+          ]
+        }
+      ],
+      "cases": [
+        {
+          "id": "refused",
+          "expectedErrors": [
+            "MISMATCHED_EXPORTS"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "per-scene-files-twice",
+      "description": "The same file passed twice is the same scene twice.",
+      "blueprintFiles": [
+        {
+          "format": "lsde-blueprints",
+          "version": 1,
+          "generator": {
+            "app": "LSDE",
+            "version": "2.0.3"
+          },
+          "exportedAt": "2026-09-07T00:00:00.000Z",
+          "project": "Conformance",
+          "locales": [
+            "en",
+            "fr"
+          ],
+          "referenceLocale": "en",
+          "dictionaries": [
+            {
+              "id": "switches",
+              "valueType": "boolean",
+              "entries": [
+                "door_unlocked",
+                "met_vesk"
+              ]
+            },
+            {
+              "id": "variables",
+              "valueType": "number",
+              "entries": [
+                "credits",
+                "trust"
+              ]
+            }
+          ],
+          "functions": [
+            {
+              "id": "play_music",
+              "params": [
+                {
+                  "name": "track",
+                  "type": "string"
+                }
+              ]
+            },
+            {
+              "id": "give_item",
+              "params": [
+                {
+                  "name": "item",
+                  "type": "string"
+                }
+              ]
+            }
+          ],
+          "cards": [
+            {
+              "id": "var1",
+              "name": "kael",
+              "role": "characters"
+            },
+            {
+              "id": "var2",
+              "name": "nora",
+              "role": "characters"
+            },
+            {
+              "id": "var3",
+              "name": "afraid",
+              "role": "emotions"
+            }
+          ],
+          "scenes": [
+            {
+              "scene": "first",
+              "id": "sc_first",
+              "blocks": [
+                {
+                  "id": "DIALOG-001",
+                  "key": "__blueprints__.s1.DIALOG-001",
+                  "type": "dialog",
+                  "text": {
+                    "en": "In first",
+                    "fr": "In first"
+                  }
+                }
+              ],
+              "start": "DIALOG-001"
+            }
+          ]
+        },
+        {
+          "format": "lsde-blueprints",
+          "version": 1,
+          "generator": {
+            "app": "LSDE",
+            "version": "2.0.3"
+          },
+          "exportedAt": "2026-09-07T00:00:00.000Z",
+          "project": "Conformance",
+          "locales": [
+            "en",
+            "fr"
+          ],
+          "referenceLocale": "en",
+          "dictionaries": [
+            {
+              "id": "switches",
+              "valueType": "boolean",
+              "entries": [
+                "door_unlocked",
+                "met_vesk"
+              ]
+            },
+            {
+              "id": "variables",
+              "valueType": "number",
+              "entries": [
+                "credits",
+                "trust"
+              ]
+            }
+          ],
+          "functions": [
+            {
+              "id": "play_music",
+              "params": [
+                {
+                  "name": "track",
+                  "type": "string"
+                }
+              ]
+            },
+            {
+              "id": "give_item",
+              "params": [
+                {
+                  "name": "item",
+                  "type": "string"
+                }
+              ]
+            }
+          ],
+          "cards": [
+            {
+              "id": "var1",
+              "name": "kael",
+              "role": "characters"
+            },
+            {
+              "id": "var2",
+              "name": "nora",
+              "role": "characters"
+            },
+            {
+              "id": "var3",
+              "name": "afraid",
+              "role": "emotions"
+            }
+          ],
+          "scenes": [
+            {
+              "scene": "first",
+              "id": "sc_first",
+              "blocks": [
+                {
+                  "id": "DIALOG-001",
+                  "key": "__blueprints__.s1.DIALOG-001",
+                  "type": "dialog",
+                  "text": {
+                    "en": "In first",
+                    "fr": "In first"
+                  }
+                }
+              ],
+              "start": "DIALOG-001"
+            }
+          ]
+        }
+      ],
+      "cases": [
+        {
+          "id": "refused",
+          "expectedErrors": [
+            "DUPLICATE_SCENE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "per-scene-files-empty",
+      "description": "An empty list is no data at all. C++ cannot express this case (a payload struct always exists) and its runner skips it, saying so.",
+      "blueprintFiles": [],
+      "cases": [
+        {
+          "id": "refused",
+          "expectedErrors": [
+            "MISSING_DATA"
+          ]
+        }
+      ]
     }
   ]
 }

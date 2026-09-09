@@ -9,7 +9,8 @@ namespace lsde {
 ResolvedCards ResolvedCards::resolve(
     const BlueprintBlock& block,
     const std::function<const Card*(const std::string&)>& lookup,
-    const std::function<const Card*(const std::vector<Card>&)>& pickCharacter) {
+    const std::function<const Card*(const std::vector<Card>&)>& pickCharacter,
+    const std::optional<std::string>& designatedActorId) {
     ResolvedCards cards;
 
     for (const auto& id : block.actors) {
@@ -23,7 +24,15 @@ ResolvedCards ResolvedCards::resolve(
     }
 
     if (pickCharacter) {
-        const Card* picked = pickCharacter(cards.actors);
+        // inPortPerCharacter: the wire named ONE actor, so that is the only one offered. The game
+        // is still asked — it may answer nullptr — but it cannot pick a different one.
+        std::vector<Card> offered;
+        if (designatedActorId.has_value()) {
+            for (const auto& card : cards.actors) {
+                if (card.id == *designatedActorId) offered.push_back(card);
+            }
+        }
+        const Card* picked = pickCharacter(designatedActorId.has_value() ? offered : cards.actors);
         if (picked != nullptr) cards.character = *picked;
     }
 
@@ -98,6 +107,16 @@ InternalConditionContext::InternalConditionContext(
 const std::vector<RuntimeConditionCase>& InternalConditionContext::cases() const { return _cases; }
 
 void InternalConditionContext::resolve(const std::string& port) { conditionPort = port; }
+
+// ─── Router ──────────────────────────────────────────────────────────────────
+
+InternalRouterContext::InternalRouterContext(
+    const BlueprintBlock& block,
+    ResolvedCards cards,
+    std::vector<RuntimeConditionCase> cases)
+    : InternalBlockContext(block, std::move(cards)), _cases(std::move(cases)) {}
+
+const std::vector<RuntimeConditionCase>& InternalRouterContext::cases() const { return _cases; }
 
 // ─── Action ──────────────────────────────────────────────────────────────────
 

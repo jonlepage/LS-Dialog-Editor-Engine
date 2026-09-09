@@ -152,7 +152,7 @@ function はゲームが実行できる処理を記述します — `set_flag`�
 
 block は dialogue scene の構成要素です — エディターグラフの各ノードが block です。engine は block から block へフローをルーティングし、各タイプに対応する handler を呼び出します。
 
-タイプは5種類あります：**Dialog**、**Choice**、**Condition**、**Action**、**Note**。最初の4つは専用の handler（`onDialog`、`onChoice`、`onCondition`、`onAction`）を持つコンテンツ block です — 4つとも**必須**で、`start()` 呼び出し時に検証されます。Note block は自動的にスキップされます。
+タイプは6種類あります：**Dialog**、**Choice**、**Condition**、**Router**、**Action**、**Note**。Dialog、Choice、Condition、Action は専用の handler（`onDialog`、`onChoice`、`onCondition`、`onAction`）を持つコンテンツ block です — 4つとも**必須**で、`start()` 呼び出し時に検証されます。Router に handler はありません：engine が自分で dispatch します。Note block は自動的にスキップされます。
 
 handler は2つのレベルで構成されます：**global handler**（engine に登録）はすべての scene をカバーし、ほとんどのゲームではこれだけで十分です。**scene handler**（[`SceneHandle`](/api-ref/interfaces/SceneHandle) に登録）は、特定の scene で global を補完または上書きできます。詳細は [Handlers](/ja/guide/handlers) を参照してください。
 
@@ -206,6 +206,18 @@ dictionary が予約語 **`choice`** であるテストは、プレイヤーが�
 
 <!--@include: ../../_shared/block-condition.md-->
 
+## ROUTER
+
+router block は condition と**同じ `cases`** を持ち、それを逆向きに読みます。condition は*どれが*成立するかを尋ねて一つの port から出ますが、router は*どれらが*成立するかを尋ねます：**すべて**の case を評価し、真の case それぞれの port を起動し、そのうえで必ず続行します — すべて成立していれば `then`、一つでも不成立なら `catch` から。case を一つも持たない router は、`Promise.all([])` が解決するのと同じように `then` から出ます。
+
+`K*` ルートは他の port と同じように歩かれます：`isAsync` のターゲットは自身のトラックを開き、それ以外は順番に歩かれ、継続先は**最後**に来ます。`catch` は何も取り消しません — 真の case のトラックはすでに走っています。
+
+**`onRouter` handler は存在せず**、`start()` はそれを要求しません：engine は router を自分で dispatch します。観測するには `handle.onBlock(id)` を使います。
+
+<!--@include: ../../_shared/block-router.md-->
+
+完全な契約と図は [Router block](/ja/guide/router) を、router のルートが通常名指す入口 port `inPortPerCharacter` については [登場人物の割り当て](/ja/guide/character-distribution) を参照してください。
+
 ## ACTION
 
 action block はゲーム内で副作用を発動します — アイテムの付与、サウンドの再生、フラグの設定。
@@ -228,7 +240,7 @@ note block はナラティブデザイナーのためのメモです — コメ�
 |-------|------|-------------|
 | `id` | `string` | **その scene に対する**識別子 — `DIALOG-002`。id は scene をまたいで繰り返されます。 |
 | `key` | `string` | ローカライズファイルが持つ完全な i18n キー |
-| `type` | `BlockType` | `dialog`、`choice`、`condition`、`action`、`note` |
+| `type` | `BlockType` | `dialog`、`choice`、`condition`、`router`、`action`、`note` |
 | `label` | `string?` | writer が付けた場合の可読名 |
 | `parentLabels` | `string[]?` | エディター内の親フォルダー階層 |
 | `note` | `string?` | writer のメモ |
@@ -238,7 +250,7 @@ note block はナラティブデザイナーのためのメモです — コメ�
 | `text` | `TextByLocale?` | inline 出力の場合のロケール別テキスト |
 | `props` | `PropertyBag?` | **ひとつの袋**：native と writer 自身のプロパティが、素の id で同居します |
 | `options` | `Option[]?` | CHOICE のみ |
-| `cases` | `ConditionCase[]?` | CONDITION のみ |
+| `cases` | `ConditionCase[]?` | CONDITION と ROUTER — 同じデータを逆向きに読む |
 | `calls` | `ActionCall[]?` | ACTION のみ |
 | `next` | `Link[]?` | **block の出力ワイヤー。** v2 に connection テーブルはありません |
 
@@ -247,7 +259,7 @@ note block はナラティブデザイナーのためのメモです — コメ�
 
 ### NativeProperties
 
-**engine** が `props` から読み取る九つのプロパティです。id が衝突することはありません — LSDE は
+**engine** が `props` から読み取る十のプロパティです。id が衝突することはありません — LSDE は
 native と同じ名前のプロジェクトプロパティを拒否します — したがって見分けるのは単なる検索です。
 
 | フィールド | 型 | 説明 |
@@ -259,6 +271,7 @@ native と同じ名前のプロジェクトプロパティを拒否します —
 | `waitInput` | `boolean?` | プレイヤー入力を待つ。そのまま渡され、解釈されません — **`timeout` が優先します** |
 | `debug` | `boolean?` | エディタ用デバッグフラグ。そのまま渡されます |
 | `portPerCharacter` | `boolean?` | block は `out` ではなく、actor の **card id で名付けられた port** から出ます |
+| `inPortPerCharacter` | `boolean?` | ワイヤーが**actor を名指します**：link の `toPort` は card id で、その actor だけが `onResolveCharacter` に提示されます。[登場人物の割り当て](/ja/guide/character-distribution) を参照 |
 | `skipIfMissingActor` | `boolean?` | そのまま渡されます — 判断はゲーム側です |
 | `portPerCase` | `boolean?` | CONDITION：各 case が `out` を共有せず、**自身の port**（`K1`…）から出ます |
 
@@ -275,7 +288,7 @@ v1 では秒でした。そして**実行時にそれを知らせるものは何
 
 そして block を離れることがそれを**完了**と記すので、`timeout` はその block を名指す [`waitForBlocks`](/ja/guide/async-tracks) を解除するものでもあります。
 
-これら九つのうち、走査を変えるのは**二つ**だけです：`isAsync` と `waitForBlocks`。残りの七つは
+これら十のうち、走査を変えるのは**三つ**だけです：`isAsync`、`waitForBlocks`、`inPortPerCharacter`。残りの七つは
 そのままゲームに渡され、どう扱うかはゲームが決めます。
 
 ================================================================================
@@ -680,6 +693,8 @@ engine は以下の handler を公開しています：
 | [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) | global | 統合 condition リゾルバー（choice の可視性 + condition の事前評価） |
 
 `onDialog`、`onChoice`、`onAction` は**必須**です — `start()` 呼び出し時に engine がその存在を検証し、欠けている場合は記述的なエラーをスローします。`onCondition` は `onResolveCondition` がインストールされている場合は**オプション**です — engine が事前評価された condition グループから自動ルーティングします。
+
+ROUTER block に handler は**なく**、必要でもありません：engine はすべての case を評価し、真の case それぞれの port を起動し、`then`（すべて成立）か `catch`（一つでも不成立）で自分で続行します。観測するには `handle.onBlock(id)` を使います — [Router block](/ja/guide/router) を参照。
 
 <!--@include: ../../_shared/handler-basic.md-->
 

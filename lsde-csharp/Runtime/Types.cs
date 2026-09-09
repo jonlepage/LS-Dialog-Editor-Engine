@@ -26,6 +26,11 @@ namespace LsdeDialogEngine
         public const string Choice = "choice";
         /// <summary>A test on game state. Exits by <c>out</c>/<c>default</c>, or by K1… with portPerCase.</summary>
         public const string Condition = "condition";
+        /// <summary>A dispatcher. Carries the SAME cases as a condition and reads them the opposite
+        /// way: every case is evaluated, each true one launches its port, and the flow then always
+        /// continues — by <c>then</c> when all of them held, by <c>catch</c> when any did not. A
+        /// router with no case at all leaves by <c>then</c>, the way Promise.all([]) resolves.</summary>
+        public const string Router = "router";
         /// <summary>A call into the game. Exits by <c>then</c>, or <c>catch</c> when a call failed.</summary>
         public const string Action = "action";
         /// <summary>A designer-only note. Never dispatched: the traversal steps over it.</summary>
@@ -93,10 +98,13 @@ namespace LsdeDialogEngine
         /// <summary>The default exit of a dialog, and the true exit of an if-style condition.</summary>
         public const string Out = "out";
 
-        /// <summary>The exit of an action block once its calls succeeded.</summary>
+        /// <summary>The nominal exit, on two block types: an action whose calls all succeeded, and a
+        /// router whose cases were ALL true.</summary>
         public const string Then = "then";
 
-        /// <summary>The exit of an action block when a call failed.</summary>
+        /// <summary>The exception exit, on the same two: an action where a call failed, and a router
+        /// where at least one case was false. On a router it does NOT cancel anything — the tracks of
+        /// the true cases are already running, exactly like a Promise.all that rejects.</summary>
         public const string Catch = "catch";
 
         /// <summary>The fallback exit of a condition block: no case matched.</summary>
@@ -230,7 +238,8 @@ namespace LsdeDialogEngine
         public string? Join { get; set; }
     }
 
-    /// <summary>One case of a condition block: the exit port, and what must hold for it.</summary>
+    /// <summary>One case of a condition or a router block: the exit port, and what must hold for it.
+    /// The data is identical on both; only the engine's reading differs — see BlockType.</summary>
     public class ConditionCase
     {
         /// <summary>The exit port of this case (K1…), or the block's Out when cases share one exit.</summary>
@@ -285,8 +294,9 @@ namespace LsdeDialogEngine
     /// keyed by bare id. Ids cannot collide — LSDE refuses a project property that takes a native
     /// name — so telling them apart is a lookup against NativePropertyIds, not a guess.</para>
     /// <para>Most are inert: Delay, Timeout, Debug, WaitInput, PortPerCharacter and
-    /// SkipIfMissingActor are passed through untouched. Two are not: IsAsync spawns a parallel
-    /// track, and WaitForBlocks parks one until its blocks have FINISHED.</para>
+    /// SkipIfMissingActor are passed through untouched. Three are not: IsAsync spawns a parallel
+    /// track, WaitForBlocks parks one until its blocks have FINISHED, and InPortPerCharacter makes
+    /// the wire name the actor.</para>
     /// <para><b>Inert is not the same as free.</b> A writer who fills a field in expects a
     /// behaviour, and the doc on each property below says which one. Timeout is the one that is
     /// easy to implement backwards, so read it before wiring a timer.</para>
@@ -330,6 +340,16 @@ namespace LsdeDialogEngine
         /// <summary>One exit port per actor CARD ID, with Out as the fallback.</summary>
         public bool? PortPerCharacter { get; set; }
 
+        /// <summary>One ENTRY port per actor CARD ID, "in" as the fallback — the mirror of
+        /// PortPerCharacter.
+        /// <para>The wire names the speaker: a link's ToPort carries the CARD ID of the actor the
+        /// block is to be assigned to on that pass. This is what lets several wires reach one block
+        /// and each stand for a different actor — a block alone cannot tell which path brought it.</para>
+        /// <para>The engine still ASKS: OnResolveCharacter is handed that one actor rather than the
+        /// whole cast, and a game that returns null says the character does not exist. Entering
+        /// through "in" names nobody, and the callback gets the whole list as everywhere else.</para></summary>
+        public bool? InPortPerCharacter { get; set; }
+
         /// <summary>Skip the block when its actor is absent at runtime. Passed through.</summary>
         public bool? SkipIfMissingActor { get; set; }
 
@@ -359,15 +379,15 @@ namespace LsdeDialogEngine
         public List<string>? WaitForBlocks { get; set; }
     }
 
-    /// <summary>The nine ids of NativeProperties, to sort a Props bag into natives and the writer's
+    /// <summary>The ten ids of NativeProperties, to sort a Props bag into natives and the writer's
     /// own properties. Anything not in here belongs to the game.</summary>
     public static class NativePropertyIds
     {
-        /// <summary>The nine ids LSDE reserves. Everything else in <c>Props</c> is the writer's own.</summary>
+        /// <summary>The ten ids LSDE reserves. Everything else in <c>Props</c> is the writer's own.</summary>
         public static readonly string[] All =
         {
             "isAsync", "delay", "timeout", "waitInput", "debug",
-            "portPerCharacter", "skipIfMissingActor", "portPerCase", "waitForBlocks",
+            "portPerCharacter", "inPortPerCharacter", "skipIfMissingActor", "portPerCase", "waitForBlocks",
         };
 
         /// <summary>Whether an id in <c>Props</c> is a native rather than one of the writer's properties.</summary>
@@ -428,7 +448,7 @@ namespace LsdeDialogEngine
         /// <summary>Action blocks: what to run, in order.</summary>
         public List<ActionCall>? Calls { get; set; }
 
-        /// <summary>Condition blocks: the cases, in evaluation order.</summary>
+        /// <summary>Condition AND router blocks: the cases, in evaluation order.</summary>
         public List<ConditionCase>? Cases { get; set; }
 
         /// <summary>Choice blocks: the answers, in display order.</summary>
@@ -523,7 +543,12 @@ namespace LsdeDialogEngine
     /// <summary>Single diagnostic entry (error or warning).</summary>
     public class DiagnosticEntry
     {
-        /// <summary>Machine-readable error/warning code (e.g. "NO_ENTRY_BLOCK").</summary>
+        /// <summary>Machine-readable code, e.g. BROKEN_LINK or UNKNOWN_WAIT_BLOCK.
+        /// <para>The seventeen the engine emits are listed in the Getting Started guide, split into
+        /// the eleven that refuse the payload and the six that let it play. It is a string and not
+        /// an enum on purpose: a runtime is allowed to add one — TypeScript and GDScript read the
+        /// raw payload and can say WRONG_NAMING_CONVENTION, where this runtime only ever sees a
+        /// typed object and reports INVALID_FORMAT for the same file.</para></summary>
         public string Code { get; set; } = "";
 
         /// <summary>Human-readable description of the issue.</summary>
@@ -662,6 +687,19 @@ namespace LsdeDialogEngine
         void Resolve(string port);
 
         /// <summary>The block's cases, each with its port and its pre-evaluated Result.</summary>
+        IReadOnlyList<RuntimeConditionCase> Cases { get; }
+    }
+
+    /// <summary>What a ROUTER handler gets.
+    /// <para>The same pre-evaluated Cases as a condition, and <b>no Resolve</b>: a router's exits
+    /// are a tally, not a choice. Every true case has already launched its port and the
+    /// continuation is already picked — "then" when they all held, "catch" otherwise — by the time
+    /// a handler could speak. There is nothing left to override, which is also why no handler is
+    /// required for the type: the engine dispatches nothing and advances on its own. A game that
+    /// wants to watch one router still can, through OnBlock(id).</para></summary>
+    public interface IRouterContext : IBaseBlockContext
+    {
+        /// <summary>The block's cases, each with its port and its pre-evaluated Result. ALL of them ran.</summary>
         IReadOnlyList<RuntimeConditionCase> Cases { get; }
     }
 
@@ -828,7 +866,8 @@ namespace LsdeDialogEngine
     /// Scene-level handlers are called BEFORE global handlers. Both execute unless PreventGlobalHandler() is called.</para></summary>
     public interface ISceneHandle
     {
-        /// <summary>Start the scene flow. Validates that all 4 mandatory handlers are registered — throws if any are missing.</summary>
+        /// <summary>Start the scene flow from the entry block. Throws when a type handler the scene needs is missing.
+        /// <para>OnCondition is optional once OnResolveCondition is installed, and a ROUTER block needs no handler at all.</para></summary>
         void Start();
 
         /// <summary>Cancel the scene flow. All async tracks are cancelled, cleanup runs, OnSceneExit fires.</summary>
@@ -983,6 +1022,14 @@ namespace LsdeDialogEngine
 
         /// <summary>CONDITION only: the port its cases picked — "out", "default", or K1….</summary>
         public string? ConditionPort { get; set; }
+
+        /// <summary>ROUTER only: every port it leaves by, in order — the K* of each true case, then
+        /// "then" or "catch" LAST.
+        /// <para>A list and not one port, because a router does not pick an exit: it launches one
+        /// per true case and continues besides. The continuation comes last so that the traversal,
+        /// which keeps the first non-async target as the main flow, keeps then/catch when the case
+        /// routes are async — which is the arrangement LSDE recommends.</para></summary>
+        public List<string>? RouterPorts { get; set; }
 
         /// <summary>ACTION only: true when a call failed, so "catch" is tried before "then".</summary>
         public bool? ActionRejected { get; set; }

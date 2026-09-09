@@ -1,8 +1,5 @@
 # Le bloc Router
 
-> **À venir.** Le contrat est figé, le bloc n'est pas encore implémenté dans le moteur. Cette page
-> décrit ce qu'il fera, et n'est pas encore dans le menu du site.
-
 Un Router **lance toutes les routes dont la condition est remplie**, attend celles qui bloquent,
 puis dit si toutes les conditions l'étaient.
 
@@ -129,7 +126,13 @@ engine.onResolveCondition((test) => {
 
 Le moteur décide quels ports partent et choisit `then` ou `catch`. Rien à router à la main.
 
-Le handler d'observation (`onRouter`) n'est pas encore arrêté. Il sera optionnel.
+Il n'y a **pas de handler `onRouter`**, et il n'en faut pas : au moment où un handler pourrait
+parler, chaque cas vrai a déjà lancé son port et la continuation est déjà choisie — il ne reste
+rien à répondre. `start()` n'en exige aucun. Pour observer un routeur — journaliser ce qui a tenu,
+alimenter une vue de debug — passez par `handle.onBlock(id)` : son contexte porte les `cases`
+pré-évalués, TOUS, et aucun `resolve`.
+
+<!--@include: ../../_shared/block-router.md-->
 
 ## Pièges
 

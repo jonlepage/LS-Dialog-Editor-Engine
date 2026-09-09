@@ -2,7 +2,7 @@
 
 Blocks are the building blocks of a dialogue scene — each node in the editor graph is a block. The engine routes the flow from block to block and calls the matching handler for each type.
 
-There are 5 types: **Dialog**, **Choice**, **Condition**, **Action**, and **Note**. The first four are content blocks with a dedicated handler (`onDialog`, `onChoice`, `onCondition`, `onAction`) — all four are **required** and validated when `start()` is called. Note blocks are skipped automatically.
+There are 6 types: **Dialog**, **Choice**, **Condition**, **Router**, **Action**, and **Note**. Dialog, Choice, Condition and Action are content blocks with a dedicated handler (`onDialog`, `onChoice`, `onCondition`, `onAction`) — all four are **required** and validated when `start()` is called. A Router has no handler: the engine dispatches it on its own. Note blocks are skipped automatically.
 
 Handlers come in two tiers: **global handlers** (registered on the engine) cover all scenes and are sufficient for most games. **Scene handlers** (registered on a [`SceneHandle`](/api-ref/interfaces/SceneHandle)) can supplement or override globals for a specific scene. See [Handlers](/guide/handlers) for details.
 
@@ -43,6 +43,18 @@ A test whose dictionary is the reserved word **`choice`** reads an answer the pl
 
 <!--@include: ../_shared/block-condition.md-->
 
+## ROUTER
+
+A router carries the **same `cases`** as a condition and reads them the opposite way. A condition asks *which one* holds and leaves by a single port; a router asks *which ones*: it evaluates **every** case, launches the port of each true one, and then always continues — by `then` when all of them held, by `catch` when any did not. A router with no case at all leaves by `then`, the way `Promise.all([])` resolves.
+
+Its `K*` routes are walked like any other port: an `isAsync` target opens its own track, the others are walked in turn, and the continuation comes **last**. `catch` cancels nothing — the tracks of the true cases are already running.
+
+There is **no `onRouter` handler** and `start()` requires none: the engine dispatches a router on its own. To observe one, use `handle.onBlock(id)`.
+
+<!--@include: ../_shared/block-router.md-->
+
+See [The Router Block](/guide/router) for the full contract and diagrams, and [Distributing characters](/guide/character-distribution) for `inPortPerCharacter` — the entry port a router's routes typically name.
+
 ## ACTION
 
 An action block fires side effects in the game — give an item, play a sound, set a flag. `context.calls` carries the calls: each cites the `fn` of a declared [function](/guide/blueprints#functions), and its `args` arrive **by name**, never by position. The handler executes them then calls `context.resolve()` to follow the `then` port, or `context.reject()` to follow the `catch` port — and when the designer wired no `catch`, the flow carries on through `then` rather than stranding the player.
@@ -61,7 +73,7 @@ All blocks share these base fields ([`BlueprintBlockBase`](/api-ref/type-aliases
 |-------|------|-------------|
 | `id` | `string` | Identity **relative to its scene** — `DIALOG-002`. Ids repeat across scenes. |
 | `key` | `string` | The full i18n key, as the localization files carry it |
-| `type` | `BlockType` | `dialog`, `choice`, `condition`, `action` or `note` |
+| `type` | `BlockType` | `dialog`, `choice`, `condition`, `router`, `action` or `note` |
 | `label` | `string?` | Readable name, when the writer set one |
 | `parentLabels` | `string[]?` | Parent folder hierarchy from the editor |
 | `note` | `string?` | The writer's own note |
@@ -71,7 +83,7 @@ All blocks share these base fields ([`BlueprintBlockBase`](/api-ref/type-aliases
 | `text` | `TextByLocale?` | The text per locale, when the export is inline |
 | `props` | `PropertyBag?` | **One bag**: the natives and the writer's own properties, by bare id |
 | `options` | `Option[]?` | CHOICE only |
-| `cases` | `ConditionCase[]?` | CONDITION only |
+| `cases` | `ConditionCase[]?` | CONDITION and ROUTER — the same data, read in opposite ways |
 | `calls` | `ActionCall[]?` | ACTION only |
 | `next` | `Link[]?` | **The block's outgoing wires.** There is no connection table in v2 |
 
@@ -79,7 +91,7 @@ The entry block is not flagged on the block: the **scene** names it, in `scene.s
 
 ### NativeProperties
 
-The nine properties the **engine** reads, taken out of `props`. Ids cannot collide — LSDE refuses a project property that takes a native name — so telling them apart is a plain lookup.
+The ten properties the **engine** reads, taken out of `props`. Ids cannot collide — LSDE refuses a project property that takes a native name — so telling them apart is a plain lookup.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -90,6 +102,7 @@ The nine properties the **engine** reads, taken out of `props`. Ids cannot colli
 | `waitInput` | `boolean?` | Wait for player input. Passed through, never interpreted — **outranked by `timeout`** |
 | `debug` | `boolean?` | Debug flag for the editor. Passed through |
 | `portPerCharacter` | `boolean?` | The block leaves by a port **named by the actor's card id**, instead of `out` |
+| `inPortPerCharacter` | `boolean?` | The wire **names the actor**: a link's `toPort` is a card id, and only that actor is offered to `onResolveCharacter`. See [Distributing characters](/guide/character-distribution) |
 | `skipIfMissingActor` | `boolean?` | Passed through — the game decides |
 | `portPerCase` | `boolean?` | CONDITION: each case leaves by **its own port** (`K1`…) instead of sharing `out` |
 
@@ -107,4 +120,4 @@ It **outranks `waitInput`**, and it outranks leaving immediately. All three say 
 And since leaving a block is what marks it **finished**, a `timeout` is also what releases a [`waitForBlocks`](/guide/async-tracks) that names it.
 :::
 
-Only **two** of these change anything about the traversal: `isAsync` and `waitForBlocks`. The other seven are handed to the game untouched.
+Only **three** of these change anything about the traversal: `isAsync`, `waitForBlocks` and `inPortPerCharacter`. The other seven are handed to the game untouched.

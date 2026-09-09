@@ -31,7 +31,7 @@ SceneHandleImpl::~SceneHandleImpl() {
 void SceneHandleImpl::start() {
     if (_running) return;
 
-    // Validate that all 4 mandatory handlers are registered
+    // Validate the type handlers this scene needs
     std::vector<std::string> missing;
     if (!_sceneRegistry.dialogHandler && !_globalRegistry.dialogHandler) missing.push_back("onDialog");
     if (!_sceneRegistry.choiceHandler && !_globalRegistry.choiceHandler) missing.push_back("onChoice");
@@ -46,9 +46,10 @@ void SceneHandleImpl::start() {
             if (i > 0) msg += ", ";
             msg += missing[i];
         }
-        msg += ".\nRegister all 4 handlers before starting:\n"
+        msg += ".\nRegister handlers before starting:\n"
                "  engine.onDialog(handler)\n  engine.onChoice(handler)\n"
-               "  engine.onCondition(handler)\n  engine.onAction(handler)";
+               "  engine.onCondition(handler)\n  engine.onAction(handler)\n"
+               "Note: onCondition is optional when engine.onResolveCondition() is installed.";
         throw std::runtime_error(msg);
     }
 
@@ -61,7 +62,7 @@ void SceneHandleImpl::start() {
     if (startBlock) {
         // The flow the player watches is a track like any other. The only thing that sets it
         // apart is what happens when it ends — see trackEnded.
-        auto track = std::make_unique<Track>(*this, *startBlock, kMainTrackId, -1);
+        auto track = std::make_unique<Track>(*this, *startBlock, kMainTrackId, -1, Ports::In);
         _mainTrack = track.get();
         _tracks.push_back(std::move(track));
         _mainTrack->start();
@@ -153,11 +154,12 @@ void SceneHandleImpl::addCompleted(const std::string& blockId) {
     }
 }
 
-int SceneHandleImpl::spawnTrack(const BlueprintBlock& startBlock, int parentTrackId) {
+int SceneHandleImpl::spawnTrack(const BlueprintBlock& startBlock, int parentTrackId,
+                                const std::string& entryPort) {
     int trackId = _nextTrackId++;
     // -1 when the main flow opened it — the convention TrackInfo publishes.
     const int parent = parentTrackId == kMainTrackId ? -1 : parentTrackId;
-    auto track = std::make_unique<Track>(*this, startBlock, trackId, parent);
+    auto track = std::make_unique<Track>(*this, startBlock, trackId, parent, entryPort);
     auto* trackPtr = track.get();
     _tracks.push_back(std::move(track));
     trackPtr->start();
@@ -188,11 +190,11 @@ std::exception_ptr SceneHandleImpl::trackEnded(Track* track) {
     return shutdown();
 }
 
-bool SceneHandleImpl::runValidation(const BlueprintBlock& block, const BlueprintBlock* fromBlock,
-                                    const Card* fromCharacter) {
+bool SceneHandleImpl::runValidation(const BlueprintBlock& block, const std::string& entryPort,
+                                    const BlueprintBlock* fromBlock, const Card* fromCharacter) {
     if (!_globalRegistry.validateNextBlockHandler) return true;
 
-    ResolvedCards nextCards = resolveCardsFor(block);
+    ResolvedCards nextCards = resolveCardsFor(block, entryPort);
 
     ValidateNextBlockArgs args;
     args.nextBlock = &block;
@@ -229,8 +231,9 @@ bool SceneHandleImpl::isCompleted(const std::string& blockId) const {
 /// parallelTracks() filters on isRunning(). It is freed with the scene handle.
 void SceneHandleImpl::retireTrack(Track*) {}
 
-std::unique_ptr<IBaseBlockContext> SceneHandleImpl::createBlockContext(const BlueprintBlock& block) {
-    return createContext(block);
+std::unique_ptr<IBaseBlockContext> SceneHandleImpl::createBlockContext(const BlueprintBlock& block,
+                                                                        const std::string& entryPort) {
+    return createContext(block, entryPort);
 }
 
 void SceneHandleImpl::recordChoice(const std::string& blockId, const std::string& optionId) {
@@ -344,12 +347,40 @@ ConditionEvaluatorFn SceneHandleImpl::visibilityEvaluator() {
     };
 }
 
-ResolvedCards SceneHandleImpl::resolveCardsFor(const BlueprintBlock& block) const {
+ResolvedCards SceneHandleImpl::resolveCardsFor(const BlueprintBlock& block,
+                                               const std::string& entryPort) const {
     auto lookup = _callbacks.getCard
         ? _callbacks.getCard
         : std::function<const Card*(const std::string&)>{[](const std::string&) { return nullptr; }};
-    return ResolvedCards::resolve(block, lookup, getResolveCharacterFn());
+    std::optional<std::string> designated;
+    if (getNativeProperties(block).inPortPerCharacter.value_or(false) && entryPort != Ports::In) {
+        designated = entryPort;
+    }
+    return ResolvedCards::resolve(block, lookup, getResolveCharacterFn(), designated);
 }
+
+std::vector<RuntimeConditionCase> SceneHandleImpl::evaluateCases(const BlueprintBlock& block) {
+    ConditionEvaluatorFn evaluate = routingEvaluator();
+    std::vector<RuntimeConditionCase> cases;
+    cases.reserve(block.cases.size());
+    for (const auto& conditionCase : block.cases) {
+        RuntimeConditionCase runtimeCase;
+        runtimeCase.port = conditionCase.port;
+        runtimeCase.when = conditionCase.when;
+        runtimeCase.result = evaluateConditionChain(conditionCase.when, evaluate);
+        cases.push_back(std::move(runtimeCase));
+    }
+    return cases;
+}
+
+namespace {
+std::vector<bool> resultsOf(const std::vector<RuntimeConditionCase>& cases) {
+    std::vector<bool> results;
+    results.reserve(cases.size());
+    for (const auto& c : cases) results.push_back(c.result.value_or(false));
+    return results;
+}
+} // namespace
 
 // ─── Scene lifecycle ─────────────────────────────────────────────────────────
 
@@ -376,11 +407,11 @@ ResolveCharacterFn SceneHandleImpl::getResolveCharacterFn() const {
 
 // ─── Context creation ────────────────────────────────────────────────────────
 
-// Cards are resolved fresh every time, never cached. This runs for the main track AND for async
-// tracks (through createBlockContext), and a cache would leak the main track's actor into a track
-// released later by waitForBlocks.
-std::unique_ptr<IBaseBlockContext> SceneHandleImpl::createContext(const BlueprintBlock& block) {
-    ResolvedCards cards = resolveCardsFor(block);
+// Cards are resolved fresh every time, never cached. This runs for every track, and a cache would
+// leak one track's actor into another released later by waitForBlocks.
+std::unique_ptr<IBaseBlockContext> SceneHandleImpl::createContext(const BlueprintBlock& block,
+                                                                  const std::string& entryPort) {
+    ResolvedCards cards = resolveCardsFor(block, entryPort);
 
     if (block.type == BlockType::Dialog) {
         return std::unique_ptr<IBaseBlockContext>(new InternalDialogContext(block, std::move(cards)));
@@ -397,30 +428,25 @@ std::unique_ptr<IBaseBlockContext> SceneHandleImpl::createContext(const Blueprin
     }
 
     if (block.type == BlockType::Condition) {
-        ConditionEvaluatorFn evaluate = routingEvaluator();
-        bool portPerCase = getNativeProperties(block).portPerCase.value_or(false);
-
         // Every case is evaluated up front, so the handler is handed results rather than
         // questions. With a resolver installed the engine already knows where to go, which is what
         // makes onCondition optional: the handler becomes a place to log or to override.
-        //
-        // ONCE. The port is read off these same results rather than re-asking the game: each test
-        // reaches onResolveCondition exactly one time, whatever the mode and whichever case matches.
-        std::vector<RuntimeConditionCase> cases;
-        std::vector<bool> results;
-        cases.reserve(block.cases.size());
-        results.reserve(block.cases.size());
-        for (const auto& conditionCase : block.cases) {
-            RuntimeConditionCase runtimeCase;
-            runtimeCase.port = conditionCase.port;
-            runtimeCase.when = conditionCase.when;
-            runtimeCase.result = evaluateConditionChain(conditionCase.when, evaluate);
-            results.push_back(runtimeCase.result.value_or(false));
-            cases.push_back(std::move(runtimeCase));
-        }
-
+        auto cases = evaluateCases(block);
+        auto results = resultsOf(cases);
+        bool portPerCase = getNativeProperties(block).portPerCase.value_or(false);
         auto* ctx = new InternalConditionContext(block, std::move(cards), std::move(cases));
         ctx->conditionPort = pickPortFromResults(block.cases, portPerCase, results);
+        return std::unique_ptr<IBaseBlockContext>(ctx);
+    }
+
+    if (block.type == BlockType::Router) {
+        // The same cases, read the opposite way: EVERY case counts, each true one launches its
+        // port, and the tally picks then or catch. That difference lives entirely in
+        // pickRouterPorts — there is no second evaluator and no router-specific hook.
+        auto cases = evaluateCases(block);
+        auto results = resultsOf(cases);
+        auto* ctx = new InternalRouterContext(block, std::move(cards), std::move(cases));
+        ctx->routerPorts = pickRouterPorts(block.cases, results);
         return std::unique_ptr<IBaseBlockContext>(ctx);
     }
 

@@ -61,6 +61,7 @@ bool globalPrevented(IBaseBlockContext* ctx) {
     if (auto* dc = dynamic_cast<InternalDialogContext*>(ctx)) return dc->globalPrevented;
     if (auto* cc = dynamic_cast<InternalChoiceContext*>(ctx)) return cc->globalPrevented;
     if (auto* cndc = dynamic_cast<InternalConditionContext*>(ctx)) return cndc->globalPrevented;
+    if (auto* rc = dynamic_cast<InternalRouterContext*>(ctx)) return rc->globalPrevented;
     if (auto* ac = dynamic_cast<InternalActionContext*>(ctx)) return ac->globalPrevented;
     return false;
 }
@@ -69,12 +70,13 @@ bool globalPrevented(IBaseBlockContext* ctx) {
 
 // ─── Track ───────────────────────────────────────────────────────────────────
 
-Track::Track(ITrackHost& host, const BlueprintBlock& startBlock, int id_, int parentTrackId_)
+Track::Track(ITrackHost& host, const BlueprintBlock& startBlock, int id_, int parentTrackId_,
+             std::string startEntryPort)
     : id(id_), parentTrackId(parentTrackId_), startBlockId(startBlock.id),
-      _host(host), _startBlock(&startBlock) {}
+      _host(host), _startBlock(&startBlock), _startEntryPort(std::move(startEntryPort)) {}
 
 void Track::start() {
-    processBlock(*_startBlock);
+    processBlock(*_startBlock, _startEntryPort);
 }
 
 std::exception_ptr Track::cancel() {
@@ -130,7 +132,7 @@ TrackInfo Track::getTrackInfo() const {
 /// 3. Ask onValidateNextBlock. The game's gate; a refusal stops this track.
 /// 4. Mark it current and visited, which may release another parked track.
 /// 5. Fire onBeforeBlock, whose resolve() releases the type handler.
-void Track::processBlock(const BlueprintBlock& startingBlock) {
+void Track::processBlock(const BlueprintBlock& startingBlock, const std::string& entryPort) {
     if (!_running || !_host.isSceneRunning()) return;
 
     const SceneGraph& sceneGraph = _host.hostSceneGraph();
@@ -159,12 +161,15 @@ void Track::processBlock(const BlueprintBlock& startingBlock) {
     const auto waitBlocks = getNativeProperties(block).waitForBlocks;
     if (!waitBlocks.empty() && !allCompleted(waitBlocks)) {
         const BlueprintBlock* parked = &block;
-        _pendingAdvance = [this, parked]() { processBlock(*parked); };
+        // The port is COPIED into the closure: the caller's string may be gone by the time the
+        // wait lifts.
+        _pendingAdvance = [this, parked, entryPort]() { processBlock(*parked, entryPort); };
         _host.registerWaitForBlocks(this, waitBlocks);
         return;
     }
 
-    if (!_host.runValidation(block, _previousBlock, _previousCard ? &(*_previousCard) : nullptr)) {
+    if (!_host.runValidation(block, entryPort, _previousBlock,
+                             _previousCard ? &(*_previousCard) : nullptr)) {
         // A refusal is a dead end like any other, so it ENDS this track.
         //
         // There is no API to resume a refused track - no goto, no retry, and start() refuses a
@@ -200,14 +205,14 @@ void Track::processBlock(const BlueprintBlock& startingBlock) {
         // block it already left.
         auto resolvedOnce = std::make_shared<bool>(false);
         auto natives = _currentNatives;  // held for as long as the game holds resolve()
-        args.resolve = [this, &block, resolvedOnce, natives]() {
+        args.resolve = [this, &block, resolvedOnce, natives, entryPort]() {
             if (*resolvedOnce) return;
             *resolvedOnce = true;
-            executeBlockHandler(block);
+            executeBlockHandler(block, entryPort);
         };
         registry.beforeBlockHandler(args);
     } else {
-        executeBlockHandler(block);
+        executeBlockHandler(block, entryPort);
     }
 }
 
@@ -216,7 +221,7 @@ void Track::processBlock(const BlueprintBlock& startingBlock) {
 /// next() is guarded and deferred: called during the handler it only raises a flag, and the
 /// advance happens once both handlers have returned. Otherwise a scene handler calling next()
 /// would move the flow on before the global handler ever ran.
-void Track::executeBlockHandler(const BlueprintBlock& block) {
+void Track::executeBlockHandler(const BlueprintBlock& block, const std::string& entryPort) {
     // `_running` and not just the scene's: a resolve() kept in a closure and fired after this
     // track ended would otherwise restart it on a dead flow.
     if (!_running || !_host.isSceneRunning()) return;
@@ -224,7 +229,7 @@ void Track::executeBlockHandler(const BlueprintBlock& block) {
     auto resolved = resolveHandler(block.type, block.id,
                                    &_host.hostSceneRegistry(), _host.hostGlobalRegistry());
 
-    _ownedContext = _host.createBlockContext(block);
+    _ownedContext = _host.createBlockContext(block, entryPort);
     auto* context = _ownedContext.get();
     if (!context) {
         advanceToNextBlock(block, nullptr);
@@ -326,6 +331,7 @@ void Track::advanceToNextBlock(const BlueprintBlock& block, IBaseBlockContext* c
     input.links = sceneGraph.getOutgoingLinks(block.id);
     if (auto* cc = dynamic_cast<InternalChoiceContext*>(context)) input.selectedOptionId = cc->selectedOptionId;
     if (auto* cndc = dynamic_cast<InternalConditionContext*>(context)) input.conditionPort = cndc->conditionPort;
+    if (auto* rc = dynamic_cast<InternalRouterContext*>(context)) input.routerPorts = rc->routerPorts;
     if (auto* ac = dynamic_cast<InternalActionContext*>(context)) input.actionRejected = ac->actionRejected;
     if (auto* dc = dynamic_cast<InternalDialogContext*>(context)) input.actorPort = dc->actorPort;
 
@@ -360,7 +366,7 @@ void Track::advanceToNextBlock(const BlueprintBlock& block, IBaseBlockContext* c
     for (const auto* link : detached) {
         auto* targetBlock = sceneGraph.getBlock(link->to);
         if (targetBlock) {
-            _childTrackIds.push_back(_host.spawnTrack(*targetBlock, id));
+            _childTrackIds.push_back(_host.spawnTrack(*targetBlock, id, link->toPort));
         }
     }
 
@@ -388,7 +394,7 @@ void Track::advanceToNextBlock(const BlueprintBlock& block, IBaseBlockContext* c
     if (continuation) {
         auto* nextBlock = sceneGraph.getBlock(continuation->to);
         if (nextBlock) {
-            processBlock(*nextBlock);
+            processBlock(*nextBlock, continuation->toPort);
             return;
         }
     }
@@ -410,7 +416,7 @@ std::exception_ptr Track::endBranch() {
         _queue.erase(_queue.begin());
         auto* target = sceneGraph.getBlock(link.to);
         if (!target) continue;
-        processBlock(*target);
+        processBlock(*target, link.toPort);
         return fault;
     }
 

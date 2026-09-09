@@ -2553,3 +2553,111 @@ Mesuré, pas recopié — les compteurs des README étaient tous faux (417, 133,
 - Les mentions de la v1 encore présentes dans `src/` sont toutes des commentaires qui expliquent ce
   qui a été retiré — `fromPortIndex`, `filterVisibleChoices`, `MULTIPLE_NON_ASYNC_FORK`, le mode
   dispatcher. Rien de vivant.
+
+
+# Parité des quatre runtimes sur le Router et `inPortPerCharacter` (2026-09-09)
+
+Jonathan a demandé de lire l'intégralité de la référence TypeScript et de lister **tout** ce qui
+manquait dans C#, C++ et GDScript — code et tests — pour qu'il n'y ait aucune divergence, paradigme
+mis à part. Lecture complète et personnelle des quatre runtimes (~22 000 lignes), de la spec
+partagée et des quatre runners ; pas de sous-agents, à sa demande.
+
+## Le constat
+
+Deux fonctionnalités v2 n'existaient **qu'en TypeScript**, commits `778f09e` (Router) et `e1ff0ba`
+(`inPortPerCharacter`) : les trois portages ne connaissaient que cinq types de blocs et neuf
+natives. Un blueprint avec un ROUTER ne jouait pas en Unity, Unreal ni Godot — `resolvePort`
+répondait « aucun fil », le contexte était `null`, le bloc avançait sans rien lancer — et un fil
+`toPort: "l1"` était ignoré, aucun portage ne lisant `link.toPort`. La spec partagée n'avait
+**aucun** cas pour l'un ni pour l'autre, ce qui est exactement pourquoi rien ne l'avait signalé.
+
+La référence avait aussi ses propres trous : `RouterBlock` et `RouterContext` non exportés dans
+`index.ts`, `LsdeUtils` sans `isRouterBlock` ni `pickRouterPorts`, et le guide `router.md` qui
+disait encore « Coming — not implemented in the engine yet » dans les quatre locales.
+
+Treize comportements n'étaient vérifiés qu'en TypeScript : les tiers de handlers
+(`preventGlobalHandler`, `onBlock` > type, `onDialogId`, dernier enregistré gagne, `onEnter` de
+Tier 2), `TrackInfo` et la cascade de `cancel()`, les arguments de `onValidateNextBlock`, les
+natives de `onBeforeBlock`, `getSceneConnections`, `setLocale`, `init` répété, `LsdeUtils` en
+entier, l'export par scène (`MISMATCHED_EXPORTS`), `notEquals` sur un choix jamais atteint, une
+scène dont l'entrée est une NOTE, et l'ordre des cleanups. L'action `resolveCondition` existait
+dans les quatre runners et **aucune suite ne l'employait**.
+
+## La décision : pas de handler de type pour le Router
+
+La référence TS n'en a pas — `getTypeHandler` répond `null`, `start()` ne l'exige pas, le bloc
+avance seul — et les trois portages suivent : pas d'`OnRouter`, pas d'`OnRouterId`. Un routeur
+s'observe par `onBlock(id)`, avec un `RouterContext` qui porte les `cases` pré-évalués et **aucun
+`resolve`** : au moment où un handler pourrait parler, chaque cas vrai a lancé son port et la
+continuation est choisie, il ne reste rien à répondre. C'est ce que le § 5 quinquies du lecteur de
+blueprint dit aussi : le routeur lance ses pistes lui-même.
+
+## Ce qui a été porté, à l'identique dans les trois
+
+- `BlockType.Router`, `IRouterContext` / `RouterContext` (cases seulement), `PortResolutionInput`
+  gagne `routerPorts`, `resolvePort` une branche Router, `ConditionEvaluator` un `pickRouterPorts`
+  (le port de chaque cas vrai, puis `then` si tous / `catch` sinon — **en dernier**, ce qui garde
+  la continuation comme piste principale quand les routes sont async).
+- `inPortPerCharacter` : dixième id natif partout ; `resolveCards` prend un `designatedActorId` ;
+  `entryPort` traverse toute la chaîne `Track` ctor → `processBlock` → `runValidation` /
+  `createBlockContext` → `resolveCardsFor`, et `spawnTrack` / `processBlock` reçoivent le `toPort`
+  du fil suivi — dans `advanceToNextBlock` ET dans `endBranch`.
+- `evaluateCases` factorisé, partagé par CONDITION et ROUTER, comme en TS.
+- `LsdeUtils.isRouterBlock` et `pickRouterPorts` dans les quatre ; TS exporte `RouterBlock` et
+  `RouterContext`. C# : `DialogueEngine : IDialogueEngine`, qui existait sans être implémentée.
+- Le message de `start()` sur un handler manquant est aligné sur TS dans les trois (la note sur
+  `onCondition` facultatif y compris).
+- Docs mortes retirées : `NO_ENTRY_BLOCK` / `ORPHAN_CONNECTION` dans `DiagnosticEntry.code` (C#,
+  C++), « the fork rule (at most one non-async target per port) » dans les quatre validateurs,
+  `resolve(true)` dans l'exemple d'`engine.h`, « visited » → FINISHED sur `validateWaits`.
+
+## La spec partagée : 52 suites / 59 cas → 72 suites / 81 cas
+
+Nouveaux : `router-all-true-in-turn` (routing — l'ordre des ports résolus prime sur celui du
+fichier), `router-all-true-beside`, `router-one-false`, `router-none-true`, `router-no-cases`,
+`router-continuation-unwired`, `router-case-branch-depth-first`, `router-unwired-case-port`,
+`router-loads-clean`, `in-port-per-character` (deux passes du même bloc, `characterId` `var1`
+puis `var2`), `in-port-per-character-through-in`, `condition-handler-override` (2 cas),
+`choice-memory-not-equals` (2), `choice-memory-never-reached`, `note-as-start-block`,
+`note-only-scene`, et quatre suites `per-scene-files-*` sur un nouveau champ de suite
+`blueprintFiles`. Deux ajouts aux quatre runners : `expect.characterId` et `blueprintFiles`.
+
+Le routeur figure dans `expectedVisited` : la traversée marque un bloc atteint **avant** de
+chercher son handler. Une seule asymétrie assumée : `per-scene-files-empty` (`MISSING_DATA`) ne
+s'exprime pas en C++, où une struct de payload existe toujours — le runner C++ saute ce cas et
+l'imprime, plutôt que de passer une struct par défaut et d'appeler `INVALID_FORMAT` une réussite.
+
+## Les tests natifs ajoutés, mêmes noms dans les trois portages
+
+`RouterTests`, `InPortPerCharacterTests`, `HandlerTierTests`, `TrackInfoTests`,
+`ValidationHookTests`, `EngineFacadeTests`, `LsdeUtilsTests`, plus trois cas `pickRouterPorts`
+dans les tests de l'évaluateur. En C#, `[assembly: CollectionBehavior(DisableTestParallelization
+= true)]` : `LsdeUtils.Locale` est un état statique que le runner croisé écrit, et deux classes qui
+s'y disputent feraient clignoter « throws when no locale was ever set ».
+
+## Relevé mesuré
+
+| runtime | avant | après |
+|---|---|---|
+| TypeScript | 461 | **485 / 485** (`tsc --noEmit` propre) |
+| C# | 140 | **227 / 227** (201 + 13 + 13), 0 avertissement de build |
+| C++ | 64 | **129 / 129**, 0 avertissement |
+| GDScript | 175 | **358 / 358** |
+| spec partagée | 52 / 59 | **72 suites / 81 cas** |
+
+## Différences de paradigme, laissées telles quelles
+
+`InitOptions` (`data: X | X[]` en TS ; `data` + `files` ailleurs) ; `TrackInfo.parentTrackId`
+(`null` / `-1`) et `currentBlockId` (`null` / `""`) ; `hasFromContext` en C++ ; `push_error` +
+`null` en GDScript là où les trois autres lèvent ; `WRONG_NAMING_CONVENTION` en TS et GD
+seulement ; `MISSING_DATA` impossible en C++ ; `getVisitedBlocks` en `Set` ou en liste ordonnée.
+Un cas limite inatteignable par un export LSDE reste divergent en connaissance de cause : un test
+`choice` dont `value` n'est pas une chaîne — C# répond par `ToString()`, C++ par `negated`, GD
+par une comparaison de `Variant`. Un `value` de test `choice` est toujours un id d'option.
+
+## Ce que ce relevé ne dit pas
+
+Les suites partagées d'attente (`wait-for-blocks-*`, `port-with-only-async-targets`) laissent
+volontairement des scènes en cours ; sous Godot, le processus quitte alors avec un avertissement
+« ObjectDB instances leaked », préexistant et attendu — un cycle handle ↔ track qu'une scène
+parquée ne rompt pas.

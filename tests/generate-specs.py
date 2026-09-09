@@ -1139,6 +1139,458 @@ flow_suites += [
 ]
 
 
+# ── ROUTER and inPortPerCharacter ────────────────────────────────────────────
+#
+# The sixth block type and the entry port that names the speaker. Both were implemented in the
+# reference runtime first, and nothing here exercised them - which is how the three ports shipped
+# without either, and how a blueprint carrying a ROUTER played in TypeScript and stopped dead in
+# Unity, Unreal and Godot. These suites are the transcription of `branch-queue.test.ts` (the
+# ROUTER section) and `in-port-per-character.test.ts`, so a port cannot claim the feature without
+# playing it.
+#
+# A ROUTER has NO handler: every true case launches its port and the tally picks `then` or `catch`
+# before a handler could speak, so the engine dispatches nothing and advances on its own. It still
+# counts as VISITED - the traversal marks a block reached before it looks for a handler - which is
+# why it opens every `expectedVisited` below.
+
+
+def rtr(bid, cases, **kw):
+    return block(bid, "router", cases=cases, **kw)
+
+
+ROUTER_CASES = [
+    {"port": "K1", "when": [cmp_("switches", "door_unlocked", True)]},
+    {"port": "K2", "when": [cmp_("switches", "met_vesk", True)]},
+    {"port": "K3", "when": [cmp_("variables", "credits", 50, "greaterOrEqual")]},
+]
+
+
+def router_scene(async_routes):
+    """A three-case router whose K* routes are, or are not, isAsync. The continuation ports are
+    written FIRST in `next` on purpose: the order the flow follows is the order of the ports the
+    router resolved - K1, K2, K3, then the continuation - never the order of the file."""
+    route = {"isAsync": True} if async_routes else None
+    return scene("s1", [
+        rtr("ROUTER-001", ROUTER_CASES, next=[
+            wire("then", "DIALOG-004"), wire("catch", "DIALOG-005"),
+            wire("K1", "DIALOG-001"), wire("K2", "DIALOG-002"), wire("K3", "DIALOG-003"),
+        ]),
+        dlg("DIALOG-001", "Route one", props=route),
+        dlg("DIALOG-002", "Route two", props=route),
+        dlg("DIALOG-003", "Route three", props=route),
+        dlg("DIALOG-004", "All of them held"),
+        dlg("DIALOG-005", "One did not"),
+    ])
+
+
+flow_suites += [
+    {
+        "id": "router-all-true-beside",
+        "description": "Every case true, routes isAsync: each runs on its own track, then continues at once.",
+        "blueprint": header([router_scene(async_routes=True)]),
+        "sceneId": "s1",
+        "cases": [{
+            "id": "three-tracks-then-then",
+            "steps": [
+                {"expect": {"type": "dialog", "blockId": "DIALOG-001"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-002"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-003"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-004"}, "action": {"type": "next"}},
+            ],
+            "expectedVisited": ["ROUTER-001", "DIALOG-001", "DIALOG-002", "DIALOG-003", "DIALOG-004"],
+            "expectedCleanupCalls": 4,
+            "orderIndependent": True,
+        }],
+    },
+    {
+        "id": "router-one-false",
+        "description": "One case false: the true routes still run, and the exit is catch.",
+        "blueprint": header([router_scene(async_routes=False)]),
+        "sceneId": "s1",
+        "stateBridge": {"conditions": {"switches.met_vesk": False}},
+        "cases": [{
+            "id": "k1-k3-then-catch",
+            "steps": [
+                {"expect": {"type": "dialog", "blockId": "DIALOG-001"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-003"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-005"}, "action": {"type": "next"}},
+            ],
+            "expectedVisited": ["ROUTER-001", "DIALOG-001", "DIALOG-003", "DIALOG-005"],
+            "expectedCleanupCalls": 3,
+        }],
+    },
+    {
+        "id": "router-none-true",
+        "description": "No case true: catch alone, nothing launched.",
+        "blueprint": header([router_scene(async_routes=False)]),
+        "sceneId": "s1",
+        "stateBridge": {"conditions": {
+            "switches.door_unlocked": False, "switches.met_vesk": False, "variables.credits": False,
+        }},
+        "cases": [{
+            "id": "catch-alone",
+            "steps": [
+                {"expect": {"type": "dialog", "blockId": "DIALOG-005"}, "action": {"type": "next"}},
+            ],
+            "expectedVisited": ["ROUTER-001", "DIALOG-005"],
+            "expectedCleanupCalls": 1,
+        }],
+    },
+    {
+        "id": "router-no-cases",
+        "description": "A router with no case at all leaves by then, the way Promise.all([]) resolves.",
+        "blueprint": header([scene("s1", [
+            rtr("ROUTER-001", [], next=[wire("then", "DIALOG-001"), wire("catch", "DIALOG-002")]),
+            dlg("DIALOG-001", "Nothing to check"),
+            dlg("DIALOG-002", "Must not be taken"),
+        ])]),
+        "sceneId": "s1",
+        "cases": [{
+            "id": "the-empty-tally-is-then",
+            "steps": [
+                {"expect": {"type": "dialog", "blockId": "DIALOG-001"}, "action": {"type": "next"}},
+            ],
+            "expectedVisited": ["ROUTER-001", "DIALOG-001"],
+        }],
+    },
+    {
+        "id": "router-continuation-unwired",
+        "description": "Neither then nor catch is wired: the routes are still walked, then the track ends.",
+        "blueprint": header([scene("s1", [
+            rtr("ROUTER-001", ROUTER_CASES[:2], next=[wire("K1", "DIALOG-001"), wire("K2", "DIALOG-002")]),
+            dlg("DIALOG-001", "Route one"),
+            dlg("DIALOG-002", "Route two"),
+        ])]),
+        "sceneId": "s1",
+        "cases": [{
+            "id": "routes-then-the-end",
+            "steps": [
+                {"expect": {"type": "dialog", "blockId": "DIALOG-001"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-002"}, "action": {"type": "next"}},
+            ],
+            "expectedVisited": ["ROUTER-001", "DIALOG-001", "DIALOG-002"],
+            "expectedRunning": False,
+        }],
+    },
+    {
+        "id": "router-case-branch-depth-first",
+        "description": "A route with its own chain finishes it before the next case starts.",
+        "blueprint": header([scene("s1", [
+            rtr("ROUTER-001", ROUTER_CASES[:2], next=[
+                wire("K1", "DIALOG-001"), wire("K2", "DIALOG-002"), wire("then", "DIALOG-004"),
+            ]),
+            dlg("DIALOG-001", "Route one", next=[wire("out", "DIALOG-006")]),
+            dlg("DIALOG-006", "Route one, continued"),
+            dlg("DIALOG-002", "Route two"),
+            dlg("DIALOG-004", "All of them held"),
+        ])]),
+        "sceneId": "s1",
+        "cases": [{
+            "id": "k1-and-its-chain-then-k2-then-then",
+            "steps": [
+                {"expect": {"type": "dialog", "blockId": "DIALOG-001"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-006"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-002"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-004"}, "action": {"type": "next"}},
+            ],
+            "expectedVisited": ["ROUTER-001", "DIALOG-001", "DIALOG-006", "DIALOG-002", "DIALOG-004"],
+            "expectedCleanupCalls": 4,
+        }],
+    },
+    {
+        "id": "in-port-per-character",
+        "description": "The wire names the speaker: one block, two entry ports, one actor offered per pass.",
+        # `toPort` is a CARD ID here, not `in`. The block is dispatched once per wire, and on each
+        # pass onResolveCharacter is handed that one actor only - `context.character` is the actor
+        # the designer wired, whatever the whole cast would have produced. The default resolver
+        # picks the first of the list it is given, which is exactly what makes the two passes
+        # differ. A single `expectedVisited` entry: the visited set does not count passes.
+        "blueprint": header([scene("s1", [
+            rtr("ROUTER-001", ROUTER_CASES[:2], next=[
+                {"port": "K1", "to": "DIALOG-001", "toPort": "var1"},
+                {"port": "K2", "to": "DIALOG-001", "toPort": "var2"},
+            ]),
+            dlg("DIALOG-001", "Me too", actors=["var1", "var2"],
+                props={"isAsync": True, "inPortPerCharacter": True}),
+        ])]),
+        "sceneId": "s1",
+        "cases": [{
+            "id": "each-pass-speaks-as-its-wire-says",
+            "steps": [
+                {"expect": {"type": "dialog", "blockId": "DIALOG-001", "characterId": "var1"},
+                 "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-001", "characterId": "var2"},
+                 "action": {"type": "next"}},
+            ],
+            "expectedVisited": ["ROUTER-001", "DIALOG-001"],
+            "expectedCleanupCalls": 2,
+        }],
+    },
+    {
+        "id": "in-port-per-character-through-in",
+        "description": "Entering through in names nobody: the whole cast is offered, as everywhere else.",
+        "blueprint": header([scene("s1", [
+            dlg("DIALOG-001", "Before", next=[wire("out", "DIALOG-002")]),
+            dlg("DIALOG-002", "Me too", actors=["var1", "var2"], props={"inPortPerCharacter": True}),
+        ])]),
+        "sceneId": "s1",
+        "cases": [{
+            "id": "the-default-resolver-takes-the-first-of-the-cast",
+            "steps": [
+                {"expect": {"type": "dialog", "blockId": "DIALOG-001"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-002", "characterId": "var1"},
+                 "action": {"type": "next"}},
+            ],
+            "expectedVisited": ["DIALOG-001", "DIALOG-002"],
+        }],
+    },
+]
+
+routing_suites += [
+    {
+        "id": "router-all-true-in-turn",
+        "description": "Every case true, routes not isAsync: K1, K2, K3 in turn, then the continuation - "
+                       "the order of the resolved ports, never the order of the file.",
+        "blueprint": header([router_scene(async_routes=False)]),
+        "sceneId": "s1",
+        "cases": [{
+            "id": "k1-k2-k3-then-then",
+            "steps": [
+                {"expect": {"type": "dialog", "blockId": "DIALOG-001"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-002"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-003"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-004"}, "action": {"type": "next"}},
+            ],
+            "expectedVisited": ["ROUTER-001", "DIALOG-001", "DIALOG-002", "DIALOG-003", "DIALOG-004"],
+            "expectedCleanupCalls": 4,
+        }],
+    },
+    {
+        "id": "router-unwired-case-port",
+        "description": "A true case with no wire contributes nothing, and is not an error.",
+        "blueprint": header([scene("s1", [
+            rtr("ROUTER-001", ROUTER_CASES[:2], next=[wire("K1", "DIALOG-001"), wire("then", "DIALOG-004")]),
+            dlg("DIALOG-001", "Route one"),
+            dlg("DIALOG-004", "All of them held"),
+        ])]),
+        "sceneId": "s1",
+        "cases": [{
+            "id": "k1-then-then",
+            "steps": [
+                {"expect": {"type": "dialog", "blockId": "DIALOG-001"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-004"}, "action": {"type": "next"}},
+            ],
+            "expectedVisited": ["ROUTER-001", "DIALOG-001", "DIALOG-004"],
+        }],
+    },
+]
+
+validation_suites += [
+    {
+        "id": "router-loads-clean",
+        "description": "A router, and wires whose toPort is a card id, load with no error and no warning.",
+        "blueprint": header([scene("s1", [
+            rtr("ROUTER-001", ROUTER_CASES[:2], next=[
+                {"port": "K1", "to": "DIALOG-001", "toPort": "var1"},
+                {"port": "K2", "to": "DIALOG-001", "toPort": "var2"},
+            ]),
+            dlg("DIALOG-001", "Me too", actors=["var1", "var2"],
+                props={"isAsync": True, "inPortPerCharacter": True}),
+        ])]),
+        "cases": [{
+            "id": "clean",
+            "expectedErrors": [],
+            "expectedWarnings": [],
+            "expectedStats": {"sceneCount": 1, "blockCount": 2, "connectionCount": 2},
+        }],
+    },
+]
+
+# ── Behaviours the reference tested alone ────────────────────────────────────
+#
+# Three rules every runtime implements and only the TypeScript unit suites pinned. The
+# `resolveCondition` action existed in all four runners and no suite used it.
+
+flow_suites += [
+    {
+        "id": "condition-handler-override",
+        "description": "The handler may override the port the cases picked, with a PORT NAME.",
+        "blueprint": header([scene("s1", [
+            block("COND-001", "condition",
+                  props={"portPerCase": True},
+                  cases=[
+                      {"port": "K1", "when": [cmp_("switches", "door_unlocked", True)]},
+                      {"port": "K2", "when": [cmp_("switches", "met_vesk", True)]},
+                  ],
+                  next=[wire("K1", "DIALOG-001"), wire("K2", "DIALOG-002"), wire("default", "DIALOG-003")]),
+            dlg("DIALOG-001", "One"), dlg("DIALOG-002", "Two"), dlg("DIALOG-003", "None"),
+        ])]),
+        "sceneId": "s1",
+        "stateBridge": {"conditions": {"switches.door_unlocked": True, "switches.met_vesk": False}},
+        "cases": [
+            {
+                "id": "overrides-a-match-with-default",
+                "steps": [
+                    {"expect": {"type": "condition", "blockId": "COND-001"},
+                     "action": {"type": "resolveCondition", "port": "default"}},
+                    {"expect": {"type": "dialog", "blockId": "DIALOG-003"}, "action": {"type": "next"}},
+                ],
+                "expectedVisited": ["COND-001", "DIALOG-003"],
+            },
+            {
+                "id": "overrides-with-a-case-that-did-not-hold",
+                "steps": [
+                    {"expect": {"type": "condition", "blockId": "COND-001"},
+                     "action": {"type": "resolveCondition", "port": "K2"}},
+                    {"expect": {"type": "dialog", "blockId": "DIALOG-002"}, "action": {"type": "next"}},
+                ],
+                "expectedVisited": ["COND-001", "DIALOG-002"],
+            },
+        ],
+    },
+    {
+        "id": "choice-memory-not-equals",
+        "description": "notEquals on the reserved choice dictionary: true for a different answer.",
+        "blueprint": header([scene("s1", [
+            block("CHOICE-001", "choice",
+                  options=[opt("C1", "Yes"), opt("C2", "No")],
+                  next=[wire("C1", "COND-001"), wire("C2", "COND-001")]),
+            block("COND-001", "condition",
+                  cases=[{"port": "out", "when": [cmp_("choice", "CHOICE-001", "C1", "notEquals")]}],
+                  next=[wire("out", "DIALOG-001"), wire("default", "DIALOG-002")]),
+            dlg("DIALOG-001", "You did not say yes"),
+            dlg("DIALOG-002", "You said yes"),
+        ])]),
+        "sceneId": "s1",
+        "cases": [
+            {
+                "id": "a-different-answer-holds",
+                "steps": [
+                    {"expect": {"type": "choice", "blockId": "CHOICE-001"},
+                     "action": {"type": "selectChoice", "optionId": "C2"}},
+                    {"expect": {"type": "condition", "blockId": "COND-001"}, "action": {"type": "next"}},
+                    {"expect": {"type": "dialog", "blockId": "DIALOG-001"}, "action": {"type": "next"}},
+                ],
+                "expectedVisited": ["CHOICE-001", "COND-001", "DIALOG-001"],
+            },
+            {
+                "id": "the-same-answer-does-not",
+                "steps": [
+                    {"expect": {"type": "choice", "blockId": "CHOICE-001"},
+                     "action": {"type": "selectChoice", "optionId": "C1"}},
+                    {"expect": {"type": "condition", "blockId": "COND-001"}, "action": {"type": "next"}},
+                    {"expect": {"type": "dialog", "blockId": "DIALOG-002"}, "action": {"type": "next"}},
+                ],
+                "expectedVisited": ["CHOICE-001", "COND-001", "DIALOG-002"],
+            },
+        ],
+    },
+    {
+        "id": "choice-memory-never-reached",
+        "description": "A CHOICE never reached answers false to equals and TRUE to notEquals.",
+        "blueprint": header([scene("s1", [
+            dlg("DIALOG-001", "Straight to the tests", next=[wire("out", "COND-001")]),
+            block("COND-001", "condition",
+                  cases=[{"port": "out", "when": [cmp_("choice", "CHOICE-001", "C1")]}],
+                  next=[wire("out", "DIALOG-002"), wire("default", "COND-002")]),
+            block("COND-002", "condition",
+                  cases=[{"port": "out", "when": [cmp_("choice", "CHOICE-001", "C1", "notEquals")]}],
+                  next=[wire("out", "DIALOG-003"), wire("default", "DIALOG-004")]),
+            block("CHOICE-001", "choice", options=[opt("C1", "Never offered")]),
+            dlg("DIALOG-002", "Must not be taken"),
+            dlg("DIALOG-003", "Never asked, so not C1"),
+            dlg("DIALOG-004", "Must not be taken either"),
+        ])]),
+        "sceneId": "s1",
+        "cases": [{
+            "id": "equals-is-false-not-equals-is-true",
+            "steps": [
+                {"expect": {"type": "dialog", "blockId": "DIALOG-001"}, "action": {"type": "next"}},
+                {"expect": {"type": "condition", "blockId": "COND-001"}, "action": {"type": "next"}},
+                {"expect": {"type": "condition", "blockId": "COND-002"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-003"}, "action": {"type": "next"}},
+            ],
+            "expectedVisited": ["DIALOG-001", "COND-001", "COND-002", "DIALOG-003"],
+        }],
+    },
+    {
+        "id": "note-as-start-block",
+        "description": "A scene whose entry is a NOTE starts on the first real block behind it.",
+        "blueprint": header([scene("s1", [
+            block("NOTE-001", "note", note="Read me first", next=[wire("out", "DIALOG-001")]),
+            dlg("DIALOG-001", "The real first line"),
+        ])]),
+        "sceneId": "s1",
+        "cases": [{
+            "id": "steps-over-the-entry-note",
+            "steps": [
+                {"expect": {"type": "dialog", "blockId": "DIALOG-001"}, "action": {"type": "next"}},
+            ],
+            "expectedVisited": ["DIALOG-001"],
+        }],
+    },
+    {
+        "id": "note-only-scene",
+        "description": "A scene made of notes alone plays nothing and ends at once.",
+        "blueprint": header([scene("s1", [
+            block("NOTE-001", "note", note="Only notes", next=[wire("out", "NOTE-002")]),
+            block("NOTE-002", "note", note="Still nothing"),
+        ])]),
+        "sceneId": "s1",
+        "cases": [{
+            "id": "ends-without-dispatching",
+            "steps": [],
+            "expectedVisited": [],
+            "expectedCleanupCalls": 0,
+        }],
+    },
+]
+
+# ── A per-scene export, loaded as several files ──────────────────────────────
+#
+# `blueprintFiles` replaces `blueprint`: the runner hands the list to init() the way its runtime
+# spells it - `data: []` in TypeScript, `Files` in C#, `files` in C++ and GDScript. Each file
+# carries the whole header, and the engine folds them after checking they come from one export.
+
+
+def one_file(path):
+    return header([scene(path, [dlg("DIALOG-001", "In " + path)])])
+
+
+validation_suites += [
+    {
+        "id": "per-scene-files-merged",
+        "description": "Two files of one export stack their scenes behind one header.",
+        "blueprintFiles": [one_file("first"), one_file("second")],
+        "cases": [{
+            "id": "counts-both-scenes",
+            "expectedErrors": [],
+            "expectedWarnings": [],
+            "expectedStats": {"sceneCount": 2, "blockCount": 2, "connectionCount": 0},
+        }],
+    },
+    {
+        "id": "per-scene-files-mismatched",
+        "description": "Pieces of two different exports are refused by name.",
+        "blueprintFiles": [one_file("first"), dict(one_file("second"), exportedAt="2026-09-08T00:00:00.000Z")],
+        "cases": [{"id": "refused", "expectedErrors": ["MISMATCHED_EXPORTS"]}],
+    },
+    {
+        "id": "per-scene-files-twice",
+        "description": "The same file passed twice is the same scene twice.",
+        "blueprintFiles": [one_file("first"), one_file("first")],
+        "cases": [{"id": "refused", "expectedErrors": ["DUPLICATE_SCENE"]}],
+    },
+    {
+        "id": "per-scene-files-empty",
+        "description": "An empty list is no data at all. C++ cannot express this case (a payload "
+                       "struct always exists) and its runner skips it, saying so.",
+        "blueprintFiles": [],
+        "cases": [{"id": "refused", "expectedErrors": ["MISSING_DATA"]}],
+    },
+]
+
+
 def write(path, description, suites):
     doc = {
         "version": "2.0",

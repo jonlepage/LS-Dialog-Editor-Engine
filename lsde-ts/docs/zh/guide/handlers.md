@@ -27,6 +27,8 @@ engine 公开以下 handler：
 
 `onDialog`、`onChoice` 和 `onAction` 是**必需的** — `start()` 调用时 engine 验证它们是否存在，缺失时抛出描述性错误。当安装了 `onResolveCondition` 时，`onCondition` 是**可选的** — engine 从预评估的 condition 组中自动路由。
 
+ROUTER block **没有 handler**，也不需要：engine 自己对每个 case 求值，为每个为真的 case 启动其端口，并走 `then`（全部成立）或 `catch`（有一个不成立）继续。要观察它，用 `handle.onBlock(id)` —— 见 [Router block](/zh/guide/router)。
+
 <!--@include: ../../_shared/handler-basic.md-->
 
 ## Two-Tier Handler System

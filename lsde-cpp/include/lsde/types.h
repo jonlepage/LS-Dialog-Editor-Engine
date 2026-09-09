@@ -22,6 +22,7 @@ class IBaseBlockContext;
 class IDialogContext;
 class IChoiceContext;
 class IConditionContext;
+class IRouterContext;
 class IActionContext;
 
 // ─── The payload contract ────────────────────────────────────────────────────
@@ -38,6 +39,11 @@ namespace BlockType {
     inline constexpr const char* Dialog = "dialog";
     inline constexpr const char* Choice = "choice";
     inline constexpr const char* Condition = "condition";
+    /// A dispatcher. Carries the SAME cases as a condition and reads them the opposite way: every
+    /// case is evaluated, each true one launches its port, and the flow then always continues — by
+    /// `then` when all of them held, by `catch` when any did not. A router with no case at all
+    /// leaves by `then`, the way Promise.all([]) resolves.
+    inline constexpr const char* Router = "router";
     inline constexpr const char* Action = "action";
     inline constexpr const char* Note = "note";
 }
@@ -72,9 +78,12 @@ namespace Ports {
     inline constexpr const char* In = "in";
     /// The default exit of a dialog, and the true exit of an if-style condition.
     inline constexpr const char* Out = "out";
-    /// The exit of an action block once its calls succeeded.
+    /// The nominal exit, on two block types: an action whose calls all succeeded, and a router
+    /// whose cases were ALL true.
     inline constexpr const char* Then = "then";
-    /// The exit of an action block when a call failed.
+    /// The exception exit, on the same two: an action where a call failed, and a router where at
+    /// least one case was false. On a router it does NOT cancel anything — the tracks of the true
+    /// cases are already running, exactly like a Promise.all that rejects.
     inline constexpr const char* Catch = "catch";
     /// The fallback exit of a condition block: no case matched.
     inline constexpr const char* Default = "default";
@@ -190,7 +199,8 @@ struct ConditionTest {
     std::optional<std::string> join;
 };
 
-/// One case of a condition block: the exit port, and what must hold for it.
+/// One case of a condition or a router block: the exit port, and what must hold for it. The data
+/// is identical on both; only the engine's reading differs — see BlockType.
 struct ConditionCase {
     /// The exit port of this case (K1…), or the block's `out` when cases share one exit.
     std::string port;
@@ -239,8 +249,8 @@ struct RuntimeConditionCase {
 /// telling them apart is a lookup against NATIVE_PROPERTY_IDS, not a guess.
 ///
 /// Most are inert: delay, timeout, debug, waitInput, portPerCharacter and skipIfMissingActor are
-/// passed through untouched. Two are not: isAsync spawns a parallel track, and waitForBlocks parks
-/// one until its blocks have FINISHED.
+/// passed through untouched. Three are not: isAsync spawns a parallel track, waitForBlocks parks
+/// one until its blocks have FINISHED, and inPortPerCharacter makes the wire name the actor.
 ///
 /// **Inert is not the same as free.** A writer who fills a field in expects a behaviour, and the
 /// doc on each field below says which one. timeout is the one that is easy to implement backwards,
@@ -280,6 +290,16 @@ struct NativeProperties {
     std::optional<bool> debug;
     /// One exit port per actor CARD ID, with `out` as the fallback.
     std::optional<bool> portPerCharacter;
+    /// One ENTRY port per actor CARD ID, `in` as the fallback — the mirror of portPerCharacter.
+    ///
+    /// The wire names the speaker: a link's toPort carries the CARD ID of the actor the block is
+    /// to be assigned to on that pass. This is what lets several wires reach one block and each
+    /// stand for a different actor — a block alone cannot tell which path brought it.
+    ///
+    /// The engine still ASKS: onResolveCharacter is handed that one actor rather than the whole
+    /// cast, and a game that returns nullptr says the character does not exist. Entering through
+    /// `in` names nobody, and the callback gets the whole list as everywhere else.
+    std::optional<bool> inPortPerCharacter;
     /// Skip the block when its actor is absent at runtime. Passed through.
     std::optional<bool> skipIfMissingActor;
     /// Condition blocks: each case exits by its own port instead of sharing `out`.
@@ -312,12 +332,12 @@ struct NativeProperties {
     std::vector<std::string> waitForBlocks;
 };
 
-/// The nine ids of NativeProperties, to sort a props bag into natives and the writer's own
+/// The ten ids of NativeProperties, to sort a props bag into natives and the writer's own
 /// properties. Anything not in here belongs to the game.
 inline const std::vector<std::string>& nativePropertyIds() {
     static const std::vector<std::string> ids = {
         "isAsync", "delay", "timeout", "waitInput", "debug",
-        "portPerCharacter", "skipIfMissingActor", "portPerCase", "waitForBlocks",
+        "portPerCharacter", "inPortPerCharacter", "skipIfMissingActor", "portPerCase", "waitForBlocks",
     };
     return ids;
 }
@@ -357,7 +377,7 @@ struct BlueprintBlock {
     PropertyBag props;
     /// Action blocks: what to run, in order.
     std::vector<ActionCall> calls;
-    /// Condition blocks: the cases, in evaluation order.
+    /// Condition AND router blocks: the cases, in evaluation order.
     std::vector<ConditionCase> cases;
     /// Choice blocks: the answers, in display order.
     std::vector<Option> options;
@@ -414,7 +434,13 @@ struct BlueprintExport {
 
 /// Single diagnostic entry (error or warning).
 struct DiagnosticEntry {
-    /// Machine-readable error/warning code (e.g. "NO_ENTRY_BLOCK", "ORPHAN_CONNECTION").
+    /// Machine-readable code, e.g. "BROKEN_LINK" or "UNKNOWN_WAIT_BLOCK".
+    ///
+    /// The seventeen the engine emits are listed in the Getting Started guide, split into the
+    /// eleven that refuse the payload and the six that let it play. It is a string and not an enum
+    /// on purpose: a runtime is allowed to add one — TypeScript and GDScript read the raw payload
+    /// and can say WRONG_NAMING_CONVENTION, where this runtime only ever sees a typed struct and
+    /// reports INVALID_FORMAT for the same file.
     std::string code;
     /// Human-readable description of the issue.
     std::string message;
@@ -542,6 +568,20 @@ public:
     virtual void resolve(const std::string& port) = 0;
 
     /// The block's cases, each with its port and its pre-evaluated result.
+    virtual const std::vector<RuntimeConditionCase>& cases() const = 0;
+};
+
+/// What a ROUTER handler gets.
+///
+/// The same pre-evaluated cases as a condition, and **no resolve**: a router's exits are a tally,
+/// not a choice. Every true case has already launched its port and the continuation is already
+/// picked — `then` when they all held, `catch` otherwise — by the time a handler could speak.
+/// There is nothing left to override, which is also why no handler is required for the type: the
+/// engine dispatches nothing and advances on its own. A game that wants to watch one router still
+/// can, through onBlock(id).
+class IRouterContext : public virtual IBaseBlockContext {
+public:
+    /// The block's cases, each with its port and its pre-evaluated result. ALL of them ran.
     virtual const std::vector<RuntimeConditionCase>& cases() const = 0;
 };
 
@@ -712,8 +752,8 @@ public:
     virtual ~ISceneHandle() = default;
 
     /// Start the scene flow from the entry block.
-    /// Validates that all 4 mandatory handlers (onDialog, onChoice, onCondition, onAction)
-    /// are registered — throws if any are missing.
+    /// Throws when a type handler the scene needs is missing. onCondition is optional once
+    /// onResolveCondition is installed, and a ROUTER block needs no handler at all.
     virtual void start() = 0;
     /// Cancel the scene flow. All async tracks are cancelled, cleanup runs, onSceneExit fires.
     virtual void cancel() = 0;
@@ -781,6 +821,14 @@ struct PortResolutionInput {
     std::optional<std::string> selectedOptionId;
     /// CONDITION only: the port its cases picked — "out", "default", or K1….
     std::optional<std::string> conditionPort;
+    /// ROUTER only: every port it leaves by, in order — the K* of each true case, then "then" or
+    /// "catch" LAST.
+    ///
+    /// A list and not one port, because a router does not pick an exit: it launches one per true
+    /// case and continues besides. The continuation comes last so that the traversal, which keeps
+    /// the first non-async target as the main flow, keeps then/catch when the case routes are
+    /// async — which is the arrangement LSDE recommends.
+    std::optional<std::vector<std::string>> routerPorts;
     /// ACTION only: true when a call failed, so "catch" is tried before "then".
     std::optional<bool> actionRejected;
     /// DIALOG with portPerCharacter: the CARD ID of the speaking actor, never an index.

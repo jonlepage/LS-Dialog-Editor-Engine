@@ -14,6 +14,7 @@
 //   dialog     "out", or one port per actor CARD ID with portPerCharacter — "out" is the fallback
 //   choice     the picked option's id (C1…) — there is no "out" on a choice
 //   condition  "out" (true) and "default" (false), or K1… per case with portPerCase
+//   router     the K1… of EVERY case that held, then "then" (all held) or "catch" (one did not)
 //   action     "then", and "catch" when a call failed
 //   note       never dispatched; the traversal steps over it
 //
@@ -78,6 +79,31 @@ PortResolutionResult resolveConditionPort(
     return {onPort(links, *conditionPort)};
 }
 
+/// A router leaves by SEVERAL ports at once: the K* of each true case, then "then" or "catch".
+///
+/// Which ports those are was decided before we got here, by the condition evaluator — the same
+/// division of labour as a condition, and for the same reason: only it knows the game's answers.
+///
+/// Order is preserved, and the continuation is last. That is what lets the traversal keep
+/// then/catch as the main flow: it takes the first non-async target, and in the arrangement LSDE
+/// recommends the case routes all carry isAsync.
+///
+/// A port with no wire contributes nothing and is not an error — a writer who launched nothing on
+/// a true case simply drew it that way. nullopt means nothing was decided, so nowhere to go.
+PortResolutionResult resolveRouterPorts(
+    const std::vector<Link>& links,
+    const std::optional<std::vector<std::string>>& routerPorts) {
+    if (!routerPorts.has_value()) return {};
+
+    std::vector<Link> matches;
+    for (const auto& port : *routerPorts) {
+        for (const auto& link : links) {
+            if (link.port == port) matches.push_back(link);
+        }
+    }
+    return {matches};
+}
+
 /// An action leaves by "then" once its calls went through, and by "catch" when one failed.
 ///
 /// A failure with no "catch" wired falls back to "then": the writer who drew no error branch meant
@@ -104,6 +130,7 @@ PortResolutionResult resolvePort(const PortResolutionInput& input) {
     if (type == BlockType::Dialog) return resolveDialogPort(input.links, input.actorPort);
     if (type == BlockType::Choice) return resolveChoicePort(input.links, input.selectedOptionId);
     if (type == BlockType::Condition) return resolveConditionPort(input.links, input.conditionPort);
+    if (type == BlockType::Router) return resolveRouterPorts(input.links, input.routerPorts);
     if (type == BlockType::Action) return resolveActionPort(input.links, input.actionRejected);
     if (type == BlockType::Note) return {input.links};
 

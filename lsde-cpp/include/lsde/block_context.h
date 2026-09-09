@@ -35,10 +35,16 @@ struct ResolvedCards {
     /// An id with no card is dropped rather than reported: a payload citing a card that is not in
     /// its own tables is an exporter bug, and the traversal is not where a game should learn about
     /// it — init() is.
+    ///
+    /// inPortPerCharacter: when the wire named ONE actor, `designatedActorId` is that card id and
+    /// it is the only one offered to `pickCharacter`. The game is still asked — it may answer
+    /// nullptr, which says the character does not exist — but it cannot pick a different one, and
+    /// `actors` stays the whole cast either way.
     static ResolvedCards resolve(
         const BlueprintBlock& block,
         const std::function<const Card*(const std::string&)>& lookup,
-        const std::function<const Card*(const std::vector<Card>&)>& pickCharacter);
+        const std::function<const Card*(const std::vector<Card>&)>& pickCharacter,
+        const std::optional<std::string>& designatedActorId = std::nullopt);
 };
 
 // ─── Internal context classes ────────────────────────────────────────────────
@@ -121,6 +127,27 @@ public:
 
     const std::vector<RuntimeConditionCase>& cases() const override;
     void resolve(const std::string& port) override;
+
+private:
+    std::vector<RuntimeConditionCase> _cases;
+};
+
+/// Internal context for ROUTER block handlers.
+///
+/// No resolve. By the time a handler could speak, every true case has launched its port and the
+/// continuation is picked — there is no single exit left to override. The handler is an
+/// observation point, which is why the type requires none at all.
+class InternalRouterContext : public InternalBlockContext, public IRouterContext {
+public:
+    /// Every port the block leaves by, the continuation last. See pickRouterPorts.
+    std::optional<std::vector<std::string>> routerPorts;
+
+    InternalRouterContext(
+        const BlueprintBlock& block,
+        ResolvedCards cards,
+        std::vector<RuntimeConditionCase> cases);
+
+    const std::vector<RuntimeConditionCase>& cases() const override;
 
 private:
     std::vector<RuntimeConditionCase> _cases;
