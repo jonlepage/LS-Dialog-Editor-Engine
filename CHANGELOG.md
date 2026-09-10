@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.0.0 (2026-09-10)
 
 Engine 2.0 reads `lsde-blueprints` version 1 — the format LSDE 2.x exports. The two formats share
 no field, so there is no dual reader and no fallback: a project still on LSDE 1.6 stays on engine
