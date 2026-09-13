@@ -3,8 +3,8 @@
 //   npm run 1-update-version             asks: patch, minor or major
 //   npm run 1-update-version -- minor    no question (patch, minor, major, or an exact X.Y.Z)
 //
-// Writes the number wherever an engine user reads it (npm, NuGet ×3, Unity, CMake) and dates the
-// "## Unreleased" section of CHANGELOG.md. Commits nothing, builds nothing, publishes nothing: the
+// Writes the number wherever an engine user reads it (npm, NuGet ×3, Unity, CMake), and in the three
+// private task-runner package.json, then dates the "## Unreleased" section of CHANGELOG.md. Commits nothing, builds nothing, publishes nothing: the
 // diff is read and committed by hand, then step 2 runs.
 
 import {

@@ -31,7 +31,7 @@ There is no `PLAN.md` and no `AGENTS.md` — earlier revisions of this file refe
 ### Migration status (important)
 
 **The migration is done.** All four runtimes read `lsde-blueprints` version 1 — the format LSDE
-2.0.3 writes — and the engine is versioned **2.0.0** to match the editor a client has on screen.
+2.0.3 writes — and the engine's major version is **2**, to match the editor a client has on screen.
 
 The break was clean: the two formats share no field, so there is no dual reader and no v1 fallback.
 A project still on LSDE 1.6 stays on engine 0.3.x.
@@ -277,8 +277,9 @@ then the shared JSON spec, then the three ports.
 - Releasing is three npm scripts at the root (`scripts/release/`), run by hand and in order. Each
   does one thing and stops; they replaced `publish.sh` on 2026-09-12 (`MIGRATION-V2.md`).
   1. `1-update-version` asks patch / minor / major, writes the number into `lsde-ts/package.json`
-     (and its lock), the three `.csproj`, the Unity manifest and `CMakeLists.txt`, and dates
-     `## Unreleased` in `CHANGELOG.md`. It commits nothing: the diff is reviewed and committed by hand.
+     (and its lock), the three `.csproj`, the Unity manifest, `CMakeLists.txt` and the three private
+     task-runner `package.json`, and dates `## Unreleased` in `CHANGELOG.md`. It commits nothing:
+     the diff is reviewed and committed by hand.
   2. `2-build-release` refuses uncommitted changes, runs the four suites, and packs npm + NuGet into
      `release/vX.Y.Z/` (ignored), with the commit it was built from.
   3. `3-publish` checks everything first — the build is HEAD, npm login, NuGet key, branch not

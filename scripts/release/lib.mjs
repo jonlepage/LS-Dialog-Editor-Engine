@@ -18,8 +18,7 @@ export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 // ─── Where the version lives ─────────────────────────────────────────────────
 
 // Every number an engine USER reads: npm, the three NuGet packages, the Unity Package Manager, CMake.
-// GDScript has no manifest, and the root, lsde-cpp and lsde-gdscript package.json are private task
-// runners that never carried the engine's version.
+// GDScript has no manifest of its own.
 export const NPM_MANIFEST = 'lsde-ts/package.json';
 export const NPM_LOCK = 'lsde-ts/package-lock.json';
 export const CSPROJS = [
@@ -29,6 +28,10 @@ export const CSPROJS = [
 ];
 export const UPM_MANIFEST = 'lsde-csharp/package.json';
 export const CMAKE = 'lsde-cpp/CMakeLists.txt';
+// The private task runners. Never published, but npm prints their version in front of every script
+// it runs: "ls-dialog-editor-engine@2.0.0 3-publish" over the 2.1.0 release, "0.1.0" over the C++
+// build — both read like a mistake.
+export const TASK_RUNNERS = ['package.json', 'lsde-cpp/package.json', 'lsde-gdscript/package.json'];
 export const CHANGELOG = 'CHANGELOG.md';
 
 const CSPROJ_VERSION = /(<Version>)([^<]*)(<\/Version>)/g;
@@ -52,6 +55,7 @@ export function readVersions() {
     ...CSPROJS.map((file) => ({ file, version: single(readText(file), CSPROJ_VERSION) })),
     { file: UPM_MANIFEST, version: JSON.parse(readText(UPM_MANIFEST)).version },
     { file: CMAKE, version: single(readText(CMAKE), CMAKE_VERSION) },
+    ...TASK_RUNNERS.map((file) => ({ file, version: JSON.parse(readText(file)).version })),
   ];
 }
 
@@ -76,7 +80,9 @@ export function writeVersion(version) {
   for (const file of CSPROJS) {
     writeText(file, readText(file).replace(CSPROJ_VERSION, keepAround));
   }
-  writeText(UPM_MANIFEST, readText(UPM_MANIFEST).replace(JSON_VERSION, keepAround));
+  for (const file of [UPM_MANIFEST, ...TASK_RUNNERS]) {
+    writeText(file, readText(file).replace(JSON_VERSION, keepAround));
+  }
   writeText(CMAKE, readText(CMAKE).replace(CMAKE_VERSION, (_all, head) => head + version));
 
   const behind = readVersions().filter((entry) => entry.version !== version);

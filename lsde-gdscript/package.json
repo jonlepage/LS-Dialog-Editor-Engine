@@ -1,6 +1,6 @@
 {
   "name": "@lsde/dialog-engine-gdscript",
-  "version": "0.1.0",
+  "version": "2.1.0",
   "private": true,
   "description": "Task runner for the GDScript LSDE Dialog Engine (requires Godot 4.6+)",
   "scripts": {

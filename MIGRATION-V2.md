@@ -3113,3 +3113,17 @@ Ce qui ne change pas :
   publication ratée ;
 - le CHANGELOG s'écrit à la main ; les sujets de commit ne servent qu'en dernier recours, comme
   brouillon signalé.
+
+**Ajout, même jour, après la publication de la 2.1.0.** Les trois `package.json` privés (racine,
+`lsde-cpp`, `lsde-gdscript`) gardaient leur propre numéro : `2.0.0` et `0.1.0`. Aucun n'est publié,
+mais npm imprime ce numéro devant chaque script. Le terminal affichait donc
+`ls-dialog-editor-engine@2.0.0 3-publish` pendant la publication de la 2.1.0, et
+`@lsde/dialog-engine-cpp@0.1.0` devant la compilation C++. L'étape 1 les synchronise maintenant avec
+les autres. Ils sont passés à 2.1.0 après l'étiquette : `v2.1.0` garde les anciens numéros, qu'aucun
+utilisateur du moteur ne lit.
+
+**Et un `.meta` manquant, trouvé en vérifiant la 2.1.0 en ligne.** `lsde-csharp/Directory.Build.props`
+(ajouté par `89a8f6f`, présent dans `v2.0.0` et `v2.1.0`) était le seul des 24 assets du paquet Unity
+sans `.meta`. Un paquet installé par le Package Manager est immuable : Unity avertit pour chaque asset
+sans `.meta`, puis l'ignore. Pour ce fichier, seul l'avertissement dérange. Le `.meta` est ajouté et
+partira avec la prochaine version.
