@@ -12,9 +12,9 @@ handle.OnExit(args => {
 });
 ```
 ```cpp [C++]
-handle->onExit([](auto* scene, auto*) {
-    auto history = scene->getChoiceHistory();
-    auto picks = scene->getChoice("CHOICE-001"); // std::vector<std::string>*
+handle->onExit([](const lsde::SceneLifecycleArgs& args) {
+    auto history = args.scene->getChoiceHistory();
+    auto picks = args.scene->getChoice("CHOICE-001"); // std::vector<std::string>*
 });
 ```
 ```gdscript [GDScript]

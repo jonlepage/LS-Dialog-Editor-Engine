@@ -9,6 +9,8 @@
 #include <fstream>
 #include <iostream>
 #include <algorithm>
+#include <memory>
+#include <stdexcept>
 
 #include <lsde/engine.h>
 #include <lsde/scene_handle.h>
@@ -33,12 +35,23 @@ TestFile loadTestFile(const std::string& filename) {
 /// The game's answer to one comparison, from the suite's stateBridge.
 ///
 /// A test on the reserved "choice" dictionary never gets here — the engine answers those from the
-/// history it kept during the scene.
+/// history it kept during the scene. A key in trueTimes is answered true that many times, then
+/// false — a counter a loop can run out of. It outranks conditions for the same key.
 ConditionEvaluatorFn makeResolver(const TestSuite& suite) {
-    return [&suite](const ConditionTest& test) -> bool {
+    // Shared, not captured by value: the resolver is copied into the engine, and every copy has to
+    // count down the same counter.
+    auto remaining = std::make_shared<std::unordered_map<std::string, int>>();
+    if (suite.stateBridge) *remaining = suite.stateBridge->trueTimes;
+
+    return [&suite, remaining](const ConditionTest& test) -> bool {
+        const std::string key = test.dict + "." + test.entry;
         bool answer = true;
-        if (suite.stateBridge) {
-            auto it = suite.stateBridge->conditions.find(test.dict + "." + test.entry);
+        auto counter = remaining->find(key);
+        if (counter != remaining->end()) {
+            answer = counter->second > 0;
+            counter->second--;
+        } else if (suite.stateBridge) {
+            auto it = suite.stateBridge->conditions.find(key);
             if (it != suite.stateBridge->conditions.end()) answer = it->second;
         }
         return test.op == ConditionOperator::NotEquals ? !answer : answer;
@@ -89,6 +102,8 @@ void executeStepAction(
     } else if (a.type == "resolveCharacterPort") {
         dynamic_cast<IDialogContext*>(ctx)->resolveCharacterPort(a.cardId.value_or(""));
         next();
+    } else if (a.type == "throw") {
+        throw std::runtime_error(a.error.value_or("thrown by the spec"));
     }
 }
 
@@ -161,6 +176,8 @@ void runFlowCase(const TestSuite& suite, const TestCase& testCase) {
     engine.onResolveCondition(makeResolver(suite));
 
     RunState state;
+    std::vector<SceneContext> exits;
+    engine.onSceneExit([&exits](const SceneLifecycleArgs& args) { exits.push_back(args.context); });
 
     engine.onDialog([&](ISceneHandle*, const BlueprintBlock* b, IDialogContext* c, std::function<void()> next) {
         return dispatch(BlockType::Dialog, b, c, next, suite, testCase, state);
@@ -176,11 +193,32 @@ void runFlowCase(const TestSuite& suite, const TestCase& testCase) {
     });
 
     auto handle = engine.scene(suite.sceneId.value_or(""));
-    handle->start();
+
+    // A fault reaches whoever called start() — once the scene is closed. Caught here so that
+    // everything after it can be checked, not only that it threw. An exception the spec did not
+    // expect is re-thrown as it was.
+    std::exception_ptr thrown = nullptr;
+    try {
+        handle->start();
+    } catch (...) {
+        thrown = std::current_exception();
+    }
+    if (thrown && !testCase.expectedThrow) std::rethrow_exception(thrown);
+    EXPECT_EQ(testCase.expectedThrow, static_cast<bool>(thrown));
 
     // Every step the spec described must have been reached.
     EXPECT_EQ(static_cast<int>(testCase.steps.size()), state.stepIndex);
     EXPECT_EQ(testCase.expectedRunning, handle->isRunning());
+
+    if (testCase.expectedExitReason) {
+        ASSERT_EQ(1u, exits.size());
+        EXPECT_EQ(*testCase.expectedExitReason, exits[0].reason.value_or(""));
+    }
+
+    if (testCase.expectedWaitingFor) {
+        ASSERT_FALSE(exits.empty());
+        EXPECT_EQ(*testCase.expectedWaitingFor, exits[0].waitingFor);
+    }
 
     if (testCase.expectedVisited) {
         std::vector<std::string> visited = handle->getVisitedBlocks();

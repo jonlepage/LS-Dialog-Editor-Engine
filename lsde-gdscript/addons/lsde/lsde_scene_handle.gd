@@ -15,6 +15,14 @@ var _callbacks: Dictionary  # {on_scene_started, on_scene_ended, get_resolve_cha
 
 var _running: bool = false
 
+## The scene is being closed right now — set on entering _shutdown(), before any cleanup runs.
+##
+## _running cannot say it: it only drops once every track is cancelled, and a cleanup run by that
+## cancelling may call scene.cancel() or engine.stop() — the natural thing for a panel that closes
+## the dialogue it belongs to. The inner call found the scene still running and closed it a second
+## time: on_scene_exit fired twice, the engine was told twice.
+var _closing: bool = false
+
 # ─── Shared by every track of this scene ──────────────────────────────────
 var _visited: Array = []  # ordered list of visited block ids
 var _visited_set: Dictionary = {}  # fast lookup
@@ -41,6 +49,8 @@ var _next_track_id: int = LsdeTrack.MAIN_TRACK_ID + 1
 ## waitForBlocks is a property of the BLOCK: "the block waits for these before it advances", in the
 ## format's own words. Only the parallel copy read it, so a designer who set it on a block of the main flow
 ## got nothing at all, silently, with the checkbox ticked in the editor.
+##
+## A Dictionary keeps the order the tracks parked in, which is the order waitingFor is reported in.
 var _pending_waits: Dictionary = {}  # {LsdeTrack: [block_ids]}
 ## Scene-level character resolver override.
 var _resolve_character: Callable
@@ -82,13 +92,17 @@ func start() -> void:
 		return
 
 	_running = true
+	_closing = false
 	if _callbacks.has("on_scene_started"):
 		_callbacks["on_scene_started"].call(self)
 	_fire_scene_enter()
+	# on_scene_enter is allowed to cancel the scene it was told about.
+	if not _running:
+		return
 
 	var start_block: Variant = _scene_graph.get_start_block()
 	if start_block == null:
-		_shutdown()
+		_shutdown(LsdeTypes.SCENE_END_COMPLETED)
 		return
 
 	# The flow the player watches is a track like any other. The only thing that sets it apart is
@@ -99,9 +113,9 @@ func start() -> void:
 
 ## Cancel the scene flow. All async tracks are cancelled, cleanup runs, on_scene_exit fires.
 func cancel() -> void:
-	if not _running:
+	if not _running or _closing:
 		return
-	_shutdown()
+	_shutdown(LsdeTypes.SCENE_END_CANCELLED)
 
 ## Override the global on_scene_enter for this scene.
 func on_enter(handler: Callable) -> void:
@@ -234,7 +248,10 @@ func _add_completed(block_id: String) -> void:
 			if all_completed:
 				satisfied.append(waiter)
 		for waiter in satisfied:
-			_pending_waits.erase(waiter)
+			# Closing the scene clears the waits: a release that closed it leaves nothing for the
+			# ones after it to wake.
+			if not _pending_waits.erase(waiter):
+				continue
 			waiter.notify_wait_satisfied()
 
 ## Open a parallel track, entered through entry_port. Returns its id.
@@ -262,26 +279,40 @@ func _cancel_track(track_id: int) -> void:
 ## running out of tracks able to advance, not the main flow reaching its end.
 ##
 ## It used to be the main flow: _track_ended on track 0 called _shutdown(), which cancels every live
-## track. That contradicted the promise LsdeTrack._end_flow makes — child tracks survive, only an
+## track. That contradicted the promise LsdeTrack._retire makes — child tracks survive, only an
 ## explicit cancel() cascades — for the one track that opens most of them, and it made a whole port
 ## silently do nothing: a port whose targets are ALL isAsync leaves the main flow no continuation,
 ## so it ends the instant it has spawned them, and shutdown cancelled the branches born three lines
 ## earlier. They never got past on_before_block.
 ##
 ## A track parked on a waitForBlocks does NOT count as able to advance: it is waiting for another
-## track to visit a block, so once every survivor is parked, nothing will ever visit anything again.
-## Keeping the scene open on those would turn an unreachable wait into a scene that never closes.
+## track to finish a block, so once every survivor is parked, nothing will ever finish anything
+## again. Keeping the scene open on those would turn an unreachable wait into a scene that never
+## closes — and on_scene_exit is told "deadlocked", with the blocks still awaited, so a miswired join
+## no longer reads like a scene played to its last line.
 ##
 ## An explicit cancel() still tears the whole scene down at once — that is its job.
-func _track_ended(track: Variant) -> void:
+func _track_ended(track: Variant, ending: String) -> void:
 	_remove_track(track)
-	for other in _tracks:
-		if other.is_running() and not other.is_waiting_for_blocks():
-			return
-	_shutdown()
+	if _closing or _can_still_advance():
+		return
+	var waiting_for: Array = _waiting_for()
+	if waiting_for.size() > 0:
+		_shutdown(LsdeTypes.SCENE_END_DEADLOCKED, waiting_for)
+	else:
+		_shutdown(ending)
 
-## Register a track as waiting for a set of block ids to be visited.
-## Park a track - or the main flow - until every listed block has been visited.
+## A track just parked. Close the scene if that left nothing able to release it.
+##
+## The other half of the deadlock _track_ended closes on. Checking only when a track ENDED missed
+## the case where the last track able to move PARKED instead: a single flow waiting on a block of a
+## branch it never took stayed open for good.
+func _track_parked() -> void:
+	if _closing or _can_still_advance():
+		return
+	_shutdown(LsdeTypes.SCENE_END_DEADLOCKED, _waiting_for())
+
+## Park a track - or the main flow - until every listed block has FINISHED.
 func _register_wait_for_blocks(waiter: Variant, block_ids: Array) -> void:
 	_pending_waits[waiter] = block_ids
 
@@ -340,6 +371,22 @@ func _parallel_tracks() -> Array:
 		if track.id != LsdeTrack.MAIN_TRACK_ID and track.is_running():
 			result.append(track)
 	return result
+
+## Is there a track left that could still finish a block? A parked one cannot.
+func _can_still_advance() -> bool:
+	for track in _tracks:
+		if track.is_running() and not track.is_waiting_for_blocks():
+			return true
+	return false
+
+## The blocks the parked tracks still wait for, each once, in the order they were asked for.
+func _waiting_for() -> Array:
+	var ids: Array = []
+	for waiter in _pending_waits:
+		for wait_id in _pending_waits[waiter]:
+			if not _completed_set.has(wait_id) and not ids.has(wait_id):
+				ids.append(wait_id)
+	return ids
 
 ## Create the appropriate context for a block. entry_port is the port the wire arrived on — a CARD
 ## ID under inPortPerCharacter, "in" otherwise.
@@ -471,8 +518,13 @@ func _fire_scene_enter() -> void:
 
 ## Close the scene down: cancel every track, fire on_scene_exit, tell the engine.
 ##
-## Reached from a dead end, from a note loop, from cancel() and from a scene with no entry block.
-func _shutdown() -> void:
+## Reached from a dead end, from a note loop, from cancel(), from a deadlock and from a scene with no
+## entry block. `waiting_for` must be read BEFORE: the pending waits are cleared on the way in.
+func _shutdown(reason: String, waiting_for: Array = []) -> void:
+	if _closing:
+		return
+	_closing = true
+
 	_pending_waits.clear()
 
 	# A copy: cancelling a track cascades to its children, and every track is cancelled. Leaving
@@ -482,15 +534,18 @@ func _shutdown() -> void:
 	_tracks.clear()
 
 	_running = false
-	_fire_scene_exit()
+	_fire_scene_exit(reason, waiting_for)
 	if _callbacks.has("on_scene_ended"):
 		_callbacks["on_scene_ended"].call(self)
 
 
-func _fire_scene_exit() -> void:
+func _fire_scene_exit(reason: String, waiting_for: Array) -> void:
 	var handler: Callable = _scene_registry.exit_handler if _scene_registry.exit_handler.is_valid() else _global_registry.scene_exit_handler
 	if handler.is_valid():
-		handler.call({"scene": self, "context": {}})
+		var context: Dictionary = {"reason": reason}
+		if reason == LsdeTypes.SCENE_END_DEADLOCKED:
+			context["waitingFor"] = waiting_for
+		handler.call({"scene": self, "context": context})
 	scene_exited.emit(self)
 
 # ─── Internal helpers ─────────────────────────────────────────────────────

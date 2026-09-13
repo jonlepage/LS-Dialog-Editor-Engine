@@ -1,5 +1,49 @@
 # Changelog
 
+## Unreleased
+
+A scene can no longer be left open with nothing able to move it. Found while migrating a Unity
+project to 2.0.0; every item below was reproduced before it was fixed, and holds in all four
+runtimes as far as each language allows.
+
+### Fixed
+
+- **A fault closes the whole scene — whoever threw.** 2.0.0 closed the scene only when the type
+  handler of the main flow threw. A throwing `onValidateNextBlock`, `onInvalidateBlock`,
+  `onBeforeBlock`, `onResolveCondition`, `onResolveCharacter` or `onSceneEnter` — or any handler on
+  an `isAsync` track, or on a track a join had just released — left the scene running with nothing
+  able to advance it: no `onSceneExit`, and `isRunning()` answering true forever. Now the scene is
+  closed (cleanups run, tracks cancelled, `onSceneExit` fired) and then the error reaches whoever
+  called `start()`, `next()` or `resolve()`.
+- **`onSceneExit` that throws no longer keeps the scene forever.** The engine was never told the
+  scene had ended, and `engine.stop()` could not remove it. The engine is now always told; the error
+  still reaches you.
+- **The stack no longer grows with the graph.** Every block advanced synchronously added frames: a
+  condition ↔ action loop overflowed after ~700 passes in TypeScript and killed the process in C#
+  (a Unity crash) and C++. The walk is now a loop; 10,000 passes run at a constant depth.
+- **A deadlock closes the scene.** A block waiting on a block no track can ever finish — one on a
+  branch the flow did not take — held the scene open for good when it was the last track able to
+  move. It now closes.
+- **A cleanup that cancels its own scene** (or calls `engine.stop()`) no longer fires `onSceneExit`
+  twice.
+
+### Added
+
+- **`onSceneExit` says why the scene ended**: `context.reason` is `completed`, `cancelled`,
+  `invalidated`, `faulted` or `deadlocked`, and a deadlock also carries `context.waitingFor`, the
+  blocks still awaited. `SceneEndReason` is exported (`LsdeTypes.SCENE_END_*` in GDScript).
+- **C# and C++ refuse calls from another thread.** `next()`, `resolve()` and `cancel()` called from a
+  thread other than the one that started the scene throw an exception naming both threads, and
+  change nothing.
+
+### Changed
+
+- **A `resolve()` called inside `onBeforeBlock` takes effect when `onBeforeBlock` returns** — like
+  `next()` inside a handler. Code written after `resolve()` now runs before the block is dispatched,
+  not after it.
+- **A scene parked on an unreachable `waitForBlocks` now ends** (`deadlocked`) instead of staying
+  running.
+
 ## v2.0.0 (2026-09-10)
 
 Engine 2.0 reads `lsde-blueprints` version 1 — the format LSDE 2.x exports. The two formats share

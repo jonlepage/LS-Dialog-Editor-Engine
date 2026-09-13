@@ -226,13 +226,13 @@ A ROUTER block has **no handler** and needs none: the engine evaluates every cas
 | `engine.onValidateNextBlock(handler)` | Validate before entering a block. |
 | `engine.onInvalidateBlock(handler)` | Called when a block fails validation. |
 | `engine.onSceneEnter(handler)` | Called when any scene starts. |
-| `engine.onSceneExit(handler)` | Called when any scene ends. |
+| `engine.onSceneExit(handler)` | Called when any scene ends. `args.context.reason` says why (`SceneEndReason`): `completed`, `cancelled`, `invalidated`, `faulted` or `deadlocked` (with `args.context.waitingFor`). |
 
 ### Scene Handle (Tier 2 — Per-Scene)
 
 | Method | Description |
 |--------|-------------|
-| `handle->start()` | Begin traversal from the entry block. |
+| `handle->start()` | Begin traversal from the entry block. Call `next()`, `resolve()` and `cancel()` from the thread that started it — in Unreal, the game thread; another thread is refused with a `std::logic_error`. |
 | `handle->cancel()` | Stop the scene and all async tracks. |
 | `handle->onDialog(handler)` | Override global DIALOG handler for this scene. |
 | `handle->onChoice(handler)` | Override global CHOICE handler for this scene. |

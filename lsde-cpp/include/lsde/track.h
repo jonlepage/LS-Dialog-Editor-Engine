@@ -119,8 +119,19 @@ public:
     virtual int spawnTrack(const BlueprintBlock& startBlock, int parentTrackId,
                            const std::string& entryPort) = 0;
     virtual std::exception_ptr cancelTrack(int trackId) = 0;
-    /// This track reached the end of its flow. The scene decides what that means.
-    virtual std::exception_ptr trackEnded(Track* track) = 0;
+    /// This track reached the end of its flow — SceneEndReason::Completed or Invalidated. The scene
+    /// decides what that means.
+    virtual std::exception_ptr trackEnded(Track* track, const std::string& ending) = 0;
+    /// A track just parked on a waitForBlocks. The scene closes if nothing is left to release it.
+    virtual std::exception_ptr trackParked() = 0;
+    /// Code of the game threw during the walk: close the scene. The caller re-throws.
+    ///
+    /// Idempotent — a fault on a nested track passes through every walk on its way out, and only
+    /// the first one closes anything.
+    virtual void fault() = 0;
+    /// Throw when the game calls into a running scene from another thread than the one that
+    /// started it. `call` names the call, for the message.
+    virtual void ensureOwnerThread(const char* call) = 0;
 };
 
 // ─── Track ───────────────────────────────────────────────────────────────────
@@ -144,9 +155,10 @@ public:
 
     /// Parked on a `waitForBlocks` — alive, but unable to move on its own.
     ///
-    /// It is waiting for ANOTHER track to visit a block, so it cannot be what keeps a scene open:
-    /// once every remaining track is parked like this, nothing will ever visit anything again.
-    /// That is the deadlock `SceneHandleImpl::trackEnded` closes the scene on.
+    /// It is waiting for ANOTHER track to finish a block, so it cannot be what keeps a scene open:
+    /// once every remaining track is parked like this, nothing will ever finish anything again.
+    /// That is the deadlock SceneHandleImpl closes the scene on — whether the last track able to
+    /// move ENDS (trackEnded) or PARKS (trackParked).
     bool isWaitingForBlocks() const;
 
     const BlueprintBlock* getCurrentBlock() const;
@@ -165,16 +177,33 @@ public:
     const std::string startBlockId;
 
 private:
-    void processBlock(const BlueprintBlock& startingBlock, const std::string& entryPort);
-    void executeBlockHandler(const BlueprintBlock& block, const std::string& entryPort);
-    void advanceToNextBlock(const BlueprintBlock& block, IBaseBlockContext* context);
-    /// This track has nowhere left to go. Its cleanup runs, then the scene is told.
+    /// One unit of the walk, handed back to run() instead of called.
+    ///
+    /// Process takes a block the track has arrived at, Execute dispatches it once onBeforeBlock
+    /// has let it through, Advance leaves it once the game has said so. The block lives in the
+    /// graph and the context in _ownedContext, which only the next Execute of THIS track replaces
+    /// — and run() takes an Advance before any other step of this track can come.
+    struct Step {
+        enum class Kind { Process, Execute, Advance };
+        Kind kind;
+        const BlueprintBlock* block;
+        std::string entryPort;
+        IBaseBlockContext* context;
+    };
+
+    /// Walk from `first` until the track has to wait for the game. The one error boundary.
+    void run(Step first);
+    std::optional<Step> take(const Step& step);
+
+    std::optional<Step> processBlock(const BlueprintBlock& startingBlock, const std::string& entryPort);
+    std::optional<Step> executeBlockHandler(const BlueprintBlock& block, const std::string& entryPort);
+    std::optional<Step> advanceToNextBlock(const BlueprintBlock& block, IBaseBlockContext* context);
     /// This branch has nowhere left to go: hand over to the queue, or stop.
-    std::exception_ptr endBranch();
+    std::optional<Step> endBranch();
     /// Stop for good, DROPPING whatever was still owed.
-    std::exception_ptr endFlow();
+    std::exception_ptr endFlow(const std::string& ending);
     /// The track is done; the scene decides what its ending means.
-    std::exception_ptr retire();
+    std::exception_ptr retire(const std::string& ending);
     /// Run the cleanup of the block being left, once, carrying what it threw.
     std::exception_ptr runBlockCleanup();
     bool allCompleted(const std::vector<std::string>& blockIds) const;
@@ -192,7 +221,7 @@ private:
     std::optional<Card> _previousCard;
     CleanupFn _previousCleanup;
     /// What to resume when a waitForBlocks is satisfied.
-    std::function<void()> _pendingAdvance;
+    std::optional<Step> _pendingStep;
 
     /// The wires this track still owes, in the order it will walk them.
     ///

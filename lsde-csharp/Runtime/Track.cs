@@ -1,4 +1,4 @@
-﻿// LSDE Dialog Engine — one track walking the graph (C# port of track.ts)
+// LSDE Dialog Engine — one track walking the graph (C# port of track.ts)
 //
 // This is THE traversal. There is one of it, and every track uses it: the one the player is
 // watching and every parallel branch IsAsync opens. A track is a cursor — it knows which block it
@@ -19,7 +19,7 @@ using System.Collections.Generic;
 
 namespace LsdeDialogEngine
 {
-    /// <summary>Anything the engine can park until a set of blocks has been visited.</summary>
+    /// <summary>Anything the engine can park until a set of blocks has FINISHED.</summary>
     internal interface IWaiter
     {
         void NotifyWaitSatisfied();
@@ -165,8 +165,49 @@ namespace LsdeDialogEngine
         int SpawnTrack(BlueprintBlock startBlock, int? parentTrackId, string entryPort);
         Exception? CancelTrack(int trackId);
 
-        /// <summary>This track reached the end of its flow. The scene decides what that means.</summary>
-        Exception? TrackEnded(Track track);
+        /// <summary>This track reached the end of its flow — <see cref="SceneEndReason.Completed"/>
+        /// or <see cref="SceneEndReason.Invalidated"/>. The scene decides what that means.</summary>
+        Exception? TrackEnded(Track track, string ending);
+
+        /// <summary>A track just parked on a WaitForBlocks. The scene closes if nothing is left to
+        /// release it.</summary>
+        Exception? TrackParked();
+
+        /// <summary>Code of the game threw during the walk: close the scene. The caller re-throws.</summary>
+        /// <remarks>Idempotent — a fault on a nested track passes through every walk on its way
+        /// out, and only the first one closes anything.</remarks>
+        void Fault();
+
+        /// <summary>Throw when the game calls into the scene from another thread than the one that
+        /// started it. <paramref name="call"/> names the call, for the message.</summary>
+        void EnsureOwnerThread(string call);
+    }
+
+    /// <summary>
+    /// One unit of the walk, handed back to <see cref="Track"/>'s loop instead of called.
+    /// </summary>
+    /// <remarks>Process takes a block the track has arrived at, Execute dispatches it once
+    /// OnBeforeBlock has let it through, Advance leaves it once the game has said so.</remarks>
+    internal sealed class Step
+    {
+        internal enum StepKind { Process, Execute, Advance }
+
+        internal StepKind Kind { get; }
+        internal BlueprintBlock Block { get; }
+        internal string EntryPort { get; }
+        internal IBaseBlockContext? Context { get; }
+
+        private Step(StepKind kind, BlueprintBlock block, string entryPort, IBaseBlockContext? context)
+        {
+            Kind = kind;
+            Block = block;
+            EntryPort = entryPort;
+            Context = context;
+        }
+
+        internal static Step Process(BlueprintBlock block, string entryPort) => new Step(StepKind.Process, block, entryPort, null);
+        internal static Step Execute(BlueprintBlock block, string entryPort) => new Step(StepKind.Execute, block, entryPort, null);
+        internal static Step Advance(BlueprintBlock block, IBaseBlockContext? context) => new Step(StepKind.Advance, block, Ports.In, context);
     }
 
     /// <summary>One cursor walking the graph. The main flow is one of these, with id 0.</summary>
@@ -193,7 +234,7 @@ namespace LsdeDialogEngine
         private Card? _previousCharacter;
         private Action? _previousCleanup;
         /// <summary>What to resume when a WaitForBlocks is satisfied.</summary>
-        private Action? _pendingAdvance;
+        private Step? _pendingStep;
 
         /// <summary>The wires this track still owes, in the order it will walk them.</summary>
         /// <remarks>A port may carry several wires. The ones whose target is IsAsync open their
@@ -221,7 +262,7 @@ namespace LsdeDialogEngine
         /// <summary>Begin walking. Must be called after the track is in the scene's pool.</summary>
         internal void Start()
         {
-            ProcessBlock(_startBlock, _startEntryPort);
+            Run(Step.Process(_startBlock, _startEntryPort));
         }
 
         /// <summary>Stop this track and every track it opened.</summary>
@@ -237,7 +278,7 @@ namespace LsdeDialogEngine
             var fault = Cleanups.Run(cleanup);
 
             _currentBlock = null;
-            _pendingAdvance = null;
+            _pendingStep = null;
             _queue.Clear();
             foreach (var childId in _childTrackIds)
             {
@@ -252,21 +293,21 @@ namespace LsdeDialogEngine
         internal bool IsRunning() => _running;
 
         /// <summary>Parked on a waitForBlocks — alive, but unable to move on its own.</summary>
-        /// <remarks>It is waiting for ANOTHER track to visit a block, so it cannot be what keeps a
-        /// scene open: once every remaining track is parked like this, nothing will ever visit
-        /// anything again. That is the deadlock SceneHandleImpl.TrackEnded closes the scene
-        /// on.</remarks>
-        internal bool IsWaitingForBlocks() => _pendingAdvance != null;
+        /// <remarks>It is waiting for ANOTHER track to finish a block, so it cannot be what keeps a
+        /// scene open: once every remaining track is parked like this, nothing will ever finish
+        /// anything again. That is the deadlock SceneHandleImpl closes the scene on — whether the
+        /// last track able to move ENDS (TrackEnded) or PARKS (TrackParked).</remarks>
+        internal bool IsWaitingForBlocks() => _pendingStep != null;
 
         internal BlueprintBlock? GetCurrentBlock() => _currentBlock;
 
-        /// <summary>Called once every block this track was waiting on has been visited.</summary>
+        /// <summary>Called once every block this track was waiting on has been finished.</summary>
         public void NotifyWaitSatisfied()
         {
-            if (!_running || !_host.IsSceneRunning() || _pendingAdvance == null) return;
-            var advance = _pendingAdvance;
-            _pendingAdvance = null;
-            advance();
+            if (!_running || !_host.IsSceneRunning() || _pendingStep == null) return;
+            var step = _pendingStep;
+            _pendingStep = null;
+            Run(step);
         }
 
         /// <summary>A read-only snapshot, for a debug view.</summary>
@@ -282,6 +323,59 @@ namespace LsdeDialogEngine
             };
         }
 
+        // ─── The loop ────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Walk from <paramref name="first"/> until the track has to wait for the game. The one
+        /// error boundary.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>The stack.</b> Every step used to CALL the next one — ProcessBlock,
+        /// ExecuteBlockHandler, AdvanceToNextBlock, ProcessBlock again — three frames per block for
+        /// as long as the game advanced synchronously, and nothing brought the stack back down. A
+        /// condition/action loop is a StackOverflowException here: no catch stops it, and it takes
+        /// the whole Unity process down — the shared spec's loop crashed the test host outright.
+        /// Every one of those calls was the LAST thing its caller did, so each step now RETURNS the
+        /// next one and this loop takes it: the same steps, in the same order, at a constant
+        /// depth.</para>
+        /// <para>What still nests is what has to come back: opening a child track, and releasing a
+        /// parked one. Each runs the other track's loop and returns here. The depth they add is how
+        /// many are opened or released in a row without the game ever waiting — a property of the
+        /// graph's async shape, not of its length.</para>
+        /// <para><b>The faults.</b> Only the type handler used to sit inside a try. A throwing
+        /// validation, OnBeforeBlock or resolver — or a fault on a track this one had just opened —
+        /// escaped through a track that had not finished leaving its block, and the scene stayed
+        /// open with nothing able to move it. Every entry into the walk comes through here, so every
+        /// line of the game's code the walk calls is inside this try. The scene is closed down
+        /// FIRST — cleanups run, tracks cancelled, OnSceneExit fired — and THEN the exception is
+        /// re-thrown, with its original stack, to whoever called Start(), Next() or Resolve(). That
+        /// is problem 11 of MIGRATION-V2.md, and it now holds for all of them, on every
+        /// track.</para>
+        /// </remarks>
+        private void Run(Step first)
+        {
+            Step? step = first;
+            try
+            {
+                while (step != null) step = Take(step);
+            }
+            catch
+            {
+                _host.Fault();
+                throw;
+            }
+        }
+
+        private Step? Take(Step step)
+        {
+            switch (step.Kind)
+            {
+                case Step.StepKind.Process: return ProcessBlock(step.Block, step.EntryPort);
+                case Step.StepKind.Execute: return ExecuteBlockHandler(step.Block, step.EntryPort);
+                default: return AdvanceToNextBlock(step.Block, step.Context);
+            }
+        }
+
         // ─── The traversal ───────────────────────────────────────────────
 
         /// <summary>
@@ -291,11 +385,13 @@ namespace LsdeDialogEngine
         /// <para>1. Step over NOTEs. They are designer-only and never dispatched.</para>
         /// <para>2. Honour WaitForBlocks. BEFORE anything else — see the note inside.</para>
         /// <para>3. Ask OnValidateNextBlock. The game's gate; a refusal stops this track.</para>
-        /// <para>4. Mark it current and visited, which may release another parked track.</para>
+        /// <para>4. Mark it current and visited.</para>
         /// <para>5. Fire OnBeforeBlock, whose Resolve() releases the type handler.</para></remarks>
-        private void ProcessBlock(BlueprintBlock startingBlock, string entryPort)
+        /// <returns>The next step, or null when the track has to wait — for Resolve(), for a join,
+        /// or for good.</returns>
+        private Step? ProcessBlock(BlueprintBlock startingBlock, string entryPort)
         {
-            if (!_running || !_host.IsSceneRunning()) return;
+            if (!_running || !_host.IsSceneRunning()) return null;
 
             var sceneGraph = _host.GetSceneGraph();
 
@@ -303,9 +399,7 @@ namespace LsdeDialogEngine
             if (block == null)
             {
                 // The end of THIS branch, not of the track: whatever is queued is still owed.
-                var deadEnd = EndBranch();
-                if (deadEnd != null) throw deadEnd;
-                return;
+                return EndBranch();
             }
 
             // WaitForBlocks holds the block BEFORE it is dispatched — the handler is never called,
@@ -325,10 +419,17 @@ namespace LsdeDialogEngine
             var waitBlocks = Natives.WaitForBlocks(block);
             if (waitBlocks != null && waitBlocks.Count > 0 && !AllCompleted(waitBlocks))
             {
-                var parked = block;
-                _pendingAdvance = () => ProcessBlock(parked, entryPort);
+                _pendingStep = Step.Process(block, entryPort);
                 _host.RegisterWaitForBlocks(this, waitBlocks);
-                return;
+
+                // Parking may be exactly what leaves the scene with nothing able to move. That used
+                // to be noticed only when a track ENDED, so when the last track able to move PARKED
+                // instead — a single flow waiting on a block of a branch it did not take — the scene
+                // stayed open for good: no OnSceneExit, the handle in the engine's registry,
+                // IsRunning() true.
+                var deadlock = _host.TrackParked();
+                if (deadlock != null) throw deadlock;
+                return null;
             }
 
             if (!_host.RunValidation(block, entryPort, _previousBlock, _previousCharacter))
@@ -344,38 +445,49 @@ namespace LsdeDialogEngine
                 //
                 // Every other dead end here already does it: a NOTE loop, a port with no wire, a
                 // missing target.
-                var refused = EndFlow();
+                var refused = EndFlow(SceneEndReason.Invalidated);
                 if (refused != null) throw refused;
-                return;
+                return null;
             }
 
             _currentBlock = block;
             _host.AddVisited(block.Id);
 
             var registry = _host.GetGlobalRegistry();
-            if (registry.BeforeBlockHandler != null)
+            if (registry.BeforeBlockHandler == null) return Step.Execute(block, entryPort);
+
+            // GUARDED like Next(): a delay timer that fires twice would otherwise dispatch the same
+            // block twice — the handler runs again, cleanups pile up, and the track advances from a
+            // block it already left.
+            //
+            // And DEFERRED like Next(): a Resolve() called while OnBeforeBlock is still running only
+            // raises a flag, and the block is dispatched once OnBeforeBlock has returned. Dispatching
+            // it on the spot ran the whole rest of the walk INSIDE the game's callback — a frame per
+            // block that nothing ever gave back — and ran the type handler before the lines the game
+            // had written after its Resolve().
+            var resolvedOnce = false;
+            var inside = true;
+            var resolvedInside = false;
+            registry.BeforeBlockHandler(new BeforeBlockArgs
             {
-                // GUARDED like Next(): a delay timer that fires twice would otherwise dispatch the
-                // same block twice — the handler runs again, cleanups pile up, and the track
-                // advances from a block it already left.
-                var resolvedOnce = false;
-                registry.BeforeBlockHandler(new BeforeBlockArgs
+                Block = block,
+                Scene = _host.AsSceneHandle(),
+                Context = new BeforeBlockContext { NativeProperties = Natives.Of(block) },
+                Resolve = () =>
                 {
-                    Block = block,
-                    Scene = _host.AsSceneHandle(),
-                    Context = new BeforeBlockContext { NativeProperties = Natives.Of(block) },
-                    Resolve = () =>
+                    if (resolvedOnce) return;
+                    _host.EnsureOwnerThread("Resolve()");
+                    resolvedOnce = true;
+                    if (inside)
                     {
-                        if (resolvedOnce) return;
-                        resolvedOnce = true;
-                        ExecuteBlockHandler(block, entryPort);
+                        resolvedInside = true;
+                        return;
                     }
-                });
-            }
-            else
-            {
-                ExecuteBlockHandler(block, entryPort);
-            }
+                    Run(Step.Execute(block, entryPort));
+                }
+            });
+            inside = false;
+            return resolvedInside ? Step.Execute(block, entryPort) : null;
         }
 
         /// <summary>
@@ -384,11 +496,12 @@ namespace LsdeDialogEngine
         /// <remarks>Next() is guarded and deferred: called during the handler it only raises a
         /// flag, and the advance happens once both handlers have returned. Otherwise a scene
         /// handler calling Next() would move the flow on before the global handler ever ran.</remarks>
-        private void ExecuteBlockHandler(BlueprintBlock block, string entryPort)
+        /// <returns>The advance, when the game has already said so; null while it has not.</returns>
+        private Step? ExecuteBlockHandler(BlueprintBlock block, string entryPort)
         {
             // Running and not just the scene's: a Resolve() kept in a closure and fired after this
             // track ended would otherwise restart it on a dead flow.
-            if (!_running || !_host.IsSceneRunning()) return;
+            if (!_running || !_host.IsSceneRunning()) return null;
 
             var resolved = HandlerResolver.ResolveHandler(
                 block.Type, block.Id,
@@ -396,18 +509,10 @@ namespace LsdeDialogEngine
                 _host.GetGlobalRegistry());
 
             var context = _host.CreateBlockContext(block, entryPort);
-            if (context == null)
-            {
-                AdvanceToNextBlock(block, null);
-                return;
-            }
+            if (context == null) return Step.Advance(block, null);
 
             // No handler → advance silently. Start() already refused a scene missing one.
-            if (resolved.SceneHandler == null && resolved.GlobalHandler == null)
-            {
-                AdvanceToNextBlock(block, context);
-                return;
-            }
+            if (resolved.SceneHandler == null && resolved.GlobalHandler == null) return Step.Advance(block, context);
 
             var nextCalled = false;
             var syncPhase = true;
@@ -417,38 +522,27 @@ namespace LsdeDialogEngine
             void next()
             {
                 if (nextCalled) return;
+                _host.EnsureOwnerThread("Next()");
                 nextCalled = true;
                 if (syncPhase) return;
-                AdvanceToNextBlock(block, context);
+                Run(Step.Advance(block, context));
             }
 
-            try
+            // No try here any more. A handler that throws reaches Run(), which closes the scene
+            // before re-throwing — the same boundary as every other callback of the game, instead
+            // of a boundary of its own that the others did not have.
+            if (resolved.SceneHandler != null)
             {
-                if (resolved.SceneHandler != null)
-                {
-                    sceneCleanup = resolved.SceneHandler(_host.AsSceneHandle(), block, context, next);
-                    var globalPrevented = GetGlobalPrevented(context);
-                    if (!globalPrevented && resolved.GlobalHandler != null)
-                    {
-                        globalCleanup = resolved.GlobalHandler(_host.AsSceneHandle(), block, context, next);
-                    }
-                }
-                else if (resolved.GlobalHandler != null)
+                sceneCleanup = resolved.SceneHandler(_host.AsSceneHandle(), block, context, next);
+                var globalPrevented = GetGlobalPrevented(context);
+                if (!globalPrevented && resolved.GlobalHandler != null)
                 {
                     globalCleanup = resolved.GlobalHandler(_host.AsSceneHandle(), block, context, next);
                 }
             }
-            catch
+            else if (resolved.GlobalHandler != null)
             {
-                // The flow is closed down first, THEN the error is re-thrown. By the time the game
-                // sees it, the cleanups have run and OnSceneExit has fired if this was the main
-                // track. The dialogue stopped PROPERLY, and the error surfaces where the game
-                // called Start() or next().
-                //
-                // v1 swallowed it — silently, not even logged — while an exception from the
-                // cleanup that same handler returned reached the caller.
-                EndFlow();
-                throw;
+                globalCleanup = resolved.GlobalHandler(_host.AsSceneHandle(), block, context, next);
             }
 
             var cleanup = Cleanups.Combine(sceneCleanup, globalCleanup);
@@ -461,17 +555,14 @@ namespace LsdeDialogEngine
             {
                 var closed = Cleanups.Run(cleanup);
                 if (closed != null) throw closed;
-                return;
+                return null;
             }
 
             // Stored BEFORE any advance runs, so leaving the block finds it.
             _previousCleanup = cleanup;
 
             syncPhase = false;
-            if (nextCalled)
-            {
-                AdvanceToNextBlock(block, context);
-            }
+            return nextCalled ? Step.Advance(block, context) : null;
         }
 
         /// <summary>
@@ -484,9 +575,10 @@ namespace LsdeDialogEngine
         /// <para>That second line is what IsAsync used to be unable to say. Every wire but the
         /// first was detached whether the designer had ticked the box or not, so on a secondary
         /// wire the property was INERT. MIGRATION-V2.md records the whole decision.</para></remarks>
-        private void AdvanceToNextBlock(BlueprintBlock block, IBaseBlockContext? context)
+        /// <returns>The block this track goes on to, or null when it has ended.</returns>
+        private Step? AdvanceToNextBlock(BlueprintBlock block, IBaseBlockContext? context)
         {
-            if (!_running || !_host.IsSceneRunning()) return;
+            if (!_running || !_host.IsSceneRunning()) return null;
 
             _previousBlock = block;
             _previousCharacter = context?.Character;
@@ -543,32 +635,25 @@ namespace LsdeDialogEngine
             //
             // The cleanup runs here rather than inside EndBranch for the same reason; EndBranch
             // calls it again and finds nothing, which is what makes that safe.
+            //
+            // A cleanup that throws is a fault like a handler that throws: Run() closes the scene,
+            // then surfaces it.
             var cleanupFault = RunBlockCleanup();
-            if (cleanupFault != null)
-            {
-                // Same order as a handler that throws: close down first, surface after.
-                EndFlow();
-                throw cleanupFault;
-            }
+            if (cleanupFault != null) throw cleanupFault;
 
             _host.AddCompleted(block.Id);
 
             // Releasing a parked track re-enters the traversal immediately, and a handler there is
             // allowed to cancel the scene, so the guard is re-read rather than assumed.
-            if (!_running || !_host.IsSceneRunning()) return;
+            if (!_running || !_host.IsSceneRunning()) return null;
 
             if (continuation != null)
             {
                 var nextBlock = sceneGraph.GetBlock(continuation.To);
-                if (nextBlock != null)
-                {
-                    ProcessBlock(nextBlock, continuation.ToPort);
-                    return;
-                }
+                if (nextBlock != null) return Step.Process(nextBlock, continuation.ToPort);
             }
 
-            var endFault = EndBranch();
-            if (endFault != null) throw endFault;
+            return EndBranch();
         }
 
         /// <summary>This branch has nowhere left to go — hand over to the queue, or stop.</summary>
@@ -576,22 +661,24 @@ namespace LsdeDialogEngine
         /// block is leaving a block, whether the track carries on or not. Hanging on to it until
         /// the queue emptied would keep a panel open, or an audio voice alive, through everything
         /// that came after it.</remarks>
-        private Exception? EndBranch()
+        private Step? EndBranch()
         {
-            var fault = RunBlockCleanup();
-            var sceneGraph = _host.GetSceneGraph();
+            var cleanupFault = RunBlockCleanup();
+            if (cleanupFault != null) throw cleanupFault;
 
+            var sceneGraph = _host.GetSceneGraph();
             while (_queue.Count > 0)
             {
                 var link = _queue[0];
                 _queue.RemoveAt(0);
                 var target = sceneGraph.GetBlock(link.To);
                 if (target == null) continue;
-                ProcessBlock(target, link.ToPort);
-                return fault;
+                return Step.Process(target, link.ToPort);
             }
 
-            return fault ?? Retire();
+            var retired = Retire(SceneEndReason.Completed);
+            if (retired != null) throw retired;
+            return null;
         }
 
         /// <summary>Run the cleanup of the block this track is leaving, once, carrying what it
@@ -604,29 +691,29 @@ namespace LsdeDialogEngine
         }
 
         /// <summary>Stop this track for good, DROPPING whatever it still owed.</summary>
-        /// <remarks>For the ends that are not a branch running out of graph: OnValidateNextBlock
-        /// refusing a block, a handler throwing, a cleanup throwing. All three say the flow is
-        /// over — the guide has always read OnInvalidateBlock as "the scene stops" — so the queue
-        /// goes with it. Playing the next wire after the game refused this one would be answering
-        /// a no with "then try that".</remarks>
-        private Exception? EndFlow()
+        /// <remarks>For OnValidateNextBlock refusing a block — the guide has always read
+        /// OnInvalidateBlock as "the scene stops" — so the queue goes with it. Playing the next wire
+        /// after the game refused this one would be answering a no with "then try that". A handler
+        /// or a cleanup that throws no longer comes here: that closes the whole scene, in
+        /// Run().</remarks>
+        private Exception? EndFlow(string ending)
         {
             var fault = RunBlockCleanup();
-            return fault ?? Retire();
+            return fault ?? Retire(ending);
         }
 
         /// <summary>The track is done. Its cleanup has already run; the scene decides what its
         /// ending means.</summary>
         /// <remarks>Child tracks SURVIVE: they live independently in the pool, and only an
         /// explicit Cancel() cascades to them.</remarks>
-        private Exception? Retire()
+        private Exception? Retire(string ending)
         {
             _running = false;
             _currentBlock = null;
-            _pendingAdvance = null;
+            _pendingStep = null;
             _queue.Clear();
 
-            return _host.TrackEnded(this);
+            return _host.TrackEnded(this, ending);
         }
 
         private bool AllCompleted(List<string> blockIds)

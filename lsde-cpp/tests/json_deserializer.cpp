@@ -22,6 +22,12 @@ void from_json(const nlohmann::json& j, StateBridgeConfig& v) {
             v.conditions[entry.key()] = entry.value().get<bool>();
         }
     }
+    auto trueTimes = j.find("trueTimes");
+    if (trueTimes != j.end() && trueTimes->is_object()) {
+        for (auto entry = trueTimes->begin(); entry != trueTimes->end(); ++entry) {
+            v.trueTimes[entry.key()] = entry.value().get<int>();
+        }
+    }
 }
 
 void from_json(const nlohmann::json& j, StepExpect& v) {
@@ -78,6 +84,16 @@ void from_json(const nlohmann::json& j, TestCase& v) {
         v.orderIndependent = orderIndependent->get<bool>();
     }
 
+    v.expectedExitReason = optString(j, "expectedExitReason");
+
+    auto waitingFor = j.find("expectedWaitingFor");
+    if (waitingFor != j.end() && waitingFor->is_array()) {
+        v.expectedWaitingFor = waitingFor->get<std::vector<std::string>>();
+    }
+
+    auto thrown = j.find("expectedThrow");
+    if (thrown != j.end() && !thrown->is_null()) v.expectedThrow = thrown->get<bool>();
+
     auto errors = j.find("expectedErrors");
     if (errors != j.end() && errors->is_array()) {
         v.expectedErrors = errors->get<std::vector<std::string>>();
@@ -107,6 +123,11 @@ void from_json(const nlohmann::json& j, TestSuite& v) {
     auto stateBridge = j.find("stateBridge");
     if (stateBridge != j.end() && !stateBridge->is_null()) {
         v.stateBridge = stateBridge->get<StateBridgeConfig>();
+    }
+
+    auto requiresExceptions = j.find("requiresExceptions");
+    if (requiresExceptions != j.end() && !requiresExceptions->is_null()) {
+        v.requiresExceptions = requiresExceptions->get<bool>();
     }
 
     v.cases = j.at("cases").get<std::vector<TestCase>>();

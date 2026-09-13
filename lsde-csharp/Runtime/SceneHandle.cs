@@ -28,6 +28,23 @@ namespace LsdeDialogEngine
 
         private bool _running;
 
+        /// <summary>The scene is being closed right now — set on entering Shutdown(), before any
+        /// cleanup runs.</summary>
+        /// <remarks>_running cannot say it: it only drops once every track is cancelled, and a
+        /// cleanup run by that cancelling may call scene.Cancel() or engine.Stop() — the natural
+        /// thing for a panel that closes the dialogue it belongs to. The inner call found the scene
+        /// still running and closed it a second time: OnSceneExit fired twice, the engine was told
+        /// twice.</remarks>
+        private bool _closing;
+
+        /// <summary>The thread that started the scene. The engine is not thread-safe, and the only
+        /// honest thing to do about it is to say so the first time it happens.</summary>
+        /// <remarks>A game that awaits on the thread pool — UniTask.SwitchToThreadPool, an audio or
+        /// network callback — and calls Next() from there ran every handler after it off the main
+        /// thread. The lists and sets here were mutated without a lock, and the Unity API calls in
+        /// those handlers failed somewhere far from the cause.</remarks>
+        private int _ownerThreadId;
+
         // ─── Shared by every track of this scene ─────────────────────────
         private readonly HashSet<string> _visited = new HashSet<string>();
 
@@ -40,8 +57,13 @@ namespace LsdeDialogEngine
         /// lifted in the very tick it was registered.</remarks>
         private readonly HashSet<string> _completed = new HashSet<string>();
         private readonly Dictionary<string, List<string>> _choiceHistory = new Dictionary<string, List<string>>();
-        /// <summary>Tracks — the main flow included — parked until a set of blocks has been visited.</summary>
+        /// <summary>Tracks — the main flow included — parked until a set of blocks has been finished.</summary>
         private readonly Dictionary<IWaiter, List<string>> _pendingWaits = new Dictionary<IWaiter, List<string>>();
+        /// <summary>The same waiters, in the order they parked.</summary>
+        /// <remarks>A Dictionary does not keep an order once an entry has been removed, and
+        /// WaitingFor is published: a deadlock must name the same blocks in the same order in all
+        /// four runtimes.</remarks>
+        private readonly List<IWaiter> _waitOrder = new List<IWaiter>();
 
         // ─── The tracks ──────────────────────────────────────────────────
         /// <summary>Every live track, the main flow first.</summary>
@@ -86,14 +108,30 @@ namespace LsdeDialogEngine
             }
 
             _running = true;
+            _closing = false;
+            _ownerThreadId = Environment.CurrentManagedThreadId;
             _callbacks.OnSceneStarted?.Invoke(this);
 
-            FireSceneEnter();
+            // OnSceneEnter is the game's code like any handler, and it runs before there is a track
+            // to catch what it throws. It used to leave the scene registered and running with no
+            // track at all: nothing to advance, nothing to end it. Same rule as the walk — close,
+            // then surface.
+            try
+            {
+                FireSceneEnter();
+            }
+            catch
+            {
+                Shutdown(SceneEndReason.Faulted);
+                throw;
+            }
+            // OnSceneEnter is allowed to cancel the scene it was told about.
+            if (!_running) return;
 
             var startBlock = _sceneGraph.GetStartBlock();
             if (startBlock == null)
             {
-                var fault = Shutdown();
+                var fault = Shutdown(SceneEndReason.Completed);
                 if (fault != null) throw fault;
                 return;
             }
@@ -107,8 +145,9 @@ namespace LsdeDialogEngine
 
         public void Cancel()
         {
-            if (!_running) return;
-            var fault = Shutdown();
+            if (!_running || _closing) return;
+            EnsureOwnerThread("Cancel()");
+            var fault = Shutdown(SceneEndReason.Cancelled);
             if (fault != null) throw fault;
         }
 
@@ -281,18 +320,21 @@ namespace LsdeDialogEngine
                 // Collected before notifying: releasing a track re-enters the traversal, which can
                 // park or release others, and mutating the dictionary mid-iteration would throw.
                 var satisfied = new List<IWaiter>();
-                foreach (var kvp in _pendingWaits)
+                foreach (var waiter in _waitOrder)
                 {
                     bool allCompleted = true;
-                    foreach (var u in kvp.Value)
+                    foreach (var u in _pendingWaits[waiter])
                     {
                         if (!_completed.Contains(u)) { allCompleted = false; break; }
                     }
-                    if (allCompleted) satisfied.Add(kvp.Key);
+                    if (allCompleted) satisfied.Add(waiter);
                 }
                 foreach (var waiter in satisfied)
                 {
-                    _pendingWaits.Remove(waiter);
+                    // Closing the scene clears the waits: a release that closed it leaves nothing
+                    // for the ones after it to wake.
+                    if (!_pendingWaits.Remove(waiter)) continue;
+                    _waitOrder.Remove(waiter);
                     waiter.NotifyWaitSatisfied();
                 }
             }
@@ -326,32 +368,69 @@ namespace LsdeDialogEngine
         /// is the pool running out of tracks able to advance, not the main flow reaching its
         /// end.</para>
         /// <para>It used to be the main flow: TrackEnded on track 0 called Shutdown(), which
-        /// cancels every live track. That contradicted the promise Track.EndFlow makes — child
+        /// cancels every live track. That contradicted the promise Track.Retire makes — child
         /// tracks survive, only an explicit Cancel() cascades — for the one track that opens most
         /// of them, and it made a whole port silently do nothing: a port whose targets are ALL
         /// isAsync leaves the main flow no continuation, so it ends the instant it has spawned
         /// them, and shutdown cancelled the branches born three lines earlier. They never got past
         /// OnBeforeBlock.</para>
         /// <para>A track parked on a waitForBlocks does NOT count as able to advance: it is waiting
-        /// for another track to visit a block, so once every survivor is parked, nothing will ever
-        /// visit anything again. Keeping the scene open on those would turn an unreachable wait
-        /// into a scene that never closes.</para>
+        /// for another track to finish a block, so once every survivor is parked, nothing will ever
+        /// finish anything again. Keeping the scene open on those would turn an unreachable wait
+        /// into a scene that never closes — and OnSceneExit is told Deadlocked, with the blocks
+        /// still awaited, so a miswired join no longer reads like a scene played to its last
+        /// line.</para>
         /// <para>An explicit Cancel() still tears the whole scene down at once — that is its
         /// job.</para>
         /// </remarks>
-        public Exception? TrackEnded(Track track)
+        public Exception? TrackEnded(Track track, string ending)
         {
             RemoveTrack(track);
-            foreach (var other in _tracks)
-            {
-                if (other.IsRunning() && !other.IsWaitingForBlocks()) return null;
-            }
-            return Shutdown();
+            if (_closing || CanStillAdvance()) return null;
+
+            var waitingFor = WaitingFor();
+            return waitingFor.Count > 0
+                ? Shutdown(SceneEndReason.Deadlocked, waitingFor)
+                : Shutdown(ending);
+        }
+
+        /// <summary>A track just parked. Close the scene if that left nothing able to release it.</summary>
+        /// <remarks>The other half of the deadlock TrackEnded closes on. Checking only when a track
+        /// ENDED missed the case where the last track able to move PARKED instead: a single flow
+        /// waiting on a block of a branch it never took stayed open for good.</remarks>
+        public Exception? TrackParked()
+        {
+            if (_closing || CanStillAdvance()) return null;
+            return Shutdown(SceneEndReason.Deadlocked, WaitingFor());
+        }
+
+        /// <summary>Code of the game threw during the walk. Close the scene; the track re-throws.</summary>
+        /// <remarks>What a cleanup throws while closing is dropped here, on purpose: the game gets
+        /// the exception that started it, which is the one that explains everything after.</remarks>
+        public void Fault()
+        {
+            if (!_running || _closing) return;
+            Shutdown(SceneEndReason.Faulted);
+        }
+
+        /// <summary>Throw when the game calls into a running scene from another thread than the
+        /// one that started it.</summary>
+        public void EnsureOwnerThread(string call)
+        {
+            if (!_running) return;
+            var current = Environment.CurrentManagedThreadId;
+            if (current == _ownerThreadId) return;
+            throw new InvalidOperationException(
+                $"LSDE: {call} was called on thread {current}, but this scene was started on thread {_ownerThreadId}. " +
+                "The engine is not thread-safe: call it from the thread that started the scene. In Unity that is the " +
+                "main thread — switch back before calling it (await UniTask.SwitchToMainThread(), or queue the call " +
+                "for the main thread).");
         }
 
         /// <summary>Park a track (or the main flow) until every listed block has FINISHED.</summary>
         public void RegisterWaitForBlocks(IWaiter waiter, List<string> blockIds)
         {
+            if (!_pendingWaits.ContainsKey(waiter)) _waitOrder.Add(waiter);
             _pendingWaits[waiter] = blockIds;
         }
 
@@ -406,6 +485,32 @@ namespace LsdeDialogEngine
                 if (track.Id != Track.MainTrackId && track.IsRunning()) result.Add(track);
             }
             return result;
+        }
+
+        /// <summary>Is there a track left that could still finish a block? A parked one cannot.</summary>
+        private bool CanStillAdvance()
+        {
+            foreach (var track in _tracks)
+            {
+                if (track.IsRunning() && !track.IsWaitingForBlocks()) return true;
+            }
+            return false;
+        }
+
+        /// <summary>The blocks the parked tracks still wait for, each once, in the order they were
+        /// asked for.</summary>
+        private List<string> WaitingFor()
+        {
+            var ids = new List<string>();
+            var seen = new HashSet<string>();
+            foreach (var waiter in _waitOrder)
+            {
+                foreach (var id in _pendingWaits[waiter])
+                {
+                    if (!_completed.Contains(id) && seen.Add(id)) ids.Add(id);
+                }
+            }
+            return ids;
         }
 
         public IBaseBlockContext? CreateBlockContext(BlueprintBlock block, string entryPort)
@@ -486,9 +591,18 @@ namespace LsdeDialogEngine
         }
 
 
-        private Exception? Shutdown()
+        /// <summary>Close the scene down: cancel every track, fire OnSceneExit, tell the engine.</summary>
+        /// <remarks>Returns what a cleanup threw rather than throwing it, so the teardown always
+        /// runs to the end. Callers re-throw once there is nothing left to unwind.
+        /// <para>waitingFor must be read BEFORE: the pending waits are cleared on the way
+        /// in.</para></remarks>
+        private Exception? Shutdown(string reason, List<string>? waitingFor = null)
         {
+            if (_closing) return null;
+            _closing = true;
+
             _pendingWaits.Clear();
+            _waitOrder.Clear();
 
             Exception? fault = null;
             // A copy: cancelling a track cascades to its children, and every track is cancelled
@@ -506,9 +620,15 @@ namespace LsdeDialogEngine
             _tracks.Clear();
 
             _running = false;
-            FireSceneExit();
+
+            // OnSceneExit is the game's code too, and it used to throw between _running = false
+            // and telling the engine: the handle then sat in the engine's registry for good,
+            // IsRunning() answered true, and Stop() could not reach it — Cancel() returns at once on
+            // a scene that is not running. The engine is ALWAYS told; what OnSceneExit threw is
+            // carried like a cleanup's fault.
+            var exitFault = Cleanups.Run(() => FireSceneExit(reason, waitingFor));
             _callbacks.OnSceneEnded?.Invoke(this);
-            return fault;
+            return fault ?? exitFault;
         }
 
         // ─── Scene lifecycle ─────────────────────────────────────────────────
@@ -519,10 +639,14 @@ namespace LsdeDialogEngine
             handler?.Invoke(new SceneLifecycleArgs { Scene = this, Context = new SceneContext() });
         }
 
-        private void FireSceneExit()
+        private void FireSceneExit(string reason, List<string>? waitingFor)
         {
             var handler = _sceneRegistry.ExitHandler ?? _globalRegistry.SceneExitHandler;
-            handler?.Invoke(new SceneLifecycleArgs { Scene = this, Context = new SceneContext() });
+            handler?.Invoke(new SceneLifecycleArgs
+            {
+                Scene = this,
+                Context = new SceneContext { Reason = reason, WaitingFor = waitingFor?.AsReadOnly() },
+            });
         }
 
         // ─── Internal helpers ────────────────────────────────────────────────

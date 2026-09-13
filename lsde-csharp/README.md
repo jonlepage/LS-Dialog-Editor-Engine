@@ -194,13 +194,13 @@ A ROUTER block has **no handler** and needs none: the engine evaluates every cas
 | `engine.OnValidateNextBlock(handler)` | Validate before entering a block. |
 | `engine.OnInvalidateBlock(handler)` | Called when a block fails validation. |
 | `engine.OnSceneEnter(handler)` | Called when any scene starts. |
-| `engine.OnSceneExit(handler)` | Called when any scene ends. |
+| `engine.OnSceneExit(handler)` | Called when any scene ends. `args.Context.Reason` says why (`SceneEndReason`): `completed`, `cancelled`, `invalidated`, `faulted` or `deadlocked` (with `args.Context.WaitingFor`). |
 
 ### Scene Handle (Tier 2 — Per-Scene)
 
 | Method | Description |
 |--------|-------------|
-| `handle.Start()` | Begin traversal from the entry block. |
+| `handle.Start()` | Begin traversal from the entry block. Call `Next()`, `Resolve()` and `Cancel()` from the thread that started it — in Unity, the main thread; another thread is refused with an exception. |
 | `handle.Cancel()` | Stop the scene and all async tracks. |
 | `handle.OnDialog(handler)` | Override global DIALOG handler for this scene. |
 | `handle.OnChoice(handler)` | Override global CHOICE handler for this scene. |

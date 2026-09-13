@@ -24,6 +24,7 @@ add_executable(lsde_tests
     json_loader_test.cpp
     condition_integration_test.cpp
     robustness_test.cpp
+    traversal_robustness_test.cpp
     router_test.cpp
     in_port_per_character_test.cpp
     handler_tiers_test.cpp

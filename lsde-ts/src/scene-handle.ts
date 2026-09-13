@@ -19,7 +19,7 @@ import type {
 	ConditionTest, Card, RuntimeConditionCase,
 	ConditionBlock, RouterBlock,
 } from './types.js';
-import { ConditionOperator, Ports } from './types.js';
+import { ConditionOperator, Ports, SceneEndReason } from './types.js';
 import { SceneGraph } from './graph.js';
 import { HandlerRegistry, SceneHandlerRegistry } from './handler-registry.js';
 import {
@@ -33,8 +33,8 @@ import {
 	evaluateConditionChain as evaluateConditionChainOf,
 } from './condition-evaluator.js';
 import {
-	Track, MAIN_TRACK_ID, natives,
-	type TrackHost, type Waiter, type CleanupFault, type InternalContext,
+	Track, MAIN_TRACK_ID, natives, runCleanup,
+	type TrackHost, type Waiter, type CleanupFault, type InternalContext, type TrackEnding,
 } from './track.js';
 
 export interface SceneHandleCallbacks {
@@ -56,6 +56,16 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 
 	private running = false;
 
+	/**
+	 * The scene is being closed right now — set on entering `shutdown()`, before any cleanup runs.
+	 *
+	 * `running` cannot say it: it only drops once every track is cancelled, and a cleanup run by that
+	 * cancelling may call `scene.cancel()` or `engine.stop()` — the natural thing for a panel that
+	 * closes the dialogue it belongs to. The inner call found the scene still running and closed it
+	 * a second time: `onSceneExit` fired twice, the engine was told twice.
+	 */
+	private closing = false;
+
 	// ─── Shared by every track of this scene ─────────────────────────────
 	private readonly visited = new Set<string>();
 
@@ -73,7 +83,7 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 	 */
 	private readonly completed = new Set<string>();
 	private readonly choiceHistory = new Map<string, string[]>();
-	/** Tracks — the main flow included — parked until a set of blocks has been visited. */
+	/** Tracks — the main flow included — parked until a set of blocks has been finished. */
 	private readonly pendingWaits = new Map<Waiter, string[]>();
 
 	// ─── The tracks ──────────────────────────────────────────────────────
@@ -119,13 +129,23 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 		}
 
 		this.running = true;
+		this.closing = false;
 		this.callbacks.onSceneStarted( this );
 
-		this.fireSceneEnter();
+		// `onSceneEnter` is the game's code like any handler, and it runs before there is a track to
+		// catch what it throws. It used to leave the scene registered and running with no track at
+		// all: nothing to advance, nothing to end it. Same rule as the walk — close, then surface.
+		const enterFault = runCleanup( () => this.fireSceneEnter() );
+		if ( enterFault ) {
+			this.shutdown( SceneEndReason.Faulted );
+			throw enterFault.value;
+		}
+		// `onSceneEnter` is allowed to cancel the scene it was told about.
+		if ( !this.running ) return;
 
 		const startBlock = this.sceneGraph.getStartBlock();
 		if ( !startBlock ) {
-			const fault = this.shutdown();
+			const fault = this.shutdown( SceneEndReason.Completed );
 			if ( fault ) throw fault.value;
 			return;
 		}
@@ -138,8 +158,8 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 	}
 
 	cancel(): void {
-		if ( !this.running ) return;
-		const fault = this.shutdown();
+		if ( !this.running || this.closing ) return;
+		const fault = this.shutdown( SceneEndReason.Cancelled );
 		if ( fault ) throw fault.value;
 	}
 
@@ -303,24 +323,51 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 	 * pool running out of tracks able to advance, not the main flow reaching its end.
 	 *
 	 * It used to be the main flow: `trackEnded` on track 0 called `shutdown()`, which cancels
-	 * every live track. That contradicted the promise `Track.endFlow` makes — child tracks
+	 * every live track. That contradicted the promise `Track.retire` makes — child tracks
 	 * survive, only an explicit `cancel()` cascades — for the one track that opens most of them,
 	 * and it made a whole port silently do nothing: a port whose targets are ALL `isAsync` leaves
 	 * the main flow no continuation, so it ends the instant it has spawned them, and shutdown
 	 * cancelled the branches born three lines earlier. They never got past `onBeforeBlock`.
 	 *
 	 * A track parked on a `waitForBlocks` does NOT count as able to advance: it is waiting for
-	 * another track to visit a block, so once every survivor is parked, nothing will ever visit
+	 * another track to finish a block, so once every survivor is parked, nothing will ever finish
 	 * anything again. Keeping the scene open on those would turn an unreachable wait into a scene
-	 * that never closes.
+	 * that never closes — and `onSceneExit` is told `deadlocked`, with the blocks still awaited, so
+	 * a miswired join no longer reads like a scene played to its last line.
 	 *
 	 * An explicit `cancel()` still tears the whole scene down at once — that is its job.
 	 */
-	trackEnded( track: Track ): CleanupFault {
+	trackEnded( track: Track, ending: TrackEnding ): CleanupFault {
 		this.removeTrack( track );
-		const canStillAdvance = this.tracks.some( t => t.isRunning() && !t.isWaitingForBlocks() );
-		if ( canStillAdvance ) return null;
-		return this.shutdown();
+		if ( this.closing || this.canStillAdvance() ) return null;
+
+		const waitingFor = this.waitingFor();
+		return waitingFor.length > 0
+			? this.shutdown( SceneEndReason.Deadlocked, waitingFor )
+			: this.shutdown( ending );
+	}
+
+	/**
+	 * @internal — A track just parked. Close the scene if that left nothing able to release it.
+	 *
+	 * The other half of the deadlock `trackEnded` closes on. Checking only when a track ENDED
+	 * missed the case where the last track able to move PARKED instead: a single flow waiting on a
+	 * block of a branch it never took stayed open for good.
+	 */
+	trackParked(): CleanupFault {
+		if ( this.closing || this.canStillAdvance() ) return null;
+		return this.shutdown( SceneEndReason.Deadlocked, this.waitingFor() );
+	}
+
+	/**
+	 * @internal — Code of the game threw during the walk. Close the scene; the track re-throws.
+	 *
+	 * What a cleanup throws while closing is dropped here, on purpose: the game gets the error that
+	 * started it, which is the one that explains everything after.
+	 */
+	fault(): void {
+		if ( !this.running || this.closing ) return;
+		this.shutdown( SceneEndReason.Faulted );
 	}
 
 	/**
@@ -391,8 +438,13 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 	 * end. Callers re-throw once there is nothing left to unwind — this is reached from a dead
 	 * end, from a note loop, from `cancel()` and from a handler that already failed, and only the
 	 * caller knows which error the game should see.
+	 *
+	 * `waitingFor` must be read BEFORE: the pending waits are cleared on the way in.
 	 */
-	private shutdown(): CleanupFault {
+	private shutdown( reason: SceneEndReason, waitingFor?: string[] ): CleanupFault {
+		if ( this.closing ) return null;
+		this.closing = true;
+
 		this.pendingWaits.clear();
 
 		let fault: CleanupFault = null;
@@ -409,9 +461,15 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 		this.tracks.length = 0;
 
 		this.running = false;
-		this.fireSceneExit();
+
+		// `onSceneExit` is the game's code too, and it used to throw between `running = false` and
+		// telling the engine: the handle then sat in the engine's registry for good, `isRunning()`
+		// answered true, and `stop()` could not reach it — `cancel()` returns at once on a scene
+		// that is not running. The engine is ALWAYS told; what `onSceneExit` threw is carried like
+		// a cleanup's fault.
+		const exitFault = runCleanup( () => this.fireSceneExit( reason, waitingFor ) );
 		this.callbacks.onSceneEnded( this );
-		return fault;
+		return fault ?? exitFault;
 	}
 
 	private fireSceneEnter(): void {
@@ -421,10 +479,10 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 		}
 	}
 
-	private fireSceneExit(): void {
+	private fireSceneExit( reason: SceneEndReason, waitingFor?: string[] ): void {
 		const handler = this.sceneRegistry.exitHandler ?? this.globalRegistry.sceneExitHandler;
 		if ( handler ) {
-			handler( { scene: this, context: {} } );
+			handler( { scene: this, context: waitingFor ? { reason, waitingFor } : { reason } } );
 		}
 	}
 
@@ -437,6 +495,22 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 	private removeTrack( track: Track ): void {
 		const idx = this.tracks.indexOf( track );
 		if ( idx >= 0 ) this.tracks.splice( idx, 1 );
+	}
+
+	/** Is there a track left that could still finish a block? A parked one cannot. */
+	private canStillAdvance(): boolean {
+		return this.tracks.some( t => t.isRunning() && !t.isWaitingForBlocks() );
+	}
+
+	/** The blocks the parked tracks still wait for, each once, in the order they were asked for. */
+	private waitingFor(): string[] {
+		const ids = new Set<string>();
+		for ( const required of this.pendingWaits.values() ) {
+			for ( const id of required ) {
+				if ( !this.completed.has( id ) ) ids.add( id );
+			}
+		}
+		return [...ids];
 	}
 
 	private getResolveCharacterFn(): ( actors: Card[] ) => Card | undefined {

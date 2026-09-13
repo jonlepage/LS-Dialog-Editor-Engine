@@ -34,12 +34,19 @@ namespace LsdeDialogEngine.Tests
         /// <summary>What the game answers, keyed "&lt;dict&gt;.&lt;entry&gt;". Absent means everything is true.</summary>
         public StateBridgeConfig? StateBridge { get; set; }
 
+        /// <summary>The suite throws from a handler. GDScript has no exceptions and skips it; C# runs it.</summary>
+        public bool? RequiresExceptions { get; set; }
+
         public List<TestCase> Cases { get; set; } = new();
     }
 
     public class StateBridgeConfig
     {
         public Dictionary<string, bool>? Conditions { get; set; }
+
+        /// <summary>Keys answered true this many times, then false — a counter a loop can run out
+        /// of. Outranks Conditions for the same key.</summary>
+        public Dictionary<string, int>? TrueTimes { get; set; }
     }
 
     public class TestCase
@@ -51,10 +58,20 @@ namespace LsdeDialogEngine.Tests
         public int? ExpectedCleanupCalls { get; set; }
 
         /// <summary>Is the scene still running when the steps are done?</summary>
-        /// <remarks>A block parked on WaitForBlocks leaves the scene alive: it is waiting, not
-        /// finished. Every other suite ends, so this defaults to false.</remarks>
+        /// <remarks>A block waiting for the game leaves the scene alive. A block parked on a
+        /// WaitForBlocks that nothing can finish does not: the scene closes as deadlocked. Every
+        /// other suite ends, so this defaults to false.</remarks>
         public bool? ExpectedRunning { get; set; }
         public bool? OrderIndependent { get; set; }
+
+        /// <summary>What OnSceneExit is told, once. Null means the reason is not checked.</summary>
+        public string? ExpectedExitReason { get; set; }
+
+        /// <summary>With deadlocked: the blocks still awaited, in the order the engine reports them.</summary>
+        public List<string>? ExpectedWaitingFor { get; set; }
+
+        /// <summary>Does an exception come out of Start()? Null means it must not.</summary>
+        public bool? ExpectedThrow { get; set; }
 
         // Validation only
         public List<string>? ExpectedErrors { get; set; }
@@ -90,7 +107,8 @@ namespace LsdeDialogEngine.Tests
 
     public class StepAction
     {
-        /// <summary>next, selectChoice, resolveCondition, resolveAction, rejectAction, resolveCharacterPort.</summary>
+        /// <summary>next, selectChoice, resolveCondition, resolveAction, rejectAction,
+        /// resolveCharacterPort, throw.</summary>
         public string Type { get; set; } = "";
 
         /// <summary>selectChoice — the option id, which is also its exit port.</summary>

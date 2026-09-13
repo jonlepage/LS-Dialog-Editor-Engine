@@ -24,7 +24,7 @@
 import type {
 	BlueprintBlock, SceneHandle, CleanupFn, Card, NativeProperties, TrackInfo, Link,
 } from './types.js';
-import { BlockType } from './types.js';
+import { BlockType, SceneEndReason } from './types.js';
 import type { SceneGraph } from './graph.js';
 import type { HandlerRegistry, SceneHandlerRegistry } from './handler-registry.js';
 import { resolveHandler } from './handler-registry.js';
@@ -45,6 +45,9 @@ export type InternalContext =
  * the scene ends when it ends. That is the ONLY thing that sets it apart.
  */
 export const MAIN_TRACK_ID = 0;
+
+/** How a track can end on its own. A fault and a cancel are the scene's business, not the track's. */
+export type TrackEnding = typeof SceneEndReason.Completed | typeof SceneEndReason.Invalidated;
 
 // ─── Cleanup faults ──────────────────────────────────────────────────────────
 
@@ -179,10 +182,30 @@ export interface TrackHost {
 	spawnTrack( startBlock: BlueprintBlock, parentTrackId: number | null, entryPort: string ): number;
 	cancelTrack( trackId: number ): CleanupFault;
 	/** This track reached the end of its flow. The scene decides what that means. */
-	trackEnded( track: Track ): CleanupFault;
+	trackEnded( track: Track, ending: TrackEnding ): CleanupFault;
+	/** A track just parked on a `waitForBlocks`. The scene closes if nothing is left to release it. */
+	trackParked(): CleanupFault;
+	/**
+	 * Code of the game threw during the walk: close the scene. The caller re-throws.
+	 *
+	 * Idempotent — a fault on a nested track passes through every walk on its way out, and only the
+	 * first one closes anything.
+	 */
+	fault(): void;
 }
 
 // ─── Track ───────────────────────────────────────────────────────────────────
+
+/**
+ * One unit of the walk, handed back to {@link Track.run} instead of called.
+ *
+ * `process` takes a block the track has arrived at, `execute` dispatches it once `onBeforeBlock`
+ * has let it through, `advance` leaves it once the game has said so.
+ */
+type Step =
+	| { kind: 'process'; block: BlueprintBlock; entryPort: string }
+	| { kind: 'execute'; block: BlueprintBlock; entryPort: string }
+	| { kind: 'advance'; block: BlueprintBlock; context: InternalContext | null };
 
 /** One cursor walking the graph. The main flow is one of these, with id 0. */
 export class Track implements Waiter {
@@ -206,7 +229,7 @@ export class Track implements Waiter {
 	private previousCharacter: Card | undefined = undefined;
 	private previousCleanup: CleanupFn | null = null;
 	/** What to resume when a `waitForBlocks` is satisfied. */
-	private pendingAdvance: ( () => void ) | null = null;
+	private pendingStep: Step | null = null;
 
 	/**
 	 * The wires this track still owes, in the order it will walk them.
@@ -242,7 +265,7 @@ export class Track implements Waiter {
 
 	/** Begin walking. Must be called after the track is in the scene's pool. */
 	start(): void {
-		this.processBlock( this.startBlock, this.startEntryPort );
+		this.run( { kind: 'process', block: this.startBlock, entryPort: this.startEntryPort } );
 	}
 
 	/**
@@ -260,7 +283,7 @@ export class Track implements Waiter {
 		let fault = runCleanup( cleanup );
 
 		this.currentBlock = null;
-		this.pendingAdvance = null;
+		this.pendingStep = null;
 		this.queue.length = 0;
 		for ( const childId of this.childTrackIds ) {
 			// Evaluated FIRST, then kept — see the note in `SceneHandleImpl.shutdown()`.
@@ -278,24 +301,25 @@ export class Track implements Waiter {
 	/**
 	 * Parked on a `waitForBlocks` — alive, but unable to move on its own.
 	 *
-	 * It is waiting for ANOTHER track to visit a block, so it cannot be what keeps a scene open:
-	 * once every remaining track is parked like this, nothing will ever visit anything again.
-	 * That is the deadlock `SceneHandleImpl.trackEnded` closes the scene on.
+	 * It is waiting for ANOTHER track to finish a block, so it cannot be what keeps a scene open:
+	 * once every remaining track is parked like this, nothing will ever finish anything again.
+	 * That is the deadlock `SceneHandleImpl` closes the scene on — whether the last track able to
+	 * move ENDS (`trackEnded`) or PARKS (`trackParked`).
 	 */
 	isWaitingForBlocks(): boolean {
-		return this.pendingAdvance !== null;
+		return this.pendingStep !== null;
 	}
 
 	getCurrentBlock(): BlueprintBlock | null {
 		return this.currentBlock;
 	}
 
-	/** Called once every block this track was waiting on has been visited. */
+	/** Called once every block this track was waiting on has been finished. */
 	notifyWaitSatisfied(): void {
-		if ( !this.running || !this.host.isSceneRunning() || !this.pendingAdvance ) return;
-		const advance = this.pendingAdvance;
-		this.pendingAdvance = null;
-		advance();
+		if ( !this.running || !this.host.isSceneRunning() || !this.pendingStep ) return;
+		const step = this.pendingStep;
+		this.pendingStep = null;
+		this.run( step );
 	}
 
 	/** A read-only snapshot, for a debug view. */
@@ -309,6 +333,52 @@ export class Track implements Waiter {
 		};
 	}
 
+	// ─── The loop ────────────────────────────────────────────────────────
+
+	/**
+	 * Walk from `first` until the track has to wait for the game. The one error boundary.
+	 *
+	 * Two jobs, and both used to be missing.
+	 *
+	 * **The stack.** Every step used to CALL the next one — `processBlock` → `executeBlockHandler`
+	 * → `advanceToNextBlock` → `processBlock` — three frames per block for as long as the game
+	 * advanced synchronously, and nothing brought the stack back down. A condition ↔ action loop
+	 * died on a `RangeError` after 694 passes, and the reference export overflowed on a loop a
+	 * player can take. In C# the same walk is a `StackOverflowException`: no catch stops it, and it
+	 * takes the whole Unity process down. Every one of those calls was the LAST thing its caller
+	 * did, so each step now RETURNS the next one and this loop takes it — the same steps, in the
+	 * same order, at a constant depth.
+	 *
+	 * What still nests is what has to come back: opening a child track, and releasing a parked one.
+	 * Each runs the other track's loop and returns here. The depth they add is how many are opened
+	 * or released in a row without the game ever waiting — a property of the graph's async shape,
+	 * not of its length.
+	 *
+	 * **The faults.** Only the type handler used to sit inside a `try`. A throwing validation,
+	 * `onBeforeBlock` or resolver — or a fault on a track this one had just opened — escaped
+	 * through a track that had not finished leaving its block, and the scene stayed open with
+	 * nothing able to move it. Every entry into the walk comes through here, so every line of the
+	 * game's code the walk calls is inside this `try`. The scene is closed down FIRST — cleanups
+	 * run, tracks cancelled, `onSceneExit` fired — and THEN the error is re-thrown, to whoever
+	 * called `start()`, `next()` or `resolve()`. That is problem 11 of `MIGRATION-V2.md`, and it now
+	 * holds for all of them, on every track.
+	 */
+	private run( first: Step ): void {
+		let step: Step | null = first;
+		try {
+			while ( step ) step = this.take( step );
+		} catch ( err ) {
+			this.host.fault();
+			throw err;
+		}
+	}
+
+	private take( step: Step ): Step | null {
+		if ( step.kind === 'process' ) return this.processBlock( step.block, step.entryPort );
+		if ( step.kind === 'execute' ) return this.executeBlockHandler( step.block, step.entryPort );
+		return this.advanceToNextBlock( step.block, step.context );
+	}
+
 	// ─── The traversal ───────────────────────────────────────────────────
 
 	/**
@@ -319,20 +389,21 @@ export class Track implements Waiter {
 	 * 1. **Step over NOTEs.** They are designer-only and never dispatched.
 	 * 2. **Honour `waitForBlocks`.** BEFORE anything else — see the note below.
 	 * 3. **Ask `onValidateNextBlock`.** The game's gate; a refusal stops this track.
-	 * 4. **Mark it current and visited.** Visiting it may release another parked track.
+	 * 4. **Mark it current and visited.**
 	 * 5. **Fire `onBeforeBlock`**, whose `resolve()` releases the type handler.
+	 *
+	 * @returns the next step, or `null` when the track has to wait — for `resolve()`, for a join,
+	 * or for good.
 	 */
-	private processBlock( startingBlock: BlueprintBlock, entryPort: string ): void {
-		if ( !this.running || !this.host.isSceneRunning() ) return;
+	private processBlock( startingBlock: BlueprintBlock, entryPort: string ): Step | null {
+		if ( !this.running || !this.host.isSceneRunning() ) return null;
 
 		const sceneGraph = this.host.getSceneGraph();
 
 		const block = skipNotes( startingBlock, sceneGraph );
 		if ( !block ) {
 			// The end of THIS branch, not of the track: whatever is queued is still owed.
-			const fault = this.endBranch();
-			if ( fault ) throw fault.value;
-			return;
+			return this.endBranch();
 		}
 
 		// `waitForBlocks` holds the block BEFORE it is dispatched — the handler is never called,
@@ -351,9 +422,16 @@ export class Track implements Waiter {
 		// advancing. Same checkbox, two meanings, and the second one showed the line early.
 		const waitBlocks = natives( block ).waitForBlocks;
 		if ( waitBlocks?.length && !waitBlocks.every( id => this.host.isCompleted( id ) ) ) {
-			this.pendingAdvance = () => this.processBlock( block, entryPort );
+			this.pendingStep = { kind: 'process', block, entryPort };
 			this.host.registerWaitForBlocks( this, waitBlocks );
-			return;
+
+			// Parking may be exactly what leaves the scene with nothing able to move. That used to
+			// be noticed only when a track ENDED, so when the last track able to move PARKED instead
+			// — a single flow waiting on a block of a branch it did not take — the scene stayed open
+			// for good: no `onSceneExit`, the handle in the engine's registry, `isRunning()` true.
+			const fault = this.host.trackParked();
+			if ( fault ) throw fault.value;
+			return null;
 		}
 
 		if ( !this.host.runValidation( block, entryPort, this.previousBlock, this.previousCharacter ) ) {
@@ -367,33 +445,45 @@ export class Track implements Waiter {
 			//
 			// The guide has always said so — "onInvalidateBlock → scene stops" — and every other
 			// dead end here already does it: a NOTE loop, a port with no wire, a missing target.
-			const fault = this.endFlow();
+			const fault = this.endFlow( SceneEndReason.Invalidated );
 			if ( fault ) throw fault.value;
-			return;
+			return null;
 		}
 
 		this.currentBlock = block;
 		this.host.addVisited( block.id );
 
 		const registry = this.host.getGlobalRegistry();
-		if ( registry.beforeBlockHandler ) {
-			// GUARDED like next(): a delay timer that fires twice would otherwise dispatch the
-			// same block twice — the handler runs again, cleanups pile up, and the track advances
-			// from a block it already left.
-			let resolved = false;
-			registry.beforeBlockHandler( {
-				block,
-				scene: this.host.asSceneHandle(),
-				context: { nativeProperties: natives( block ) },
-				resolve: () => {
-					if ( resolved ) return;
-					resolved = true;
-					this.executeBlockHandler( block, entryPort );
-				},
-			} );
-		} else {
-			this.executeBlockHandler( block, entryPort );
-		}
+		if ( !registry.beforeBlockHandler ) return { kind: 'execute', block, entryPort };
+
+		// GUARDED like next(): a delay timer that fires twice would otherwise dispatch the same
+		// block twice — the handler runs again, cleanups pile up, and the track advances from a
+		// block it already left.
+		//
+		// And DEFERRED like next(): a `resolve()` called while `onBeforeBlock` is still running only
+		// raises a flag, and the block is dispatched once `onBeforeBlock` has returned. Dispatching
+		// it on the spot ran the whole rest of the walk INSIDE the game's callback — a frame per
+		// block that nothing ever gave back — and ran the type handler before the lines the game had
+		// written after its `resolve()`.
+		let resolved = false;
+		let inside = true;
+		let resolvedInside = false;
+		registry.beforeBlockHandler( {
+			block,
+			scene: this.host.asSceneHandle(),
+			context: { nativeProperties: natives( block ) },
+			resolve: () => {
+				if ( resolved ) return;
+				resolved = true;
+				if ( inside ) {
+					resolvedInside = true;
+					return;
+				}
+				this.run( { kind: 'execute', block, entryPort } );
+			},
+		} );
+		inside = false;
+		return resolvedInside ? { kind: 'execute', block, entryPort } : null;
 	}
 
 	/**
@@ -402,11 +492,13 @@ export class Track implements Waiter {
 	 * `next()` is guarded and deferred: called during the handler it only raises a flag, and the
 	 * advance happens once both handlers have returned. Otherwise a scene handler calling `next()`
 	 * would move the flow on before the global handler ever ran.
+	 *
+	 * @returns the advance, when the game has already said so; `null` while it has not.
 	 */
-	private executeBlockHandler( block: BlueprintBlock, entryPort: string ): void {
+	private executeBlockHandler( block: BlueprintBlock, entryPort: string ): Step | null {
 		// `running` and not just the scene's: a `resolve()` kept in a closure and fired after this
 		// track ended would otherwise restart it on a dead flow.
-		if ( !this.running || !this.host.isSceneRunning() ) return;
+		if ( !this.running || !this.host.isSceneRunning() ) return null;
 
 		const { sceneHandler, globalHandler } = resolveHandler(
 			block.type, block.id,
@@ -415,16 +507,10 @@ export class Track implements Waiter {
 		);
 
 		const context = this.host.createBlockContext( block, entryPort );
-		if ( !context ) {
-			this.advanceToNextBlock( block, null );
-			return;
-		}
+		if ( !context ) return { kind: 'advance', block, context: null };
 
 		// No handler → advance silently. `start()` already refused a scene missing one.
-		if ( !sceneHandler && !globalHandler ) {
-			this.advanceToNextBlock( block, context );
-			return;
-		}
+		if ( !sceneHandler && !globalHandler ) return { kind: 'advance', block, context };
 
 		let nextCalled = false;
 		let syncPhase = true;
@@ -435,30 +521,21 @@ export class Track implements Waiter {
 			if ( nextCalled ) return;
 			nextCalled = true;
 			if ( syncPhase ) return;
-			this.advanceToNextBlock( block, context );
+			this.run( { kind: 'advance', block, context } );
 		};
 
 		const handlerArgs = { scene: this.host.asSceneHandle(), block, context, next };
 
-		try {
-			if ( sceneHandler ) {
-				sceneCleanup = sceneHandler( handlerArgs );
-				if ( !context._globalPrevented && globalHandler ) {
-					globalCleanup = globalHandler( handlerArgs );
-				}
-			} else if ( globalHandler ) {
+		// No `try` here any more. A handler that throws reaches `run()`, which closes the scene
+		// before re-throwing — the same boundary as every other callback of the game, instead of a
+		// boundary of its own that the others did not have.
+		if ( sceneHandler ) {
+			sceneCleanup = sceneHandler( handlerArgs );
+			if ( !context._globalPrevented && globalHandler ) {
 				globalCleanup = globalHandler( handlerArgs );
 			}
-		} catch ( err ) {
-			// The flow is closed down first, THEN the error is re-thrown. By the time the game
-			// sees it, the cleanups have run and `onSceneExit` has fired if this was the main
-			// track. The dialogue stopped PROPERLY, and the error surfaces where the game called
-			// `start()` or `next()`.
-			//
-			// v1 swallowed it — silently, not even logged — while an exception from the cleanup
-			// that same handler returned reached the caller. One fault, two opposite behaviours.
-			this.endFlow();
-			throw err;
+		} else if ( globalHandler ) {
+			globalCleanup = globalHandler( handlerArgs );
 		}
 
 		const cleanup = combineCleanups( sceneCleanup, globalCleanup );
@@ -470,16 +547,14 @@ export class Track implements Waiter {
 		if ( !this.running || !this.host.isSceneRunning() ) {
 			const fault = runCleanup( cleanup );
 			if ( fault ) throw fault.value;
-			return;
+			return null;
 		}
 
 		// Stored BEFORE any advance runs, so leaving the block finds it.
 		this.previousCleanup = cleanup;
 
 		syncPhase = false;
-		if ( nextCalled ) {
-			this.advanceToNextBlock( block, context );
-		}
+		return nextCalled ? { kind: 'advance', block, context } : null;
 	}
 
 	/**
@@ -495,9 +570,11 @@ export class Track implements Waiter {
 	 * detached whether the designer had ticked the box or not, so on a secondary wire the property
 	 * was INERT: ticked or not, the target ran beside. The engine now honours it — ticked means
 	 * beside, unticked means in turn — and `MIGRATION-V2.md` records the whole decision.
+	 *
+	 * @returns the block this track goes on to, or `null` when it has ended.
 	 */
-	private advanceToNextBlock( block: BlueprintBlock, context: InternalContext | null ): void {
-		if ( !this.running || !this.host.isSceneRunning() ) return;
+	private advanceToNextBlock( block: BlueprintBlock, context: InternalContext | null ): Step | null {
+		if ( !this.running || !this.host.isSceneRunning() ) return null;
 
 		this.previousBlock = block;
 		this.previousCharacter = context?.character;
@@ -549,29 +626,24 @@ export class Track implements Waiter {
 		//
 		// The cleanup runs here rather than inside `endBranch` for the same reason; `endBranch`
 		// calls it again and finds nothing, which is what makes that safe.
+		//
+		// A cleanup that throws is a fault like a handler that throws: `run()` closes the scene,
+		// then surfaces it.
 		const cleanupFault = this.runBlockCleanup();
-		if ( cleanupFault ) {
-			// Same order as a handler that throws: close down first, surface after.
-			this.endFlow();
-			throw cleanupFault.value;
-		}
+		if ( cleanupFault ) throw cleanupFault.value;
 
 		this.host.addCompleted( block.id );
 
 		// Releasing a parked track re-enters the traversal immediately, and a handler there is
 		// allowed to cancel the scene — so the guard is re-read rather than assumed.
-		if ( !this.running || !this.host.isSceneRunning() ) return;
+		if ( !this.running || !this.host.isSceneRunning() ) return null;
 
 		if ( continuation ) {
 			const nextBlock = sceneGraph.getBlock( continuation.to );
-			if ( nextBlock ) {
-				this.processBlock( nextBlock, continuation.toPort );
-				return;
-			}
+			if ( nextBlock ) return { kind: 'process', block: nextBlock, entryPort: continuation.toPort };
 		}
 
-		const fault = this.endBranch();
-		if ( fault ) throw fault.value;
+		return this.endBranch();
 	}
 
 	/**
@@ -581,32 +653,34 @@ export class Track implements Waiter {
 	 * a block, whether the track carries on or not. Hanging on to it until the queue emptied would
 	 * keep a panel open, or an audio voice alive, through everything that came after it.
 	 */
-	private endBranch(): CleanupFault {
-		const fault = this.runBlockCleanup();
-		const sceneGraph = this.host.getSceneGraph();
+	private endBranch(): Step | null {
+		const cleanupFault = this.runBlockCleanup();
+		if ( cleanupFault ) throw cleanupFault.value;
 
+		const sceneGraph = this.host.getSceneGraph();
 		while ( this.queue.length > 0 ) {
 			const link = this.queue.shift()!;
 			const target = sceneGraph.getBlock( link.to );
 			if ( !target ) continue;
-			this.processBlock( target, link.toPort );
-			return fault;
+			return { kind: 'process', block: target, entryPort: link.toPort };
 		}
 
-		return fault ?? this.retire();
+		const fault = this.retire( SceneEndReason.Completed );
+		if ( fault ) throw fault.value;
+		return null;
 	}
 
 	/**
 	 * Stop this track for good, DROPPING whatever it still owed.
 	 *
-	 * For the ends that are not a branch running out of graph: `onValidateNextBlock` refusing a
-	 * block, a handler throwing, a cleanup throwing. All three say the flow is over — the guide has
-	 * always read `onInvalidateBlock` as "the scene stops" — so the queue goes with it. Playing the
-	 * next wire after the game refused this one would be answering a "no" with "then try that".
+	 * For `onValidateNextBlock` refusing a block — the guide has always read `onInvalidateBlock`
+	 * as "the scene stops" — so the queue goes with it. Playing the next wire after the game refused
+	 * this one would be answering a "no" with "then try that". A handler or a cleanup that throws
+	 * no longer comes here: that closes the whole scene, in `run()`.
 	 */
-	private endFlow(): CleanupFault {
+	private endFlow( ending: TrackEnding ): CleanupFault {
 		const fault = this.runBlockCleanup();
-		return fault ?? this.retire();
+		return fault ?? this.retire( ending );
 	}
 
 	/**
@@ -615,12 +689,12 @@ export class Track implements Waiter {
 	 * Child tracks SURVIVE: they live independently in the pool, and only an explicit `cancel()`
 	 * cascades to them.
 	 */
-	private retire(): CleanupFault {
+	private retire( ending: TrackEnding ): CleanupFault {
 		this.running = false;
 		this.currentBlock = null;
-		this.pendingAdvance = null;
+		this.pendingStep = null;
 		this.queue.length = 0;
-		return this.host.trackEnded( this );
+		return this.host.trackEnded( this, ending );
 	}
 
 	/** Run the cleanup of the block this track is leaving, once, and carry what it threw. */

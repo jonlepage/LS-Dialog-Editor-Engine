@@ -190,11 +190,16 @@ describe( 'waitForBlocks — already finished', () => {
 		expect( played ).toEqual( ['first', 'second'] );
 	} );
 
-	it( 'never dispatches a block waiting on one that cannot finish', () => {
-		// A wait on a block the flow never reaches parks the track for good. The engine has no
-		// timeout and invents none: an unsatisfiable join is the drawing, and the scene simply
-		// stops there rather than guessing what the designer meant.
+	it( 'never dispatches a block waiting on one that cannot finish, and closes the scene', () => {
+		// A wait on a block the flow never reaches can never lift. The engine has no timeout and
+		// invents none: the joining block is never dispatched, and the scene is CLOSED as
+		// `deadlocked` rather than guessing what the designer meant.
+		//
+		// It used to stay open instead — parked for good, `onSceneExit` never fired, the handle in
+		// the engine's registry — because a deadlock was only noticed when a track ENDED, and here
+		// the last track PARKS. A game awaiting the end of the dialogue waited forever.
 		const played: string[] = [];
+		const reasons: unknown[] = [];
 		const engine = new DialogueEngine();
 		engine.init( { data: sceneOf( [
 			dialog( 'start', { next: ['joiner'] } ),
@@ -203,10 +208,12 @@ describe( 'waitForBlocks — already finished', () => {
 		] ) } );
 		registerUnusedHandlers( engine );
 		engine.onDialog( ( { block, next } ) => { played.push( block.id ); next(); } );
+		engine.onSceneExit( ( { context } ) => { reasons.push( [context.reason, context.waitingFor] ); } );
 		const handle = engine.scene( 's1' );
 		handle.start();
 
 		expect( played ).toEqual( ['start'] );
-		expect( handle.isRunning() ).toBe( true );
+		expect( handle.isRunning() ).toBe( false );
+		expect( reasons ).toEqual( [['deadlocked', ['nowhere']]] );
 	} );
 } );

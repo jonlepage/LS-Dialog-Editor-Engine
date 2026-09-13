@@ -59,6 +59,25 @@ const PORT_DEFAULT := "default"
 ## this id.
 const DICT_CHOICE := "choice"
 
+## Why a scene ended — what on_scene_exit is told in [code]context["reason"][/code]. Absent for
+## on_scene_enter. A waitForBlocks wired to a block no track will ever finish used to end exactly
+## like a scene played to its last line; a game awaiting the exit of a dialogue could not tell.
+##
+## The flow ran out of graph.
+const SCENE_END_COMPLETED := "completed"
+## cancel() on the handle, or stop() on the engine.
+const SCENE_END_CANCELLED := "cancelled"
+## on_validate_next_block refused the block the last running track was entering.
+const SCENE_END_INVALIDATED := "invalidated"
+## Code of the game threw during the walk. Never reported by this runtime: GDScript has no
+## exceptions, and a script error is pushed to the Godot log while the call returns null. The name
+## exists so a game shared between runtimes reads the same set of reasons.
+const SCENE_END_FAULTED := "faulted"
+## Every track left is parked on a waitForBlocks nothing can finish any more. The context then also
+## carries [code]waitingFor[/code]: the blocks still awaited, each once, in the order they were
+## asked for.
+const SCENE_END_DEADLOCKED := "deadlocked"
+
 ## The only payload this engine reads.
 const SUPPORTED_FORMAT := "lsde-blueprints"
 ## The format version this engine reads. Bumps only when the payload contract changes.

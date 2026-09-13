@@ -15,6 +15,8 @@
 #include <lsde/block_context.h>
 #include <lsde/track.h>
 
+#include <thread>
+
 namespace lsde {
 
 /// Callback type for character resolution.
@@ -114,19 +116,41 @@ public:
     /// running out of tracks able to advance, not the main flow reaching its end.
     ///
     /// It used to be the main flow: trackEnded on track 0 called shutdown(), which cancels every
-    /// live track. That contradicted the promise Track::endFlow makes — child tracks survive, only
+    /// live track. That contradicted the promise Track::retire makes — child tracks survive, only
     /// an explicit cancel() cascades — for the one track that opens most of them, and it made a
     /// whole port silently do nothing: a port whose targets are ALL isAsync leaves the main flow no
     /// continuation, so it ends the instant it has spawned them, and shutdown cancelled the
     /// branches born three lines earlier. They never got past onBeforeBlock.
     ///
     /// A track parked on a waitForBlocks does NOT count as able to advance: it is waiting for
-    /// another track to visit a block, so once every survivor is parked, nothing will ever visit
+    /// another track to finish a block, so once every survivor is parked, nothing will ever finish
     /// anything again. Keeping the scene open on those would turn an unreachable wait into a scene
-    /// that never closes.
+    /// that never closes — and onSceneExit is told deadlocked, with the blocks still awaited, so a
+    /// miswired join no longer reads like a scene played to its last line.
     ///
     /// An explicit cancel() still tears the whole scene down at once — that is its job.
-    std::exception_ptr trackEnded(Track* track) override;
+    std::exception_ptr trackEnded(Track* track, const std::string& ending) override;
+
+    /// A track just parked. Close the scene if that left nothing able to release it.
+    ///
+    /// The other half of the deadlock trackEnded closes on. Checking only when a track ENDED missed
+    /// the case where the last track able to move PARKED instead: a single flow waiting on a block
+    /// of a branch it never took stayed open for good.
+    std::exception_ptr trackParked() override;
+
+    /// Code of the game threw during the walk. Close the scene; the track re-throws.
+    ///
+    /// What a cleanup throws while closing is dropped here, on purpose: the game gets the exception
+    /// that started it, which is the one that explains everything after.
+    void fault() override;
+
+    /// Throw when the game calls into a running scene from another thread than the one that
+    /// started it.
+    ///
+    /// The engine is not thread-safe, and the only honest thing to do about it is to say so the
+    /// first time it happens. A game that completes a task on a worker thread and calls next()
+    /// from there ran every handler after it off the game thread, with nothing to say so.
+    void ensureOwnerThread(const char* call) override;
 
     /// Run onValidateNextBlock for a block, and onInvalidateBlock when it refuses.
     ///
@@ -159,16 +183,22 @@ public:
 
 private:
     /// Close the scene down: cancel every track, fire onSceneExit, tell the engine.
-    std::exception_ptr shutdown();
+    ///
+    /// `waitingFor` must be read BEFORE: the pending waits are cleared on the way in.
+    std::exception_ptr shutdown(const std::string& reason, std::vector<std::string> waitingFor = {});
     /// A track that ended is stopped, not deleted — see the note in shutdown().
     /// Retire an ended parallel track. A no-op by design — see the definition.
     void retireTrack(Track* track);
     std::vector<Track*> parallelTracks() const;
+    /// Is there a track left that could still finish a block? A parked one cannot.
+    bool canStillAdvance() const;
+    /// The blocks the parked tracks still wait for, each once, in the order they were asked for.
+    std::vector<std::string> waitingFor() const;
     /// Evaluate a condition using choice history for choice: keys, fallback for others.
     bool evaluateConditionWithHistory(const ConditionTest& test,
         const std::function<bool(const ConditionTest&)>& fallbackEvaluator);
     void fireSceneEnter();
-    void fireSceneExit();
+    void fireSceneExit(const std::string& reason, const std::vector<std::string>& waitingFor);
     std::unique_ptr<IBaseBlockContext> createContext(const BlueprintBlock& block,
                                                      const std::string& entryPort);
     /// Returns the scene-level resolver if set, otherwise the engine-level resolver.
@@ -221,6 +251,17 @@ private:
 
     bool _running = false;
 
+    /// The scene is being closed right now — set on entering shutdown(), before any cleanup runs.
+    ///
+    /// _running cannot say it: it only drops once every track is cancelled, and a cleanup run by
+    /// that cancelling may call scene->cancel() or engine.stop() — the natural thing for a panel
+    /// that closes the dialogue it belongs to. The inner call found the scene still running and
+    /// closed it a second time: onSceneExit fired twice, the engine was told twice.
+    bool _closing = false;
+
+    /// The thread that started the scene. See ensureOwnerThread().
+    std::thread::id _ownerThread;
+
     // ─── Shared by every track of this scene ─────────────────────────
     std::unordered_set<std::string> _visitedSet;
     std::vector<std::string> _visitedOrder;
@@ -235,7 +276,8 @@ private:
     /// registered.
     std::unordered_set<std::string> _completedSet;
     std::unordered_map<std::string, std::vector<std::string>> _choiceHistory;
-    /// Tracks — the main flow included — parked until a set of blocks has FINISHED.
+    /// Tracks — the main flow included — parked until a set of blocks has FINISHED, in the order
+    /// they parked, which is the order waitingFor() reports.
     std::vector<std::pair<IWaiter*, std::vector<std::string>>> _pendingWaits;
 
     // ─── The tracks ──────────────────────────────────────────────────

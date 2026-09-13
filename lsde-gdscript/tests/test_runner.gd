@@ -10,6 +10,7 @@ extends SceneTree
 var _passed: int = 0
 var _failed: int = 0
 var _total: int = 0
+var _skipped: int = 0
 
 func _init() -> void:
 	_run_flow_tests("test-cases.json")
@@ -21,6 +22,7 @@ func _init() -> void:
 		"res://tests/test_condition_evaluator.gd",
 		"res://tests/test_on_resolve_condition.gd",
 		"res://tests/test_robustness.gd",
+		"res://tests/test_traversal_robustness.gd",
 		"res://tests/test_router.gd",
 		"res://tests/test_in_port_per_character.gd",
 		"res://tests/test_handler_tiers.gd",
@@ -36,7 +38,7 @@ func _init() -> void:
 		_total += result["total"]
 
 	print("\n━━━ Results ━━━")
-	print("Total: %d | Passed: %d | Failed: %d" % [_total, _passed, _failed])
+	print("Total: %d | Passed: %d | Failed: %d | Skipped: %d" % [_total, _passed, _failed, _skipped])
 	if _failed > 0:
 		print("FAIL")
 	else:
@@ -64,16 +66,26 @@ func _load_test_file(filename: String) -> Dictionary:
 ## The game's answer to one comparison, from the suite's stateBridge.
 ##
 ## A test on the reserved "choice" dictionary never gets here — the engine answers those from the
-## history it kept during the scene.
+## history it kept during the scene. A key in trueTimes is answered true that many times, then
+## false — a counter a loop can run out of. It outranks conditions for the same key.
 func _make_resolver(suite: Dictionary) -> Callable:
 	var answers: Dictionary = {}
+	var remaining: Dictionary = {}
 	var bridge: Variant = suite.get("stateBridge")
 	if bridge is Dictionary and bridge.has("conditions"):
 		answers = bridge["conditions"]
+	if bridge is Dictionary and bridge.has("trueTimes"):
+		# A copy: the lambda below counts down in it, and a Dictionary is shared, not captured.
+		remaining = bridge["trueTimes"].duplicate()
 
 	return func(test: Dictionary) -> bool:
 		var key: String = "%s.%s" % [test.get("dict", ""), test.get("entry", "")]
-		var answer: bool = answers[key] if answers.has(key) else true
+		var answer: bool
+		if remaining.has(key):
+			answer = remaining[key] > 0
+			remaining[key] -= 1
+		else:
+			answer = answers[key] if answers.has(key) else true
 		return not answer if test.get("op", "") == LsdeTypes.OP_NOT_EQUALS else answer
 
 func _execute_action(action: Variant, context: Variant, next_fn: Callable) -> void:
@@ -97,6 +109,7 @@ func _execute_action(action: Variant, context: Variant, next_fn: Callable) -> vo
 		"resolveCharacterPort":
 			context.resolve_character_port(action.get("cardId", ""))
 			next_fn.call()
+		# "throw" never reaches here: the suites that use it require exceptions, and are skipped.
 
 ## What the suite hands to init(): one payload, or the files of a per-scene export.
 func _options_of(suite: Dictionary) -> Dictionary:
@@ -116,8 +129,15 @@ func _run_flow_tests(filename: String) -> void:
 	var test_file: Dictionary = _load_test_file(filename)
 	for suite in test_file.get("suites", []):
 		for tc in suite.get("cases", []):
-			_total += 1
 			var display_name: String = "%s/%s" % [suite["id"], tc["id"]]
+			# A suite that throws from a handler cannot be expressed here: GDScript has no
+			# exceptions, so there is nothing to throw and nothing for the engine to close on. Said
+			# out loud rather than counted as a pass.
+			if suite.get("requiresExceptions", false):
+				_skipped += 1
+				print("  SKIP: %s — needs exceptions, which GDScript does not have" % display_name)
+				continue
+			_total += 1
 			if _run_single_flow_test(suite, tc, display_name):
 				_passed += 1
 				print("  PASS: %s" % display_name)
@@ -137,6 +157,8 @@ func _run_single_flow_test(suite: Dictionary, tc: Dictionary, display_name: Stri
 	var steps: Array = tc.get("steps", [])
 	var state: Array = [0, 0]  # [step_index, cleanup_calls]
 	var failures: Array = []
+	var exits: Array = []
+	engine.on_scene_exit(func(args: Dictionary) -> void: exits.append(args["context"]))
 
 	# One handler per block type, consuming the steps in order. A block that is not the next
 	# expected step still reaches here — an async track, or a block the spec does not assert on —
@@ -201,12 +223,25 @@ func _run_single_flow_test(suite: Dictionary, tc: Dictionary, display_name: Stri
 	if not _assert_eq(state[0], steps.size(), display_name + " steps consumed"):
 		ok = false
 
-	# A block parked on waitForBlocks leaves the scene alive: it is waiting, not finished. Every
-	# other suite ends, so the field defaults to false.
+	# A block waiting for the game leaves the scene alive. A block parked on a waitForBlocks nothing
+	# can finish does not: the scene closes as deadlocked. Every other suite ends, so the field
+	# defaults to false.
 	var expected_running: bool = tc.get("expectedRunning", false)
 	if handle.is_running() != expected_running:
 		print("  FAIL: %s — scene running=%s, expected %s" % [display_name, handle.is_running(), expected_running])
 		ok = false
+
+	if tc.has("expectedExitReason"):
+		var reasons: Array = []
+		for context in exits:
+			reasons.append(context.get("reason"))
+		if not _assert_eq(reasons, [tc["expectedExitReason"]], display_name + " exit reason"):
+			ok = false
+
+	if tc.has("expectedWaitingFor"):
+		var waiting_for: Variant = exits[0].get("waitingFor") if exits.size() > 0 else null
+		if not _assert_eq(waiting_for, tc["expectedWaitingFor"], display_name + " waiting for"):
+			ok = false
 
 	if tc.has("expectedVisited"):
 		var visited: Array = handle.get_visited_blocks()

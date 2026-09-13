@@ -399,9 +399,36 @@ export interface BeforeBlockContext {
 	nativeProperties: NativeProperties | undefined;
 }
 
+/**
+ * Why a scene ended — what `onSceneExit` is told in {@link SceneContext.reason}.
+ *
+ * `faulted` and `deadlocked` are the two a game most needs to tell apart from `completed`. A
+ * `waitForBlocks` wired to a block no track will ever finish used to end exactly like a scene played
+ * to its last line, and a game awaiting the exit of a dialogue could not know it had been cut short.
+ */
+export const SceneEndReason = {
+	/** The flow ran out of graph. */
+	Completed: 'completed',
+	/** `handle.cancel()` or `engine.stop()`. */
+	Cancelled: 'cancelled',
+	/** `onValidateNextBlock` refused the block the last running track was entering. */
+	Invalidated: 'invalidated',
+	/**
+	 * Code of the game threw during the walk — a handler, a cleanup, a resolver, a hook. The scene is
+	 * closed first, then the error reaches whoever called `start()`, `next()` or `resolve()`.
+	 */
+	Faulted: 'faulted',
+	/** Every track left is parked on a `waitForBlocks` nothing can finish any more. See `waitingFor`. */
+	Deadlocked: 'deadlocked',
+} as const;
+export type SceneEndReason = ( typeof SceneEndReason )[keyof typeof SceneEndReason];
+
 /** Context passed to scene lifecycle handlers. */
 export interface SceneContext {
-	// Extensible — reserved for future scene-level data.
+	/** Why the scene ended. Set for `onSceneExit` only — absent for `onSceneEnter`. */
+	reason?: SceneEndReason;
+	/** With `deadlocked`: the blocks the parked tracks were still waiting for, each once. */
+	waitingFor?: readonly string[];
 }
 
 // ─── Handler Types ───────────────────────────────────────────────────────────

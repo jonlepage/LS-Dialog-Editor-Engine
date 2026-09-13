@@ -7,6 +7,7 @@
 #include <lsde/condition_evaluator.h>
 #include <lsde/utils.h>
 #include <algorithm>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
@@ -19,11 +20,11 @@ SceneHandleImpl::SceneHandleImpl(const SceneGraph& sg, const HandlerRegistry& gr
     : _sceneGraph(sg), _globalRegistry(gr), _callbacks(std::move(cb)) {}
 
 SceneHandleImpl::~SceneHandleImpl() {
-    if (!_running) return;
+    if (!_running || _closing) return;
     // Swallowed, not propagated: a fault thrown out of a destructor terminates the process, and
     // there is no caller left to hand it to. The teardown itself still runs to the end.
     try {
-        shutdown();
+        shutdown(SceneEndReason::Cancelled);
     } catch (...) {
     }
 }
@@ -54,9 +55,21 @@ void SceneHandleImpl::start() {
     }
 
     _running = true;
+    _closing = false;
+    _ownerThread = std::this_thread::get_id();
     if (_callbacks.onSceneStarted) _callbacks.onSceneStarted(this);
 
-    fireSceneEnter();
+    // onSceneEnter is the game's code like any handler, and it runs before there is a track to
+    // catch what it throws. It used to leave the scene registered and running with no track at
+    // all: nothing to advance, nothing to end it. Same rule as the walk — close, then surface.
+    try {
+        fireSceneEnter();
+    } catch (...) {
+        shutdown(SceneEndReason::Faulted);
+        throw;
+    }
+    // onSceneEnter is allowed to cancel the scene it was told about.
+    if (!_running) return;
 
     auto* startBlock = _sceneGraph.getStartBlock();
     if (startBlock) {
@@ -67,14 +80,15 @@ void SceneHandleImpl::start() {
         _tracks.push_back(std::move(track));
         _mainTrack->start();
     } else {
-        if (auto fault = shutdown()) std::rethrow_exception(fault);
+        if (auto fault = shutdown(SceneEndReason::Completed)) std::rethrow_exception(fault);
     }
 }
 
 void SceneHandleImpl::cancel() {
-    if (!_running) return;
+    if (!_running || _closing) return;
+    ensureOwnerThread("cancel()");
 
-    if (auto fault = shutdown()) std::rethrow_exception(fault);
+    if (auto fault = shutdown(SceneEndReason::Cancelled)) std::rethrow_exception(fault);
 }
 
 void SceneHandleImpl::onEnter(SceneLifecycleHandler h) { _sceneRegistry.enterHandler = std::move(h); }
@@ -143,12 +157,16 @@ void SceneHandleImpl::addCompleted(const std::string& blockId) {
             if (allCompleted) satisfied.push_back(entry.first);
         }
         for (auto* waiter : satisfied) {
+            const auto before = _pendingWaits.size();
             _pendingWaits.erase(
                 std::remove_if(_pendingWaits.begin(), _pendingWaits.end(),
                     [waiter](const std::pair<IWaiter*, std::vector<std::string>>& entry) {
                         return entry.first == waiter;
                     }),
                 _pendingWaits.end());
+            // Closing the scene clears the waits: a release that closed it leaves nothing for the
+            // ones after it to wake.
+            if (_pendingWaits.size() == before) continue;
             waiter->notifyWaitSatisfied();
         }
     }
@@ -180,14 +198,37 @@ void SceneHandleImpl::registerWaitForBlocks(IWaiter* waiter, const std::vector<s
     _pendingWaits.emplace_back(waiter, blockIds);
 }
 
-std::exception_ptr SceneHandleImpl::trackEnded(Track* track) {
+std::exception_ptr SceneHandleImpl::trackEnded(Track* track, const std::string& ending) {
     retireTrack(track);
 
-    // `endFlow` already cleared this track's `_running`, so it does not count itself here.
-    for (const auto& other : _tracks) {
-        if (other->isRunning() && !other->isWaitingForBlocks()) return nullptr;
-    }
-    return shutdown();
+    // `retire` already cleared this track's `_running`, so it does not count itself here.
+    if (_closing || canStillAdvance()) return nullptr;
+
+    auto waiting = waitingFor();
+    if (!waiting.empty()) return shutdown(SceneEndReason::Deadlocked, std::move(waiting));
+    return shutdown(ending);
+}
+
+std::exception_ptr SceneHandleImpl::trackParked() {
+    if (_closing || canStillAdvance()) return nullptr;
+    return shutdown(SceneEndReason::Deadlocked, waitingFor());
+}
+
+void SceneHandleImpl::fault() {
+    if (!_running || _closing) return;
+    shutdown(SceneEndReason::Faulted);
+}
+
+void SceneHandleImpl::ensureOwnerThread(const char* call) {
+    if (!_running) return;
+    const auto current = std::this_thread::get_id();
+    if (current == _ownerThread) return;
+    std::ostringstream message;
+    message << "LSDE: " << call << " was called on thread " << current
+            << ", but this scene was started on thread " << _ownerThread
+            << ". The engine is not thread-safe: call it from the thread that started the scene "
+               "- in Unreal, the game thread. Queue the call back to that thread before making it.";
+    throw std::logic_error(message.str());
 }
 
 bool SceneHandleImpl::runValidation(const BlueprintBlock& block, const std::string& entryPort,
@@ -231,6 +272,24 @@ bool SceneHandleImpl::isCompleted(const std::string& blockId) const {
 /// parallelTracks() filters on isRunning(). It is freed with the scene handle.
 void SceneHandleImpl::retireTrack(Track*) {}
 
+bool SceneHandleImpl::canStillAdvance() const {
+    for (const auto& other : _tracks) {
+        if (other->isRunning() && !other->isWaitingForBlocks()) return true;
+    }
+    return false;
+}
+
+std::vector<std::string> SceneHandleImpl::waitingFor() const {
+    std::vector<std::string> ids;
+    for (const auto& entry : _pendingWaits) {
+        for (const auto& id : entry.second) {
+            if (_completedSet.find(id) != _completedSet.end()) continue;
+            if (std::find(ids.begin(), ids.end(), id) == ids.end()) ids.push_back(id);
+        }
+    }
+    return ids;
+}
+
 std::unique_ptr<IBaseBlockContext> SceneHandleImpl::createBlockContext(const BlueprintBlock& block,
                                                                         const std::string& entryPort) {
     return createContext(block, entryPort);
@@ -270,7 +329,10 @@ void SceneHandleImpl::onResolveCharacter(std::function<const Card*(const std::ve
 }
 
 
-std::exception_ptr SceneHandleImpl::shutdown() {
+std::exception_ptr SceneHandleImpl::shutdown(const std::string& reason, std::vector<std::string> waitingFor) {
+    if (_closing) return nullptr;
+    _closing = true;
+
     _pendingWaits.clear();
 
     std::exception_ptr fault = nullptr;
@@ -295,9 +357,20 @@ std::exception_ptr SceneHandleImpl::shutdown() {
     // isRunning(), and a stopped track answers false.
 
     _running = false;
-    fireSceneExit();
+
+    // onSceneExit is the game's code too, and it used to throw between `_running = false` and
+    // telling the engine: the handle then sat in the engine's registry for good, isRunning()
+    // answered true, and stop() could not reach it — cancel() returns at once on a scene that is
+    // not running. The engine is ALWAYS told; what onSceneExit threw is carried like a cleanup's
+    // fault.
+    std::exception_ptr exitFault = nullptr;
+    try {
+        fireSceneExit(reason, waitingFor);
+    } catch (...) {
+        exitFault = std::current_exception();
+    }
     if (_callbacks.onSceneEnded) _callbacks.onSceneEnded(this);
-    return fault;
+    return fault ? fault : exitFault;
 }
 
 // ─── Choice history condition evaluation ─────────────────────────────────────
@@ -389,9 +462,13 @@ void SceneHandleImpl::fireSceneEnter() {
     if (handler) handler({this, {}});
 }
 
-void SceneHandleImpl::fireSceneExit() {
+void SceneHandleImpl::fireSceneExit(const std::string& reason, const std::vector<std::string>& waitingFor) {
     auto handler = _sceneRegistry.exitHandler ? _sceneRegistry.exitHandler : _globalRegistry.sceneExitHandler;
-    if (handler) handler({this, {}});
+    if (!handler) return;
+    SceneContext context;
+    context.reason = reason;
+    if (reason == SceneEndReason::Deadlocked) context.waitingFor = waitingFor;
+    handler({this, context});
 }
 
 // ─── Internal helpers ────────────────────────────────────────────────────────

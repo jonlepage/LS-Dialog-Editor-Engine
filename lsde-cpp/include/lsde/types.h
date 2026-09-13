@@ -608,8 +608,35 @@ struct BeforeBlockContext {
     const NativeProperties* nativeProperties = nullptr;
 };
 
-/// Context passed to scene lifecycle handlers. Extensible — reserved for future scene-level data.
-struct SceneContext {};
+/// Why a scene ended — what onSceneExit is told in SceneContext::reason.
+///
+/// Faulted and Deadlocked are the two a game most needs to tell apart from Completed. A
+/// waitForBlocks wired to a block no track will ever finish used to end exactly like a scene played
+/// to its last line, and a game awaiting the exit of a dialogue could not know it had been cut
+/// short.
+namespace SceneEndReason {
+    /// The flow ran out of graph.
+    inline constexpr const char* Completed = "completed";
+    /// handle->cancel(), engine.stop(), or destroying a running handle.
+    inline constexpr const char* Cancelled = "cancelled";
+    /// onValidateNextBlock refused the block the last running track was entering.
+    inline constexpr const char* Invalidated = "invalidated";
+    /// Code of the game threw during the walk — a handler, a cleanup, a resolver, a hook. The scene
+    /// is closed first, then the exception reaches whoever called start(), next() or resolve().
+    inline constexpr const char* Faulted = "faulted";
+    /// Every track left is parked on a waitForBlocks nothing can finish any more. See waitingFor.
+    inline constexpr const char* Deadlocked = "deadlocked";
+}
+
+/// Context passed to scene lifecycle handlers.
+struct SceneContext {
+    /// Why the scene ended, one of SceneEndReason. Set for onSceneExit only — empty for
+    /// onSceneEnter.
+    std::optional<std::string> reason;
+    /// With Deadlocked: the blocks the parked tracks were still waiting for, each once, in the
+    /// order they were asked for. Empty otherwise.
+    std::vector<std::string> waitingFor;
+};
 
 // ─── Handler Types ───────────────────────────────────────────────────────────
 

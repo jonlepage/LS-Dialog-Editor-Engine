@@ -14,7 +14,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DialogueEngine } from './engine.js';
 import type {
-	Blueprints, ConditionTest,
+	Blueprints, ConditionTest, SceneContext,
 	DialogContext, ChoiceContext, ConditionContext, ActionContext,
 } from './types.js';
 
@@ -36,8 +36,17 @@ interface Suite {
 	/** The scene to play — a path or the stable id. Absent in the validation specs. */
 	sceneId?: string;
 	locale?: string;
-	/** What the game answers, keyed `<dict>.<entry>`. Absent means everything is true. */
-	stateBridge?: { conditions?: Record<string, boolean> };
+	stateBridge?: {
+		/** What the game answers, keyed `<dict>.<entry>`. Absent means everything is true. */
+		conditions?: Record<string, boolean>;
+		/**
+		 * Keys answered true this many times, then false — a counter a loop can run out of. It
+		 * outranks `conditions` for the same key.
+		 */
+		trueTimes?: Record<string, number>;
+	};
+	/** The suite throws from a handler. GDScript has no exceptions, and its runner skips it. */
+	requiresExceptions?: boolean;
 	cases: Case[];
 }
 
@@ -47,8 +56,14 @@ interface Case {
 	steps?: Step[];
 	expectedVisited?: string[];
 	expectedCleanupCalls?: number;
-	/** Is the scene still running when the steps are done? A block parked on `waitForBlocks` is. */
+	/** Is the scene still running when the steps are done? A block waiting for the game is. */
 	expectedRunning?: boolean;
+	/** What `onSceneExit` is told, once. Absent means the reason is not checked. */
+	expectedExitReason?: string;
+	/** With `deadlocked`: the blocks still awaited, in the order the engine reports them. */
+	expectedWaitingFor?: string[];
+	/** Does an exception come out of `start()`? Absent means it must not. */
+	expectedThrow?: boolean;
 	orderIndependent?: boolean;
 	// Validation only
 	expectedErrors?: string[];
@@ -67,7 +82,7 @@ interface Step {
 		characterId?: string;
 	};
 	action?: {
-		type: 'next' | 'selectChoice' | 'resolveCondition' | 'resolveAction' | 'rejectAction' | 'resolveCharacterPort';
+		type: 'next' | 'selectChoice' | 'resolveCondition' | 'resolveAction' | 'rejectAction' | 'resolveCharacterPort' | 'throw';
 		/** selectChoice — the option id, which is also its exit port. */
 		optionId?: string;
 		/** resolveCondition — a PORT NAME (`out`, `default`, `K1`), never a boolean. */
@@ -103,9 +118,16 @@ function payloadOf( suite: Suite ): Blueprints | Blueprints[] {
  */
 function makeResolver( suite: Suite ): ( test: ConditionTest ) => boolean {
 	const answers = suite.stateBridge?.conditions ?? {};
+	const remaining = { ...( suite.stateBridge?.trueTimes ?? {} ) };
 	return ( test ) => {
 		const key = `${ test.dict }.${ test.entry }`;
-		const answer = key in answers ? answers[key]! : true;
+		let answer: boolean;
+		if ( key in remaining ) {
+			answer = remaining[key]! > 0;
+			remaining[key]!--;
+		} else {
+			answer = key in answers ? answers[key]! : true;
+		}
 		return test.op === 'notEquals' ? !answer : answer;
 	};
 }
@@ -138,6 +160,8 @@ function executeAction( step: Step, context: AnyContext, next: NextFn ): void {
 			( context as DialogContext ).resolveCharacterPort( action.cardId! );
 			next();
 			break;
+		case 'throw':
+			throw new Error( action.error ?? 'thrown by the spec' );
 	}
 }
 
@@ -161,6 +185,8 @@ function runFlowSpec( filename: string ): void {
 						const steps = tc.steps ?? [];
 						let stepIndex = 0;
 						let cleanupCalls = 0;
+						const exits: SceneContext[] = [];
+						engine.onSceneExit( ( { context } ) => { exits.push( context ); } );
 
 						/**
 						 * One handler per block type, consuming the steps in order.
@@ -209,11 +235,28 @@ function runFlowSpec( filename: string ): void {
 						engine.onAction( makeHandler( 'action' ) );
 
 						const handle = engine.scene( suite.sceneId! );
-						handle.start();
+
+						// A fault reaches whoever called start() — once the scene is closed. Caught
+						// here so that everything after it can be checked, not only that it threw.
+						let thrown: unknown = undefined;
+						try {
+							handle.start();
+						} catch ( err ) {
+							thrown = err ?? 'thrown';
+						}
+						expect( thrown !== undefined ).toBe( tc.expectedThrow === true );
 
 						// Every step the spec described must have been reached.
 						expect( stepIndex ).toBe( steps.length );
 						expect( handle.isRunning() ).toBe( tc.expectedRunning === true );
+
+						if ( tc.expectedExitReason !== undefined ) {
+							expect( exits.map( e => e.reason ) ).toEqual( [tc.expectedExitReason] );
+						}
+
+						if ( tc.expectedWaitingFor !== undefined ) {
+							expect( exits[0]?.waitingFor ).toEqual( tc.expectedWaitingFor );
+						}
 
 						if ( tc.expectedVisited ) {
 							const visited = Array.from( handle.getVisitedBlocks() );

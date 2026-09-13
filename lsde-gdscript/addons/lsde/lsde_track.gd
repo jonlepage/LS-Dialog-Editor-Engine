@@ -47,8 +47,8 @@ var _current_block: Variant = null
 var _previous_block: Variant = null
 var _previous_character: Variant = null
 var _previous_cleanup: Callable
-## What to resume when a waitForBlocks is satisfied.
-var _pending_advance: Callable
+## What to resume when a waitForBlocks is satisfied: a step, or null.
+var _pending_step: Variant = null
 
 ## The wires this track still owes, in the order it will walk them.
 ##
@@ -76,7 +76,7 @@ func _init(host: Object, start_block: Dictionary, track_id: int, parent_id: int,
 
 ## Begin walking. Must be called after the track is in the scene's pool.
 func start() -> void:
-	_process_block(_start_block, _start_entry_port)
+	_run(_process_step(_start_block, _start_entry_port))
 
 
 ## Stop this track and every track it opened.
@@ -91,7 +91,7 @@ func cancel() -> void:
 		cleanup.call()
 
 	_current_block = null
-	_pending_advance = Callable()
+	_pending_step = null
 	_queue.clear()
 	for child_id in _child_track_ids:
 		_host._cancel_track(child_id)
@@ -104,24 +104,25 @@ func is_running() -> bool:
 
 ## Parked on a waitForBlocks — alive, but unable to move on its own.
 ##
-## It is waiting for ANOTHER track to visit a block, so it cannot be what keeps a scene open: once
-## every remaining track is parked like this, nothing will ever visit anything again. That is the
-## deadlock LsdeSceneHandle._track_ended closes the scene on.
+## It is waiting for ANOTHER track to finish a block, so it cannot be what keeps a scene open: once
+## every remaining track is parked like this, nothing will ever finish anything again. That is the
+## deadlock LsdeSceneHandle closes the scene on — whether the last track able to move ENDS
+## (_track_ended) or PARKS (_track_parked).
 func is_waiting_for_blocks() -> bool:
-	return _pending_advance.is_valid()
+	return _pending_step != null
 
 
 func get_current_block() -> Variant:
 	return _current_block
 
 
-## Called once every block this track was waiting on has been visited.
+## Called once every block this track was waiting on has been finished.
 func notify_wait_satisfied() -> void:
-	if not _running or not _host._is_scene_running() or not _pending_advance.is_valid():
+	if not _running or not _host._is_scene_running() or _pending_step == null:
 		return
-	var advance: Callable = _pending_advance
-	_pending_advance = Callable()
-	advance.call()
+	var step: Dictionary = _pending_step
+	_pending_step = null
+	_run(step)
 
 
 ## A read-only snapshot, for a debug view.
@@ -135,6 +136,54 @@ func get_track_info() -> Dictionary:
 	}
 
 
+# ─── The loop ─────────────────────────────────────────────────────────────
+
+## Walk from `first` until the track has to wait for the game.
+##
+## Every step used to CALL the next one — _process_block, _execute_block_handler,
+## _advance_to_next_block, _process_block again — several frames per block for as long as the game
+## advanced synchronously, and nothing brought the stack back down. Godot caps the GDScript call
+## stack, so a condition/action loop the game walks without waiting stopped dead a few hundred
+## blocks in. Every one of those calls was the LAST thing its caller did, so each step now RETURNS
+## the next one and this loop takes it: the same steps, in the same order, at a constant depth.
+##
+## What still nests is what has to come back: opening a child track, and releasing a parked one.
+## Each runs the other track's loop and returns here. The depth they add is how many are opened or
+## released in a row without the game ever waiting — a property of the graph's async shape, not of
+## its length.
+##
+## NOT an error boundary, unlike the other three runtimes: GDScript has no exceptions. A handler
+## with a script error returns null without calling next(), and its block simply waits.
+func _run(first: Dictionary) -> void:
+	var step: Variant = first
+	while step != null:
+		step = _take(step)
+
+
+func _take(step: Dictionary) -> Variant:
+	match step["kind"]:
+		"process":
+			return _process_block(step["block"], step["entry_port"])
+		"execute":
+			return _execute_block_handler(step["block"], step["entry_port"])
+	return _advance_to_next_block(step["block"], step["context"])
+
+
+## Take a block the track has arrived at.
+static func _process_step(block: Dictionary, entry_port: String) -> Dictionary:
+	return {"kind": "process", "block": block, "entry_port": entry_port}
+
+
+## Dispatch a block once on_before_block has let it through.
+static func _execute_step(block: Dictionary, entry_port: String) -> Dictionary:
+	return {"kind": "execute", "block": block, "entry_port": entry_port}
+
+
+## Leave a block once the game has said so.
+static func _advance_step(block: Dictionary, context: Variant) -> Dictionary:
+	return {"kind": "advance", "block": block, "context": context}
+
+
 # ─── The traversal ────────────────────────────────────────────────────────
 
 ## Take a block, and either park on it or dispatch it.
@@ -144,19 +193,21 @@ func get_track_info() -> Dictionary:
 ## 1. Step over NOTEs. They are designer-only and never dispatched.
 ## 2. Honour waitForBlocks. BEFORE anything else — see the note below.
 ## 3. Ask on_validate_next_block. The game's gate; a refusal stops this track.
-## 4. Mark it current and visited, which may release another parked track.
+## 4. Mark it current and visited.
 ## 5. Fire on_before_block, whose resolve() releases the type handler.
-func _process_block(starting_block: Dictionary, entry_port: String) -> void:
+##
+## Returns the next step, or null when the track has to wait — for resolve(), for a join, or for
+## good.
+func _process_block(starting_block: Dictionary, entry_port: String) -> Variant:
 	if not _running or not _host._is_scene_running():
-		return
+		return null
 
 	var scene_graph: LsdeGraph.SceneGraph = _host._get_scene_graph()
 
 	var skipped: Variant = LsdeTrack.skip_notes(starting_block, scene_graph)
 	if skipped == null:
 		# The end of THIS branch, not of the track: whatever is queued is still owed.
-		_end_branch()
-		return
+		return _end_branch()
 	var block: Dictionary = skipped
 
 	# waitForBlocks holds the block BEFORE it is dispatched — the handler is never called, so the
@@ -174,9 +225,15 @@ func _process_block(starting_block: Dictionary, entry_port: String) -> void:
 	# MIGRATION-V2.md records the decision.
 	var wait_blocks: Array = LsdeUtils.get_native_properties(block).get("waitForBlocks", [])
 	if wait_blocks.size() > 0 and not _all_completed(wait_blocks):
-		_pending_advance = func() -> void: _process_block(block, entry_port)
+		_pending_step = _process_step(block, entry_port)
 		_host._register_wait_for_blocks(self, wait_blocks)
-		return
+
+		# Parking may be exactly what leaves the scene with nothing able to move. That used to be
+		# noticed only when a track ENDED, so when the last track able to move PARKED instead — a
+		# single flow waiting on a block of a branch it did not take — the scene stayed open for
+		# good: no on_scene_exit, the handle in the engine's registry, is_running() true.
+		_host._track_parked()
+		return null
 
 	if not _host._run_validation(block, entry_port, _previous_block, _previous_character):
 		# A refusal is a dead end like any other, so it ENDS this track.
@@ -189,30 +246,43 @@ func _process_block(starting_block: Dictionary, entry_port: String) -> void:
 		#
 		# Every other dead end here already does it: a NOTE loop, a port with no wire, a missing
 		# target.
-		_end_flow()
-		return
+		_end_flow(LsdeTypes.SCENE_END_INVALIDATED)
+		return null
 
 	_current_block = block
 	_host._add_visited(block.get("id", ""))
 
 	var registry: LsdeHandlerRegistry = _host._get_global_registry()
-	if registry.before_block_handler.is_valid():
-		# GUARDED like next(): a delay timer that fires twice would otherwise dispatch the same
-		# block twice. The flag lives in an Array because a lambda captures by value, and an Array
-		# is the one capture GDScript lets us mutate from inside.
-		var resolved_once: Array = [false]
-		var resolve_fn: Callable = func() -> void:
-			if resolved_once[0]:
-				return
-			resolved_once[0] = true
-			_execute_block_handler(block, entry_port)
-		registry.before_block_handler.call({
-			"block": block, "scene": _host,
-			"context": {"nativeProperties": LsdeUtils.get_native_properties(block)},
-			"resolve": resolve_fn
-		})
-	else:
-		_execute_block_handler(block, entry_port)
+	if not registry.before_block_handler.is_valid():
+		return _execute_step(block, entry_port)
+
+	# GUARDED like next(): a delay timer that fires twice would otherwise dispatch the same block
+	# twice.
+	#
+	# And DEFERRED like next(): a resolve() called while on_before_block is still running only
+	# raises a flag, and the block is dispatched once on_before_block has returned. Dispatching it on
+	# the spot ran the whole rest of the walk INSIDE the game's callback — a frame per block that
+	# nothing ever gave back — and ran the type handler before the lines the game had written after
+	# its resolve().
+	#
+	# The flags live in an Array because a lambda captures by value, and an Array is the one capture
+	# GDScript lets us mutate from inside.
+	var flags: Array = [false, true, false]  # [resolved_once, inside, resolved_inside]
+	var resolve_fn: Callable = func() -> void:
+		if flags[0]:
+			return
+		flags[0] = true
+		if flags[1]:
+			flags[2] = true
+			return
+		_run(_execute_step(block, entry_port))
+	registry.before_block_handler.call({
+		"block": block, "scene": _host,
+		"context": {"nativeProperties": LsdeUtils.get_native_properties(block)},
+		"resolve": resolve_fn
+	})
+	flags[1] = false
+	return _execute_step(block, entry_port) if flags[2] else null
 
 
 ## Run the handlers for a block, then leave when the game says so.
@@ -220,11 +290,13 @@ func _process_block(starting_block: Dictionary, entry_port: String) -> void:
 ## next() is guarded and deferred: called during the handler it only raises a flag, and the advance
 ## happens once both handlers have returned. Otherwise a scene handler calling next() would move
 ## the flow on before the global handler ever ran.
-func _execute_block_handler(block: Dictionary, entry_port: String) -> void:
+##
+## Returns the advance, when the game has already said so; null while it has not.
+func _execute_block_handler(block: Dictionary, entry_port: String) -> Variant:
 	# `_running` and not just the scene's: a resolve() kept in a closure and fired after this track
 	# ended would otherwise restart it on a dead flow.
 	if not _running or not _host._is_scene_running():
-		return
+		return null
 
 	var resolved: Dictionary = LsdeHandlerRegistry.resolve_handler(
 		block.get("type", ""), block.get("id", ""),
@@ -232,16 +304,14 @@ func _execute_block_handler(block: Dictionary, entry_port: String) -> void:
 
 	var context: Variant = _host._create_block_context(block, entry_port)
 	if context == null:
-		_advance_to_next_block(block, null)
-		return
+		return _advance_step(block, null)
 
 	var scene_handler: Callable = resolved["scene_handler"]
 	var global_handler: Callable = resolved["global_handler"]
 
 	# No handler → advance silently. start() already refused a scene missing one.
 	if not scene_handler.is_valid() and not global_handler.is_valid():
-		_advance_to_next_block(block, context)
-		return
+		return _advance_step(block, context)
 
 	var state: Array = [false, true]  # [next_called, sync_phase]
 	var scene_cleanup: Variant
@@ -253,7 +323,7 @@ func _execute_block_handler(block: Dictionary, entry_port: String) -> void:
 		state[0] = true
 		if state[1]:  # sync_phase
 			return
-		_advance_to_next_block(block, context)
+		_run(_advance_step(block, context))
 
 	var args: Dictionary = {"scene": _host, "block": block, "context": context, "next": next_fn}
 
@@ -276,14 +346,13 @@ func _execute_block_handler(block: Dictionary, entry_port: String) -> void:
 	if not _running or not _host._is_scene_running():
 		if cleanup.is_valid():
 			cleanup.call()
-		return
+		return null
 
 	# Stored BEFORE any advance runs, so leaving the block finds it.
 	_previous_cleanup = cleanup
 
 	state[1] = false  # sync_phase = false
-	if state[0]:  # next_called
-		_advance_to_next_block(block, context)
+	return _advance_step(block, context) if state[0] else null
 
 
 ## Leave a block: open a track per parallel target, walk the rest one after the other.
@@ -295,9 +364,11 @@ func _execute_block_handler(block: Dictionary, entry_port: String) -> void:
 ## That second line is what isAsync used to be unable to say. Every wire but the first was detached
 ## whether the designer had ticked the box or not, so on a secondary wire the property was INERT.
 ## MIGRATION-V2.md records the whole decision.
-func _advance_to_next_block(block: Dictionary, context: Variant) -> void:
+##
+## Returns the block this track goes on to, or null when it has ended.
+func _advance_to_next_block(block: Dictionary, context: Variant) -> Variant:
 	if not _running or not _host._is_scene_running():
-		return
+		return null
 
 	_previous_block = block
 	_previous_character = context.character if context != null else null
@@ -362,15 +433,14 @@ func _advance_to_next_block(block: Dictionary, context: Variant) -> void:
 	# Releasing a parked track re-enters the traversal immediately, and a handler there is allowed
 	# to cancel the scene, so the guard is re-read rather than assumed.
 	if not _running or not _host._is_scene_running():
-		return
+		return null
 
 	if continuation != null:
 		var next_block: Variant = scene_graph.get_block(continuation.get("to", ""))
 		if next_block != null:
-			_process_block(next_block, continuation.get("toPort", LsdeTypes.PORT_IN))
-			return
+			return _process_step(next_block, continuation.get("toPort", LsdeTypes.PORT_IN))
 
-	_end_branch()
+	return _end_branch()
 
 
 ## This branch has nowhere left to go — hand over to the queue, or stop.
@@ -378,7 +448,7 @@ func _advance_to_next_block(block: Dictionary, context: Variant) -> void:
 ## The block's cleanup runs FIRST, before the next wire is picked up: leaving a block is leaving a
 ## block, whether the track carries on or not. Hanging on to it until the queue emptied would keep
 ## a panel open, or an audio voice alive, through everything that came after it.
-func _end_branch() -> void:
+func _end_branch() -> Variant:
 	_run_block_cleanup()
 	var scene_graph: LsdeGraph.SceneGraph = _host._get_scene_graph()
 
@@ -387,10 +457,10 @@ func _end_branch() -> void:
 		var target: Variant = scene_graph.get_block(link.get("to", ""))
 		if target == null:
 			continue
-		_process_block(target, link.get("toPort", LsdeTypes.PORT_IN))
-		return
+		return _process_step(target, link.get("toPort", LsdeTypes.PORT_IN))
 
-	_retire()
+	_retire(LsdeTypes.SCENE_END_COMPLETED)
+	return null
 
 
 ## Run the cleanup of the block this track is leaving, once.
@@ -403,26 +473,25 @@ func _run_block_cleanup() -> void:
 
 ## Stop this track for good, DROPPING whatever it still owed.
 ##
-## For the ends that are not a branch running out of graph: on_validate_next_block refusing a
-## block, a handler failing. Both say the flow is over — the guide has always read
-## on_invalidate_block as "the scene stops" — so the queue goes with it. Playing the next wire
-## after the game refused this one would be answering a no with "then try that".
-func _end_flow() -> void:
+## For on_validate_next_block refusing a block — the guide has always read on_invalidate_block as
+## "the scene stops" — so the queue goes with it. Playing the next wire after the game refused this
+## one would be answering a no with "then try that".
+func _end_flow(ending: String) -> void:
 	_run_block_cleanup()
-	_retire()
+	_retire(ending)
 
 
 ## The track is done. Its cleanup has already run; the scene decides what its ending means.
 ##
 ## Child tracks SURVIVE: they live independently in the pool, and only an explicit cancel()
 ## cascades to them.
-func _retire() -> void:
+func _retire(ending: String) -> void:
 	_running = false
 	_current_block = null
-	_pending_advance = Callable()
+	_pending_step = null
 	_queue.clear()
 
-	_host._track_ended(self)
+	_host._track_ended(self, ending)
 
 
 func _all_completed(block_ids: Array) -> bool:

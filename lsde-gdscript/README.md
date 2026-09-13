@@ -193,7 +193,7 @@ A ROUTER block has **no handler** and needs none: the engine evaluates every cas
 | `engine.on_validate_next_block(handler)` | Validate before entering a block. |
 | `engine.on_invalidate_block(handler)` | Called when a block fails validation. |
 | `engine.on_scene_enter(handler)` | Called when any scene starts. |
-| `engine.on_scene_exit(handler)` | Called when any scene ends. |
+| `engine.on_scene_exit(handler)` | Called when any scene ends. `args["context"]["reason"]` says why (`LsdeTypes.SCENE_END_*`): `completed`, `cancelled`, `invalidated` or `deadlocked` (with `waitingFor`). |
 
 ### Scene Handle (Tier 2 — Per-Scene)
 

@@ -34,20 +34,20 @@ handle.OnEnter(args => {
 });
 ```
 ```cpp [C++]
-engine.onSceneEnter([&game](auto* scene, auto*) {
+engine.onSceneEnter([&game](const lsde::SceneLifecycleArgs&) {
     game.cinemaMode(true);
     game.stopNpcMovements();
 });
 
-engine.onSceneExit([&game](auto*, auto*) {
+engine.onSceneExit([&game](const lsde::SceneLifecycleArgs&) {
     game.cinemaMode(false);
     game.resumeNpcMovements();
 });
 
 // scene-level override
 auto handle = engine.scene(sceneId);
-handle->onEnter([&game](auto* scene, auto*) {
-    game.playIntroSequence(scene);
+handle->onEnter([&game](const lsde::SceneLifecycleArgs& args) {
+    game.playIntroSequence(args.scene);
 });
 ```
 ```gdscript [GDScript]

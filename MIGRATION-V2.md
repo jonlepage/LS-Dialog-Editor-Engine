@@ -2661,3 +2661,194 @@ Les suites partagées d'attente (`wait-for-blocks-*`, `port-with-only-async-targ
 volontairement des scènes en cours ; sous Godot, le processus quitte alors avec un avertissement
 « ObjectDB instances leaked », préexistant et attendu — un cycle handle ↔ track qu'une scène
 parquée ne rompt pas.
+
+---
+
+# Revue d'intégration Unity — fautes, pile, interblocage (2026-09-12)
+
+Un agent qui migrait un projet Unity vers le moteur 2.0.0 a remonté cinq défauts. Il n'avait pas
+toute la documentation, alors aucun n'a été cru sur parole : **tous ont été reproduits sur le moteur
+TypeScript avant qu'une ligne change** — d'abord par un script, puis par des tests écrits rouges.
+Deux de ses constats étaient sous-évalués, un troisième lui avait échappé, et la reproduction en a
+trouvé un quatrième.
+
+## La dérive qui explique la moitié du reste
+
+Le problème 11 avait tranché : une exception ferme **la scène** — nettoyages exécutés, pistes
+parallèles annulées, `onSceneExit` tiré — **puis** remonte au jeu. `docs/guide/lifecycle.md` le
+publie mot pour mot.
+
+Le code ne le faisait plus. Depuis « Une seule logique de parcours », un handler qui levait appelait
+`Track.endFlow()`, qui ne retire **que sa propre piste** : si une piste parallèle vivait encore, la
+scène restait ouverte. Et le `try` n'entourait **que** le handler de type. Personne n'avait relu le
+n°11 contre la refonte. Les tests couvraient le handler qui lève sur la piste principale, seule — le
+seul cas où les deux lectures donnent le même résultat.
+
+## 1. Une faute sur une autre piste laissait le parent bloqué
+
+Un enfant `isAsync` lance pendant qu'il s'ouvre : l'enfant se retire, `trackEnded` voit le parent
+vivant et ne ferme rien, l'exception traverse `advanceToNextBlock` du parent **avant** son cleanup,
+son `addCompleted` et sa continuation. Mesuré : exception reçue, `isRunning = true`, `onSceneExit`
+jamais tiré, cleanup du bloc quitté jamais appelé. `next()` était déjà consommé : plus rien ne
+pouvait avancer. Même chose pour une piste libérée par `addCompleted` — et les attentes satisfaites
+après elle dans la même boucle n'étaient jamais réveillées.
+
+## 2. La pile grandissait avec le graphe
+
+Chaque étape **appelait** la suivante : `processBlock → executeBlockHandler → advanceToNextBlock →
+processBlock`. Un `next()` synchrone ajoutait trois cadres par bloc, et rien ne les rendait. L'agent
+avait raison ; ma première réponse avait tort sur l'ordre de grandeur (« des milliers de blocs », sans
+mesure).
+
+| Mesure | Avant |
+|---|---|
+| TS, boucle condition ↔ action, `next()` synchrone | `RangeError` au tour **694** |
+| La même, avec un `onBeforeBlock` qui résout aussitôt | `RangeError` au tour **548** |
+| TS, **l'export de référence** — `reactor_breach`, tout faux, dernier choix | `RangeError` |
+| C#, la spec partagée | « Plantage du processus hôte de test : Stack overflow » |
+| GDScript, la spec partagée | 4 échecs, puis `Stack underflow! (Engine Bug)` |
+
+La troisième ligne compte le plus : ce n'est pas un graphe fabriqué. La scène de référence contient
+une boucle « réessayer » (`DIALOG-002 → DIALOG-003 → CHOICE-001 → COND-001 → DIALOG-009 →
+DIALOG-002`) qu'un joueur peut prendre autant de fois qu'il veut. Les seuils exacts en C# et en
+GDScript **n'ont pas été mesurés** : la spec C# bouclait sans fin (son runner ne lisait pas encore le
+compteur), ce qui prouve la mort du processus, pas le seuil.
+
+### La décision : une boucle, sans changer l'ordre
+
+Chacun de ces appels était la **dernière** chose que faisait l'appelant. Chaque étape **rend** donc
+maintenant la suivante (`process`, `execute`, `advance`), et `Track.run()` les enchaîne. Mêmes étapes,
+même ordre, profondeur constante : la boucle de 10 000 tours reste à 22 cadres.
+
+Ce qui reste imbriqué doit revenir à l'appelant : ouvrir une piste enfant, libérer une piste parquée.
+La profondeur ajoutée est le nombre de pistes ouvertes ou libérées d'affilée **sans que le jeu
+attende** — une propriété de la forme async du graphe, plus de sa longueur. Limite connue, laissée
+telle quelle.
+
+**Un seul changement d'ordre, volontaire.** Un `resolve()` appelé *pendant* `onBeforeBlock` lève un
+drapeau, et le bloc part au retour de `onBeforeBlock` — exactement ce que `next()` fait déjà dans un
+handler. Sans ça, le reste du parcours tournait à l'intérieur du callback du jeu, un cadre de plus
+par bloc. Effet visible : le code écrit après `resolve()` dans `onBeforeBlock` s'exécute avant le
+handler de type, plus après.
+
+**Comment on sait que rien d'autre n'a bougé.** `traversal-order.test.ts` a enregistré, **sur le
+moteur récursif, avant toute modification**, l'ordre complet des callbacks (`onBeforeBlock`,
+handlers, cleanups, `onSceneExit`) : l'export de référence joué de deux façons (tout vrai et premier
+choix, tout faux et dernier choix), en synchrone et en différé, plus un graphe qui réunit file,
+pistes imbriquées, routeur et jointure. Onze traces. Après la boucle, dix sont identiques octet pour
+octet ; la onzième, isolée exprès, est le `resolve()` différé, et son diff est exactement celui
+annoncé.
+
+## 3. Les callbacks du jeu hors du `try`
+
+`onValidateNextBlock`, `onInvalidateBlock`, `onBeforeBlock`, `onResolveCondition` (condition,
+routeur, visibilité des options) et `onResolveCharacter` laissaient la piste vivante sur son bloc,
+sans handler ni `next`. `onSceneEnter` laissait une scène enregistrée, en cours, **sans aucune
+piste**.
+
+`onSceneExit` était le pire : `shutdown()` passait `running` à `false`, **puis** l'appelait. S'il
+levait, le moteur n'était jamais prévenu : la poignée restait dans le registre pour toujours,
+`engine.isRunning()` répondait vrai, et `stop()` ne pouvait plus rien — `cancel()` sort tout de
+suite sur une scène arrêtée. Mesuré : `stop()` ne lève pas, une scène active reste.
+
+### La décision : une seule frontière
+
+`Track.run()` est l'unique frontière d'erreur. Toute entrée dans le parcours y passe — `start()`,
+`next()` différé, `resolve()` différé, libération d'une attente — donc tout code du jeu que le
+parcours appelle est dedans. Une faute ferme **la scène** (`fault()`, idempotente), puis remonte à
+l'appelant. Le `catch` propre au handler a disparu : il n'y a plus de frontière privilégiée.
+
+`onSceneEnter` qui lève ferme la scène (`faulted`) puis relance. Ce que `onSceneExit` lève est
+**transporté** comme la faute d'un cleanup, et le moteur est **toujours** prévenu.
+
+### Ce que les tests rouges ont trouvé et que l'agent n'avait pas vu
+
+**La fermeture n'était pas ré-entrante.** Un cleanup qui appelle `scene.cancel()` ou `engine.stop()`
+— le geste naturel d'un panneau qui ferme son propre dialogue — trouvait la scène encore `running`
+pendant l'annulation des pistes, et la refermait : `onSceneExit` tiré **deux fois**. C'était une
+hypothèse ; le test rouge l'a confirmée. `closing` est posé en entrant dans `shutdown()`.
+
+## 4. L'interblocage n'était vu qu'à la fin d'une piste
+
+L'agent décrivait une scène qui se ferme en silence. C'est l'un des deux cas. L'autre lui avait
+échappé, et il est pire : l'interblocage n'était vérifié que quand une piste **se terminait**. Quand
+la dernière piste capable d'avancer **se parquait** — une seule piste qui attend un bloc d'une
+branche qu'elle n'a pas prise — rien ne le vérifiait, et la scène restait **ouverte pour toujours**,
+sans `onSceneExit`.
+
+`trackParked()` fait maintenant la même vérification que `trackEnded()`, avec le même prédicat
+(`canStillAdvance`).
+
+**Décision renversée, en connaissance de cause.** La suite partagée `wait-for-blocks-main-track`
+épinglait `expectedRunning: true`, avec ce commentaire : « parquée, pas terminée ; elle reprend si le
+bloc attendu est un jour visité ». C'est impossible : la piste parquée est la seule, `DIALOG-404`
+n'existe pas, et plus rien ne terminera jamais quoi que ce soit. Elle attend maintenant une scène
+fermée, `deadlocked`, `waitingFor: ["DIALOG-404"]`. Même correction dans `wait-for-completion.test.ts`.
+
+## 5. Pourquoi la scène s'est terminée
+
+`SceneContext`, vide et « réservé pour plus tard », porte maintenant `reason` pour `onSceneExit` :
+
+| Raison | Quand |
+|---|---|
+| `completed` | le flux n'a plus de graphe |
+| `cancelled` | `handle.cancel()`, `engine.stop()`, destruction d'une poignée en cours (C++) |
+| `invalidated` | `onValidateNextBlock` a refusé le bloc de la dernière piste vivante |
+| `faulted` | du code du jeu a levé pendant le parcours |
+| `deadlocked` | toutes les pistes restantes sont parquées ; `waitingFor` nomme les blocs attendus |
+
+`waitingFor` liste chaque bloc une fois, **dans l'ordre où les attentes ont été posées**. En C#, un
+`Dictionary` ne garde pas l'ordre après une suppression : une liste d'ordre l'accompagne, pour que
+les quatre runtimes nomment les mêmes blocs dans le même ordre. `onSceneEnter` ne reçoit pas de
+raison.
+
+## 6. Le thread (C# et C++)
+
+Un `next()` appelé depuis le pool de threads (`UniTask.SwitchToThreadPool`, un callback audio ou
+réseau) faisait tourner tous les handlers suivants hors du thread principal, collections modifiées
+sans verrou, sans un mot. La scène retient son thread au `Start()`. `Next()`, `Resolve()` et
+`Cancel()` venant d'un autre thread lèvent une exception qui le dit et nomme le remède — **avant**
+de toucher à quoi que ce soit : l'appel refusé ne consomme rien, le même `next()` fonctionne ensuite
+depuis le bon thread. Un serveur qui fait tourner le moteur sur un autre thread que le principal
+reste servi : c'est le thread qui a **démarré** la scène qui compte.
+
+TypeScript : sans objet. GDScript : documentation seulement.
+
+## GDScript
+
+GDScript n'a pas d'exceptions : les points 1 et 3 n'y existent pas sous cette forme — une erreur de
+script remonte au journal de Godot et l'appel rend `null`, donc le bloc attend. Le port reçoit la
+boucle, l'interblocage au parquage, la raison de fin et la fermeture non ré-entrante. Le runner
+**saute** les suites marquées `requiresExceptions` et le dit (`SKIP`), plutôt que de les compter
+réussies. `SCENE_END_FAULTED` existe quand même, pour qu'un jeu partagé entre runtimes lise le même
+ensemble de raisons.
+
+## La spec partagée
+
+Nouveaux champs, générés par `generate-specs.py` : `expectedExitReason`, `expectedWaitingFor`,
+`expectedThrow`, l'action `throw`, `stateBridge.trueTimes` (vrai N fois, puis faux) et
+`requiresExceptions`. Quatre suites : la raison `completed`, l'interblocage de deux pistes quand la
+principale se parque en dernier, la boucle de 10 000 tours, la faute sur une piste parallèle.
+
+## Ce que cette passe n'a pas vérifié
+
+- **C++ : pas de preuve rouge capturée.** La spec n'y a été jouée qu'après le portage, et les tests
+  natifs écrits après. Les trois autres runtimes ont été vus rouges avant.
+- **Seuils C# et GDScript non mesurés** — voir la section 2.
+- **C++, durée de vie de l'étape `advance`** : elle pointe sur le contexte que possède la piste,
+  remplacé seulement au prochain `execute` de cette même piste. Vérifié par relecture, pas sous ASan.
+- **Au passage :** l'extrait C++ de `docs/_shared/lifecycle-scene-events.md` montrait une signature
+  `(auto* scene, auto*)` qui ne compile pas — le handler reçoit un `const SceneLifecycleArgs&`.
+
+## Relevé mesuré
+
+| Runtime | Avant | Après |
+|---|---|---|
+| TypeScript | 485 | **528 / 528** (`tsc --noEmit` propre) |
+| C# | 227 (201 + 13 + 13) | **261 / 261** (235 + 13 + 13) |
+| C++ | 129 | **160 / 160** |
+| GDScript | 358 | **403 / 403**, 1 suite sautée (`requiresExceptions`) |
+| Spec partagée | 72 suites / 81 cas | **76 suites / 85 cas** |
+
+Sous Godot, le processus quitte encore avec « resources still in use at exit » : préexistant, voir
+plus haut.

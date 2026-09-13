@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using Xunit;
 using LsdeDialogEngine.Json;
@@ -86,14 +87,28 @@ namespace LsdeDialogEngine.Tests
         /// The game's answer to one comparison, from the suite's stateBridge.
         /// <para>A test on the reserved "choice" dictionary never gets here — the engine answers
         /// those from the history it kept during the scene.</para>
+        /// <para>A key in TrueTimes is answered true that many times, then false — a counter a loop
+        /// can run out of. It outranks Conditions for the same key.</para>
         /// </summary>
         protected static Func<ConditionTest, bool> MakeResolver(TestSuite suite)
         {
             var answers = suite.StateBridge?.Conditions ?? new Dictionary<string, bool>();
+            var remaining = suite.StateBridge?.TrueTimes != null
+                ? new Dictionary<string, int>(suite.StateBridge.TrueTimes)
+                : new Dictionary<string, int>();
             return test =>
             {
                 var key = $"{test.Dict}.{test.Entry}";
-                var answer = answers.TryGetValue(key, out var known) ? known : true;
+                bool answer;
+                if (remaining.TryGetValue(key, out var left))
+                {
+                    answer = left > 0;
+                    remaining[key] = left - 1;
+                }
+                else
+                {
+                    answer = answers.TryGetValue(key, out var known) ? known : true;
+                }
                 return test.Op == ConditionOperator.NotEquals ? !answer : answer;
             };
         }
@@ -128,6 +143,8 @@ namespace LsdeDialogEngine.Tests
             var steps = testCase.Steps ?? new List<TestStep>();
             int stepIndex = 0;
             int cleanupCalls = 0;
+            var exits = new List<SceneContext>();
+            engine.OnSceneExit(args => exits.Add(args.Context));
 
             // One handler per block type, consuming the steps in order. A block that is not the
             // next expected step still reaches here — an async track, or a block the spec does not
@@ -176,11 +193,37 @@ namespace LsdeDialogEngine.Tests
             engine.OnAction(a => Dispatch(BlockType.Action, a.Block, a.Context, a.Next));
 
             var handle = engine.Scene(suite.SceneId!);
-            handle.Start();
+
+            // A fault reaches whoever called Start() — once the scene is closed. Caught here so that
+            // everything after it can be checked, not only that it threw. An exception the spec did
+            // not expect is re-thrown as it was, so the failure shows where it came from.
+            Exception? thrown = null;
+            try
+            {
+                handle.Start();
+            }
+            catch (Exception err)
+            {
+                thrown = err;
+            }
+            if (thrown != null && testCase.ExpectedThrow != true) ExceptionDispatchInfo.Capture(thrown).Throw();
+            Assert.Equal(testCase.ExpectedThrow == true, thrown != null);
 
             // Every step the spec described must have been reached.
             Assert.Equal(steps.Count, stepIndex);
             Assert.Equal(testCase.ExpectedRunning == true, handle.IsRunning());
+
+            if (testCase.ExpectedExitReason != null)
+            {
+                Assert.Single(exits);
+                Assert.Equal(testCase.ExpectedExitReason, exits[0].Reason);
+            }
+
+            if (testCase.ExpectedWaitingFor != null)
+            {
+                Assert.NotEmpty(exits);
+                Assert.Equal(testCase.ExpectedWaitingFor, exits[0].WaitingFor?.ToList());
+            }
 
             if (testCase.ExpectedVisited != null)
             {
@@ -231,6 +274,8 @@ namespace LsdeDialogEngine.Tests
                     ((IDialogContext)context).ResolveCharacterPort(action.CardId!);
                     next();
                     break;
+                case "throw":
+                    throw new InvalidOperationException(action.Error ?? "thrown by the spec");
             }
         }
     }

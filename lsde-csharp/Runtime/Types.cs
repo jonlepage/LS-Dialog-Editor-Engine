@@ -726,8 +726,43 @@ namespace LsdeDialogEngine
         public NativeProperties? NativeProperties { get; set; }
     }
 
-    /// <summary>Context passed to scene lifecycle handlers. Extensible — reserved for future scene-level data.</summary>
-    public class SceneContext { }
+    /// <summary>Why a scene ended — what OnSceneExit is told in <see cref="SceneContext.Reason"/>.</summary>
+    /// <remarks>Faulted and Deadlocked are the two a game most needs to tell apart from Completed.
+    /// A WaitForBlocks wired to a block no track will ever finish used to end exactly like a scene
+    /// played to its last line, and a game awaiting the exit of a dialogue could not know it had
+    /// been cut short.</remarks>
+    public static class SceneEndReason
+    {
+        /// <summary>The flow ran out of graph.</summary>
+        public const string Completed = "completed";
+
+        /// <summary>handle.Cancel() or engine.Stop().</summary>
+        public const string Cancelled = "cancelled";
+
+        /// <summary>OnValidateNextBlock refused the block the last running track was entering.</summary>
+        public const string Invalidated = "invalidated";
+
+        /// <summary>Code of the game threw during the walk — a handler, a cleanup, a resolver, a
+        /// hook. The scene is closed first, then the exception reaches whoever called Start(),
+        /// Next() or Resolve().</summary>
+        public const string Faulted = "faulted";
+
+        /// <summary>Every track left is parked on a WaitForBlocks nothing can finish any more. See
+        /// <see cref="SceneContext.WaitingFor"/>.</summary>
+        public const string Deadlocked = "deadlocked";
+    }
+
+    /// <summary>Context passed to scene lifecycle handlers.</summary>
+    public class SceneContext
+    {
+        /// <summary>Why the scene ended, one of <see cref="SceneEndReason"/>. Set for OnSceneExit
+        /// only — null for OnSceneEnter.</summary>
+        public string? Reason { get; set; }
+
+        /// <summary>With Deadlocked: the blocks the parked tracks were still waiting for, each
+        /// once, in the order they were asked for. Null otherwise.</summary>
+        public IReadOnlyList<string>? WaitingFor { get; set; }
+    }
 
     // ─── Handler Args & Delegates ────────────────────────────────────────────────
 

@@ -31,6 +31,10 @@
 
 <!--@include: ../../_shared/lifecycle-before-block.md-->
 
+**`onBeforeBlock` の実行中に**呼ばれた `resolve()` は、コールバックが戻った時点で効果を持ちます —
+handler の中で呼ばれた `next()` とまったく同じです。タイプ handler はあなたのコールバックが終わってから
+ディスパッチされるため、`resolve()` の後に書いた行は block の**前に**実行されます。
+
 ## クリーンアップ関数
 
 handler はクリーンアップ関数を返すことができ、block から離れる際に呼び出されます：
@@ -39,28 +43,68 @@ handler はクリーンアップ関数を返すことができ、block から離
 
 ## エラー境界
 
-**何も飲み込まれません。** handler がスローすると、engine はまず scene を閉じ、その後 `start()` または
-`next()` を呼び出した側へエラーを**再スロー**します。
+**何も飲み込まれません。** engine がグラフをたどっている間にあなたのコードがスローすると — タイプ
+handler、クリーンアップ関数、`onValidateNextBlock`、`onInvalidateBlock`、`onBeforeBlock`、
+`onResolveCondition`、`onResolveCharacter`、`onSceneEnter` のいずれでも — engine はまず **scene 全体**を
+閉じ、その後 `start()`、`next()`、`resolve()` を呼び出した側へエラーを**再スロー**します。
+
+これは**すべてのトラック**で成り立ちます。`isAsync` のブランチでスローした handler は、そのブランチだけで
+なく scene を閉じます。
 
 使いものになるのはこの順序のおかげです。エラーがあなたのコードに届く時点で：
 
 - クリーンアップ関数は実行済み
 - async トラックは取り消し済み
-- `onSceneExit` は発火済み
+- `onSceneExit` は `reason: 'faulted'` で発火済み
 
 対話は**正しく**停止しており、次に何をするかはあなたが決めます — それなしで続行する、画面を出す、
-あるいはクラッシュさせる。`start()` や `next()` の周りにご自身の `try/catch` を置いてください。
+あるいはクラッシュさせる。`start()`、`next()`、`resolve()` の周りにご自身の `try/catch` を置いてください。
 
-**クリーンアップ関数**がスローした例外も、同じ経路で届きます。
+`onSceneExit` 自体がスローした例外も同じ経路で届き、それでも scene は解放されます：
+`engine.isRunning()` はもうそれを数えません。
+
+::: warning GDScript
+GDScript には例外がありません。handler 内のスクリプトエラーは Godot のログに出力され、呼び出しは `null`
+を返します：block は来ることのない `next()` をただ待ち続けます。scene を代わりに閉じるものは何もありません。
+:::
 
 ::: tip なぜ変わったのか
 v1 は handler の例外を静かに飲み込んでいました — ログにも残さず — 一方で、その同じ handler が返した
 クリーンアップからの例外は呼び出し側に届いていました。ひとつの障害に対して二つの正反対の挙動であり、
 静かな方はプロジェクトが動き続ける限り本物のバグを隠していました。
 
-言語に `try/catch` を持たない GDScript は、すでに正しい振る舞いをしていました。誰も気づいて
-いませんでした。
+2.0.0 はそれをタイプ handler についてだけ直していました。スローする検証、`onBeforeBlock`、リゾルバ —
+あるいは並列トラック上の handler — は、進めるものが何もないまま scene を開いたままにし、対話の終了を
+待つゲームは永遠に待ち続けていました。
 :::
+
+## Scene が終わった理由
+
+`onSceneExit` は `context.reason` でその理由を受け取ります：
+
+| `reason` | いつ |
+|---|---|
+| `completed` | フローがグラフの終わりに達した |
+| `cancelled` | `scene.cancel()` または `engine.stop()` |
+| `invalidated` | 最後に動いていたトラックが入ろうとした block を `onValidateNextBlock` が拒否した |
+| `faulted` | 走査中にあなたのコードがスローした — [エラー境界](#エラー境界)を参照 |
+| `deadlocked` | 残っているトラックがすべて、何も完了させられない `waitForBlocks` で待機している。`context.waitingFor` がそれらの block を示す |
+
+`onSceneEnter` には理由が渡されません。
+
+**デッドロックは scene を閉じます。** どのトラックも完了させない block を待つ block — たとえばフローが
+通らなかったブランチの block — は、`onSceneExit` もなく scene を永久に開いたままにしていました。いまは
+動けるトラックが最後に止まった瞬間に scene が `deadlocked` で閉じ、`waitingFor` がどの合流の配線が
+誤っているかを教えてくれます。
+
+## ひとつのスレッド
+
+engine はスレッドセーフではありません。`next()`、`resolve()`、`cancel()` は scene を**開始した**スレッド
+から呼び出してください — Unity ではメインスレッド、Unreal ではゲームスレッドです。
+
+C# と C++ では、別のスレッドからの呼び出しは両方のスレッドを示す例外で**拒否され**、何も変わりません：
+正しいスレッドから呼べば同じ `next()` がそのまま動きます。Unity では engine を呼ぶ前にメインスレッドへ
+戻してください（`await UniTask.SwitchToMainThread()`、またはメインスレッド用のキューに入れる）。
 
 ## cancel()
 
@@ -68,8 +112,11 @@ v1 は handler の例外を静かに飲み込んでいました — ログにも
 
 1. すべての **async トラック** がキャンセルされます
 2. 現在の block の**クリーンアップ関数**が実行されます
-3. `onSceneExit` handler が呼び出されます
+3. `onSceneExit` handler が `reason: 'cancelled'` で呼び出されます
 4. scene が完了としてマークされます
+
+scene がすでに閉じつつあるときにクリーンアップが `scene.cancel()` や `engine.stop()` を呼んでも無視され
+ます：`onSceneExit` は一度だけ発火します。
 
 <!--@include: ../../_shared/lifecycle-invalidate.md-->
 
@@ -85,7 +132,7 @@ engine が block をディスパッチする方法を制御する実行プロパ
 | `portPerCharacter` | `boolean?` | metadata 内のキャラクターごとに出力ポートを作成 |
 | `skipIfMissingActor` | `boolean?` | 参照されたアクターが不在の場合、block をスキップ |
 | `debug` | `boolean?` | エディタ用デバッグフラグ |
-| `waitForBlocks` | `string[]?` | **この scene の** block id。それらがすべて**完了**するまで、block は**ディスパッチされる前に**保持されます |
+| `waitForBlocks` | `string[]?` | **この scene の** block id。それらがすべて**完了**するまで、block は**ディスパッチされる前に**保持されます。何もそれらを完了させられない場合、scene は `deadlocked` で閉じます |
 | `waitInput` | `boolean?` | 明示的なプレイヤー入力制御用のパッシブフラグ — **`timeout` が優先します** |
 
 ## Visual Reference

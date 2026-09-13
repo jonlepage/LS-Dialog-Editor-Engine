@@ -154,7 +154,7 @@ A ROUTER block has **no handler** and needs none: the engine evaluates every cas
 | `engine.onValidateNextBlock(handler)` | Validate before entering a block. |
 | `engine.onInvalidateBlock(handler)` | Called when a block fails validation. |
 | `engine.onSceneEnter(handler)` | Called when any scene starts. |
-| `engine.onSceneExit(handler)` | Called when any scene ends. |
+| `engine.onSceneExit(handler)` | Called when any scene ends. `context.reason` says why: `completed`, `cancelled`, `invalidated`, `faulted` or `deadlocked` (with `context.waitingFor`). |
 
 ### Scene Handle (Tier 2 — Per-Scene)
 

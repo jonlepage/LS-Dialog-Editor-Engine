@@ -17,6 +17,9 @@ namespace lsde::tests {
 struct StateBridgeConfig {
     /// What the game answers, keyed "<dict>.<entry>". Absent means everything is true.
     std::unordered_map<std::string, bool> conditions;
+    /// Keys answered true this many times, then false — a counter a loop can run out of. Outranks
+    /// `conditions` for the same key.
+    std::unordered_map<std::string, int> trueTimes;
 };
 
 struct StepExpect {
@@ -30,7 +33,8 @@ struct StepExpect {
 };
 
 struct StepAction {
-    /// next, selectChoice, resolveCondition, resolveAction, rejectAction, resolveCharacterPort.
+    /// next, selectChoice, resolveCondition, resolveAction, rejectAction, resolveCharacterPort,
+    /// throw.
     std::string type;
     /// selectChoice — the option id, which is also its exit port.
     std::optional<std::string> optionId;
@@ -60,10 +64,17 @@ struct TestCase {
     std::optional<int> expectedCleanupCalls;
     /// Is the scene still running when the steps are done?
     ///
-    /// A block parked on waitForBlocks leaves the scene alive: it is waiting, not finished. Every
-    /// other suite ends, so this defaults to false.
+    /// A block waiting for the game leaves the scene alive. A block parked on a waitForBlocks
+    /// nothing can finish does not: the scene closes as deadlocked. Every other suite ends, so this
+    /// defaults to false.
     bool expectedRunning = false;
     std::optional<bool> orderIndependent;
+    /// What onSceneExit is told, once. nullopt = the reason is not checked.
+    std::optional<std::string> expectedExitReason;
+    /// With deadlocked: the blocks still awaited, in the order the engine reports them.
+    std::optional<std::vector<std::string>> expectedWaitingFor;
+    /// Does an exception come out of start()? Defaults to no.
+    bool expectedThrow = false;
     /// Validation only. nullopt = the spec says nothing; an empty vector = expect none.
     std::optional<std::vector<std::string>> expectedErrors;
     std::optional<std::vector<std::string>> expectedWarnings;
@@ -81,6 +92,8 @@ struct TestSuite {
     std::optional<std::string> sceneId;
     std::optional<std::string> locale;
     std::optional<StateBridgeConfig> stateBridge;
+    /// The suite throws from a handler. GDScript has no exceptions and skips it; C++ runs it.
+    bool requiresExceptions = false;
     std::vector<TestCase> cases;
 };
 

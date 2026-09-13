@@ -3659,7 +3659,10 @@
           "expectedVisited": [
             "DIALOG-001"
           ],
-          "expectedRunning": true
+          "expectedExitReason": "deadlocked",
+          "expectedWaitingFor": [
+            "DIALOG-404"
+          ]
         }
       ]
     },
@@ -7639,6 +7642,606 @@
           "steps": [],
           "expectedVisited": [],
           "expectedCleanupCalls": 0
+        }
+      ]
+    },
+    {
+      "id": "scene-end-reason-completed",
+      "description": "onSceneExit is told why the scene ended: here, it ran out of graph.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "The only line",
+                  "fr": "The only line"
+                }
+              }
+            ],
+            "start": "DIALOG-001"
+          }
+        ]
+      },
+      "sceneId": "s1",
+      "cases": [
+        {
+          "id": "completed",
+          "steps": [
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-001"
+              },
+              "action": {
+                "type": "next"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "DIALOG-001"
+          ],
+          "expectedExitReason": "completed"
+        }
+      ]
+    },
+    {
+      "id": "deadlock-when-the-last-track-parks",
+      "description": "Two tracks waiting for each other close the scene, whichever parks last.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "forks",
+                  "fr": "forks"
+                },
+                "next": [
+                  {
+                    "port": "out",
+                    "to": "DIALOG-002",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "out",
+                    "to": "DIALOG-003",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-002",
+                "key": "__blueprints__.s1.DIALOG-002",
+                "type": "dialog",
+                "text": {
+                  "en": "waits for the main flow",
+                  "fr": "waits for the main flow"
+                },
+                "props": {
+                  "isAsync": true,
+                  "waitForBlocks": [
+                    "DIALOG-003"
+                  ]
+                }
+              },
+              {
+                "id": "DIALOG-003",
+                "key": "__blueprints__.s1.DIALOG-003",
+                "type": "dialog",
+                "text": {
+                  "en": "waits for the branch",
+                  "fr": "waits for the branch"
+                },
+                "props": {
+                  "waitForBlocks": [
+                    "DIALOG-002"
+                  ]
+                }
+              }
+            ],
+            "start": "DIALOG-001"
+          }
+        ]
+      },
+      "sceneId": "s1",
+      "cases": [
+        {
+          "id": "closes-as-deadlocked",
+          "steps": [
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-001"
+              },
+              "action": {
+                "type": "next"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "DIALOG-001"
+          ],
+          "expectedExitReason": "deadlocked",
+          "expectedWaitingFor": [
+            "DIALOG-003",
+            "DIALOG-002"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synchronous-loop-keeps-a-flat-stack",
+      "description": "10000 condition-action passes advanced without waiting do not overflow the stack.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "COND-001",
+                "key": "__blueprints__.s1.COND-001",
+                "type": "condition",
+                "cases": [
+                  {
+                    "port": "out",
+                    "when": [
+                      {
+                        "dict": "switches",
+                        "entry": "door_unlocked",
+                        "op": "equals",
+                        "value": true
+                      }
+                    ]
+                  }
+                ],
+                "next": [
+                  {
+                    "port": "out",
+                    "to": "ACTION-001",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "default",
+                    "to": "DIALOG-001",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "ACTION-001",
+                "key": "__blueprints__.s1.ACTION-001",
+                "type": "action",
+                "calls": [
+                  {
+                    "fn": "give_item",
+                    "args": {
+                      "item": "keycard"
+                    }
+                  }
+                ],
+                "next": [
+                  {
+                    "port": "then",
+                    "to": "COND-001",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "Out of the loop",
+                  "fr": "Out of the loop"
+                }
+              }
+            ],
+            "start": "COND-001"
+          }
+        ]
+      },
+      "sceneId": "s1",
+      "stateBridge": {
+        "trueTimes": {
+          "switches.door_unlocked": 10000
+        }
+      },
+      "cases": [
+        {
+          "id": "ten-thousand-passes",
+          "steps": [
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-001"
+              },
+              "action": {
+                "type": "next"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "COND-001",
+            "ACTION-001",
+            "DIALOG-001"
+          ],
+          "expectedExitReason": "completed"
+        }
+      ]
+    },
+    {
+      "id": "fault-on-a-parallel-track-closes-the-scene",
+      "description": "A handler that throws on an isAsync track closes the WHOLE scene, then surfaces.",
+      "requiresExceptions": true,
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "forks",
+                  "fr": "forks"
+                },
+                "next": [
+                  {
+                    "port": "out",
+                    "to": "DIALOG-002",
+                    "toPort": "in"
+                  },
+                  {
+                    "port": "out",
+                    "to": "DIALOG-003",
+                    "toPort": "in"
+                  }
+                ]
+              },
+              {
+                "id": "DIALOG-002",
+                "key": "__blueprints__.s1.DIALOG-002",
+                "type": "dialog",
+                "text": {
+                  "en": "never reached",
+                  "fr": "never reached"
+                }
+              },
+              {
+                "id": "DIALOG-003",
+                "key": "__blueprints__.s1.DIALOG-003",
+                "type": "dialog",
+                "text": {
+                  "en": "throws",
+                  "fr": "throws"
+                },
+                "props": {
+                  "isAsync": true
+                }
+              }
+            ],
+            "start": "DIALOG-001"
+          }
+        ]
+      },
+      "sceneId": "s1",
+      "cases": [
+        {
+          "id": "closed-then-thrown",
+          "steps": [
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-001"
+              },
+              "action": {
+                "type": "next"
+              }
+            },
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-003"
+              },
+              "action": {
+                "type": "throw"
+              }
+            }
+          ],
+          "expectedThrow": true,
+          "expectedVisited": [
+            "DIALOG-001",
+            "DIALOG-003"
+          ],
+          "expectedCleanupCalls": 1,
+          "expectedExitReason": "faulted"
         }
       ]
     }

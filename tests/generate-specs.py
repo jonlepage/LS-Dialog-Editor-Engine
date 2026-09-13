@@ -871,9 +871,13 @@ flow_suites += [
                 {"expect": {"type": "dialog", "blockId": "DIALOG-001"}, "action": {"type": "next"}},
             ],
             "expectedVisited": ["DIALOG-001"],
-            # The scene is PARKED, not finished: no onSceneExit, and it resumes if the block it
-            # waits for is ever visited. Every other suite ends, so the field defaults to false.
-            "expectedRunning": True,
+            # The scene is CLOSED, as deadlocked. This suite used to pin it running, "parked, and
+            # it resumes if the block it waits for is ever visited" - which cannot happen: the flow
+            # parked is the only track, and nothing else will ever finish DIALOG-404. A deadlock
+            # was only noticed when a track ENDED, and here the last one PARKS, so the scene stayed
+            # open for good and a game awaiting its end waited forever.
+            "expectedExitReason": "deadlocked",
+            "expectedWaitingFor": ["DIALOG-404"],
         }],
     },
     {
@@ -1587,6 +1591,116 @@ validation_suites += [
                        "struct always exists) and its runner skips it, saying so.",
         "blueprintFiles": [],
         "cases": [{"id": "refused", "expectedErrors": ["MISSING_DATA"]}],
+    },
+]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# A scene is never left open with nothing able to move it (2026-09-12)
+# ══════════════════════════════════════════════════════════════════════════
+#
+# Found during a Unity integration, every one reproduced before a line changed. A fault on a
+# parallel track, or in any callback but the type handler, left the scene open; a deadlock was only
+# noticed when a track ENDED, never when the last one PARKED; every synchronous next() added frames
+# to the stack; and onSceneExit could not tell a finished scene from a broken one.
+# MIGRATION-V2.md, "Revue d'intégration Unity", holds the decisions.
+#
+# New fields: `expectedExitReason`, `expectedWaitingFor`, `expectedThrow`, the `throw` action,
+# `stateBridge.trueTimes` (true that many times, then false) and `requiresExceptions` - GDScript has
+# no exceptions, and its runner skips those suites, saying so.
+
+flow_suites += [
+    {
+        "id": "scene-end-reason-completed",
+        "description": "onSceneExit is told why the scene ended: here, it ran out of graph.",
+        "blueprint": header([scene("s1", [dlg("DIALOG-001", "The only line")])]),
+        "sceneId": "s1",
+        "cases": [{
+            "id": "completed",
+            "steps": [
+                {"expect": {"type": "dialog", "blockId": "DIALOG-001"}, "action": {"type": "next"}},
+            ],
+            "expectedVisited": ["DIALOG-001"],
+            "expectedExitReason": "completed",
+        }],
+    },
+    {
+        "id": "deadlock-when-the-last-track-parks",
+        "description": "Two tracks waiting for each other close the scene, whichever parks last.",
+        # DIALOG-002 opens beside and parks on DIALOG-003; the main flow then reaches DIALOG-003,
+        # which parks on DIALOG-002. Nothing is left to finish either. The main flow parks LAST,
+        # which is the case that used to hold the scene open for good.
+        "blueprint": header([scene("s1", [
+            dlg("DIALOG-001", "forks", next=[wire("out", "DIALOG-002"), wire("out", "DIALOG-003")]),
+            block("DIALOG-002", "dialog", text={"en": "waits for the main flow", "fr": "waits for the main flow"},
+                  props={"isAsync": True, "waitForBlocks": ["DIALOG-003"]}),
+            block("DIALOG-003", "dialog", text={"en": "waits for the branch", "fr": "waits for the branch"},
+                  props={"waitForBlocks": ["DIALOG-002"]}),
+        ])]),
+        "sceneId": "s1",
+        "cases": [{
+            "id": "closes-as-deadlocked",
+            "steps": [
+                {"expect": {"type": "dialog", "blockId": "DIALOG-001"}, "action": {"type": "next"}},
+            ],
+            "expectedVisited": ["DIALOG-001"],
+            "expectedExitReason": "deadlocked",
+            # Each once, in the order the waits were registered: the branch parked first.
+            "expectedWaitingFor": ["DIALOG-003", "DIALOG-002"],
+        }],
+    },
+    {
+        "id": "synchronous-loop-keeps-a-flat-stack",
+        "description": "10000 condition-action passes advanced without waiting do not overflow the stack.",
+        # Every pass used to add frames: processBlock called executeBlockHandler, which called
+        # advanceToNextBlock, which called processBlock. The TypeScript walk died on a RangeError
+        # after 694 passes; C# on a StackOverflowException, which no catch stops and which kills
+        # the Unity process. Each step now hands the next back to a loop.
+        "blueprint": header([scene("s1", [
+            block("COND-001", "condition",
+                  cases=[{"port": "out", "when": [cmp_("switches", "door_unlocked", True)]}],
+                  next=[wire("out", "ACTION-001"), wire("default", "DIALOG-001")]),
+            block("ACTION-001", "action",
+                  calls=[{"fn": "give_item", "args": {"item": "keycard"}}],
+                  next=[wire("then", "COND-001")]),
+            dlg("DIALOG-001", "Out of the loop"),
+        ])]),
+        "sceneId": "s1",
+        "stateBridge": {"trueTimes": {"switches.door_unlocked": 10000}},
+        "cases": [{
+            "id": "ten-thousand-passes",
+            "steps": [
+                {"expect": {"type": "dialog", "blockId": "DIALOG-001"}, "action": {"type": "next"}},
+            ],
+            "expectedVisited": ["COND-001", "ACTION-001", "DIALOG-001"],
+            "expectedExitReason": "completed",
+        }],
+    },
+    {
+        "id": "fault-on-a-parallel-track-closes-the-scene",
+        "description": "A handler that throws on an isAsync track closes the WHOLE scene, then surfaces.",
+        "requiresExceptions": True,
+        # DIALOG-003 opens beside the main flow and throws. The scene is closed first - DIALOG-001's
+        # cleanup runs, the main flow never reaches DIALOG-002 - and only then does the exception
+        # come out of start(). It used to escape through a main flow that had not finished leaving
+        # DIALOG-001, which stayed running with nothing able to move it.
+        "blueprint": header([scene("s1", [
+            dlg("DIALOG-001", "forks", next=[wire("out", "DIALOG-002"), wire("out", "DIALOG-003")]),
+            dlg("DIALOG-002", "never reached"),
+            block("DIALOG-003", "dialog", text={"en": "throws", "fr": "throws"}, props={"isAsync": True}),
+        ])]),
+        "sceneId": "s1",
+        "cases": [{
+            "id": "closed-then-thrown",
+            "steps": [
+                {"expect": {"type": "dialog", "blockId": "DIALOG-001"}, "action": {"type": "next"}},
+                {"expect": {"type": "dialog", "blockId": "DIALOG-003"}, "action": {"type": "throw"}},
+            ],
+            "expectedThrow": True,
+            "expectedVisited": ["DIALOG-001", "DIALOG-003"],
+            "expectedCleanupCalls": 1,
+            "expectedExitReason": "faulted",
+        }],
     },
 ]
 
