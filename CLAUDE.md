@@ -274,8 +274,13 @@ then the shared JSON spec, then the three ports.
   `[blueprints]`, `[ci]`.
 - After any API change, run the `sync-docs` skill — READMEs and the VitePress guides exist in four
   locales per runtime and go stale silently.
-- Publishing (`npm run publish:patch|minor|major` from root or `lsde-ts/`) runs
-  `lsde-ts/scripts/publish.sh`: it syncs versions across `package.json`, the three `.csproj` and
-  `CMakeLists.txt`, prepends to `CHANGELOG.md`, runs tests, builds, **commits and tags**, then
-  publishes to npm and NuGet (`publish.sh npm|nuget <bump>` restricts the target). It is a release
-  action that writes to git history — never run it on your own initiative.
+- Releasing is three npm scripts at the root (`scripts/release/`), run by hand and in order. Each
+  does one thing and stops; they replaced `publish.sh` on 2026-09-12 (`MIGRATION-V2.md`).
+  1. `1-update-version` asks patch / minor / major, writes the number into `lsde-ts/package.json`
+     (and its lock), the three `.csproj`, the Unity manifest and `CMakeLists.txt`, and dates
+     `## Unreleased` in `CHANGELOG.md`. It commits nothing: the diff is reviewed and committed by hand.
+  2. `2-build-release` refuses uncommitted changes, runs the four suites, and packs npm + NuGet into
+     `release/vX.Y.Z/` (ignored), with the commit it was built from.
+  3. `3-publish` checks everything first — the build is HEAD, npm login, NuGet key, branch not
+     behind — asks, sends those files, tags `vX.Y.Z` once both registries accepted, and pushes. Safe
+     to re-run. It is a release action: never run it on your own initiative.

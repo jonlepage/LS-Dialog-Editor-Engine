@@ -3067,3 +3067,49 @@ TypeScript : 23 tests. C# : 28, dont les 7 tests natifs sur null et le test Newt
 | C++ | 168 | **168 / 168** |
 | GDScript | 418, 2 sautées | **422 / 422**, 2 suites sautées |
 | Spec partagée | 87 suites / 96 cas | **91 suites / 100 cas** |
+
+---
+
+# La publication en trois étapes (2026-09-12)
+
+Pour publier la 2.1.0, Jonathan a cliqué sur `publish:minor`. Huit fichiers modifiés sont apparus dans
+le contrôle de source sans qu'il sache d'où ils venaient, et il a arrêté. Le script, lui, tournait
+encore, bloqué à `npm publish` (sans doute sur l'authentification npm). Rien n'était publié. Les huit
+fichiers étaient justes : Jonathan les a commités (`67b554e`).
+
+Ce que `publish.sh` faisait mal, vérifié en le relisant :
+
+- **Tout se faisait d'un clic, dans l'ordre inverse de l'habitude.** Il changeait la version et le
+  CHANGELOG, lançait les tests, publiait sur npm puis NuGet, et seulement ensuite commitait et posait
+  l'étiquette. Un arrêt au milieu laissait un arbre modifié. Relancé, le script lisait la 2.1.0 déjà
+  écrite et publiait la **2.2.0**.
+- **Le commit oubliait `lsde-ts/package-lock.json`.** C'est pour ça que `affb2e8` existe.
+- **Rien n'était montré avant d'envoyer.** Et les trois `publish:*` dépendaient d'un chemin vers
+  `bash.exe` codé en dur.
+
+**Décision de Jonathan : trois scripts numérotés, lancés à la main, dans l'ordre.** Chacun fait une
+chose et s'arrête. Ils sont écrits en Node, dans `scripts/release/`, et remplacent `publish.sh` et les
+`publish:*` des deux `package.json`.
+
+1. **`1-update-version`** demande patch, minor ou major. Il écrit le numéro dans les mêmes fichiers
+   qu'avant et date « ## Unreleased ». Il ne commite pas : on relit, puis on commite.
+2. **`2-build-release`** refuse un arbre non commité. Il lance les suites des quatre runtimes, puis
+   fabrique le paquet npm et les trois paquets NuGet dans `release/vX.Y.Z/`, en notant le commit
+   d'origine.
+3. **`3-publish`** vérifie tout avant d'envoyer quoi que ce soit : le build vient du dernier commit,
+   npm est connecté, la clé NuGet existe, la branche est à jour. Il demande confirmation, envoie ces
+   fichiers-là, pose l'étiquette, puis pousse la branche et l'étiquette. On peut le relancer : ce qui
+   est déjà publié est sauté.
+
+Deux gardes répondent directement à ce qui s'est passé :
+
+- l'étape 1 prévient quand la version actuelle n'a pas d'étiquette, donc n'a jamais été publiée,
+  avant d'en créer une nouvelle ;
+- l'étape 3 refuse un build qui ne vient pas du commit actuel.
+
+Ce qui ne change pas :
+
+- l'étiquette vient toujours **après** les deux registres, pour qu'aucune étiquette n'annonce une
+  publication ratée ;
+- le CHANGELOG s'écrit à la main ; les sujets de commit ne servent qu'en dernier recours, comme
+  brouillon signalé.

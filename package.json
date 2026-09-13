@@ -3,9 +3,9 @@
   "version": "2.0.0",
   "private": true,
   "scripts": {
-    "publish:patch": "cd lsde-ts && \"C:/Program Files/Git/bin/bash.exe\" scripts/publish.sh patch",
-    "publish:minor": "cd lsde-ts && \"C:/Program Files/Git/bin/bash.exe\" scripts/publish.sh minor",
-    "publish:major": "cd lsde-ts && \"C:/Program Files/Git/bin/bash.exe\" scripts/publish.sh major"
+    "1-update-version": "node scripts/release/1-update-version.mjs",
+    "2-build-release": "node scripts/release/2-build-release.mjs",
+    "3-publish": "node scripts/release/3-publish.mjs"
   },
   "keywords": [],
   "author": "LepaSoft",

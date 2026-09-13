@@ -70,6 +70,8 @@ lsde-ts/docs/.vitepress/dist
 lsde-ts/docs/.vitepress/cache
 
 # Publish artifacts
+# What 2-build-release packs and 3-publish sends (scripts/release/).
+/release/
 *.nupkg
 *.tgz
 .npmrc
