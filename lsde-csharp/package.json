@@ -1,6 +1,6 @@
 {
   "name": "com.lepasoft.lsde-dialog-engine",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "displayName": "LSDE Dialog Engine",
   "description": "Multi-runtime callback-driven dialogue graph dispatcher for LepaSoft Dialogue Editor. Executes blueprints (scenes, blocks, dictionaries, functions, cards) exported from LSDE 2.x.",
   "unity": "2021.3",

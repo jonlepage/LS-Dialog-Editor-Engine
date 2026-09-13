@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.1.0 (2026-09-12)
 
 A scene can no longer be left open with nothing able to move it. Found while migrating a Unity
 project to 2.0.0; every item below was reproduced before it was fixed, and holds in all four
