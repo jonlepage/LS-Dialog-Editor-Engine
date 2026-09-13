@@ -120,9 +120,9 @@ namespace LsdeDialogEngine
             {
                 FireSceneEnter();
             }
-            catch
+            catch (Exception err)
             {
-                Shutdown(SceneEndReason.Faulted);
+                Shutdown(SceneEndReason.Faulted, null, err);
                 throw;
             }
             // OnSceneEnter is allowed to cancel the scene it was told about.
@@ -250,6 +250,15 @@ namespace LsdeDialogEngine
         {
             _sceneRegistry.ActionHandler = args => { handler(args); return null; };
         }
+
+        /// <summary>The stable id of this scene (sc_u0vqg2g8) — the one to store outside the payload.</summary>
+        /// <remarks>OnSceneExit is global, and the handle it is given was the only way to tell WHICH
+        /// scene ended when several play at once; it could not say. The id is what survives a
+        /// rename.</remarks>
+        public string GetSceneId() => _sceneGraph.GetScene().Id;
+
+        /// <summary>The path of this scene (reactor_breach) — what a writer reads, and what a rename changes.</summary>
+        public string GetScenePath() => _sceneGraph.GetScene().Scene;
 
         /// <summary>The block the flow the player is watching is on. Parallel tracks have their own.</summary>
         public BlueprintBlock? GetCurrentBlock() => _mainTrack?.GetCurrentBlock();
@@ -405,12 +414,14 @@ namespace LsdeDialogEngine
         }
 
         /// <summary>Code of the game threw during the walk. Close the scene; the track re-throws.</summary>
-        /// <remarks>What a cleanup throws while closing is dropped here, on purpose: the game gets
-        /// the exception that started it, which is the one that explains everything after.</remarks>
-        public void Fault()
+        /// <remarks><paramref name="error"/> is handed to OnSceneExit, because the re-throw reaches
+        /// whoever entered the walk — a click, a timer — and never the code awaiting the end of the
+        /// scene. What a cleanup throws while closing is dropped, on purpose: the game gets the
+        /// exception that started it, which is the one that explains everything after.</remarks>
+        public void Fault(Exception error)
         {
             if (!_running || _closing) return;
-            Shutdown(SceneEndReason.Faulted);
+            Shutdown(SceneEndReason.Faulted, null, error);
         }
 
         /// <summary>Throw when the game calls into a running scene from another thread than the
@@ -545,7 +556,9 @@ namespace LsdeDialogEngine
             if (test.Dict != Ports.Choice) return fallbackEvaluator(test);
 
             bool negated = test.Op == ConditionOperator.NotEquals;
-            if (!_choiceHistory.TryGetValue(test.Entry, out var history)) return negated;
+            // A null Entry names no CHOICE block: it answers like one never reached, instead of throwing
+            // ArgumentNullException out of a Dictionary in the middle of a scene.
+            if (test.Entry == null || !_choiceHistory.TryGetValue(test.Entry, out var history)) return negated;
 
             bool picked = history.Contains(test.Value?.ToString() ?? "");
             return negated ? !picked : picked;
@@ -594,9 +607,9 @@ namespace LsdeDialogEngine
         /// <summary>Close the scene down: cancel every track, fire OnSceneExit, tell the engine.</summary>
         /// <remarks>Returns what a cleanup threw rather than throwing it, so the teardown always
         /// runs to the end. Callers re-throw once there is nothing left to unwind.
-        /// <para>waitingFor must be read BEFORE: the pending waits are cleared on the way
-        /// in.</para></remarks>
-        private Exception? Shutdown(string reason, List<string>? waitingFor = null)
+        /// <para>waitingFor must be read BEFORE: the pending waits are cleared on the way in. error
+        /// is the fault that closed the scene, handed to OnSceneExit.</para></remarks>
+        private Exception? Shutdown(string reason, List<string>? waitingFor = null, Exception? error = null)
         {
             if (_closing) return null;
             _closing = true;
@@ -626,7 +639,8 @@ namespace LsdeDialogEngine
             // IsRunning() answered true, and Stop() could not reach it — Cancel() returns at once on
             // a scene that is not running. The engine is ALWAYS told; what OnSceneExit threw is
             // carried like a cleanup's fault.
-            var exitFault = Cleanups.Run(() => FireSceneExit(reason, waitingFor));
+            var context = new SceneContext { Reason = reason, WaitingFor = waitingFor?.AsReadOnly(), Error = error };
+            var exitFault = Cleanups.Run(() => FireSceneExit(context));
             _callbacks.OnSceneEnded?.Invoke(this);
             return fault ?? exitFault;
         }
@@ -639,14 +653,10 @@ namespace LsdeDialogEngine
             handler?.Invoke(new SceneLifecycleArgs { Scene = this, Context = new SceneContext() });
         }
 
-        private void FireSceneExit(string reason, List<string>? waitingFor)
+        private void FireSceneExit(SceneContext context)
         {
             var handler = _sceneRegistry.ExitHandler ?? _globalRegistry.SceneExitHandler;
-            handler?.Invoke(new SceneLifecycleArgs
-            {
-                Scene = this,
-                Context = new SceneContext { Reason = reason, WaitingFor = waitingFor?.AsReadOnly() },
-            });
+            handler?.Invoke(new SceneLifecycleArgs { Scene = this, Context = context });
         }
 
         // ─── Internal helpers ────────────────────────────────────────────────

@@ -56,7 +56,45 @@ Source: lsde-ts/docs/ja/guide/*.md
 
 ## インストール
 
-<!--@include: ../../_shared/install-tabs.md-->
+
+```bash [TypeScript]
+npm install @lsde/dialog-engine
+```
+```bash [C#]
+dotnet add package LsdeDialogEngine
+
+# JSON loader — choose ONE based on your platform:
+dotnet add package LsdeDialogEngine.Newtonsoft        # Unity
+dotnet add package LsdeDialogEngine.SystemTextJson    # .NET 5+ / Godot .NET
+```
+```bash [C++ (CMake)]
+# Add as a git submodule
+git submodule add https://github.com/jonlepage/LS-Dialog-Editor-Engine.git deps/lsde
+
+# CMakeLists.txt
+add_subdirectory(deps/lsde/lsde-cpp)
+target_link_libraries(your_target PRIVATE lsde)
+```
+```bash [Unreal Engine]
+# Copy the headers and source into your project
+# e.g. Source/YourModule/ThirdParty/lsde/
+
+cp -r lsde-cpp/include/lsde  YourProject/Source/YourModule/ThirdParty/lsde/include
+cp -r lsde-cpp/src/*          YourProject/Source/YourModule/ThirdParty/lsde/src
+
+# In your module's .Build.cs, add:
+# PublicIncludePaths.Add(Path.Combine(ModuleDirectory, "ThirdParty/lsde/include"));
+# Add the .cpp files from ThirdParty/lsde/src/ to your module
+```
+```bash [GDScript]
+# Clone the repository
+git clone https://github.com/jonlepage/LS-Dialog-Editor-Engine.git
+
+# Copy the addon into the Godot project
+mkdir -p addons
+cp -r LS-Dialog-Editor-Engine/lsde-gdscript/addons/lsde addons/lsde
+rm -rf LS-Dialog-Editor-Engine
+```
 
 ## 基本的な使い方
 
@@ -65,15 +103,197 @@ engine はグラフ走査マシンです — block を handler にディスパ�
 > TIP:
 engine は `BlueprintExport` オブジェクトを受け取ります（ファイルではありません）。JSON、XML、YAML のいずれかを、プラットフォームに適したパーサーで読み込んでください。[解析とインポート](./parsing)を参照してください。
 
-<!--@include: ../../_shared/getting-started-usage.md-->
+```ts [TypeScript]
+import { DialogueEngine } from '@lsde/dialog-engine';
+import blueprintJson from './blueprints.json';
+
+const engine = new DialogueEngine();
+engine.init({ data: blueprintJson });
+
+// Unified condition resolver — evaluates game-state conditions for both
+// choice visibility and condition block pre-evaluation.
+engine.onResolveCondition((cond) => game.evaluateCondition(cond));
+
+// 3 required handlers — bridge between the engine and your game
+// (onCondition is optional when onResolveCondition is installed)
+engine.onDialog(({ scene, block, context, next }) => {
+  game
+    .createDialogAuto(block, context)
+    .catch(() => scene.cancel())
+    .finally(() => next());
+});
+
+engine.onChoice(({ scene, block, context, next }) => {
+  game
+    .createChoiceAuto(block, context)
+    .catch(() => scene.cancel())
+    .finally(() => next());
+});
+
+engine.onAction(({ block, context, next }) => {
+  game
+    .executeActions(block.actions)
+    .catch((err) => context.reject(err))
+    .finally(() => next());
+});
+
+// Start a scene anywhere in your game code
+function myGameScript(sceneId: string) {
+  const scene = engine.scene(sceneId);
+  scene.start();
+}
+```
+```csharp [C#]
+using LsdeDialogEngine;
+using LsdeDialogEngine.Json; // LsdeDialogEngine.SystemTextJson package
+// Unity: use LsdeDialogEngine.Newtonsoft instead
+
+var blueprint = LsdeJson.Parse(File.ReadAllText("blueprints.json"));
+var engine = new DialogueEngine();
+engine.Init(new InitOptions { Data = blueprint });
+
+// Unified condition resolver — evaluates game-state conditions for both
+// choice visibility and condition block pre-evaluation.
+engine.OnResolveCondition(cond => Game.EvaluateCondition(cond));
+
+// 3 required handlers — bridge between the engine and your game
+engine.OnDialog(args => {
+    var (scene, block, context, next) = args;
+    Game.ShowDialog(block, context, onComplete: next);
+});
+
+engine.OnChoice(args => {
+    var (scene, block, context, next) = args;
+    Game.ShowChoices(block, context, onSelected: next);
+});
+
+engine.OnAction(args => {
+    var (scene, block, context, next) = args;
+    Game.ExecuteActions(block.Actions);
+    context.Resolve();
+    next();
+});
+
+// Start a scene anywhere in your game code
+void MyGameScript(string sceneId) {
+    var scene = engine.Scene(sceneId);
+    scene.Start();
+}
+```
+```cpp [C++]
+#include <lsde/engine.h>
+
+using namespace lsde;
+
+DialogueEngine engine;
+engine.init({blueprint});
+
+// Unified condition resolver — evaluates game-state conditions for both
+// choice visibility and condition block pre-evaluation.
+engine.onResolveCondition([](const ConditionTest& cond) {
+    return game->evaluateCondition(cond);
+});
+
+// 3 required handlers — bridge between the engine and your game
+engine.onDialog([](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn {
+    game->showDialog(block, ctx, [next]() { next(); });
+    return {};
+});
+
+engine.onChoice([](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn {
+    game->showOptions(block, ctx, [next]() { next(); });
+    return {};
+});
+
+engine.onAction([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
+    game->executeActions(block->actions);
+    ctx->resolve();
+    next();
+    return {};
+});
+
+// Start a scene anywhere in your game code
+auto scene = engine.scene(sceneId);
+scene->start();
+```
+```gdscript [GDScript]
+var engine = LsdeDialogueEngine.new()
+engine.init({"data": blueprint})
+
+# Unified condition resolver — evaluates game-state conditions for both
+# choice visibility and condition block pre-evaluation.
+engine.on_resolve_condition(func(cond):
+    return game.evaluate_condition(cond)
+)
+
+# 3 required handlers — bridge between the engine and your game
+engine.on_dialog(func(args):
+    await game.show_dialog(args["block"], args["context"])
+    args["next"].call()
+)
+
+engine.on_choice(func(args):
+    await game.show_options(args["block"], args["context"])
+    args["next"].call()
+)
+
+engine.on_action(func(args):
+    game.execute_actions(args["block"].actions)
+    args["context"].resolve()
+    args["next"].call()
+)
+
+# Start a scene anywhere in your game code
+func my_game_script(scene_id: String):
+    var scene = engine.scene(scene_id)
+    scene.start()
+```
 
 ## Blueprint の検証
 
 `engine.init()` はエラー、警告、統計情報を含む[診断レポート](/api-ref/interfaces/DiagnosticReport)を返します。`check` オプションでゲーム側の機能とのクロスバリデーションが可能です：
 
-<!--@include: ../../_shared/getting-started-validation.md-->
 
-### 17 個の診断
+```ts [TypeScript]
+engine.init({
+  data,
+  check: {
+    functions: ['set_flag', 'play_sound'],          // function ids your game implements
+    dictionaries: { items: ['sword', 'shield'] },   // dictionary ids and their entry keys
+    cards: ['Alice', 'Bob'],                        // card NAMES, never the editor id
+  },
+});
+```
+```csharp [C#]
+engine.Init(new InitOptions {
+    Data = blueprint,
+    Check = new CheckOptions {
+        Functions = new() { "set_flag", "play_sound" },
+        Dictionaries = new() { ["items"] = new() { "sword", "shield" } },
+        Cards = new() { "Alice", "Bob" },
+    },
+});
+```
+```cpp [C++]
+lsde::CheckOptions check;
+check.functions = {"set_flag", "play_sound"};
+check.dictionaries = {{"items", {"sword", "shield"}}};
+check.cards = {"Alice", "Bob"};
+
+engine.init({blueprint, check});
+```
+```gdscript [GDScript]
+engine.init({
+    "data": blueprint,
+    "check": {
+        "functions": ["set_flag", "play_sound"],
+        "dictionaries": {"items": ["sword", "shield"]},
+        "cards": ["Alice", "Bob"],
+    },
+})
+```
+
+### 25 個の診断
 
 **エラー — payload は拒否され、何も再生されません。** `errors` は空ではなく、`engine.scene()` は何も返せません。
 
@@ -97,12 +317,25 @@ engine は `BlueprintExport` オブジェクトを受け取ります（ファイ
 |---|---|
 | `NO_START_BLOCK` | scene に開始 block がないため、`start()` に始める場所がありません |
 | `UNKNOWN_WAIT_BLOCK` | `waitForBlocks` の id が scene の block ではないため、そのトラックは**永久に**停留します。検証はそれ以上進めません：実在する id でも再生されないことはあり得ます |
+| `EMPTY_FUNCTION` | action に関数が選ばれていない呼び出しがあります。ゲームは実行できない呼び出しを受け取ります |
+| `UNDECLARED_FUNCTION` | action がエクスポートで宣言されていない関数を呼んでいます — たとえばプロジェクトに残った v1 の id。以前は黙って読み込まれ、ゲーム内で失敗していました |
+| `UNDECLARED_ARGUMENT` | 呼び出しが、関数の宣言にない引数を渡しています |
+| `UNDECLARED_DICTIONARY_KEY` | `dictionaryKey` 引数が、そのパラメーターが指す辞書のエントリではありません |
+| `UNDECLARED_DICTIONARY` | condition がエクスポートで宣言されていない辞書をテストしています |
+| `UNDECLARED_ENTRY` | condition が、辞書で宣言されていないエントリをテストしています |
+| `UNKNOWN_CHOICE_BLOCK` | 予約辞書 `choice` のテストが、この scene の CHOICE ではない block を指しています |
+| `UNKNOWN_CHOICE_OPTION` | 予約辞書 `choice` のテストが、その CHOICE にないオプションを指しています |
 | `UNKNOWN_FUNCTION` | action が `check.functions` に無い関数 id を呼んでいます |
 | `UNKNOWN_DICTIONARY` | condition が `check.dictionaries` に無い辞書 id をテストしています |
 | `UNKNOWN_DICTIONARY_ENTRY` | 辞書は既知ですが、エントリキーが未知です |
 | `UNKNOWN_CARD` | block が `check.cards` に無いアクターカードの**名前**を指しています |
 
 最後の 4 つは `check` を渡したときにだけ現れます — 渡さなければ engine には比較する相手がありません。
+その上の 8 つは常に有効です：block が**使う**ものを、エクスポート自身が**宣言する**ものと比べるため、
+`check` は不要です。
+
+scene 内で見つかった診断は `sceneId`（安定 id `sc_…`、`handle.getSceneId()` が返すもの）と `scenePath` を持ち、
+block を指すときは `blockId` も持ちます。
 
 ================================================================================
 
@@ -112,7 +345,66 @@ engine は `BlueprintExport` オブジェクトを受け取ります（ファイ
 
 `BlueprintExport` は [LSDE](https://lepasoft.com/ja/software/ls-dialog-editor "Lepasoft Dialog Editor") エディターから出力される JSON ファイルです。engine が必要とするすべてのデータを含んでいます。
 
-<!--@include: ../../_shared/blueprint-export-type.md-->
+
+```ts [TypeScript]
+interface BlueprintExport {
+  format: "lsde-blueprints";       // anything else is refused outright
+  version: 1;                      // the FORMAT version, not the editor's
+  generator: Generator;            // which software wrote the file
+  exportedAt: string;              // ISO 8601
+  project: string;
+  locales: string[];
+  referenceLocale: string;         // the locale written first
+  dictionaries: DictionaryDefinition[];
+  functions: FunctionDefinition[];
+  cards: Card[];                   // what a block's `actors` and `emotion` cite
+  scenes: BlueprintScene[];
+}
+```
+```csharp [C#]
+public class BlueprintExport {
+    public string Format { get; set; }              // "lsde-blueprints"
+    public int Version { get; set; }                // 1
+    public Generator? Generator { get; set; }
+    public string ExportedAt { get; set; }
+    public string Project { get; set; }
+    public List<string> Locales { get; set; }
+    public string ReferenceLocale { get; set; }
+    public List<DictionaryDefinition> Dictionaries { get; set; }
+    public List<FunctionDefinition> Functions { get; set; }
+    public List<Card> Cards { get; set; }
+    public List<BlueprintScene> Scenes { get; set; }
+}
+```
+```cpp [C++]
+struct BlueprintExport {
+    std::string format;                          // "lsde-blueprints"
+    int version = 0;                             // 1
+    Generator generator;
+    std::string exportedAt;
+    std::string project;
+    std::vector<std::string> locales;
+    std::string referenceLocale;
+    std::vector<DictionaryDefinition> dictionaries;
+    std::vector<FunctionDefinition> functions;
+    std::vector<Card> cards;
+    std::vector<BlueprintScene> scenes;
+};
+```
+```gdscript [GDScript]
+# Dictionary with keys:
+# "format":          String  — always "lsde-blueprints"
+# "version":         int     — the FORMAT version, 1
+# "generator":       Dictionary
+# "exportedAt":      String  — ISO 8601
+# "project":         String
+# "locales":         Array[String]
+# "referenceLocale": String
+# "dictionaries":    Array[Dictionary]
+# "functions":       Array[Dictionary]
+# "cards":           Array[Dictionary]
+# "scenes":          Array[Dictionary]
+```
 
 ## Scene
 
@@ -120,7 +412,42 @@ scene は独立した対話シーケンスです — 会話、カットシーン
 
 各 scene は独自のエントリーブロック、独自のフロー、独自の状態を持ちます。複数の scene を並行して実行できます（例：メインダイアログとチュートリアルオーバーレイ）。scene は [`BlueprintScene`](/api-ref/type-aliases/BlueprintScene) インターフェースで定義されます：
 
-<!--@include: ../../_shared/blueprint-scene-type.md-->
+
+```ts [TypeScript]
+interface Scene {
+  scene: string;        // the path — reactor_breach. Builds the i18n keys; changes on a rename.
+  id: string;           // the stable id — sc_u0vqg2g8. Store THIS outside the payload.
+  label?: string;
+  start?: string;       // the id of the entry block. The scene names it; blocks carry no flag.
+  blocks: Block[];      // wires live on each block, in block.next. There is no connection table.
+}
+```
+```csharp [C#]
+public class BlueprintScene {
+    public string Scene { get; set; }        // the path — reactor_breach
+    public string Id { get; set; }           // the stable id — sc_u0vqg2g8
+    public string? Label { get; set; }
+    public string? Start { get; set; }       // the id of the entry block
+    public List<BlueprintBlock> Blocks { get; set; }
+}
+```
+```cpp [C++]
+struct BlueprintScene {
+    std::string scene;                       // the path — reactor_breach
+    std::string id;                          // the stable id — sc_u0vqg2g8
+    std::optional<std::string> label;
+    std::optional<std::string> start;        // the id of the entry block
+    std::vector<BlueprintBlock> blocks;
+};
+```
+```gdscript [GDScript]
+# Dictionary with keys:
+# "scene": String        — the path, reactor_breach
+# "id": String           — the stable id, sc_u0vqg2g8
+# "label": String (optional)
+# "start": String (optional) — the id of the entry block
+# "blocks": Array[Dictionary] — wires live on each block, in block["next"]
+```
 
 ## Connection
 
@@ -130,7 +457,40 @@ connection は block 間のワイヤーです — どの block がどの block �
 
 [`BlueprintConnection`](/api-ref/type-aliases/BlueprintConnection) はそれらのワイヤーを**フラット化**したビューで、`engine.getSceneConnections(sceneRef)` が返すものです — 出発元の block を付け直したワイヤーです：
 
-<!--@include: ../../_shared/blueprint-connection-type.md-->
+
+```ts [TypeScript]
+// A Link, plus the block it leaves. `Link` is what the payload carries, on block.next.
+type BlueprintConnection = Link & { from: string };
+
+interface Link {
+  port: string;    // the exit port NAME: out, then, catch, default, C1, K1, or a card id
+  to: string;      // the id of the target block, IN THE SAME SCENE
+  toPort: string;  // always "in"
+}
+```
+```csharp [C#]
+public class BlueprintConnection {
+    public string From { get; set; }    // the id of the block this wire leaves
+    public string Port { get; set; }    // the exit port NAME
+    public string To { get; set; }      // the id of the target block, in the same scene
+    public string ToPort { get; set; }  // always "in"
+}
+```
+```cpp [C++]
+struct BlueprintConnection {
+    std::string from;             // the id of the block this wire leaves
+    std::string port;             // the exit port NAME
+    std::string to;               // the id of the target block, in the same scene
+    std::string toPort = "in";
+};
+```
+```gdscript [GDScript]
+# Dictionary with keys:
+# "from": String    — the id of the block this wire leaves
+# "port": String    — the exit port NAME: out, then, catch, default, C1, K1, or a card id
+# "to": String      — the id of the target block, in the same scene
+# "toPort": String  — always "in"
+```
 
 通常、これらを検査する必要はありません — engine が内部でルーティングを処理します。`engine.getSceneConnections(sceneRef)` は**グラフ検査**のために公開されています：scene を再生せずに配線を見るデバッグビューです。
 
@@ -138,13 +498,86 @@ connection は block 間のワイヤーです — どの block がどの block �
 
 dictionary はゲームのレジスタを記述します — スイッチ、変数、インベントリなど。開発者が [LSDE](https://lepasoft.com/ja/software/ls-dialog-editor "Lepasoft Dialog Editor") エディターで宣言し、ナラティブデザイナーにゲーム内で利用可能な変数を公開します。ランタイムでは、開発者が各 dictionary をゲームの対応するシステムにマッピングします。[`condition`](/api-ref/interfaces/ConditionTest) と [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) がこれらのキーを使ってゲーム状態を評価します。[`DictionaryDefinition`](/api-ref/interfaces/DictionaryDefinition) インターフェースで定義されます：
 
-<!--@include: ../../_shared/blueprint-dictionary-type.md-->
+
+```ts [TypeScript]
+interface DictionaryDefinition {
+  id: string;                                  // what a ConditionTest.dict cites
+  valueType: 'boolean' | 'number' | 'string';  // what its entries hold
+  entries: string[];                           // the entry names, flat
+}
+```
+```csharp [C#]
+public class DictionaryDefinition {
+    public string Id { get; set; }
+    public string ValueType { get; set; }      // "boolean" | "number" | "string"
+    public List<string> Entries { get; set; }
+}
+```
+```cpp [C++]
+struct DictionaryDefinition {
+    std::string id;
+    std::string valueType;                     // "boolean" | "number" | "string"
+    std::vector<std::string> entries;
+};
+```
+```gdscript [GDScript]
+# Dictionary with keys:
+# "id": String
+# "valueType": "boolean" | "number" | "string"
+# "entries": Array[String]
+```
 
 ## Function
 
 function はゲームが実行できる処理を記述します — `set_flag`、`play_sound`、`give_item`。開発者が [LSDE](https://lepasoft.com/ja/software/ls-dialog-editor "Lepasoft Dialog Editor") エディターで宣言し、ナラティブデザイナーが型付きパラメーターでシーケンスを構成できるようにします。ランタイムでは、function の `id` を開発者が自分のシステムにマッピングします：ACTION block が `call.fn` でそれを参照し、引数は `call.args` に**名前で**渡されます。[`FunctionDefinition`](/api-ref/interfaces/FunctionDefinition) インターフェースで定義されます：
 
-<!--@include: ../../_shared/blueprint-signature-type.md-->
+
+```ts [TypeScript]
+interface FunctionDefinition {
+  id: string;                  // what an ActionCall.fn names
+  params: FunctionParameter[];
+}
+
+interface FunctionParameter {
+  name: string;                // ActionCall.args is keyed BY NAME, never by position
+  type: ValueType;             // 'boolean' | 'number' | 'string' | 'dictionaryKey'
+  dictionary?: string;         // for type 'dictionaryKey': the DictionaryDefinition.id it draws from
+}
+```
+```csharp [C#]
+public class FunctionDefinition {
+    public string Id { get; set; }
+    public List<FunctionParameter> Params { get; set; }
+}
+
+public class FunctionParameter {
+    public string Name { get; set; }
+    public string Type { get; set; }
+    public string? Dictionary { get; set; }
+}
+```
+```cpp [C++]
+struct FunctionDefinition {
+    std::string id;
+    std::vector<FunctionParameter> params;
+};
+
+struct FunctionParameter {
+    std::string name;
+    std::string type;
+    std::optional<std::string> dictionary;
+};
+```
+```gdscript [GDScript]
+# FunctionDefinition Dictionary:
+# "id": String
+# "params": Array[FunctionParameter]
+#
+# FunctionParameter Dictionary:
+# "name": String   — args are keyed BY NAME, never by position
+# "type": "boolean" | "number" | "string" | "dictionaryKey"
+# "dictionary": String (optional) — for type "dictionaryKey", the DictionaryDefinition id
+```
 
 ================================================================================
 
@@ -160,7 +593,167 @@ handler は2つのレベルで構成されます：**global handler**（engine �
 
 dialog block はセリフを表します — キャラクターの会話、ナレーター、画面上のテキスト。engine は `onResolveCharacter` callback で話しているキャラクターを解決し、`context.character` として公開します。典型的な dialog handler はゲーム内でテキストインスタンス（テキストボックス、吹き出し、字幕…）を作成し、プレイヤーやアニメーションの完了を待ち、`next()` を呼び出して engine を進めます。オプションの cleanup 関数で、engine が次の block に移る際に副作用をクリーンアップできます。
 
-<!--@include: ../../_shared/block-dialog.md-->
+
+```ts [TypeScript]
+engine.onDialog(({ block, context, next }) => {
+  const { text, props } = block;
+  const { character, resolveCharacterPort } = context;
+  const line = game.getLocalizedText(text);
+  const emotion = game.getCharacterEmotion(character);
+
+  character && resolveCharacterPort(character.id);
+
+  game.moveCameraToCharacter(character);
+  game.animateCharacter(character, emotion);
+
+  const dialog = game.createDialog(line, character, emotion);
+
+  // next() tells the engine this block is done. WHEN to call it is answered by three
+  // natives, and `timeout` comes FIRST because it outranks the other two: all three
+  // say when the block is left, and the card is the most specific answer.
+  if (props?.timeout) {
+    // MILLISECONDS, and the countdown starts when the line has been SAID — `timeout`
+    // is how long it STAYS on screen afterwards. Arming it on arrival truncates any
+    // line slower to reveal than the timeout allows.
+    dialog.onRevealComplete(() => game.wait(props.timeout).then(() => next()));
+    // A click may HURRY that reveal; it may not dismiss a line that plays its own time.
+    dialog.onInput(() => dialog.skipReveal(), { once: true });
+  } else if (game.shouldWaitPlayerInputForDialog(props)) {
+    dialog.onInput(() => next(), { once: true });
+  } else {
+    dialog.onRevealComplete(() => next());
+  }
+
+  // cleanup: runs when the engine moves to the next block
+  return () => {
+    dialog.destroy();
+    game.animateCharacter(character, false);
+  };
+});
+```
+```csharp [C#]
+engine.OnDialog(args => {
+    var (scene, block, context, next) = args;
+    var (text, ch, emotion) = (
+        Game.GetLocalizedText(block.Text),
+        context.Character,
+        Game.GetCharacterEmotion(context.Character)
+    );
+
+    if (ch != null) context.ResolveCharacterPort(ch.Id);
+
+    Game.MoveCameraToCharacter(ch);
+    Game.AnimateCharacter(ch, emotion);
+
+    var dialog = Game.CreateDialog(text, ch, emotion);
+    var natives = block.NativeProperties;
+
+    // next() tells the engine this block is done. Timeout comes FIRST: it outranks
+    // WaitInput and it outranks leaving at once. All three say when the block is left,
+    // and the one the writer put on the card is the most specific answer.
+    if (natives?.Timeout > 0) {
+        // MILLISECONDS, and the countdown starts when the line has been SAID — Timeout
+        // is how long it STAYS on screen afterwards. Arming it on arrival truncates any
+        // line slower to reveal than the timeout allows.
+        dialog.OnRevealComplete(() =>
+            Game.Wait(natives.Timeout.Value).Then(() => next()));
+        // A click may HURRY that reveal; it may not dismiss a line playing its own time.
+        dialog.OnInput(() => dialog.SkipReveal(), once: true);
+    } else if (Game.ShouldWaitPlayerInputForDialog(natives)) {
+        dialog.OnInput(() => next(), once: true);
+    } else {
+        dialog.OnRevealComplete(() => next());
+    }
+
+    // cleanup: runs when the engine moves to the next block
+    return () => {
+        dialog.Destroy();
+        Game.AnimateCharacter(ch, false);
+    };
+});
+```
+```cpp [C++]
+engine.onDialog([&game](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn {
+    auto* ch = ctx->character();
+    auto text = game.getLocalizedText(block->text);
+    auto emotion = game.getCharacterEmotion(ch);
+
+    if (ch) ctx->resolveCharacterPort(ch->id);
+
+    game.moveCameraToCharacter(ch);
+    game.animateCharacter(ch, emotion);
+
+    auto* dialog = game.createDialog(text, ch, emotion);
+    auto natives = lsde::getNativeProperties(*block);
+
+    // next() tells the engine this block is done. timeout comes FIRST: it outranks
+    // waitInput and it outranks leaving at once. All three say when the block is left,
+    // and the one the writer put on the card is the most specific answer.
+    if (natives.timeout.value_or(0) > 0) {
+        // MILLISECONDS, and the countdown starts when the line has been SAID - timeout
+        // is how long it STAYS on screen afterwards. Arming it on arrival truncates any
+        // line slower to reveal than the timeout allows.
+        const auto stayMs = *natives.timeout;
+        dialog->onRevealComplete([&game, next, stayMs]() {
+            game.wait(stayMs).then([next]() { next(); });
+        });
+        // A click may HURRY that reveal; it may not dismiss a line playing its own time.
+        dialog->onInput([dialog]() { dialog->skipReveal(); });
+    } else if (game.shouldWaitPlayerInputForDialog(block->props)) {
+        dialog->onInput([next]() { next(); });
+    } else {
+        dialog->onRevealComplete([next]() { next(); });
+    }
+
+    // cleanup: runs when the engine moves to the next block
+    return [dialog, &game, ch]() {
+        dialog->destroy();
+        game.animateCharacter(ch, false);
+    };
+});
+```
+```gdscript [GDScript]
+engine.on_dialog(func(args):
+    var block = args["block"]
+    var ctx = args["context"]
+    var next_fn = args["next"]
+    var ch = ctx.character
+    var text = game.get_localized_text(block.get("text"))
+    var emotion = game.get_character_emotion(ch)
+
+    if ch:
+        ctx.resolve_character_port(ch.get("id", ""))
+
+    game.move_camera_to_character(ch)
+    game.animate_character(ch, emotion)
+
+    var dialog = game.create_dialog(text, ch, emotion)
+    var natives = block.get("props", {})
+    var stay_ms = natives.get("timeout", 0)
+
+    # next_fn.call() tells the engine this block is done. timeout comes FIRST: it
+    # outranks waitInput and it outranks leaving at once. All three say when the block
+    # is left, and the one written on the card is the most specific answer.
+    if stay_ms > 0:
+        # A click may HURRY the reveal; it may not dismiss a line playing its own time.
+        dialog.on_input(func(): dialog.skip_reveal(), true)
+        # MILLISECONDS, counted from the moment the line has been SAID — stay_ms is how
+        # long it REMAINS on screen afterwards, never how long it has to be said in.
+        await dialog.reveal_finished
+        await game.wait(stay_ms)
+        next_fn.call()
+    elif game.should_wait_player_input(natives):
+        dialog.on_input(func(): next_fn.call(), true)
+    else:
+        await dialog.reveal_finished
+        next_fn.call()
+
+    # cleanup: runs when the engine moves to the next block
+    return func():
+        dialog.destroy()
+        game.animate_character(ch, false)
+)
+```
 
 ナラティブデザイナーがキャラクターごとに専用の出力を割り当てた場合（[`portPerCharacter`](/api-ref/interfaces/NativeProperties#portpercharacter)）、handler は `resolveCharacterPort()` を呼び出して `next()` 時にどのパスを辿るかを engine に伝える必要があります。
 
@@ -168,7 +761,127 @@ dialog block はセリフを表します — キャラクターの会話、ナ�
 
 choice block はプレイヤーが選択する分岐点です — ダイアログメニュー、選択肢リスト。`context.options` に全ての選択肢が含まれます。[`onResolveCondition()`](/ja/guide/choice-visibility) が設定されている場合、各選択肢は `visible: true | false` でタグ付けされ、handler が表示する選択肢をフィルタリングします。プレイヤーの操作後、`selectChoice(optionId)` で engine にどのパスを辿るかを伝え — **option の id がそのまま出口 port です**（`C1`、`C2`…）— `next()` でフローを進めます。
 
-<!--@include: ../../_shared/block-choice.md-->
+
+```ts [TypeScript]
+engine.onChoice(({ block, context, next }) => {
+  const natives = LsdeUtils.getNativeProperties(block);
+  const { options, selectChoice } = context;
+
+  // EVERY option is handed over, tagged. Filtering is your call — keeping the hidden ones lets
+  // you grey them out or show "[locked]" instead of making them vanish.
+  const offered = options.filter((o) => o.visible !== false);
+  const dialog = game.createChoice(offered);
+
+  // The option id IS its exit port (C1, C2…), so hand it straight back.
+  dialog
+    .then((selected) => selectChoice(selected))
+    .finally(() => next());
+
+  // Optional: if the writer set a timeout on this block. MILLISECONDS in v2, and a
+  // CHOICE has no line to reveal, so the countdown starts once the options are readable.
+  //
+  // It must still SELECT one. An option id IS the exit port, so a choice left without
+  // `selectChoice()` resolves to NO link at all and the branch dies silently — the
+  // engine has nothing to follow. Picking the first offered option is the usual answer;
+  // a `when` on it lets the writer decide which one that is.
+  if (natives.timeout) {
+    const timeout = game.wait(natives.timeout).then(() => {
+      if (offered.length > 0) selectChoice(offered[0].id);
+      next();
+    });
+    dialog.finally(() => timeout.cancel());
+  }
+
+  return () => dialog.destroy();
+});
+```
+```csharp [C#]
+engine.OnChoice(args => {
+    var natives = LsdeUtils.GetNativeProperties(args.Block);
+    var offered = args.Context.Options
+        .Where(o => o.Visible != false).ToList();
+
+    var dialog = Game.CreateChoice(offered);
+
+    // The option id IS its exit port (C1, C2…), so hand it straight back.
+    dialog.OnSelect(selected => {
+        args.Context.SelectChoice(selected);
+        args.Next();
+    });
+
+    // Optional: MILLISECONDS in v2, counted from the moment the options are readable.
+    // It must still SELECT one: an option id IS the exit port, so a choice left without
+    // SelectChoice() resolves to NO link and the branch dies silently.
+    if (natives.Timeout is { } timeout)
+        Game.Wait(timeout).Then(() => {
+            if (offered.Count > 0) args.Context.SelectChoice(offered[0].Id);
+            args.Next();
+        });
+
+    return () => dialog.Destroy();
+});
+```
+```cpp [C++]
+engine.onChoice([&game](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
+    std::vector<const lsde::RuntimeChoiceItem*> offered;
+    for (const auto& option : ctx->options())
+        if (option.visible.value_or(true))
+            offered.push_back(&option);
+
+    auto* dialog = game.createChoice(offered);
+
+    // The option id IS its exit port (C1, C2…), so hand it straight back.
+    dialog->onSelect([ctx, next](const std::string& selected) {
+        ctx->selectChoice(selected);
+        next();
+    });
+
+    // Optional: MILLISECONDS in v2, counted from the moment the options are readable.
+    // It must still SELECT one: an option id IS the exit port, so a choice left without
+    // selectChoice() resolves to NO link and the branch dies silently.
+    auto natives = lsde::getNativeProperties(*block);
+    if (natives.timeout) {
+        game.wait(*natives.timeout).then([ctx, next, offered]() {
+            if (!offered.empty()) ctx->selectChoice(offered.front()->id);
+            next();
+        });
+    }
+
+    return [dialog]() { dialog->destroy(); };
+});
+```
+```gdscript [GDScript]
+engine.on_choice(func(args):
+    var ctx = args["context"]
+    var natives = LsdeUtils.get_native_properties(args["block"])
+
+    var offered = []
+    for option in ctx.options:
+        if option.get("visible") != false:
+            offered.append(option)
+
+    var dialog = game.create_choice(offered)
+
+    # The option id IS its exit port (C1, C2…), so hand it straight back.
+    var selected = await dialog.choice_selected
+    ctx.select_choice(selected)
+    args["next"].call()
+
+    # Optional: natives.get("timeout") is in MILLISECONDS. Use a Timer node, started
+    # once the options are readable. It must still SELECT one: an option id IS the exit
+    # port, so a choice left without select_choice() resolves to NO link and the branch
+    # dies silently.
+
+    return func(): dialog.destroy()
+)
+```
+
+> TIP:
+With `engine.onResolveCondition()` installed, each option carries `visible: true | false`. Without
+one it is **undefined** — *unknown*, not *hidden*.
+
+That distinction matters: saying "hidden" about a question nobody could answer would take an answer
+away from the player. Filter on `visible !== false`, never on `visible === true`.
 
 完全なオプトイン方式のタグ付けシステムについては [Choice の表示制御](/ja/guide/choice-visibility) を参照してください。
 
@@ -204,7 +917,73 @@ dictionary が予約語 **`choice`** であるテストは、プレイヤーが�
 この問いがゲームに届くことはありません。`scene.getChoice(blockId)` と `scene.evaluateCondition(test)` も
 参照してください。
 
-<!--@include: ../../_shared/block-condition.md-->
+
+```ts [TypeScript]
+// Optional once onResolveCondition is installed: the engine has already evaluated every case and
+// already knows which port the flow leaves by. This handler is where you log it, or override it.
+engine.onCondition(({ block, context, next }) => {
+  // Each case carries its own exit port and its pre-evaluated result.
+  const matched = context.cases.filter((c) => c.result).map((c) => c.port);
+  console.log(`${block.id} matched:`, matched.join(', ') || 'none → default');
+
+  // Override the routing with a PORT NAME: 'out', 'default', or a case port like 'K2'.
+  // context.resolve('default');
+
+  next();
+});
+```
+```csharp [C#]
+engine.OnCondition(args => {
+    var matched = args.Context.Cases
+        .Where(c => c.Result == true)
+        .Select(c => c.Port)
+        .ToList();
+    Console.WriteLine($"{args.Block.Id} matched: {string.Join(", ", matched)}");
+
+    // args.Context.Resolve(Ports.Default);   // override with a PORT NAME
+
+    args.Next();
+    return null;
+});
+```
+```cpp [C++]
+engine.onCondition([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
+    for (const auto& c : ctx->cases()) {
+        std::cout << c.port << "=" << c.result.value_or(false) << " ";
+    }
+
+    // ctx->resolve(Ports::Default);   // override with a PORT NAME
+
+    next();
+    return {};
+});
+```
+```gdscript [GDScript]
+engine.on_condition(func(args):
+    var ctx = args["context"]
+    var matched = []
+    for c in ctx.cases:
+        if c["result"]:
+            matched.append(c["port"])
+    print("%s matched: %s" % [args["block"]["id"], ", ".join(matched)])
+
+    # ctx.resolve(LsdeTypes.PORT_DEFAULT)   # override with a PORT NAME
+
+    args["next"].call()
+    return Callable()
+)
+```
+
+> TIP:
+`portPerCase` absent — every case must hold: the flow leaves by `out` if they all do, `default`
+otherwise. `portPerCase: true` — the **first** case that holds takes its own port (`K1`, `K2`…),
+`default` when none does.
+
+A case with no `when` is always true, and makes every case below it unreachable.
+
+The **dispatcher mode is gone**. It fired every matching case at once, in parallel, which meant a
+writer read three wires leaving a condition as a choice when it was three simultaneous launches.
+Use `isAsync` on the target blocks instead — where a reader of the graph can see it.
 
 ## ROUTER
 
@@ -214,7 +993,69 @@ router block は condition と**同じ `cases`** を持ち、それを逆向き�
 
 **`onRouter` handler は存在せず**、`start()` はそれを要求しません：engine は router を自分で dispatch します。観測するには `handle.onBlock(id)` を使います。
 
-<!--@include: ../../_shared/block-router.md-->
+
+```ts [TypeScript]
+import type { RouterContext } from '@lsde/dialog-engine';
+
+// A ROUTER has no handler of its own: the engine evaluates EVERY case, launches the port of each
+// true one and picks `then` or `catch` before a handler could speak. To WATCH one, target it by id.
+handle.onBlock('ROUTER-001', ({ block, context, next }) => {
+  const { cases } = context as RouterContext;
+  const launched = cases.filter((c) => c.result).map((c) => c.port);
+  console.log(`${block.id} launched:`, launched.join(', ') || 'nothing');
+
+  // Nothing to resolve: the exits are a tally, not a choice.
+  next();
+});
+```
+```csharp [C#]
+handle.OnBlock("ROUTER-001", args => {
+    var cases = ((IRouterContext)args.Context).Cases;
+    var launched = cases.Where(c => c.Result == true).Select(c => c.Port).ToList();
+    Console.WriteLine($"{args.Block.Id} launched: {string.Join(", ", launched)}");
+
+    // Nothing to resolve: the exits are a tally, not a choice.
+    args.Next();
+    return null;
+});
+```
+```cpp [C++]
+handle->onBlock("ROUTER-001", [](auto*, auto* block, IBaseBlockContext* ctx, auto next) -> CleanupFn {
+    auto* router = dynamic_cast<IRouterContext*>(ctx);
+    for (const auto& c : router->cases()) {
+        if (c.result.value_or(false)) std::cout << block->id << " launched " << c.port << "\n";
+    }
+
+    // Nothing to resolve: the exits are a tally, not a choice.
+    next();
+    return {};
+});
+```
+```gdscript [GDScript]
+handle.on_block("ROUTER-001", func(args):
+    var ctx = args["context"]  # an LsdeBlockContext.RouterContext
+    var launched = []
+    for c in ctx.cases:
+        if c["result"]:
+            launched.append(c["port"])
+    print("%s launched: %s" % [args["block"]["id"], ", ".join(launched)])
+
+    # Nothing to resolve: the exits are a tally, not a choice.
+    args["next"].call()
+    return Callable()
+)
+```
+
+> TIP:
+A condition asks *which one* and leaves by a single port. A router asks *which ones*: every case
+is evaluated — a false one in the middle hides nothing after it — each true case launches its
+port, and the flow then continues by `then` when they **all** held, by `catch` when **any** did
+not. No case at all is `then`, the way `Promise.all([])` resolves.
+
+The `K*` routes are walked like any other port: an `isAsync` target opens its own track, the others
+are this track's, in turn, and the continuation comes **last** — which is what keeps `then`/`catch`
+as the main flow when the routes are async. `catch` cancels nothing: the tracks of the true cases
+are already running.
 
 完全な契約と図は [Router block](/ja/guide/router) を、router のルートが通常名指す入口 port `inPortPerCharacter` については [登場人物の割り当て](/ja/guide/character-distribution) を参照してください。
 
@@ -226,7 +1067,54 @@ action block はゲーム内で副作用を発動します — アイテムの�
 `context.resolve()` で `then` port を、`context.reject()` で `catch` port を辿ります — designer が `catch` を
 一本も配線していない場合、プレイヤーを置き去りにするのではなく `then` からフローが続きます。
 
-<!--@include: ../../_shared/block-action.md-->
+
+```ts [TypeScript]
+engine.onAction(({ block, context, next }) => {
+  const { actions } = block;
+  game
+    .executeActionsList(actions)
+    .then(() => context.resolve())
+    .catch((err) => context.reject(err))
+    .finally(() => next());
+});
+```
+```csharp [C#]
+engine.OnAction(args => {
+    var (scene, block, context, next) = args;
+    Game.ExecuteActionsList(block.Actions, onComplete: () => {
+        context.Resolve();
+        next();
+    }, onError: err => {
+        context.Reject(err);
+        next();
+    });
+    return null;
+});
+```
+```cpp [C++]
+engine.onAction([&game](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn {
+    auto* ab = dynamic_cast<const ActionBlock*>(block);
+    game.executeActionsList(ab->actions, [ctx, next]() {
+        ctx->resolve();
+        next();
+    }, [ctx, next](const auto& err) {
+        ctx->reject(err);
+        next();
+    });
+    return {};
+});
+```
+```gdscript [GDScript]
+engine.on_action(func(args):
+    var block = args["block"]
+    var ctx = args["context"]
+    var next_fn = args["next"]
+
+    await game.execute_actions_list(block.get("actions", []))
+    ctx.resolve()
+    next_fn.call()
+)
+```
 
 ## NOTE
 
@@ -293,6 +1181,2010 @@ v1 では秒でした。そして**実行時にそれを知らせるものは何
 
 ================================================================================
 
+# Router block
+
+Router は**条件が満たされたすべてのルートを起動し**、ブロッキングするものを待ち、それらが
+すべて満たされていたかどうかを伝えます。
+
+**前提条件のディスパッチャー** block です：「揃っているものはすべて起動し、すべて揃っていたか
+を教えてくれ」。
+
+## condition block と混同しないこと
+
+どちらも条件を読みますが、担う仕事が違います。
+
+|  | CONDITION | ROUTER |
+|---|---|---|
+| 問い | 「**どれ**が真か？」 | 「**どれとどれ**が真か？」 |
+| 評価する case | 答えが出た時点で止まる | 最後まで**すべて** |
+| 通る出口 | **1 つだけ** | **真の case ごとに 1 つ**、加えて継続用の 1 つ |
+
+condition は**振り分ける**。Router は**ディスパッチする**。
+
+## port
+
+| port | 個数 | 通るとき |
+|---|---|---|
+| `K1`, `K2`, … | 宣言した case ごとに 1 つ | その case が真 |
+| `then` | 常に 1 つ | **すべて**の case が真だった |
+| `catch` | 常に 1 つ | **少なくとも 1 つ**の case が偽だった |
+
+- **`then` と `catch` は排他。** どちらか一方が必ず通り、両方も、どちらも通らないこともありません。
+- **どちらも block 作成時から存在します** — 最初の case より前から。
+- **`catch` は「エラー」を意味しません**。「条件が満たされていなかった」という意味です。
+
+## 例
+
+```
+                    ┌─────────────────────────────┐
+   ── the flow ────►│  ROUTER  "the door"         │
+                    ├─────────────────────────────┤
+                    │ K1  items.gold_key > 0      ├──► ACTION  a chime            (isAsync)
+                    │ K2  quest.guard == 2        ├──► DIALOG  the guard nods     (isAsync)
+                    │ K3  purse.gold >= 50        ├──► ACTION  take 50 gold       (isAsync)
+                    ├─────────────────────────────┤
+                    │ then                        ├──► DIALOG  "the door opens"
+                    │ catch                       ├──► DIALOG  "something is missing"
+                    └─────────────────────────────┘
+```
+
+鍵と金貨はあるが門番と話していない → K1 と K3 が発進し、3 つのうち 2 つ → **`catch`** から出ます。
+
+3 つとも揃っていれば → 3 本のルートが発進し、`then` から出ます。
+
+> WARNING:
+鐘は鳴り、金貨は取られ、**そのうえで**プレイヤーは「何かが足りない」と告げられます。
+
+## 実行
+
+```
+[[every isAsync route], [route 1], [route 2], …]  →  then | catch
+```
+
+1. **すべて**の case を宣言順に評価する。途中で止めない。
+2. `isAsync` のルートを**すべて**一度に起動する。
+3. それ以外を**1 本ずつ**、それぞれ最後まで実行する。
+4. すべての case が真なら `then`、そうでなければ `catch` へ進む。
+
+推奨：`K*` port のターゲットにはすべて `isAsync` を付けること。engine は強制しません。
+
+### 非 async port の例
+
+その場にいるパーティメンバーが反応します。3 つの吹き出しを同時に出すのではなく、**順番に**
+話させたい — だからこれらのルートに `isAsync` は付けません。
+
+```
+                    ┌─────────────────────────────┐
+   ── the flow ────►│  ROUTER  "the reactions"    │
+                    ├─────────────────────────────┤
+                    │ K1  quest.door == 3         ├──► ACTION  shut the door      (isAsync)
+                    │ K2  party.aria == true      ├──► DIALOG  Aria: "at last!"
+                    │ K3  party.bram == true      ├──► DIALOG  Bram: "no way"
+                    ├─────────────────────────────┤
+                    │ then                        ├──► DIALOG  "the party is ready"
+                    └─────────────────────────────┘
+```
+
+3 つの case がすべて真の場合：
+
+```
+time ───────────────────────────────────────────────►
+
+K1  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓            detached — lives its own life
+K2  ▓▓▓▓▓▓▓                   Aria speaks
+K3         ▓▓▓▓▓▓▓            then Bram
+then              ▓▓▓▓▓▓
+```
+
+```
+[[K1],[K2],[K3]].then
+```
+
+- **K2 は最後まで再生されます** — 最初の block だけでなく、**その後ろに繋がれた連鎖すべて**。
+  K3 が始まるのはそのあとです。
+- **`then`** は K2 と K3 を待ちます。K1 はまだ走っていて構いません。
+
+K2 と K3 に `isAsync` を付けると：Aria と Bram が同時に話し、`then` はすぐに発進します。
+
+## case の形
+
+CONDITION block と同じ形です。
+
+- フラットなリスト：`dictionary.entry` · 演算子 · 値。
+- 演算子は名前で — `equals`、`notEquals`、`lessThan`、`lessOrEqual`、`greaterThan`、
+  `greaterOrEqual`。上の図は読みやすさのために `>` と `==` を使っています。
+- 2 行目以降は自分の接続子を持ちます：`and` または `or`。
+- 評価の優先順位は export されません。リファレンス engine は左から右へ評価します。
+- **比較を 1 つも持たない case は常に真**です。
+
+## ゲーム側
+
+```ts
+engine.onResolveCondition((test) => {
+  // test = { dict: "items", entry: "gold_key", op: "greaterThan", value: 0 }
+  return myGameState.answer(test);
+});
+```
+
+どの port が発進するか、`then` か `catch` かは engine が決めます。手で振り分けるものはありません。
+
+**`onRouter` handler は存在せず**、必要でもありません：handler が発言できる時点では、真の case は
+すべて自身の port を起動済みで、継続先も決まっています — 答えるべきものは残っていません。`start()`
+はこれを要求しません。Router を観測するには — 何が成立したかをログする、デバッグ表示を動かす —
+`handle.onBlock(id)` を使います：その context は評価済みの `cases` を**すべて**持ち、`resolve` は
+ありません。
+
+
+```ts [TypeScript]
+import type { RouterContext } from '@lsde/dialog-engine';
+
+// A ROUTER has no handler of its own: the engine evaluates EVERY case, launches the port of each
+// true one and picks `then` or `catch` before a handler could speak. To WATCH one, target it by id.
+handle.onBlock('ROUTER-001', ({ block, context, next }) => {
+  const { cases } = context as RouterContext;
+  const launched = cases.filter((c) => c.result).map((c) => c.port);
+  console.log(`${block.id} launched:`, launched.join(', ') || 'nothing');
+
+  // Nothing to resolve: the exits are a tally, not a choice.
+  next();
+});
+```
+```csharp [C#]
+handle.OnBlock("ROUTER-001", args => {
+    var cases = ((IRouterContext)args.Context).Cases;
+    var launched = cases.Where(c => c.Result == true).Select(c => c.Port).ToList();
+    Console.WriteLine($"{args.Block.Id} launched: {string.Join(", ", launched)}");
+
+    // Nothing to resolve: the exits are a tally, not a choice.
+    args.Next();
+    return null;
+});
+```
+```cpp [C++]
+handle->onBlock("ROUTER-001", [](auto*, auto* block, IBaseBlockContext* ctx, auto next) -> CleanupFn {
+    auto* router = dynamic_cast<IRouterContext*>(ctx);
+    for (const auto& c : router->cases()) {
+        if (c.result.value_or(false)) std::cout << block->id << " launched " << c.port << "\n";
+    }
+
+    // Nothing to resolve: the exits are a tally, not a choice.
+    next();
+    return {};
+});
+```
+```gdscript [GDScript]
+handle.on_block("ROUTER-001", func(args):
+    var ctx = args["context"]  # an LsdeBlockContext.RouterContext
+    var launched = []
+    for c in ctx.cases:
+        if c["result"]:
+            launched.append(c["port"])
+    print("%s launched: %s" % [args["block"]["id"], ", ".join(launched)])
+
+    # Nothing to resolve: the exits are a tally, not a choice.
+    args["next"].call()
+    return Callable()
+)
+```
+
+> TIP:
+A condition asks *which one* and leaves by a single port. A router asks *which ones*: every case
+is evaluated — a false one in the middle hides nothing after it — each true case launches its
+port, and the flow then continues by `then` when they **all** held, by `catch` when **any** did
+not. No case at all is `then`, the way `Promise.all([])` resolves.
+
+The `K*` routes are walked like any other port: an `isAsync` target opens its own track, the others
+are this track's, in turn, and the continuation comes **last** — which is what keeps `then`/`catch`
+as the main flow when the routes are async. `catch` cancels nothing: the tracks of the true cases
+are already running.
+
+## 落とし穴
+
+- **選ばれた port が何にも繋がれていないことがあります** — そこでそのトラックは終わります。
+  終端 block と同じで、エラーではありません。
+- **case がゼロなら → `then`。**
+- **ACTION block の `catch` は「呼び出しが失敗した」という意味** — 別物です。
+- **「最初に成立したものが勝つ」は Router ではありません。** それは `portPerCase` を付けた
+  CONDITION です。
+
+## しないこと
+
+- **`isAsync` のルートを待つこと** — TypeScript の `Promise.all` の思想。見送りました。
+- **`finally` という概念。** 却下しました。
+
+## 関連
+
+[Block Types](./block-types) · [Async Tracks](./async-tracks) · [Handlers](./handlers)
+
+================================================================================
+
+# 登場人物の割り当て
+
+block は actor の**リスト**を持ちます — `actors`。engine は**そのどれも選びません**。
+
+これは意図的です：リストの順序が「誰が話すか」なのか「誰がその場にいるか」なのか、LSDE は
+言うことを拒みます。決めるのはゲームであり、その手段はコールバックです。
+
+## 原則
+
+```ts
+context.actors      // block に置かれたキャスト — 常にリスト全体
+context.character   // 話す者、または undefined
+```
+
+`context.character` は、**ゲームが `onResolveCharacter` を登録するまで** `undefined` です。
+engine は推測しません。
+
+## 三つの道具
+
+| デザイナーの意図 | 道具 | どこで決まるか |
+|---|---|---|
+| 「複数いるが**話すのは一人**」 | `onResolveCharacter` | ゲームのコード内 |
+| 「**話者によって続きが変わる**」 | `portPerCharacter` | actor ごとの**出力** port |
+| 「**この入口**が actor を指名する」 | `inPortPerCharacter` | actor ごとの**入力** port |
+
+`portPerCharacter` と `inPortPerCharacter` は対称です：一方は出口に、もう一方は入口に名前を
+付けます。どちらも port 名は**カード id** であり、決してインデックスではありません。
+
+## `inPortPerCharacter` — 線が actor を指名する
+
+block が複数の actor を持ち、複数の経路から到達できる場合、その block だけでは、通ってきた経路が
+どの actor を表すのか分かりません。入力 port がそれを告げます。
+
+```
+┌──────────────────────────────┐        ┌───────────────────────────┐
+│ ROUTER   CONDITION-004       │        │ DIALOG-009   "Me too"     │
+├──────────────────────────────┤        │ inPortPerCharacter: true  │
+│ K1  party.l1 ≠ true          ├───────►│ ◂ l1                      │
+│ K2  party.l2 ≠ true          ├───────►│ ◂ l2                      │
+│ K3  party.l3 ≠ true          ├───────►│ ◂ l3                      │
+├──────────────────────────────┤        │ ◂ in    (nobody named)    │
+│ then                         ├──►     └───────────────────────────┘
+└──────────────────────────────┘  DIALOG-010
+```
+
+`DIALOG-009` は三匹のウサギと一つの台詞を持ちます。`CONDITION-004` の真になった各 case が、
+**それぞれのウサギの扉から** block を起動します。
+
+### 手順
+
+```
+1. CONDITION-004：case K1 が真                     →  線が発つ
+2. DIALOG-009 の入力 port  l1  に到達する
+3. engine がゲームに尋ねる「l1 をくれ」            →  onResolveCharacter([ l1 ])
+4a. ゲームがカード l1 を返す    →  DIALOG-009 は l1 に割り当てられる
+4b. ゲームが undefined を返す   →  何も起きない：その人物は存在しない
+```
+
+**engine が単独で決めることは一度もありません。** 尋ね、ゲームが答える — 他のあらゆる場所と
+同じコールバックです。違いは一つだけ：リスト全体を渡すのではなく、**一人**の actor を尋ねる
+ので、ゲームがウサギを取り違えることがありません。
+
+### context が保持するもの
+
+`l1` から入った pass では：
+
+```ts
+context.actors      →  [ l1, l2, l3 ]   block のキャスト、変わらない
+context.character   →  l1               ゲームが持っていなければ undefined
+```
+
+`actors` は扉によって変わりません：block に置かれたリストそのものです。変わるのは `character`
+だけです。
+
+### `in` から入る
+
+actor port を持つ block でも、`in` port は残ります。そこから入ることは**actor を指名しない**
+という意味で、`onResolveCharacter` は他と同様にリスト全体を受け取ります。
+
+actor port を指名しない線は `toPort: "in"` を持ちます — このプロパティを使わないプロジェクトの
+すべての線がそれであり、すでに書かれたものは何も変わりません。
+
+## 推奨される慣習
+
+**一つの block へ複数の線を引くと、その block は同じ内容で複数回起動されます。**
+
+線ごとに**異なる**ことを言わせたい場合：
+
+| 何が異なるか | どうするか |
+|---|---|
+| 人物だけ | `inPortPerCharacter` — actor ごとの入力 port |
+| 台詞も | **線ごとに block を一つ** |
+
+避けるべきこと：入力 port を**持たない**複数 actor の block へ複数の線を引くこと。block はどの
+線から来たのか分からないまま複数回再生され、それを報告するものもありません。
+
+## 関連
+
+[Handlers](./handlers) · [Block Types](./block-types) · [Router block](./router)
+
+================================================================================
+
+# ハンドラー
+
+## Handler
+
+handler は engine とゲームを繋ぐ橋です。オブザーバーのように機能します — 関数を登録すると、対応するイベントが発生した時に engine がそれを呼び出します。テキストの表示、アニメーションの再生、状態の評価など、ゲームエンジンで適切な動作をトリガーするのは handler を通じて行います。
+
+engine は以下の handler を公開しています：
+
+| Handler | レベル | 説明 |
+|---------|--------|------|
+| [`onDialog`](/api-ref/classes/DialogueEngine#ondialog) | global / scene | dialog block — テキスト表示 |
+| [`onChoice`](/api-ref/classes/DialogueEngine#onchoice) | global / scene | choice block — 選択肢の提示 |
+| [`onCondition`](/api-ref/classes/DialogueEngine#oncondition) | global / scene | condition block — 評価と分岐 |
+| [`onAction`](/api-ref/classes/DialogueEngine#onaction) | global / scene | action block — 副作用のトリガー |
+| [`onResolveCharacter`](/api-ref/classes/DialogueEngine#onresolvecharacter) | global / scene | どのキャラクターが話しているかを解決 |
+| [`onBeforeBlock`](/api-ref/classes/DialogueEngine#onbeforeblock) | global | 各 block の前（delay、開始アニメーション…） |
+| [`onValidateNextBlock`](/api-ref/classes/DialogueEngine#onvalidatenextblock) | global | block に進む前のバリデーション |
+| [`onInvalidateBlock`](/api-ref/classes/DialogueEngine#oninvalidateblock) | global | バリデーション失敗時の処理 |
+| [`onSceneEnter`](/api-ref/classes/DialogueEngine#onsceneenter) | global / scene | scene の開始 |
+| [`onSceneExit`](/api-ref/classes/DialogueEngine#onsceneexit) | global / scene | scene の終了 |
+| [`onBlock`](/api-ref/interfaces/SceneHandle#onblock) | scene | id（`DIALOG-001`）で特定の block をオーバーライド |
+| [`onDialogId`](/api-ref/interfaces/SceneHandle#ondialogid) | scene | id で特定の DIALOG block をオーバーライド（型安全） |
+| [`onChoiceId`](/api-ref/interfaces/SceneHandle#onchoiceid) | scene | id で特定の CHOICE block をオーバーライド（型安全） |
+| [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | id で特定の CONDITION block をオーバーライド（型安全） |
+| [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | id で特定の ACTION block をオーバーライド（型安全） |
+| [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) | global | 統合 condition リゾルバー（choice の可視性 + condition の事前評価） |
+
+`onDialog`、`onChoice`、`onAction` は**必須**です — `start()` 呼び出し時に engine がその存在を検証し、欠けている場合は記述的なエラーをスローします。`onCondition` は `onResolveCondition` がインストールされている場合は**オプション**です — engine が事前評価された condition グループから自動ルーティングします。
+
+ROUTER block に handler は**なく**、必要でもありません：engine はすべての case を評価し、真の case それぞれの port を起動し、`then`（すべて成立）か `catch`（一つでも不成立）で自分で続行します。観測するには `handle.onBlock(id)` を使います — [Router block](/ja/guide/router) を参照。
+
+
+```ts [TypeScript]
+// required — the engine won't start without these
+engine.onDialog(dialogHandler);
+engine.onChoice(choiceHandler);
+engine.onCondition(conditionHandler);
+engine.onAction(actionHandler);
+
+// optional — lifecycle, validation, pre-execution
+engine.onBeforeBlock(beforeBlockHandler);
+engine.onResolveCharacter(resolveCharacterHandler);
+engine.onValidateNextBlock(validateHandler);
+engine.onSceneEnter(sceneEnterHandler);
+engine.onSceneExit(sceneExitHandler);
+
+const handle = engine.scene(sceneId);
+handle.start();
+```
+```csharp [C#]
+// required — the engine won't start without these
+engine.OnDialog(dialogHandler);
+engine.OnChoice(choiceHandler);
+engine.OnCondition(conditionHandler);
+engine.OnAction(actionHandler);
+
+// optional — lifecycle, validation, pre-execution
+engine.OnBeforeBlock(beforeBlockHandler);
+engine.OnResolveCharacter(resolveCharacterHandler);
+engine.OnValidateNextBlock(validateHandler);
+engine.OnSceneEnter(sceneEnterHandler);
+engine.OnSceneExit(sceneExitHandler);
+
+var handle = engine.Scene(sceneId);
+handle.Start();
+```
+```cpp [C++]
+// required — the engine won't start without these
+engine.onDialog(dialogHandler);
+engine.onChoice(choiceHandler);
+engine.onCondition(conditionHandler);
+engine.onAction(actionHandler);
+
+// optional — lifecycle, validation, pre-execution
+engine.onBeforeBlock(beforeBlockHandler);
+engine.onResolveCharacter(resolveCharacterHandler);
+engine.onValidateNextBlock(validateHandler);
+engine.onSceneEnter(sceneEnterHandler);
+engine.onSceneExit(sceneExitHandler);
+
+auto handle = engine.scene(sceneId);
+handle->start();
+```
+```gdscript [GDScript]
+# required — the engine won't start without these
+engine.on_dialog(dialog_handler)
+engine.on_choice(choice_handler)
+engine.on_condition(condition_handler)
+engine.on_action(action_handler)
+
+# optional — lifecycle, validation, pre-execution
+engine.on_before_block(before_block_handler)
+engine.on_resolve_character(resolve_character_handler)
+engine.on_validate_next_block(validate_handler)
+engine.on_scene_enter(scene_enter_handler)
+engine.on_scene_exit(scene_exit_handler)
+
+var handle = engine.scene(scene_id)
+handle.start()
+```
+
+## Two-Tier Handler System
+
+engine は handler を2つの階層で解決します：
+
+- **Global handler** — engine に登録され、すべての scene のデフォルト動作を定義します。ほとんどの場合これだけで十分です。
+- **Scene handler** — 特定の [`SceneHandle`](/api-ref/interfaces/SceneHandle) に登録され、scene が異なるレンダリングや制御フローを必要とする場合にデフォルト動作をオーバーライドまたは拡張できます。まれですが、利用可能です。
+
+block がディスパッチされると、engine は以下の順序で handler を解決します：
+1. `handle.onBlock(blockId)` または `handle.onDialogId(blockId)` / `handle.onActionId(blockId)` / ... — block 固有のオーバーライド
+2. `handle.onDialog()` / `handle.onChoice()` / ... — scene レベルのタイプ handler
+3. `engine.onDialog()` / `engine.onChoice()` / ... — global handler
+
+両方の階層が存在する場合、両方が順番に実行されます — scene が先、次に global — ただし scene handler が `context.preventGlobalHandler()` を呼び出して global パスを抑制した場合を除きます。
+
+
+```ts [TypeScript]
+// Tier 1 — global
+engine.onDialog(({ block, context, next }) => {
+  console.log('Global dialog handler');
+  next();
+});
+
+// Tier 2 — scene-specific
+const handle = engine.scene(sceneId);
+handle.onDialog(({ block, context, next }) => {
+  console.log('Scene-specific dialog handler');
+  context.preventGlobalHandler();
+  next();
+});
+handle.start();
+```
+```csharp [C#]
+// Tier 1 — global
+engine.OnDialog(args => {
+    Console.WriteLine("Global dialog handler");
+    args.Next();
+    return null;
+});
+
+// Tier 2 — scene-specific
+var handle = engine.Scene(sceneId);
+handle.OnDialog(args => {
+    Console.WriteLine("Scene-specific dialog handler");
+    args.Context.PreventGlobalHandler();
+    args.Next();
+    return null;
+});
+handle.Start();
+```
+```cpp [C++]
+// Tier 1 — global
+engine.onDialog([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
+    std::cout << "Global dialog handler\n";
+    next();
+    return {};
+});
+
+// Tier 2 — scene-specific
+auto handle = engine.scene(sceneId);
+handle->onDialog([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
+    std::cout << "Scene-specific dialog handler\n";
+    ctx->preventGlobalHandler();
+    next();
+    return {};
+});
+handle->start();
+```
+```gdscript [GDScript]
+# Tier 1 — global
+engine.on_dialog(func(args):
+    print("Global dialog handler")
+    args["next"].call()
+    return Callable()
+)
+
+# Tier 2 — scene-specific
+var handle = engine.scene(scene_id)
+handle.on_dialog(func(args):
+    print("Scene-specific dialog handler")
+    args["context"].prevent_global_handler()
+    args["next"].call()
+    return Callable()
+)
+handle.start()
+```
+
+## Character Resolution
+
+キャラクター解決はオプションです。`onResolveCharacter` callback を登録すると、engine は `actors` にキャラクターを持つすべての block の前にそれを呼び出します。callback は block に割り当てられたキャラクターのリストを受け取り、アクティブにすべきキャラクターを返します — 利用可能なキャラクターがいない場合は `undefined` を返します。解決されたキャラクターは、すべての handler で `context.character` としてアクセスできます。
+
+これはゲーム状態を照会するための理想的な統合ポイントです：キャラクターがシーンに存在するか、生存しているか、カメラ範囲内にいるかなどを確認できます。`undefined` を返すことで、[`skipIfMissingActor`](/api-ref/interfaces/NativeProperties#skipifmissingactor) による block スキップ、`handle.cancel()` による scene キャンセル、handler 内での直接処理など、複数の戦略が可能になります。
+
+
+```ts [TypeScript]
+// Engine-level — applies to all scenes
+engine.onResolveCharacter((characters) => {
+  return party.getActiveLeader(characters);
+});
+
+// Scene-level override
+const handle = engine.scene(sceneId);
+handle.onResolveCharacter((characters) => {
+  return battle.getActiveUnit(characters);
+});
+```
+```csharp [C#]
+engine.OnResolveCharacter(chars => party.GetActiveLeader(chars));
+
+var handle = engine.Scene(sceneId);
+handle.OnResolveCharacter(chars => battle.GetActiveUnit(chars));
+```
+```cpp [C++]
+engine.onResolveCharacter([](const auto& chars) {
+    return party.getActiveLeader(chars);
+});
+
+auto handle = engine.scene(sceneId);
+handle->onResolveCharacter([](const auto& chars) {
+    return battle.getActiveUnit(chars);
+});
+```
+```gdscript [GDScript]
+engine.on_resolve_character(func(chars):
+    return party.get_active_leader(chars)
+)
+
+var handle = engine.scene(scene_id)
+handle.on_resolve_character(func(chars):
+    return battle.get_active_unit(chars)
+)
+```
+
+## Scene Lifecycle
+
+`onSceneEnter` と `onSceneExit` callback で、scene の開始と終了に反応できます — シネマモードの有効化、NPC の停止、UI の準備、リソースのクリーンアップなど。global レベル（engine 上）と scene レベル（`handle.onEnter()` / `handle.onExit()` 経由）の両方で利用可能です。scene handler が定義されている場合、global を置き換えます。
+
+
+```ts [TypeScript]
+engine.onSceneEnter(({ scene }) => {
+  game.cinemaMode(true);
+  game.stopNpcMovements();
+});
+
+engine.onSceneExit(() => {
+  game.cinemaMode(false);
+  game.resumeNpcMovements();
+});
+
+// scene-level override
+const handle = engine.scene(sceneId);
+handle.onEnter(({ scene }) => {
+  game.playIntroSequence(scene);
+});
+```
+```csharp [C#]
+engine.OnSceneEnter(args => {
+    Game.CinemaMode(true);
+    Game.StopNpcMovements();
+});
+
+engine.OnSceneExit(args => {
+    Game.CinemaMode(false);
+    Game.ResumeNpcMovements();
+});
+
+// scene-level override
+var handle = engine.Scene(sceneId);
+handle.OnEnter(args => {
+    Game.PlayIntroSequence(args.Scene);
+});
+```
+```cpp [C++]
+engine.onSceneEnter([&game](const lsde::SceneLifecycleArgs&) {
+    game.cinemaMode(true);
+    game.stopNpcMovements();
+});
+
+engine.onSceneExit([&game](const lsde::SceneLifecycleArgs&) {
+    game.cinemaMode(false);
+    game.resumeNpcMovements();
+});
+
+// scene-level override
+auto handle = engine.scene(sceneId);
+handle->onEnter([&game](const lsde::SceneLifecycleArgs& args) {
+    game.playIntroSequence(args.scene);
+});
+```
+```gdscript [GDScript]
+engine.on_scene_enter(func(args):
+    game.cinema_mode(true)
+    game.stop_npc_movements()
+)
+
+engine.on_scene_exit(func(args):
+    game.cinema_mode(false)
+    game.resume_npc_movements()
+)
+
+# scene-level override
+var handle = engine.scene(scene_id)
+handle.on_enter(func(args):
+    game.play_intro_sequence(args["scene"])
+)
+```
+
+## Block Override
+
+`onBlock(blockId)` で特定の block をその識別子で指定し、専用の handler を割り当てることができます。これはまれなユースケースです — ジェネリック handler が大半のニーズをカバーします — ただし、個別の block が異なる動作を必要とする非常に特殊なシナリオでは利用可能です。
+
+
+```ts [TypeScript]
+const handle = engine.scene(sceneId);
+handle.onBlock('DIALOG-001', ({ block, context, next }) => {
+  next();
+});
+```
+```csharp [C#]
+var handle = engine.Scene(sceneId);
+handle.OnBlock("DIALOG-001", args => {
+    args.Next();
+    return null;
+});
+```
+```cpp [C++]
+auto handle = engine.scene(sceneId);
+handle->onBlock("DIALOG-001", [](auto*, auto*, auto*, auto next) -> CleanupFn {
+    next();
+    return {};
+});
+```
+```gdscript [GDScript]
+var handle = engine.scene(scene_id)
+handle.on_block("DIALOG-001", func(args):
+    args["next"].call()
+    return Callable()
+)
+```
+
+## Type-Safe Block Override
+
+`onDialogId(blockId)`、`onChoiceId(blockId)`、`onConditionId(blockId)`、`onActionId(blockId)` は `onBlock(blockId)` の型安全な代替メソッドです。動作は全く同じ — 同じ優先度、同じ `preventGlobalHandler` サポート — ただし handler がジェネリックユニオンではなく、特殊化された block 型とコンテキストを受け取ります。
+
+登録時に block タイプが分かっていて、`block` と `context` のオートコンプリートが必要な場合に使用してください。
+
+
+```ts [TypeScript]
+const handle = engine.scene(sceneId);
+handle.onActionId('ACTION-001', ({ block, context, next }) => {
+  // block is ActionBlock — actions is directly accessible
+  for (const action of block.actions ?? []) {
+    executeAction(action);
+  }
+  // context is ActionContext — resolve/reject are available
+  context.resolve();
+  next();
+});
+```
+```csharp [C#]
+var handle = engine.Scene(sceneId);
+handle.OnActionId("ACTION-001", args => {
+    // args.Block is ActionBlock — Actions is directly accessible
+    foreach (var action in args.Block.Actions ?? [])
+        ExecuteAction(action);
+    // args.Context is IActionContext — Resolve/Reject are available
+    args.Context.Resolve();
+    args.Next();
+});
+```
+```cpp [C++]
+auto handle = engine.scene(sceneId);
+handle->onActionId("ACTION-001", [](auto* scene, const ActionBlock* block, IActionContext* ctx, auto next) -> CleanupFn {
+    // block is const ActionBlock* — actions is directly accessible
+    for (const auto& action : block->actions)
+        executeAction(action);
+    // ctx is IActionContext* — resolve/reject are available
+    ctx->resolve();
+    next();
+    return {};
+});
+```
+```gdscript [GDScript]
+var handle = engine.scene(scene_id)
+handle.on_action_id("ACTION-001", func(args):
+    # args["block"] contains actions directly
+    for action in args["block"].get("actions", []):
+        execute_action(action)
+    # args["context"] has resolve/reject
+    args["context"]["resolve"].call()
+    args["next"].call()
+    return Callable()
+)
+```
+
+## Visual Reference
+
+### Two-Tier Handler Dispatch
+
+```mermaid
+flowchart TD
+    A[block dispatched] --> B{resolve scene handler}
+    B --> B1{"onBlock(blockId) /\nonDialogId(blockId) etc.?"}
+    B1 -- found --> S
+    B1 -- not found --> B2{"handle.onDialog() etc.?"}
+    B2 -- found --> S
+    B2 -- not found --> G
+    S[execute scene handler] --> D{preventGlobalHandler?}
+    D -- yes --> Z[done]
+    D -- no --> G["execute global handler\nengine.onDialog() etc."]
+    G --> Z
+```
+
+================================================================================
+
+# ゲームエンジン統合
+
+LSDE はエンジン非依存です — ゲームエンジン、UIフレームワーク、オーディオシステムへの依存はありません。グラフを走査し、登録された handler を呼び出します。このページでは、主要なゲームエンジンへの組み込み方法を示します。
+
+handler の詳細な実装については、[Block Types](./block-types) と [Handlers](./handlers) を参照してください。
+
+## 完全な統合例
+
+以下の例は、各エンジンに LSDE を統合する一つの方法を示しています。必須の 4 つの handler — dialog、choice、condition、action — を一つのクラスにまとめた、出発点となるコードです。
+
+ゲームごとにニーズは異なります。構造、レイアウト、UI をプロジェクトに合わせて調整してください。
+
+
+```ts [TypeScript — Phaser]
+// Phaser 3.80+ — overlay scene that handles all LSDE block types
+import Phaser from 'phaser';
+import { type DialogueEngine, LsdeUtils } from '@lsde/dialog-engine';
+
+export class DialogueUI extends Phaser.Scene {
+  private pendingNext: (() => void) | null = null;
+
+  constructor() {
+    super({ key: 'DialogueUI' });
+  }
+
+  create(params: { engine: DialogueEngine }) {
+    const dialog = this.createDialogPanel();
+    const choices = this.createChoicePanel();
+
+    // player advances dialogue via keyboard or touch
+    this.input.keyboard?.addKey('SPACE').on('down', () => this.advance());
+    this.input.on('pointerdown', () => this.advance());
+
+    // ── DIALOG ────────────────────────────────────────────────
+    params.engine.onDialog(({ block, context, next }) => {
+      const { text, props } = block;
+      const { character, resolveCharacterPort } = context;
+      const line = LsdeUtils.getLocalizedText(text);
+
+      character && resolveCharacterPort(character.id);
+
+      dialog.show(line, character?.name);
+      this.pendingNext = next;
+
+      // `timeout` outranks waitInput: a line carrying one plays its own time and the
+      // click may only hurry its reveal, never dismiss it.
+      this.dismissableByInput = !props?.timeout;
+
+      // auto-advance for blocks. MILLISECONDS in v2 — no × 1000 — and counted from the
+      // moment the line has been SAID, not from the moment the block arrived.
+      let timer: Phaser.Time.TimerEvent | null = null;
+      if (props?.timeout) {
+        dialog.onRevealComplete(() => {
+          timer = this.time.delayedCall(props.timeout, () => this.leaveBlock());
+        });
+      }
+
+      return () => { dialog.hide(); this.pendingNext = null; timer?.destroy(); };
+    });
+
+    // ── CHOICE ────────────────────────────────────────────────
+    params.engine.onChoice(({ block, context, next }) => {
+      const { props } = block;
+      const { choices: items, selectChoice } = context;
+      const offered = items.filter(c => c.visible !== false);
+
+      const buttons = choices.show(offered, (optionId) => {
+        selectChoice(optionId);
+        next();
+      });
+
+      // On a CHOICE there is no line to reveal, so the countdown starts once the options
+      // are on screen and readable. MILLISECONDS in v2 — no × 1000. And it must still
+      // SELECT one: an option id IS the exit port, so a choice left without selectChoice()
+      // resolves to NO link and the branch dies silently.
+      let timer: Phaser.Time.TimerEvent | null = null;
+      if (props?.timeout) {
+        timer = this.time.delayedCall(props.timeout, () => {
+          if (offered.length > 0) selectChoice(offered[0].id);
+          next();
+        });
+      }
+
+      return () => { choices.hide(buttons); timer?.destroy(); };
+    });
+
+    // ── CONDITION ─────────────────────────────────────────────
+    params.engine.onCondition(({ block, context, next }) => {
+      // evaluate your game state — return true or false
+      const result = true; // ← replace with your game logic
+      context.resolve(result);
+      next();
+    });
+
+    // ── ACTION ────────────────────────────────────────────────
+    params.engine.onAction(({ block, context, next }) => {
+      // execute your game effects — set flags, play sounds, give items
+      // context.resolve() on success, context.reject(err) on failure
+      context.resolve();
+      next();
+    });
+  }
+
+  /** What the pointer calls. A line still revealing takes the click as "show me the
+   *  rest"; a line on a `timeout` plays its own time and never leaves this way. */
+  private advance() {
+    if (!this.dialog.revealComplete) { this.dialog.skipReveal(); return; }
+    if (!this.dismissableByInput) return;
+    this.leaveBlock();
+  }
+
+  private leaveBlock() {
+    if (this.pendingNext) { this.pendingNext(); this.pendingNext = null; }
+  }
+
+  // ── UI factories ──────────────────────────────────────────────
+
+  private createDialogPanel() {
+    const bg = this.add
+      .graphics()
+      .fillStyle(0x000000, 0.8)
+      .fillRoundedRect(0, 0, 700, 150, 12);
+
+    const nameText = this.add.text(16, 12, '', {
+      fontSize: '16px', color: '#ffcc00', fontStyle: 'bold',
+    });
+    const bodyText = this.add.text(16, 38, '', {
+      fontSize: '14px', color: '#ffffff', wordWrap: { width: 668 },
+    });
+
+    const container = this.add
+      .container(50, 430, [bg, nameText, bodyText])
+      .setScrollFactor(0)
+      .setDepth(1000)
+      .setVisible(false);
+
+    return {
+      show: (text?: string, speaker?: string) => {
+        nameText.setText(speaker ?? '');
+        bodyText.setText(text ?? '');
+        container.setVisible(true);
+      },
+      hide: () => container.setVisible(false),
+    };
+  }
+
+  private createChoicePanel() {
+    return {
+      show: (
+        visible: { id: string; text?: Record<string, string> }[],
+        onSelect: (optionId: string) => void,
+      ) => {
+        return visible.map((choice, i) => {
+          const text = LsdeUtils.getLocalizedText(choice.text) ?? choice.label ?? '';
+          return this.add
+            .text(80, 440 + i * 40, text, { fontSize: '15px', color: '#ffffff' })
+            .setScrollFactor(0)
+            .setDepth(1001)
+            .setInteractive({ useHandCursor: true })
+            .on('pointerdown', () => onSelect(choice.id));
+        });
+      },
+      hide: (buttons: Phaser.GameObjects.Text[]) => buttons.forEach(b => b.destroy()),
+    };
+  }
+}
+
+// start a dialogue scene from your game:
+// this.scene.launch('DialogueUI', { engine });
+// engine.scene(sceneId).start();
+```
+```csharp [C# — Unity]
+// Unity 2021+ — MonoBehaviour that handles all LSDE block types
+using System.Linq;
+using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
+using LsdeDialogEngine;
+
+public class DialogueUI : MonoBehaviour
+{
+    [Header("Dialog UI — assign in Inspector")]
+    [SerializeField] private GameObject dialogPanel;
+    [SerializeField] private TMP_Text speakerName;
+    [SerializeField] private TMP_Text dialogText;
+
+    [Header("Choice UI")]
+    [SerializeField] private Transform choiceContainer;
+    [SerializeField] private GameObject choiceButtonPrefab;
+
+    private DialogueEngine _engine;
+    private System.Action _pendingNext;
+
+    /// <summary>
+    /// Call once to wire all LSDE handlers to this UI.
+    /// The engine must be initialized before calling this method.
+    /// </summary>
+    public void Register(DialogueEngine engine)
+    {
+        _engine = engine;
+
+        // ── DIALOG ────────────────────────────────────────────
+        engine.OnDialog(args => {
+            var (_, block, context, next) = args;
+            var text = LsdeUtils.GetLocalizedText(block.Text);
+            var ch = context.Character;
+
+            if (ch != null) context.ResolveCharacterPort(ch.Id);
+
+            speakerName.text = ch?.Name ?? "";
+            dialogText.text = text ?? "";
+            dialogPanel.SetActive(true);
+
+            _pendingNext = next;
+
+            return () => { dialogPanel.SetActive(false); _pendingNext = null; };
+        });
+
+        // ── CHOICE ────────────────────────────────────────────
+        engine.OnChoice(args => {
+            var (_, block, context, next) = args;
+            var visible = context.Options
+                .Where(c => c.Visible != false).ToList();
+
+            foreach (var choice in visible)
+            {
+                var btn = Instantiate(choiceButtonPrefab, choiceContainer);
+                btn.GetComponentInChildren<TMP_Text>().text =
+                    LsdeUtils.GetLocalizedText(choice.Text) ?? choice.Label ?? "";
+
+                var optionId = choice.Id;
+                btn.GetComponent<Button>().onClick.AddListener(() => {
+                    context.SelectChoice(optionId);
+                    next();
+                });
+            }
+
+            return () => {
+                foreach (Transform child in choiceContainer)
+                    Destroy(child.gameObject);
+            };
+        });
+
+        // ── CONDITION ─────────────────────────────────────────
+        engine.OnCondition(args => {
+            var (_, block, context, next) = args;
+
+            // evaluate your game state — return true or false
+            var result = true; // ← replace with your game logic
+            context.Resolve(result);
+            next();
+            return null;
+        });
+
+        // ── ACTION ────────────────────────────────────────────
+        engine.OnAction(args => {
+            var (_, block, context, next) = args;
+
+            // execute your game effects — set flags, play sounds, give items
+            // context.Resolve() on success, context.Reject(err) on failure
+            context.Resolve();
+            next();
+            return null;
+        });
+    }
+
+    /// <summary>Wire this to your Continue button's OnClick in the Inspector.</summary>
+    public void OnContinueClick()
+    {
+        if (_pendingNext == null) return;
+        _pendingNext();
+        _pendingNext = null;
+    }
+
+    /// <summary>Start a dialogue scene from your game code.</summary>
+    public void StartScene(string sceneId)
+    {
+        var handle = _engine.Scene(sceneId);
+        handle.Start();
+    }
+}
+```
+```cpp [C++ — Unreal]
+// UE5 — GameInstanceSubsystem that handles all LSDE block types
+// Engine is a lsde::DialogueEngine member initialized in Initialize()
+#include "lsde/engine.h"
+#include "lsde/utils.h"
+#include "DialogueSubsystem.h"
+#include "DialogueWidget.h"
+#include "ChoiceWidget.h"
+
+void UDialogueSubsystem::RegisterHandlers()
+{
+    // ── DIALOG ────────────────────────────────────────────────
+    Engine.onDialog([this](auto* scene, const auto* block, auto* ctx, auto next) -> lsde::CleanupFn {
+        auto localized = lsde::LsdeUtils::GetLocalizedText(block->text);
+        auto* ch = ctx->character();
+
+        if (ch) ctx->resolveCharacterPort(ch->id);
+
+        DialogWidget->SetDialogue(
+            FString(UTF8_TO_TCHAR(localized.value_or("").c_str())),
+            FString(UTF8_TO_TCHAR(ch ? ch->name.c_str() : "")));
+        DialogWidget->SetVisibility(ESlateVisibility::Visible);
+
+        PendingNext = std::move(next);
+
+        return [this]() {
+            DialogWidget->SetVisibility(ESlateVisibility::Collapsed);
+            PendingNext = nullptr;
+        };
+    });
+
+    // ── CHOICE ────────────────────────────────────────────────
+    // PendingChoiceCtx is valid only during the current block — the engine
+    // invalidates it once the cleanup runs or the scene advances.
+    Engine.onChoice([this](auto* scene, const auto* block, auto* ctx, auto next) -> lsde::CleanupFn {
+        const auto& choices = ctx->options();
+
+        for (const auto& c : choices) {
+            if (!c.visible.has_value() || c.visible.value()) {
+                auto text = lsde::LsdeUtils::GetLocalizedText(c.text);
+                ChoiceWidget->AddOption(
+                    FString(UTF8_TO_TCHAR(c.id.c_str())),
+                    FString(UTF8_TO_TCHAR(text.value_or("").c_str())));
+            }
+        }
+
+        PendingChoiceCtx = ctx;
+        PendingChoiceNext = std::move(next);
+
+        return [this]() {
+            ChoiceWidget->ClearOptions();
+            PendingChoiceCtx = nullptr;
+        };
+    });
+
+    // ── CONDITION ─────────────────────────────────────────────
+    Engine.onCondition([](auto*, const auto* block, auto* ctx, auto next) -> lsde::CleanupFn {
+        // evaluate your game state — return true or false
+        bool result = true; // ← replace with your game logic
+        ctx->resolve(result);
+        next();
+        return {};
+    });
+
+    // ── ACTION ────────────────────────────────────────────────
+    Engine.onAction([](auto*, const auto* block, auto* ctx, auto next) -> lsde::CleanupFn {
+        // execute your game effects — set flags, play sounds, give items
+        // ctx->resolve() on success, ctx->reject(err) on failure
+        ctx->resolve();
+        next();
+        return {};
+    });
+}
+
+// UFUNCTION(BlueprintCallable) — call from your Continue button
+void UDialogueSubsystem::AdvanceDialogue()
+{
+    if (PendingNext) { PendingNext(); PendingNext = nullptr; }
+}
+
+// UFUNCTION(BlueprintCallable) — call from your choice button delegate
+void UDialogueSubsystem::OnChoiceSelected(const FString& OptionId)
+{
+    if (PendingChoiceCtx) {
+        PendingChoiceCtx->selectChoice(TCHAR_TO_UTF8(*OptionId));
+        if (PendingChoiceNext) { PendingChoiceNext(); PendingChoiceNext = nullptr; }
+        PendingChoiceCtx = nullptr;
+    }
+}
+
+// UFUNCTION(BlueprintCallable) — start a dialogue scene
+void UDialogueSubsystem::StartScene(const FString& SceneId)
+{
+    auto handle = Engine.scene(TCHAR_TO_UTF8(*SceneId));
+    handle->start();
+}
+```
+```gdscript [GDScript — Godot]
+# Godot 4.3+ — autoload node that handles all LSDE block types
+# Register as autoload in Project > Settings > Autoload
+extends Node
+
+@onready var dialogue_panel: PanelContainer = %DialoguePanel
+@onready var speaker_label: Label = %SpeakerLabel
+@onready var dialogue_label: RichTextLabel = %DialogueLabel
+@onready var choice_container: VBoxContainer = %ChoiceContainer
+
+var _engine: LsdeDialogueEngine
+var _pending_next: Callable
+
+func _ready() -> void:
+    var json = JSON.parse_string(
+        FileAccess.open("res://data/blueprints.json", FileAccess.READ).get_as_text())
+    _engine = LsdeDialogueEngine.new()
+    _engine.init({"data": json})
+    _engine.set_locale("en")
+
+    _register_handlers()
+
+func _register_handlers() -> void:
+
+    # ── DIALOG ────────────────────────────────────────────────
+    _engine.on_dialog(func(args):
+        var block = args["block"]
+        var ctx = args["context"]
+        var next_fn = args["next"]
+        var ch = ctx.character
+        var text = LsdeUtils.get_localized_text(block.get("text"))
+
+        if ch:
+            ctx.resolve_character_port(ch.get("id", ""))
+
+        speaker_label.text = ch.get("name", "") if ch else ""
+        dialogue_label.text = text if text else ""
+        dialogue_panel.visible = true
+
+        _pending_next = next_fn
+
+        return func():
+            dialogue_panel.visible = false
+            _pending_next = Callable()
+    )
+
+    # ── CHOICE ────────────────────────────────────────────────
+    _engine.on_choice(func(args):
+        var ctx = args["context"]
+        var next_fn = args["next"]
+        var choices = ctx.options
+
+        var visible: Array = []
+        for c in choices:
+            if c.get("visible") != false:
+                visible.append(c)
+
+        for c in visible:
+            var btn = Button.new()
+            var label = LsdeUtils.get_localized_text(c.get("text"))
+            btn.text = label if label else c.get("label", "")
+            btn.pressed.connect(func():
+                ctx.select_choice(c["id"])
+                next_fn.call()
+            )
+            choice_container.add_child(btn)
+
+        return func():
+            for child in choice_container.get_children():
+                child.queue_free()
+    )
+
+    # ── CONDITION ─────────────────────────────────────────────
+    _engine.on_condition(func(args):
+        var ctx = args["context"]
+        var next_fn = args["next"]
+
+        # evaluate your game state — return true or false
+        var result = true  # ← replace with your game logic
+        ctx.resolve(result)
+        next_fn.call()
+    )
+
+    # ── ACTION ────────────────────────────────────────────────
+    _engine.on_action(func(args):
+        var ctx = args["context"]
+        var next_fn = args["next"]
+
+        # execute your game effects — set flags, play sounds, give items
+        # ctx.resolve() on success, ctx.reject(err) on failure
+        ctx.resolve()
+        next_fn.call()
+    )
+
+## Player input — advance dialogue on ui_accept (Space, Enter, gamepad A)
+func _unhandled_input(event: InputEvent) -> void:
+    if event.is_action_pressed("ui_accept") and _pending_next.is_valid():
+        _pending_next.call()
+        _pending_next = Callable()
+        get_viewport().set_input_as_handled()
+
+## Start a dialogue scene from your game code
+func start_scene(scene_id: String) -> void:
+    var handle = _engine.scene(scene_id)
+    handle.start()
+```
+
+## 4つの Handler
+
+各 handler は block データと `next()` コールバックを受け取ります。開発者がエンジン内でデータを処理し、block の処理が完了したら `next()` を呼び出します。その呼び出しのタイミングはゲーム側に委ねられています。
+
+- **Dialog** — テキスト、キャラクター、ネイティブプロパティ。UI にダイアログを表示し、プレイヤーの入力またはディレイを待ってから `next()` を呼び出します。engine が次の block に移る際に UI を非表示にするクリーンアップ関数を返します。
+
+- **Choice** — `onResolveCondition()` が設定されている場合、`visible` タグ付きの選択肢リスト。engine は**すべて**の選択肢をタグ付きで渡します。`visible !== false` でフィルターしてください。対応する UI 要素を作成します — ボタン、リスト、ラジアルメニュー。プレイヤーが選択したら、`selectChoice(optionId)` で分岐先を engine に伝え、`next()` でフローを進めます。
+
+- **Condition** — block に定義された case。`onResolveCondition()` を一度登録すれば engine が事前評価するため、`onCondition` は任意になります。ルーティングを上書きする場合、`context.resolve(port)` は**ポート名**を取ります — `"out"`、`"default"`、または case のポート（`"K1"`）。
+
+- **Action** — block の呼び出しは `context.calls` にあります：`fn` と、**名前で**渡される `args`。エンジンで実行します — サウンド再生、アイテム付与、シネマティックのトリガー。`context.resolve()` は `then` から、`context.reject()` は `catch` から出ます — `catch` が配線されていない場合は `then` にフォールバックします。
+
+## Tips
+
+- **`next()` はリモコンです。** 高速ダイアログのために即座に呼び出すか、アニメーションが完了するまで保持します。engine は待機します — 時間の概念を持ちません。
+- **クリーンアップ関数が後片付けします。** どの handler からでも関数を返せば、engine が次の block に移る時に呼び出します。UI の非表示、オーディオの停止、ノードの解放に最適です。
+- **`onBeforeBlock` が delay を処理します。** engine は `props.delay` を強制しません — `onBeforeBlock` がそれを読み取り、タイマー後に `resolve()` を呼び出します。完全な制御権があります。
+- **async track は並列フローです。** カットシーンでダイアログとカメラ移動を同時に行う場合、エディタで `isAsync` マークされた block は独立した track で実行されます。
+
+================================================================================
+
+# 解析とインポート
+
+## 概要
+
+engine は**フォーマット非依存**です — `engine.init({ data })` はデシリアライズ済みの `BlueprintExport` オブジェクトを受け取ります。ファイルや生の文字列ではありません。engine はファイルを読み取らず、シリアライゼーションライブラリに依存しません。
+
+[LSDE エディター](https://lepasoft.com)は複数のフォーマットでブループリントをエクスポートします：
+
+| フォーマット | 完全なグラフ? | 用途 |
+|------------|-------------|------|
+| **JSON** | はい | デフォルト — すべてのプラットフォームで最も広くサポート |
+| **XML** | はい | XML パイプライン、ローカライゼーションツール (XLIFF)、レガシーシステム |
+| **YAML** | はい | 人間が読みやすい編集、git diff に最適、設定ドリブンワークフロー |
+| **CSV** | いいえ (フラット) | ローカライゼーション / 翻訳 — Excel や Google Sheets へのエクスポート |
+
+CSV はロケールごとのダイアログテキストのフラットテーブルをエクスポートします。接続、条件、アクションは**含まれません** — engine ランタイムでは使用できません。
+
+## 推奨パーサー
+
+| Platform | JSON | XML | YAML |
+|---|---|---|---|
+| **Unity** | [Newtonsoft.Json](https://docs.unity3d.com/Packages/com.unity.nuget.newtonsoft-json@3.0/) (`com.unity.nuget.newtonsoft-json`) | `System.Xml` (native) | not recommended |
+| **Unreal Engine** | `FJsonSerializer` (native module `Json`) | `XmlParser` (native) | [UnrealYAML](https://github.com/jwindgassen/UnrealYAML) (marketplace) |
+| **Godot** | `JSON.parse_string()` (native) | `XMLParser` (native) | [godot-yaml](https://github.com/fimbul-works/godot-yaml) (GDExtension) |
+| **TypeScript** | `JSON.parse()` (native) | [fast-xml-parser](https://www.npmjs.com/package/fast-xml-parser) | [yaml](https://www.npmjs.com/package/yaml) |
+| **CSharp** | `System.Text.Json` (.NET 5+) / `Newtonsoft.Json` | `System.Xml` (native) | [YamlDotNet](https://github.com/aaubry/YamlDotNet) |
+| **CPP** | [nlohmann/json](https://github.com/nlohmann/json) (header-only) | [tinyxml2](https://github.com/leethomason/tinyxml2) / [pugixml](https://github.com/zeux/pugixml) | [yaml-cpp](https://github.com/jbeder/yaml-cpp) |
+
+## Unity
+
+
+```csharp [JSON — LsdeDialogEngine.Newtonsoft]
+// Install: dotnet add package LsdeDialogEngine.Newtonsoft
+// Unity Package Manager: com.unity.nuget.newtonsoft-json (auto-pulled)
+using LsdeDialogEngine;
+using LsdeDialogEngine.Newtonsoft;
+
+var json = File.ReadAllText("blueprints.json");
+var blueprint = LsdeJson.Parse(json);
+engine.Init(new InitOptions { Data = blueprint });
+```
+```csharp [JSON — manual Newtonsoft]
+// Without companion package — manual converter setup
+using Newtonsoft.Json;
+using LsdeDialogEngine;
+
+var json = File.ReadAllText("blueprints.json");
+var settings = new JsonSerializerSettings();
+settings.Converters.Add(new BlueprintBlockNewtonsoftConverter()); // see Polymorphic Dispatch
+var blueprint = JsonConvert.DeserializeObject<BlueprintExport>(json, settings);
+engine.Init(new InitOptions { Data = blueprint });
+```
+```csharp [XML — System.Xml]
+// System.Xml is native — nothing to install
+using System.Xml.Linq;
+using LsdeDialogEngine;
+
+var doc = XDocument.Load("blueprint.xml");
+// Manual mapping from XElement → BlueprintExport required.
+// See polymorphic dispatch section below for BlueprintBlock handling.
+```
+
+## Unreal Engine
+
+
+```cpp [JSON — FJsonSerializer (native)]
+#include "Json.h"
+#include <lsde/engine.h>
+
+FString JsonStr;
+FFileHelper::LoadFileToString(JsonStr, TEXT("blueprints.json"));
+
+TSharedPtr<FJsonObject> JsonObject;
+auto Reader = TJsonReaderFactory<>::Create(JsonStr);
+FJsonSerializer::Deserialize(Reader, JsonObject);
+
+// Map FJsonObject → BlueprintExport manually.
+// Dispatch on block "type" field for polymorphism.
+```
+```cpp [XML — XmlParser (native)]
+#include "XmlParser.h"
+
+FXmlFile XmlFile(TEXT("blueprint.xml"));
+auto* Root = XmlFile.GetRootNode();
+// Walk XML nodes → map to BlueprintExport.
+```
+
+## Godot
+
+
+```gdscript [JSON (native)]
+var file = FileAccess.open("res://blueprint.json", FileAccess.READ)
+var data = JSON.parse_string(file.get_as_text())
+file.close()
+
+engine.init({"data": data})
+# No polymorphism issues — GDScript uses dynamic Dictionaries.
+```
+```gdscript [XML — XMLParser (native)]
+var parser = XMLParser.new()
+parser.open("res://blueprint.xml")
+# Walk parser events → build Dictionary matching BlueprintExport structure.
+# See Godot docs: XMLParser class reference.
+```
+
+## TypeScript (TS/JS)
+
+
+```ts [JSON — import (bundler)]
+// Bundlers (Vite, Webpack, esbuild) auto-parse .json imports.
+import blueprintJson from './blueprints.json';
+engine.init({ data: blueprintJson });
+```
+```ts [JSON — manual]
+const json = fs.readFileSync('./blueprints.json', 'utf-8');
+engine.init({ data: JSON.parse(json) });
+// No polymorphism issues — JS objects are dynamically typed.
+```
+```ts [XML — fast-xml-parser]
+// npm install fast-xml-parser
+import { XMLParser } from 'fast-xml-parser';
+const xml = fs.readFileSync('./blueprint.xml', 'utf-8');
+const parser = new XMLParser({ ignoreAttributes: false });
+const data = parser.parse(xml);
+engine.init({ data });
+```
+```ts [YAML — yaml]
+// npm install yaml
+import { parse } from 'yaml';
+const yml = fs.readFileSync('./blueprint.yaml', 'utf-8');
+engine.init({ data: parse(yml) });
+```
+
+## CSharp (C#)
+
+
+```csharp [JSON — LsdeDialogEngine.SystemTextJson]
+// Install: dotnet add package LsdeDialogEngine.SystemTextJson
+using LsdeDialogEngine;
+using LsdeDialogEngine.Json;
+
+var json = File.ReadAllText("blueprints.json");
+var blueprint = LsdeJson.Parse(json);
+engine.Init(new InitOptions { Data = blueprint });
+```
+```csharp [JSON — manual System.Text.Json]
+// Without companion package — manual converter setup
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using LsdeDialogEngine;
+
+var json = File.ReadAllText("blueprints.json");
+var options = new JsonSerializerOptions {
+    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    Converters = {
+        new JsonStringEnumConverter(),
+        new BlueprintBlockConverter(),       // see Polymorphic Dispatch
+        new BlockPropertyValueConverter(),
+    },
+};
+var blueprint = JsonSerializer.Deserialize<BlueprintExport>(json, options);
+engine.Init(new InitOptions { Data = blueprint });
+```
+```csharp [XML — System.Xml (native)]
+// System.Xml is included in .NET — nothing to install.
+using System.Xml.Linq;
+using LsdeDialogEngine;
+
+var doc = XDocument.Load("blueprint.xml");
+// Manual mapping from XElement → BlueprintExport required.
+```
+```csharp [YAML — YamlDotNet]
+// dotnet add package YamlDotNet
+using YamlDotNet.Serialization;
+using LsdeDialogEngine;
+
+var yaml = File.ReadAllText("blueprint.yaml");
+var deserializer = new DeserializerBuilder().Build();
+// YamlDotNet requires custom type converters for polymorphic blocks.
+```
+
+## CPP (C++)
+
+
+```cpp [JSON — lsde/json_loader.h]
+// Include the optional JSON loader (requires nlohmann/json)
+#include <lsde/json_loader.h>
+
+auto blueprint = lsde::LsdeJson::parseFile("blueprints.json");
+// or from string:
+// auto blueprint = lsde::LsdeJson::parse(jsonString);
+engine.init({blueprint});
+```
+```cpp [JSON — manual nlohmann/json]
+// Without json_loader.h — manual polymorphic dispatch
+#include <nlohmann/json.hpp>
+#include <lsde/engine.h>
+
+std::ifstream f("blueprints.json");
+auto j = nlohmann::json::parse(f);
+auto blueprint = j.get<lsde::BlueprintExport>();
+// Requires custom from_json — see polymorphic dispatch below.
+```
+```cpp [XML — tinyxml2]
+#include <tinyxml2.h>
+tinyxml2::XMLDocument doc;
+doc.LoadFile("blueprint.xml");
+// Walk XML elements → map to BlueprintExport.
+```
+```cpp [YAML — yaml-cpp]
+// Install: apt install libyaml-cpp-dev (or include source)
+#include <yaml-cpp/yaml.h>
+auto node = YAML::LoadFile("blueprint.yaml");
+// Requires custom YAML::convert specializations.
+```
+
+## ポリモーフィックディスパッチ
+
+`BlueprintScene.blocks` は `BlueprintBlock` の配列です — `type` フィールドで識別される 5 つのサブタイプを持つ**判別共用体**です：
+
+| `type` | サブタイプ | 固有フィールド |
+|--------|-----------|--------------|
+| `DIALOG` | `DialogBlock` | `text`, `content`, `structureKey` |
+| `CHOICE` | `ChoiceBlock` | `choices` |
+| `CONDITION` | `ConditionBlock` | `conditions` |
+| `ACTION` | `ActionBlock` | `actions` |
+| `NOTE` | `NoteBlock` | *（なし）* |
+
+**動的型付け言語**（TypeScript、GDScript）はこれを自動的に処理します — パースされたオブジェクトにはすべてのフィールドが含まれています。
+
+**静的型付け言語**（C#、C++）は `type` フィールドを読み取り、正しいサブタイプを構築するカスタムコンバーターが必要です。これがないと、`text` や `choices` などのサブタイプ固有のフィールドが暗黙的に失われます。
+
+> INFO:
+`LsdeDialogEngine.Newtonsoft` または `LsdeDialogEngine.SystemTextJson` を使用している場合、これらのコンバーターはすでに含まれています — `LsdeJson.Parse(json)` を呼び出すだけです。以下のコードは手動統合用です。
+
+### CSharp — Newtonsoft.Json (Unity)
+
+```csharp
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using LsdeDialogEngine;
+
+class BlueprintBlockNewtonsoftConverter : JsonConverter<BlueprintBlock>
+{
+    public override BlueprintBlock ReadJson(JsonReader reader, Type objectType,
+        BlueprintBlock existingValue, bool hasExistingValue, JsonSerializer serializer)
+    {
+        var obj = JObject.Load(reader);
+        var type = obj["type"]?.ToString();
+        BlueprintBlock block = type switch
+        {
+            "dialog"    => new DialogBlock(),
+            "choice"    => new ChoiceBlock(),
+            "condition" => new ConditionBlock(),
+            "action"    => new ActionBlock(),
+            "note"      => new NoteBlock(),
+            _           => throw new JsonException($"Unknown block type: {type}")
+        };
+        serializer.Populate(obj.CreateReader(), block);
+        return block;
+    }
+
+    public override void WriteJson(JsonWriter writer, BlueprintBlock value, JsonSerializer serializer)
+        => serializer.Serialize(writer, value, value.GetType());
+}
+```
+
+### CSharp — System.Text.Json (.NET 5+)
+
+```csharp
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using LsdeDialogEngine;
+
+class BlueprintBlockConverter : JsonConverter<BlueprintBlock>
+{
+    public override BlueprintBlock Read(ref Utf8JsonReader reader, Type typeToConvert,
+        JsonSerializerOptions options)
+    {
+        using var doc = JsonDocument.ParseValue(ref reader);
+        var root = doc.RootElement;
+        var type = root.GetProperty("type").GetString();
+        var json = root.GetRawText();
+        return type switch
+        {
+            "dialog"    => JsonSerializer.Deserialize<DialogBlock>(json, options)!,
+            "choice"    => JsonSerializer.Deserialize<ChoiceBlock>(json, options)!,
+            "condition" => JsonSerializer.Deserialize<ConditionBlock>(json, options)!,
+            "action"    => JsonSerializer.Deserialize<ActionBlock>(json, options)!,
+            "note"      => JsonSerializer.Deserialize<NoteBlock>(json, options)!,
+            _           => throw new JsonException($"Unknown block type: {type}")
+        };
+    }
+
+    public override void Write(Utf8JsonWriter writer, BlueprintBlock value,
+        JsonSerializerOptions options)
+        => JsonSerializer.Serialize(writer, value, value.GetType(), options);
+}
+
+class BlockPropertyValueConverter : JsonConverter<object>
+{
+    public override object Read(ref Utf8JsonReader reader, Type typeToConvert,
+        JsonSerializerOptions options)
+    {
+        return reader.TokenType switch
+        {
+            JsonTokenType.String => reader.GetString(),
+            JsonTokenType.Number => reader.TryGetInt64(out var l) ? (object)(double)l : reader.GetDouble(),
+            JsonTokenType.True   => true,
+            JsonTokenType.False  => false,
+            JsonTokenType.Null   => null,
+            _                    => throw new JsonException($"Unexpected token {reader.TokenType}")
+        };
+    }
+
+    public override void Write(Utf8JsonWriter writer, object value, JsonSerializerOptions options)
+        => JsonSerializer.Serialize(writer, value, options);
+}
+```
+
+### CPP — nlohmann/json
+
+```cpp
+#include <nlohmann/json.hpp>
+#include <lsde/types.h>
+
+void from_json(const nlohmann::json& j, std::unique_ptr<lsde::BlueprintBlock>& block) {
+    auto type = j.at("type").get<std::string>();
+    if      (type == "dialog")    block = std::make_unique<lsde::DialogBlock>();
+    else if (type == "choice")    block = std::make_unique<lsde::ChoiceBlock>();
+    else if (type == "condition") block = std::make_unique<lsde::ConditionBlock>();
+    else if (type == "action")    block = std::make_unique<lsde::ActionBlock>();
+    else if (type == "note")      block = std::make_unique<lsde::NoteBlock>();
+    else throw std::runtime_error("Unknown block type: " + type);
+    j.get_to(*block);
+}
+```
+
+================================================================================
+
+# ライフサイクルと検証
+
+## 各 Block の実行順序
+
+1. **前の block のクリーンアップ** — *前の* block の handler が返したクリーンアップ関数が遷移時に実行されます（`next()` が呼ばれた時点）
+2. `onValidateNextBlock` — 実行前の検証
+3. `onBeforeBlock` — 前処理（続行するには `resolve()` を呼び出す必要あり）
+4. タイプ handler（Tier 2、次に Tier 1）
+
+## Scene イベント
+
+
+```ts [TypeScript]
+engine.onSceneEnter(({ scene, context }) => {
+  // Called when handle.start() is executed
+});
+
+engine.onSceneExit(({ scene, context }) => {
+  // Called when the scene ends. context.reason says why:
+  // 'completed' | 'cancelled' | 'invalidated' | 'faulted' | 'deadlocked'
+  // scene.getSceneId() says WHICH scene — a global handler needs it when several play.
+  if (context.reason === 'faulted') {
+    console.error(`Scene ${scene.getSceneId()} failed`, context.error);
+  }
+  if (context.reason === 'deadlocked') {
+    console.warn('Scene stuck waiting for', context.waitingFor);
+  }
+});
+```
+```csharp [C#]
+engine.OnSceneEnter(args => {
+    // Called when handle.Start() is executed
+});
+
+engine.OnSceneExit(args => {
+    // Called when the scene ends. args.Context.Reason says why (SceneEndReason.*)
+    // args.Scene.GetSceneId() says WHICH scene — a global handler needs it when several play.
+    if (args.Context.Reason == SceneEndReason.Faulted)
+        Debug.LogException(args.Context.Error);
+    if (args.Context.Reason == SceneEndReason.Deadlocked)
+        Debug.LogWarning($"{args.Scene.GetSceneId()} stuck waiting for {string.Join(", ", args.Context.WaitingFor)}");
+});
+```
+```cpp [C++]
+engine.onSceneEnter([](const lsde::SceneLifecycleArgs& args) {
+    // Called when handle->start() is executed
+});
+
+engine.onSceneExit([](const lsde::SceneLifecycleArgs& args) {
+    // Called when the scene ends. args.context.reason says why (lsde::SceneEndReason::*)
+    // args.scene->getSceneId() says WHICH scene — a global handler needs it when several play.
+    if (args.context.reason == lsde::SceneEndReason::Faulted) {
+        // args.context.error holds the exception: std::rethrow_exception it to read it
+    }
+    if (args.context.reason == lsde::SceneEndReason::Deadlocked) {
+        // args.context.waitingFor names the blocks the scene was stuck on
+    }
+});
+```
+```gdscript [GDScript]
+engine.on_scene_enter(func(args):
+    pass # Called when handle.start() is executed
+)
+
+engine.on_scene_exit(func(args):
+    # Called when the scene ends. args["context"]["reason"] says why (LsdeTypes.SCENE_END_*)
+    # args["scene"].get_scene_id() says WHICH scene — a global handler needs it when several play.
+    if args["context"]["reason"] == LsdeTypes.SCENE_END_DEADLOCKED:
+        push_warning("%s stuck waiting for %s" % [args["scene"].get_scene_id(), str(args["context"]["waitingFor"])])
+)
+```
+
+## onValidateNextBlock
+
+各 block 遷移をインターセプトして検証します。handler は次の block (`nextContext`) と前の block (`fromContext`) の**解決されたキャラクター**を受け取ります：
+
+
+```ts [TypeScript]
+engine.onValidateNextBlock(({ nextBlock, fromBlock, nextContext, fromContext }) => {
+  return { valid: true };
+});
+
+engine.onInvalidateBlock(({ scene, reason }) => {
+  console.error('Invalid block:', reason);
+  scene.cancel();
+});
+```
+```csharp [C#]
+engine.OnValidateNextBlock(args => {
+    // args.NextContext.Character, args.FromContext?.Character
+    return new ValidationResult { Valid = true };
+});
+
+engine.OnInvalidateBlock(args => {
+    Console.Error.WriteLine($"Invalid block: {args.Reason}");
+    args.Scene.Cancel();
+});
+```
+```cpp [C++]
+engine.onValidateNextBlock([](const auto& args) {
+    // args.nextContext.character, args.fromContext.character (check args.hasFromContext)
+    return ValidationResult{true};
+});
+
+engine.onInvalidateBlock([](auto* scene, const auto& reason) {
+    std::cerr << "Invalid block: " << reason << "\n";
+    scene->cancel();
+});
+```
+```gdscript [GDScript]
+engine.on_validate_next_block(func(args):
+    # args["nextContext"]["character"], args["fromContext"]["character"]
+    return {"valid": true}
+)
+
+engine.on_invalidate_block(func(args):
+    printerr("Invalid block: %s" % args["reason"])
+    args["scene"].cancel()
+)
+```
+
+### Character Gating
+
+`nextContext.character` を使用して、ゲームの状態に基づいて block の実行を制御します：
+
+
+```ts [TypeScript]
+// Block if the character is stunned
+engine.onValidateNextBlock(({ nextContext }) => {
+  const { character } = nextContext;
+  if (!character) return { valid: false, reason: 'no_character' };
+  if (game.characterHasStatus(character, 'stunned'))
+    return { valid: false, reason: 'character_stunned' };
+  return { valid: true };
+});
+```
+```csharp [C#]
+engine.OnValidateNextBlock(args => {
+    var character = args.NextContext.Character;
+    if (character == null)
+        return ValidationResult.Fail("no_character");
+    if (game.CharacterHasStatus(character, "stunned"))
+        return ValidationResult.Fail("character_stunned");
+    return ValidationResult.Ok();
+});
+```
+```cpp [C++]
+engine.onValidateNextBlock([&game](const auto& args) {
+    auto* character = args.nextContext.character;
+    if (!character) return ValidationResult{false, "no_character"};
+    if (game.characterHasStatus(character, "stunned"))
+        return ValidationResult{false, "character_stunned"};
+    return ValidationResult{true};
+});
+```
+```gdscript [GDScript]
+engine.on_validate_next_block(func(args):
+    var character = args["nextContext"]["character"]
+    if character == null:
+        return {"valid": false, "reason": "no_character"}
+    if game.character_has_status(character, "stunned"):
+        return {"valid": false, "reason": "character_stunned"}
+    return {"valid": true}
+)
+```
+
+`fromContext.character` を使用してキャラクター間の遷移を検証できます（例：関係チェック、クールダウン）。`fromContext` はシーンの最初の block では `null` です。
+
+## onBeforeBlock
+
+各 block の前に呼び出されます。続行するには**必ず `resolve()` を呼び出す**必要があります：
+
+
+```ts [TypeScript]
+engine.onBeforeBlock(({ block, resolve }) => {
+  const delay = LsdeUtils.getNativeProperties(block)?.delay;
+  if (delay) {
+    setTimeout(resolve, delay * 1000);
+  } else {
+    resolve();
+  }
+});
+```
+```csharp [C#]
+engine.OnBeforeBlock(args => {
+    var delay = args.Block.NativeProperties?.Delay;
+    if (delay.HasValue)
+    {
+        // use your engine's delay system (coroutine, DOTween, Invoke, etc.)
+        DelayThenCall((float)delay.Value, args.Resolve);
+    }
+    else
+    {
+        args.Resolve();
+    }
+});
+```
+```cpp [C++]
+engine.onBeforeBlock([](const auto& args) {
+    auto delay = args.block->props
+        ? args.block->props->delay : std::nullopt;
+    if (delay.has_value()) {
+        // use your engine's timer system (FTimerManager, SDL_AddTimer, etc.)
+        scheduleDelay(delay.value(), [&args]() { args.resolve(); });
+    } else {
+        args.resolve();
+    }
+});
+```
+```gdscript [GDScript]
+engine.on_before_block(func(args):
+    var delay = args["block"].get("props", {}).get("delay", 0)
+    if delay > 0:
+        await get_tree().create_timer(delay).timeout
+    args["resolve"].call()
+)
+```
+
+**`onBeforeBlock` の実行中に**呼ばれた `resolve()` は、コールバックが戻った時点で効果を持ちます —
+handler の中で呼ばれた `next()` とまったく同じです。タイプ handler はあなたのコールバックが終わってから
+ディスパッチされるため、`resolve()` の後に書いた行は block の**前に**実行されます。
+
+## クリーンアップ関数
+
+handler はクリーンアップ関数を返すことができ、block から離れる際に呼び出されます：
+
+
+```ts [TypeScript]
+engine.onDialog(({ block, next }) => {
+  const element = showDialogUI(block);
+
+  // next() is called later — by player input, timer, etc.
+
+  return () => {
+    element.remove(); // called when the engine moves to the next block
+  };
+});
+```
+```csharp [C#]
+engine.OnDialog(args => {
+    var element = ShowDialogUI(args.Block);
+
+    // next() is called later — by player input, timer, etc.
+
+    return () => element.SetActive(false);
+});
+```
+```cpp [C++]
+engine.onDialog([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
+    auto* element = showDialogUI(block);
+
+    // next() is called later — by player input, timer, etc.
+
+    return [element]() { element->remove(); };
+});
+```
+```gdscript [GDScript]
+engine.on_dialog(func(args):
+    var element = show_dialog_ui(args["block"])
+
+    # next is called later — by player input, timer, etc.
+
+    return func(): element.queue_free()
+)
+```
+
+## エラー境界
+
+**何も飲み込まれません。** engine がグラフをたどっている間にあなたのコードがスローすると — タイプ
+handler、クリーンアップ関数、`onValidateNextBlock`、`onInvalidateBlock`、`onBeforeBlock`、
+`onResolveCondition`、`onResolveCharacter`、`onSceneEnter` のいずれでも — engine はまず **scene 全体**を
+閉じ、その後 `start()`、`next()`、`resolve()` を呼び出した側へエラーを**再スロー**します。
+
+これは**すべてのトラック**で成り立ちます。`isAsync` のブランチでスローした handler は、そのブランチだけで
+なく scene を閉じます。
+
+使いものになるのはこの順序のおかげです。エラーがあなたのコードに届く時点で：
+
+- クリーンアップ関数は実行済み
+- async トラックは取り消し済み
+- `onSceneExit` は `reason: 'faulted'` で発火済みで、エラーそのものは `context.error` に入っています
+
+対話は**正しく**停止しており、次に何をするかはあなたが決めます — それなしで続行する、画面を出す、
+あるいはクラッシュさせる。`start()`、`next()`、`resolve()` の周りにご自身の `try/catch` を置いてください。
+
+エラーは意図的に**二か所**に届きます。`next()` を呼び出した側 — ゲームでは多くの場合クリックやタイマー —
+へスローされ、同時に `onSceneExit` の `context.error` にも渡されます。対話の終了を待つコードが聞いて
+いるのはこちらです。ログはどちらか一方でのみ出してください。
+
+`onSceneExit` 自体がスローした例外も同じ経路で届き、それでも scene は解放されます：
+`engine.isRunning()` はもうそれを数えません。ただし scene がすでにエラーで閉じようとしていた場合は、
+そのエラーの方が届きます — 残りを説明するのはそちらです。
+
+> WARNING:
+GDScript には例外がありません。handler 内のスクリプトエラーは Godot のログに出力され、呼び出しは `null`
+を返します：block は来ることのない `next()` をただ待ち続けます。scene を代わりに閉じるものは何もありません。
+
+> TIP:
+v1 は handler の例外を静かに飲み込んでいました — ログにも残さず — 一方で、その同じ handler が返した
+クリーンアップからの例外は呼び出し側に届いていました。ひとつの障害に対して二つの正反対の挙動であり、
+静かな方はプロジェクトが動き続ける限り本物のバグを隠していました。
+
+2.0.0 はそれをタイプ handler についてだけ直していました。スローする検証、`onBeforeBlock`、リゾルバ —
+あるいは並列トラック上の handler — は、進めるものが何もないまま scene を開いたままにし、対話の終了を
+待つゲームは永遠に待ち続けていました。
+
+## Scene が終わった理由
+
+`onSceneExit` は `context.reason` でその理由を受け取ります：
+
+| `reason` | いつ |
+|---|---|
+| `completed` | フローがグラフの終わりに達した |
+| `cancelled` | `scene.cancel()` または `engine.stop()` |
+| `invalidated` | 最後に動いていたトラックが入ろうとした block を `onValidateNextBlock` が拒否した |
+| `faulted` | 走査中にあなたのコードがスローした。`context.error` にスローされたものが入っている — [エラー境界](#エラー境界)を参照 |
+| `deadlocked` | 残っているトラックがすべて、何も完了させられない `waitForBlocks` で待機している。`context.waitingFor` がそれらの block を示す |
+
+`onSceneEnter` には理由が渡されません。
+
+`scene.getSceneId()` は**どの** scene が終わったかを示し、`scene.getScenePath()` はそのパスを返します。
+2 つの scene が同時に再生されると、グローバルな `onSceneExit` にはこれが必要になります。パスではなく id
+を保存してください：scene の名前が変わった日にパスは変わります。
+
+**デッドロックは scene を閉じます。** どのトラックも完了させない block を待つ block — たとえばフローが
+通らなかったブランチの block — は、`onSceneExit` もなく scene を永久に開いたままにしていました。いまは
+動けるトラックが最後に止まった瞬間に scene が `deadlocked` で閉じ、`waitingFor` がどの合流の配線が
+誤っているかを教えてくれます。
+
+## ひとつのスレッド
+
+engine はスレッドセーフではありません。`next()`、`resolve()`、`cancel()` は scene を**開始した**スレッド
+から呼び出してください — Unity ではメインスレッド、Unreal ではゲームスレッドです。
+
+C# と C++ では、別のスレッドからの呼び出しは両方のスレッドを示す例外で**拒否され**、何も変わりません：
+正しいスレッドから呼べば同じ `next()` がそのまま動きます。Unity では engine を呼ぶ前にメインスレッドへ
+戻してください（`await UniTask.SwitchToMainThread()`、またはメインスレッド用のキューに入れる）。
+
+## cancel()
+
+`scene.cancel()` を呼び出すと、以下のシーケンスが実行されます：
+
+1. すべての **async トラック** がキャンセルされます
+2. 現在の block の**クリーンアップ関数**が実行されます
+3. `onSceneExit` handler が `reason: 'cancelled'` で呼び出されます
+4. scene が完了としてマークされます
+
+scene がすでに閉じつつあるときにクリーンアップが `scene.cancel()` や `engine.stop()` を呼んでも無視され
+ます：`onSceneExit` は一度だけ発火します。
+
+
+```ts [TypeScript]
+engine.onInvalidateBlock(({ scene, reason }) => {
+  console.error('Validation failed:', reason);
+  scene.cancel();
+});
+```
+```csharp [C#]
+engine.OnInvalidateBlock(args => {
+    Console.Error.WriteLine($"Validation failed: {args.Reason}");
+    args.Scene.Cancel();
+});
+```
+```cpp [C++]
+engine.onInvalidateBlock([](auto* scene, const auto& reason) {
+    std::cerr << "Validation failed: " << reason << "\n";
+    scene->cancel();
+});
+```
+```gdscript [GDScript]
+engine.on_invalidate_block(func(args):
+    printerr("Validation failed: %s" % args["reason"])
+    args["scene"].cancel()
+)
+```
+
+## NativeProperties
+
+engine が block をディスパッチする方法を制御する実行プロパティ：
+
+| フィールド | 型 | 説明 |
+|-------|------|-------------|
+| `isAsync` | `boolean?` | 並列 async トラックで実行 |
+| `delay` | `number?` | block が再生されるまでの**ミリ秒**。`onBeforeBlock` が適用し、engine は決して適用しません |
+| `timeout` | `number?` | セリフを言い終えたあと block が画面に**残るミリ秒**。そのあと自分から離れます — block のオートアドバンス。**`waitInput` より優先**。そのまま渡され、engine は何も強制しません |
+| `portPerCharacter` | `boolean?` | metadata 内のキャラクターごとに出力ポートを作成 |
+| `skipIfMissingActor` | `boolean?` | 参照されたアクターが不在の場合、block をスキップ |
+| `debug` | `boolean?` | エディタ用デバッグフラグ |
+| `waitForBlocks` | `string[]?` | **この scene の** block id。それらがすべて**完了**するまで、block は**ディスパッチされる前に**保持されます。何もそれらを完了させられない場合、scene は `deadlocked` で閉じます |
+| `waitInput` | `boolean?` | 明示的なプレイヤー入力制御用のパッシブフラグ — **`timeout` が優先します** |
+
+## Visual Reference
+
+### Block Execution Flow
+
+```mermaid
+flowchart TD
+    A["next() called"] --> B["cleanup previous block"]
+    B --> C["the track enters the block"]
+    C --> D{NOTE block?}
+    D -- yes --> E[skip to next connection]
+    D -- no --> F["onValidateNextBlock\n• nextContext.character\n• fromContext.character"]
+    F --> G{valid?}
+    G -- no --> H["onInvalidateBlock\nthe engine ends the flow"]
+    G -- yes --> I["onBeforeBlock\nresolve()"]
+    I --> J[type handler\nTier 2 then Tier 1]
+    J --> K["next() → advance"]
+```
+
+### Character Gating Flow
+
+```mermaid
+flowchart TD
+    A["block.actors\n= [Lia, Bob, Sam]"] --> B["onResolveCharacter\ngame returns: Lia"]
+    B --> C["onValidateNextBlock\nnextContext.character = Lia\nfromContext.character = prev"]
+    C --> D{valid?}
+    D -- "Lia OK" --> E["execute block\ncontext.character = Lia"]
+    D -- "Lia stunned" --> F["onInvalidateBlock\nthe engine ends the flow"]
+    D -- "undefined\nno character in party" --> F
+```
+
+================================================================================
+
 # Choice の表示制御
 
 ## 概要
@@ -305,7 +3197,29 @@ CHOICE block がディスパッチされると、`context.options` には bluepr
 
 engine に condition リゾルバーを登録します — scene を開始する前に一度だけ：
 
-<!--@include: ../../_shared/choice-filter-setup.md-->
+
+```ts [TypeScript]
+engine.onResolveCondition((condition) => {
+  // Evaluate game-state conditions only.
+  // choice: conditions are handled internally by the engine.
+  return gameState.check(condition.key, condition.operator, condition.value);
+});
+```
+```csharp [C#]
+engine.OnResolveCondition(cond => {
+    return GameState.Check(cond.Key, cond.Operator, cond.Value);
+});
+```
+```cpp [C++]
+engine.onResolveCondition([](const ConditionTest& cond) {
+    return gameState.check(cond.key, cond.op, cond.value);
+});
+```
+```gdscript [GDScript]
+engine.on_resolve_condition(func(cond):
+    return game_state.check(cond)
+)
+```
 
 インストールされると、engine は `onChoice` を呼び出す**前に**各 choice の `when` を評価します。同じリゾルバーは condition block のグループも事前評価します — 詳細は [Condition blocks](/ja/guide/block-types#condition) を参照してください。
 
@@ -317,7 +3231,54 @@ engine に condition リゾルバーを登録します — scene を開始する
 
 handler 内で、1行でフィルタリングできます：
 
-<!--@include: ../../_shared/choice-visibility-handler.md-->
+
+```ts [TypeScript]
+engine.onChoice(({ context, next }) => {
+  // `visible` is undefined when no resolver is installed: unknown, not hidden.
+  const offered = context.options.filter(o => o.visible !== false);
+  showOptionsUI(offered, (optionId) => {
+    context.selectChoice(optionId);   // the option id IS the exit port (C1, C2…)
+    next();
+  });
+});
+```
+```csharp [C#]
+engine.OnChoice(args => {
+    var offered = args.Context.Options
+        .Where(o => o.Visible != false).ToList();
+    ShowChoicesUI(offered, optionId => {
+        args.Context.SelectChoice(optionId);
+        args.Next();
+    });
+    return null;
+});
+```
+```cpp [C++]
+engine.onChoice([](auto*, auto*, auto* ctx, auto next) -> lsde::CleanupFn {
+    std::vector<const lsde::RuntimeChoiceItem*> offered;
+    for (const auto& o : ctx->options())
+        if (!o.visible.has_value() || *o.visible)
+            offered.push_back(&o);
+    showOptionsUI(offered, [ctx, next](const std::string& optionId) {
+        ctx->selectChoice(optionId);
+        next();
+    });
+    return {};
+});
+```
+```gdscript [GDScript]
+engine.on_choice(func(args):
+    var offered = []
+    for o in args["context"].options:
+        if o.get("visible") != false:
+            offered.append(o)
+    show_options_ui(offered, func(option_id):
+        args["context"].select_choice(option_id)
+        args["next"].call()
+    )
+    return Callable()
+)
+```
 
 ### なぜ `visible !== false` であって `=== true` ではないのか？
 
@@ -616,7 +3577,69 @@ tutorial.on_choice(func(args):
 
 `onResolveCondition` を使えば、1つの callback で choice の可視性と condition block の事前評価の**両方**を処理できます。ロジックを重複させる必要はありません：
 
-<!--@include: ../../_shared/choice-reusable-filter.md-->
+
+```ts [TypeScript]
+// ONE evaluator answers everything about game state: option visibility AND condition cases.
+// A test on the reserved `choice` dictionary never reaches it — the engine answers those from the
+// history it kept during the scene.
+engine.onResolveCondition((test) => game.evaluate(test.dict, test.entry, test.op, test.value));
+
+// onCondition is now optional: the engine already knows which port to take.
+// Keep it to log what matched, or to override with a PORT NAME.
+engine.onCondition(({ block, context, next }) => {
+  const matched = context.cases.filter((c) => c.result).map((c) => c.port);
+  game.log(`${block.id} → ${matched[0] ?? 'default'}`);
+  next();
+});
+```
+```csharp [C#]
+engine.OnResolveCondition(test => Game.Evaluate(test.Dict, test.Entry, test.Op, test.Value));
+
+engine.OnCondition(args => {
+    var matched = args.Context.Cases
+        .Where(c => c.Result == true)
+        .Select(c => c.Port)
+        .FirstOrDefault() ?? Ports.Default;
+    Game.Log($"{args.Block.Id} → {matched}");
+    args.Next();
+    return null;
+});
+```
+```cpp [C++]
+engine.onResolveCondition([&game](const lsde::ConditionTest& test) {
+    return game.evaluate(test.dict, test.entry, test.op, test.value);
+});
+
+engine.onCondition([&game](auto*, auto* block, auto* ctx, auto next) -> lsde::CleanupFn {
+    for (const auto& c : ctx->cases()) {
+        if (c.result.value_or(false)) { game.log(block->id + " -> " + c.port); break; }
+    }
+    next();
+    return {};
+});
+```
+```gdscript [GDScript]
+engine.on_resolve_condition(func(test: Dictionary) -> bool:
+    return game.evaluate(test["dict"], test["entry"], test["op"], test["value"]))
+
+engine.on_condition(func(args):
+    for c in args["context"].cases:
+        if c["result"]:
+            game.log("%s -> %s" % [args["block"]["id"], c["port"]])
+            break
+    args["next"].call()
+    return Callable()
+)
+```
+
+> WARNING:
+The same callback feeds option visibility and condition routing, so you write your game-state
+lookup once.
+
+Inside, the engine keeps them apart on purpose. Routing has to pick a branch, so a question it
+cannot answer becomes `false` and the flow takes `default`. An option has no such obligation:
+saying `false` about a question nobody could answer would **hide an answer from the player**, so
+`visible` stays `undefined` instead.
 
 > TIP:
 `onResolveCondition` 以前は、同じ `gameState.check(...)` ロジックを `onResolveCondition` と `onCondition` に別々に登録する必要がありました。統合リゾルバーでは1つの callback で済みます — engine が両方を自動的に処理します。
@@ -665,134 +3688,217 @@ const evaluator: ConditionEvaluator = t =>
 
 ================================================================================
 
-# ハンドラー
+# 非同期トラック
 
-## Handler
+block に `props.isAsync = true` が設定されている場合、engine はメインフローとは独立して動作する**並列トラック**を作成します。
 
-handler は engine とゲームを繋ぐ橋です。オブザーバーのように機能します — 関数を登録すると、対応するイベントが発生した時に engine がそれを呼び出します。テキストの表示、アニメーションの再生、状態の評価など、ゲームエンジンで適切な動作をトリガーするのは handler を通じて行います。
+## トラックの作成方法
 
-engine は以下の handler を公開しています：
+port 解決中に複数の送出 connection が存在する場合：
+- **最初の非 async connection** が現在のフローの継続となります
+- **その他の connection**（`isAsync` を持つ block へ）が新しい並列トラックになります
 
-| Handler | レベル | 説明 |
-|---------|--------|------|
-| [`onDialog`](/api-ref/classes/DialogueEngine#ondialog) | global / scene | dialog block — テキスト表示 |
-| [`onChoice`](/api-ref/classes/DialogueEngine#onchoice) | global / scene | choice block — 選択肢の提示 |
-| [`onCondition`](/api-ref/classes/DialogueEngine#oncondition) | global / scene | condition block — 評価と分岐 |
-| [`onAction`](/api-ref/classes/DialogueEngine#onaction) | global / scene | action block — 副作用のトリガー |
-| [`onResolveCharacter`](/api-ref/classes/DialogueEngine#onresolvecharacter) | global / scene | どのキャラクターが話しているかを解決 |
-| [`onBeforeBlock`](/api-ref/classes/DialogueEngine#onbeforeblock) | global | 各 block の前（delay、開始アニメーション…） |
-| [`onValidateNextBlock`](/api-ref/classes/DialogueEngine#onvalidatenextblock) | global | block に進む前のバリデーション |
-| [`onInvalidateBlock`](/api-ref/classes/DialogueEngine#oninvalidateblock) | global | バリデーション失敗時の処理 |
-| [`onSceneEnter`](/api-ref/classes/DialogueEngine#onsceneenter) | global / scene | scene の開始 |
-| [`onSceneExit`](/api-ref/classes/DialogueEngine#onsceneexit) | global / scene | scene の終了 |
-| [`onBlock`](/api-ref/interfaces/SceneHandle#onblock) | scene | id（`DIALOG-001`）で特定の block をオーバーライド |
-| [`onDialogId`](/api-ref/interfaces/SceneHandle#ondialogid) | scene | id で特定の DIALOG block をオーバーライド（型安全） |
-| [`onChoiceId`](/api-ref/interfaces/SceneHandle#onchoiceid) | scene | id で特定の CHOICE block をオーバーライド（型安全） |
-| [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | id で特定の CONDITION block をオーバーライド（型安全） |
-| [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | id で特定の ACTION block をオーバーライド（型安全） |
-| [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) | global | 統合 condition リゾルバー（choice の可視性 + condition の事前評価） |
+これはメイントラック**と** async トラックの両方に適用されます — async トラックは独自の async connection からサブトラックを spawn でき、並列実行の階層を作成できます。
 
-`onDialog`、`onChoice`、`onAction` は**必須**です — `start()` 呼び出し時に engine がその存在を検証し、欠けている場合は記述的なエラーをスローします。`onCondition` は `onResolveCondition` がインストールされている場合は**オプション**です — engine が事前評価された condition グループから自動ルーティングします。
+## トラックのライフサイクル
 
-ROUTER block に handler は**なく**、必要でもありません：engine はすべての case を評価し、真の case それぞれの port を起動し、`then`（すべて成立）か `catch`（一つでも不成立）で自分で続行します。観測するには `handle.onBlock(id)` を使います — [Router block](/ja/guide/router) を参照。
+- `onBeforeBlock` は**すべての block** で呼び出されます（メインおよび async トラック） — `resolve()` の詳細は [Lifecycle](./lifecycle) を参照
+- async トラックはメイントラックと同様に、送出 connection をメイン vs async に分離します
+- トラックは scene 終了時または `cancel()` 呼び出し時に自動的にキャンセルされます
+- トラックが自然に終了した場合（connection がなくなった）、サブトラックは**独立して存続**します
+- トラックが明示的にキャンセルされた場合（`cancel()`）、キャンセルはすべての子トラックに**カスケード**します
 
-<!--@include: ../../_shared/handler-basic.md-->
+## waitForBlocks — 他のトラックを待つ
 
-## Two-Tier Handler System
+`props.waitForBlocks` は、指定された block が**完了する**までその block を保留します。`isAsync` が開く分岐の「合流」側です：ブランチが並列で走り、下流の block はそれが**終わる**まで待ってから再生されます。
 
-engine は handler を2つの階層で解決します：
+**到達ではなく完了です。** リストされた block は、フローがそれを**離れた**時点で数えられます：ゲームが `next()` を呼び、出口ポートが解決され、その block の cleanup が実行された時点です。つまり合流するセリフが dispatch される*前に*吹き出しは画面から消え、音声も止まっています — 合流を描く目的はまさにそれです。
 
-- **Global handler** — engine に登録され、すべての scene のデフォルト動作を定義します。ほとんどの場合これだけで十分です。
-- **Scene handler** — 特定の [`SceneHandle`](/api-ref/interfaces/SceneHandle) に登録され、scene が異なるレンダリングや制御フローを必要とする場合にデフォルト動作をオーバーライドまたは拡張できます。まれですが、利用可能です。
+> WARNING:
+2.x の最初のリリースでは、**到達**だけで十分でした。それはデザイナーが実際に描く形において、このプロパティをほぼ無効にしていました：2 つの block への分岐、そして両方への合流は、登録されたまさにその tick で解除されていたのです — 2 つはほんの数分の 1 ミリ秒前に dispatch されていたため — そして合流するセリフがその上に重なって話していました。
 
-block がディスパッチされると、engine は以下の順序で handler を解決します：
-1. `handle.onBlock(blockId)` または `handle.onDialogId(blockId)` / `handle.onActionId(blockId)` / ... — block 固有のオーバーライド
-2. `handle.onDialog()` / `handle.onChoice()` / ... — scene レベルのタイプ handler
-3. `engine.onDialog()` / `engine.onChoice()` / ... — global handler
+`getVisitedBlocks()` は影響を受けません：プレイヤーが**見た**ものを引き続き列挙し、それには話している途中の block も含まれます。
 
-両方の階層が存在する場合、両方が順番に実行されます — scene が先、次に global — ただし scene handler が `context.preventGlobalHandler()` を呼び出して global パスを抑制した場合を除きます。
+**block は dispatch される前に保留されます。** handler は呼び出されないため、待機が解除されるまでゲーム側は block の存在すら知りません — その内容が早すぎるタイミングで画面に出ることはありません。これは描画の選択ではなくエンジンの決定です：`waitForBlocks` は **native** プロパティであり、デザイナーが LSDE でチェックした以上、エンジンがその動作を保証します。
 
-<!--@include: ../../_shared/handler-tier1.md-->
+このルールはプレイヤーが見ているトラックを含め、**すべて**のトラックで同じです。
 
-## Character Resolution
+- id は**このシーンの** block を指します。ワイヤーがシーンをまたいだことは一度もありません。
+- 1 つではなく、**すべて**が完了している必要があります。
+- block が完了すると、それを待っていたものが連鎖的に解放されます。
+- 決して完了しない block はトラックを永久に停留させます — プレイヤー入力を永遠に待つ block は決して完了しません。id がシーンの block でない場合、`init()` は `UNKNOWN_WAIT_BLOCK` を報告しますが、実在する block が実際に再生されるかどうかは知り得ません。
 
-キャラクター解決はオプションです。`onResolveCharacter` callback を登録すると、engine は `actors` にキャラクターを持つすべての block の前にそれを呼び出します。callback は block に割り当てられたキャラクターのリストを受け取り、アクティブにすべきキャラクターを返します — 利用可能なキャラクターがいない場合は `undefined` を返します。解決されたキャラクターは、すべての handler で `context.character` としてアクセスできます。
+`waitForBlocks` と `delay` の両方を持つ block のシーケンス：
 
-これはゲーム状態を照会するための理想的な統合ポイントです：キャラクターがシーンに存在するか、生存しているか、カメラ範囲内にいるかなどを確認できます。`undefined` を返すことで、[`skipIfMissingActor`](/api-ref/interfaces/NativeProperties#skipifmissingactor) による block スキップ、`handle.cancel()` による scene キャンセル、handler 内での直接処理など、複数の戦略が可能になります。
+```
+waitForBlocks ゲート → onBeforeBlock (delay) → handler → next()
+```
 
-<!--@include: ../../_shared/handler-character.md-->
+## waitInput — プレイヤー入力フラグ
 
-## Scene Lifecycle
+`props.waitInput` は**パッシブフラグ**です — engine はそれを公開しますが解釈しません。ゲーム handler がそれを読み取り、明示的なプレイヤー入力を待つかどうかを決定します。
 
-`onSceneEnter` と `onSceneExit` callback で、scene の開始と終了に反応できます — シネマモードの有効化、NPC の停止、UI の準備、リソースのクリーンアップなど。global レベル（engine 上）と scene レベル（`handle.onEnter()` / `handle.onExit()` 経由）の両方で利用可能です。scene handler が定義されている場合、global を置き換えます。
+## TrackInfo API — 可観測性
 
-<!--@include: ../../_shared/handler-lifecycle.md-->
+`scene.getTrackInfos()` を使用して実行中の async トラックを検査します。各トラックの状態の読み取り専用スナップショットを返します：
 
-## Block Override
 
-`onBlock(blockId)` で特定の block をその識別子で指定し、専用の handler を割り当てることができます。これはまれなユースケースです — ジェネリック handler が大半のニーズをカバーします — ただし、個別の block が異なる動作を必要とする非常に特殊なシナリオでは利用可能です。
+```ts [TypeScript]
+const tracks = scene.getTrackInfos();
+for (const track of tracks) {
+  console.log(`Track ${track.id} (parent: ${track.parentTrackId}) at block ${track.currentBlockId}`);
+}
+```
+```csharp [C#]
+var tracks = scene.GetTrackInfos();
+foreach (var track in tracks)
+{
+    Console.WriteLine($"Track {track.Id} (parent: {track.ParentTrackId}) at block {track.CurrentBlockId}");
+}
+```
+```cpp [C++]
+auto tracks = scene->getTrackInfos();
+for (const auto& track : tracks) {
+    std::cout << "Track " << track.id
+              << " (parent: " << track.parentTrackId << ")"
+              << " at block " << track.currentBlockId << "\n";
+}
+```
+```gdscript [GDScript]
+var tracks = scene.get_track_infos()
+for track in tracks:
+    print("Track %d (parent: %s) at block %s" % [
+        track["id"], str(track["parentTrackId"]), track["currentBlockId"]])
+```
 
-<!--@include: ../../_shared/handler-block-override.md-->
+各 `TrackInfo` には `id`、`parentTrackId`、`startBlockId`、`currentBlockId`、`running` が含まれます。デバッグオーバーレイ、プレイモードレンダラー、検証に使用します。
 
-## Type-Safe Block Override
+## Async トラックで動作するもの（と動作しないもの）
 
-`onDialogId(blockId)`、`onChoiceId(blockId)`、`onConditionId(blockId)`、`onActionId(blockId)` は `onBlock(blockId)` の型安全な代替メソッドです。動作は全く同じ — 同じ優先度、同じ `preventGlobalHandler` サポート — ただし handler がジェネリックユニオンではなく、特殊化された block 型とコンテキストを受け取ります。
+async トラックは、メインの会話と*並行して*起こること — 環境エフェクト、並列アニメーション、仲間の反応 — に最適です。ただし制限があります。
 
-登録時に block タイプが分かっていて、`block` と `context` のオートコンプリートが必要な場合に使用してください。
+**推奨 — 並列コンテンツ：**
+| ユースケース | 動作する理由 |
+|---|---|
+| NPC の環境セリフ（「バーク」） | async トラック上の dialog block — NPC がメインの会話の進行中にコメント、反応、掛け合いを行います |
+| イベントに同期したキャラクター反応 | `waitForBlocks` を使用して特定の block に到達したときに反応をトリガー |
+| 環境音やBGMの再生 | action block、プレイヤーのインタラクション不要 |
+| カメラ移動のトリガー | action block、並列実行 |
+| 精密なタイミングのエフェクト | `waitForBlocks` + `delay` を組み合わせて精密なタイミングを実現 |
 
-<!--@include: ../../_shared/handler-block-override-typed.md-->
+**非推奨 — プレイヤーインタラクションやゲームロジック分岐：**
+| ユースケース | 問題となる理由 |
+|---|---|
+| async トラック内の CHOICE block | プレイヤーは既にメイントラックとインタラクション中 — 誰が async の choice に応答するのか？ |
+| 重要なゲームステート変更 | async トラックがキャンセルされた場合（scene 終了）、action は実行されません |
+
+> WARNING:
+async トラック内の CHOICE block は、プレイヤーがメインの対話に既に参加している間に選択を行うべきことを意味します。最も一般的なシナリオは AI 駆動の「choice」（例：仲間の NPC がパーソナリティに基づいて自動選択する）です。async トラックが自動選択する scene レベル handler なしで CHOICE block に到達した場合、フローは停止するか無言で終了します。
+
+## 複数の Scene の並列実行
+
+engine は複数の scene の同時実行をサポートしています。各 `SceneHandle` は独自のステート、訪問済み block、async トラックを持ちます。グローバル handler（Tier 1）は共有されます — どの scene が呼び出しているかは `scene` 引数で判別できます：
+
+
+```ts [TypeScript]
+engine.onDialog(({ scene, block, context, next }) => {
+  if (scene === mainDialogue) {
+    showMainUI(block);
+    // next() called later — by player input
+  } else if (scene === tutorialOverlay) {
+    showTutorialBubble(block);
+    // auto-advance after display
+    next();
+  }
+});
+
+const mainDialogue = engine.scene('main-quest');
+const tutorialOverlay = engine.scene('tutorial-hints');
+mainDialogue.start();
+tutorialOverlay.start();
+```
+```csharp [C#]
+engine.OnDialog(args => {
+    if (args.Scene == mainDialogue)
+    {
+        ShowMainUI(args.Block);
+        // next() called later — by player input
+    }
+    else if (args.Scene == tutorialOverlay)
+    {
+        ShowTutorialBubble(args.Block);
+        // auto-advance after display
+        args.Next();
+    }
+    return null;
+});
+
+var mainDialogue = engine.Scene("main-quest");
+var tutorialOverlay = engine.Scene("tutorial-hints");
+mainDialogue.Start();
+tutorialOverlay.Start();
+```
+```cpp [C++]
+engine.onDialog([&](auto* scene, auto* block, auto*, auto next) -> CleanupFn {
+    if (scene == mainDialogue.get()) {
+        showMainUI(block);
+        // next() called later — by player input
+    } else if (scene == tutorialOverlay.get()) {
+        showTutorialBubble(block);
+        // auto-advance after display
+        next();
+    }
+    return {};
+});
+
+auto mainDialogue = engine.scene("main-quest");
+auto tutorialOverlay = engine.scene("tutorial-hints");
+mainDialogue->start();
+tutorialOverlay->start();
+```
+```gdscript [GDScript]
+engine.on_dialog(func(args):
+    if args["scene"] == main_dialogue:
+        show_main_ui(args["block"])
+        # next() called later — by player input
+    elif args["scene"] == tutorial_overlay:
+        show_tutorial_bubble(args["block"])
+        # auto-advance after display
+        args["next"].call()
+    return Callable()
+)
+
+var main_dialogue = engine.scene("main-quest")
+var tutorial_overlay = engine.scene("tutorial-hints")
+main_dialogue.start()
+tutorial_overlay.start()
+```
+
+> TIP:
+並行する scene が多い場合は、グローバル handler 内でルーティングする代わりに、各ハンドルに scene レベル（Tier 2）の handler を登録することを検討してください。よりクリーンな分離が実現でき、`if/else` チェーンが不要になります。
 
 ## Visual Reference
 
-### Two-Tier Handler Dispatch
-
 ```mermaid
-flowchart TD
-    A[block dispatched] --> B{resolve scene handler}
-    B --> B1{"onBlock(blockId) /\nonDialogId(blockId) etc.?"}
-    B1 -- found --> S
-    B1 -- not found --> B2{"handle.onDialog() etc.?"}
-    B2 -- found --> S
-    B2 -- not found --> G
-    S[execute scene handler] --> D{preventGlobalHandler?}
-    D -- yes --> Z[done]
-    D -- no --> G["execute global handler\nengine.onDialog() etc."]
-    G --> Z
+flowchart LR
+    A["[A]"] --> B["[B]"]
+    B --> C["[C]"]
+    A -- async --> D["[D]"]
+    D --> E["[E]"]
+    D -- async --> F["[F]"]
+
+    style A fill:#4a9,stroke:#333
+    style B fill:#4a9,stroke:#333
+    style C fill:#4a9,stroke:#333
+    style D fill:#69b,stroke:#333
+    style E fill:#69b,stroke:#333
+    style F fill:#c7a,stroke:#333
 ```
 
-================================================================================
-
-# ゲームエンジン統合
-
-LSDE はエンジン非依存です — ゲームエンジン、UIフレームワーク、オーディオシステムへの依存はありません。グラフを走査し、登録された handler を呼び出します。このページでは、主要なゲームエンジンへの組み込み方法を示します。
-
-handler の詳細な実装については、[Block Types](./block-types) と [Handlers](./handlers) を参照してください。
-
-## 完全な統合例
-
-以下の例は、各エンジンに LSDE を統合する一つの方法を示しています。必須の 4 つの handler — dialog、choice、condition、action — を一つのクラスにまとめた、出発点となるコードです。
-
-ゲームごとにニーズは異なります。構造、レイアウト、UI をプロジェクトに合わせて調整してください。
-
-<!--@include: ../../_shared/integration-complete.md-->
-
-## 4つの Handler
-
-各 handler は block データと `next()` コールバックを受け取ります。開発者がエンジン内でデータを処理し、block の処理が完了したら `next()` を呼び出します。その呼び出しのタイミングはゲーム側に委ねられています。
-
-- **Dialog** — テキスト、キャラクター、ネイティブプロパティ。UI にダイアログを表示し、プレイヤーの入力またはディレイを待ってから `next()` を呼び出します。engine が次の block に移る際に UI を非表示にするクリーンアップ関数を返します。
-
-- **Choice** — `onResolveCondition()` が設定されている場合、`visible` タグ付きの選択肢リスト。engine は**すべて**の選択肢をタグ付きで渡します。`visible !== false` でフィルターしてください。対応する UI 要素を作成します — ボタン、リスト、ラジアルメニュー。プレイヤーが選択したら、`selectChoice(optionId)` で分岐先を engine に伝え、`next()` でフローを進めます。
-
-- **Condition** — block に定義された case。`onResolveCondition()` を一度登録すれば engine が事前評価するため、`onCondition` は任意になります。ルーティングを上書きする場合、`context.resolve(port)` は**ポート名**を取ります — `"out"`、`"default"`、または case のポート（`"K1"`）。
-
-- **Action** — block の呼び出しは `context.calls` にあります：`fn` と、**名前で**渡される `args`。エンジンで実行します — サウンド再生、アイテム付与、シネマティックのトリガー。`context.resolve()` は `then` から、`context.reject()` は `catch` から出ます — `catch` が配線されていない場合は `then` にフォールバックします。
-
-## Tips
-
-- **`next()` はリモコンです。** 高速ダイアログのために即座に呼び出すか、アニメーションが完了するまで保持します。engine は待機します — 時間の概念を持ちません。
-- **クリーンアップ関数が後片付けします。** どの handler からでも関数を返せば、engine が次の block に移る時に呼び出します。UI の非表示、オーディオの停止、ノードの解放に最適です。
-- **`onBeforeBlock` が delay を処理します。** engine は `props.delay` を強制しません — `onBeforeBlock` がそれを読み取り、タイマー後に `resolve()` を呼び出します。完全な制御権があります。
-- **async track は並列フローです。** カットシーンでダイアログとカメラ移動を同時に行う場合、エディタで `isAsync` マークされた block は独立した track で実行されます。
+- Main track: A &rarr; B &rarr; C
+- Track 1 (parallel): D &rarr; E
+- Track 2 (sub-track of D): F
+- Scene cancel &rarr; all tracks cancelled
+- Track D ends naturally &rarr; F continues
 
 ================================================================================

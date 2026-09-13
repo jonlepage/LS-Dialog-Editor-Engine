@@ -162,7 +162,7 @@ and tooling that a game must never import. Build output goes to build~/ for the 
 
 | Method | Description |
 |--------|-------------|
-| `engine.Init(options)` | Validate + build graph. Returns `DiagnosticReport`. |
+| `engine.Init(options)` | Validate + build graph. Returns `DiagnosticReport` — errors refuse the payload. Warnings also cover what the blocks use that the export does not declare: a function, argument, dictionary, entry or choice test (`UNDECLARED_*`, `UNKNOWN_CHOICE_*`, `EMPTY_FUNCTION`), no `Check` needed. |
 | `engine.SetLocale(locale)` | Set active locale. |
 | `engine.Scene(sceneRef)` | Create scene handle. Call `handle.Start()` to begin. |
 | `engine.Stop()` | Cancel all active scenes. |
@@ -194,7 +194,7 @@ A ROUTER block has **no handler** and needs none: the engine evaluates every cas
 | `engine.OnValidateNextBlock(handler)` | Validate before entering a block. |
 | `engine.OnInvalidateBlock(handler)` | Called when a block fails validation. |
 | `engine.OnSceneEnter(handler)` | Called when any scene starts. |
-| `engine.OnSceneExit(handler)` | Called when any scene ends. `args.Context.Reason` says why (`SceneEndReason`): `completed`, `cancelled`, `invalidated`, `faulted` or `deadlocked` (with `args.Context.WaitingFor`). |
+| `engine.OnSceneExit(handler)` | Called when any scene ends. `args.Context.Reason` says why (`SceneEndReason`): `completed`, `cancelled`, `invalidated`, `faulted` (with `args.Context.Error`, the exception) or `deadlocked` (with `args.Context.WaitingFor`). |
 
 ### Scene Handle (Tier 2 — Per-Scene)
 
@@ -214,6 +214,8 @@ A ROUTER block has **no handler** and needs none: the engine evaluates every cas
 | `handle.OnEnter(handler)` | Override global `OnSceneEnter` for this scene. |
 | `handle.OnExit(handler)` | Override global `OnSceneExit` for this scene. |
 | `handle.OnResolveCharacter(fn)` | Override character resolver for this scene. |
+| `handle.GetSceneId()` | The stable id of the scene (`sc_…`). Store this one: it survives a rename. |
+| `handle.GetScenePath()` | The scene path (`reactor_breach`) — what a writer reads, and what a rename changes. |
 | `handle.GetCurrentBlock()` | Get the block currently being executed, or `null`. |
 | `handle.GetVisitedBlocks()` | Set of visited block ids, for this scene. |
 | `handle.GetChoiceHistory()` | Map of CHOICE block id → the option ids the player picked. |

@@ -243,6 +243,16 @@ func _run_single_flow_test(suite: Dictionary, tc: Dictionary, display_name: Stri
 		if not _assert_eq(waiting_for, tc["expectedWaitingFor"], display_name + " waiting for"):
 			ok = false
 
+	# expectedExitError never reaches here: it needs an exception, and those suites are skipped.
+
+	if tc.has("expectedSceneId"):
+		if not _assert_eq(handle.get_scene_id(), tc["expectedSceneId"], display_name + " scene id"):
+			ok = false
+
+	if tc.has("expectedScenePath"):
+		if not _assert_eq(handle.get_scene_path(), tc["expectedScenePath"], display_name + " scene path"):
+			ok = false
+
 	if tc.has("expectedVisited"):
 		var visited: Array = handle.get_visited_blocks()
 		var expected: Array = tc["expectedVisited"]
@@ -281,36 +291,40 @@ func _run_single_validation_test(suite: Dictionary, tc: Dictionary, display_name
 	var report: Dictionary = engine.init(_options_of(suite))
 	var ok: bool = true
 
+	# Compared WHOLE, order aside. Checking only that each listed code was present let a runtime add a
+	# code the spec does not list, unnoticed. The order is left out on purpose: in C++ a PropertyBag is
+	# an unordered_map, so two warnings about one call may come in either order.
 	var codes_of: Callable = func(entries: Array) -> Array:
 		var codes: Array = []
 		for entry in entries:
 			codes.append(entry.get("code", ""))
+		codes.sort()
 		return codes
+	var sort_codes: Callable = func(codes: Array) -> Array:
+		var copy: Array = codes.duplicate()
+		copy.sort()
+		return copy
 
 	if tc.has("expectedErrors"):
 		var codes: Array = codes_of.call(report["errors"])
-		var expected: Array = tc["expectedErrors"]
-		if expected.is_empty():
-			if not codes.is_empty():
-				print("  FAIL: %s — expected no error, got %s" % [display_name, str(codes)])
-				ok = false
-		else:
-			for code in expected:
-				if not codes.has(code):
-					print("  FAIL: %s — missing error %s (got %s)" % [display_name, code, str(codes)])
-					ok = false
+		var expected: Array = sort_codes.call(tc["expectedErrors"])
+		if codes != expected:
+			print("  FAIL: %s — expected errors %s, got %s" % [display_name, str(expected), str(codes)])
+			ok = false
 
 	if tc.has("expectedWarnings"):
 		var codes: Array = codes_of.call(report["warnings"])
-		var expected: Array = tc["expectedWarnings"]
-		if expected.is_empty():
-			if not codes.is_empty():
-				print("  FAIL: %s — expected no warning, got %s" % [display_name, str(codes)])
-				ok = false
-		else:
-			for code in expected:
-				if not codes.has(code):
-					print("  FAIL: %s — missing warning %s (got %s)" % [display_name, code, str(codes)])
+		var expected: Array = sort_codes.call(tc["expectedWarnings"])
+		if codes != expected:
+			print("  FAIL: %s — expected warnings %s, got %s" % [display_name, str(expected), str(codes)])
+			ok = false
+
+	# Where every error and warning of the case points: sceneId is the stable id, scenePath the path.
+	if tc.has("expectedAt"):
+		var where: Dictionary = tc["expectedAt"]
+		for entry in report["errors"] + report["warnings"]:
+			for field in where:
+				if not _assert_eq(entry.get(field), where[field], "%s %s %s" % [display_name, entry.get("code", ""), field]):
 					ok = false
 
 	if tc.has("expectedStats"):

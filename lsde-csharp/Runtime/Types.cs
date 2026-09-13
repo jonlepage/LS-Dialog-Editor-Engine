@@ -544,8 +544,8 @@ namespace LsdeDialogEngine
     public class DiagnosticEntry
     {
         /// <summary>Machine-readable code, e.g. BROKEN_LINK or UNKNOWN_WAIT_BLOCK.
-        /// <para>The seventeen the engine emits are listed in the Getting Started guide, split into
-        /// the eleven that refuse the payload and the six that let it play. It is a string and not
+        /// <para>The twenty-five the engine emits are listed in the Getting Started guide, split into
+        /// the eleven that refuse the payload and the fourteen that let it play. It is a string and not
         /// an enum on purpose: a runtime is allowed to add one — TypeScript and GDScript read the
         /// raw payload and can say WRONG_NAMING_CONVENTION, where this runtime only ever sees a
         /// typed object and reports INVALID_FORMAT for the same file.</para></summary>
@@ -554,8 +554,15 @@ namespace LsdeDialogEngine
         /// <summary>Human-readable description of the issue.</summary>
         public string Message { get; set; } = "";
 
-        /// <summary>Id of the scene where the issue was found, if applicable.</summary>
+        /// <summary>The stable id of the scene the issue was found in (sc_u0vqg2g8), if applicable —
+        /// what handle.GetSceneId() answers, and what survives a rename.</summary>
+        /// <remarks>It used to hold the scene's PATH, under a name that said id. The path is
+        /// ScenePath now.</remarks>
         public string? SceneId { get; set; }
+
+        /// <summary>The path of that scene (reactor_breach) — what a writer reads, and what a rename
+        /// changes.</summary>
+        public string? ScenePath { get; set; }
 
         /// <summary>Id of the block where the issue was found, if applicable.</summary>
         public string? BlockId { get; set; }
@@ -762,6 +769,13 @@ namespace LsdeDialogEngine
         /// <summary>With Deadlocked: the blocks the parked tracks were still waiting for, each
         /// once, in the order they were asked for. Null otherwise.</summary>
         public IReadOnlyList<string>? WaitingFor { get; set; }
+
+        /// <summary>With Faulted: what was thrown — the fault that closed the scene, not a cleanup
+        /// that failed while it closed. Null otherwise.</summary>
+        /// <remarks>The same exception is ALSO re-thrown, to whoever entered the walk: in Unity that
+        /// is a click or a timer calling Next(), never the code awaiting the end of the scene — which
+        /// is why it is handed here as well. Log it in one of the two places, not both.</remarks>
+        public Exception? Error { get; set; }
     }
 
     // ─── Handler Args & Delegates ────────────────────────────────────────────────
@@ -937,6 +951,15 @@ namespace LsdeDialogEngine
 
         /// <summary>Override all ACTION blocks for this scene (Tier 2).</summary>
         void OnAction(BlockHandler<BlueprintBlock, IActionContext> handler);
+
+        /// <summary>The stable id of this scene (sc_u0vqg2g8). Store THIS one outside the payload — a
+        /// save file, an asset — because it survives a rename.</summary>
+        /// <remarks>OnSceneExit is global: with several scenes playing, this is how it tells which
+        /// one ended.</remarks>
+        string GetSceneId();
+
+        /// <summary>The path of this scene (reactor_breach): what a writer reads, and what a rename changes.</summary>
+        string GetScenePath();
 
         /// <summary>Get the block currently being executed, or null if scene is not running.</summary>
         BlueprintBlock? GetCurrentBlock();

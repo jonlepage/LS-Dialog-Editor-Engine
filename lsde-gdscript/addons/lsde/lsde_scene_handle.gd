@@ -161,6 +161,17 @@ func on_condition(handler: Callable) -> void:
 func on_action(handler: Callable) -> void:
 	_scene_registry.action_handler = handler
 
+## The stable id of this scene (sc_u0vqg2g8). Store THIS one outside the payload — a save file, a
+## resource — because it survives a rename.
+##
+## on_scene_exit is global: with several scenes playing, this is how it tells which one ended.
+func get_scene_id() -> String:
+	return _scene_graph.get_scene().get("id", "")
+
+## The path of this scene (reactor_breach): what a writer reads, and what a rename changes.
+func get_scene_path() -> String:
+	return _scene_graph.get_scene().get("scene", "")
+
 ## Get the block currently being executed, or null.
 ## The block the flow the player is watching is on. Parallel tracks have their own.
 func get_current_block() -> Variant:

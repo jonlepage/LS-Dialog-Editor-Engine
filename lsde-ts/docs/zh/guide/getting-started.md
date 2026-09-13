@@ -20,7 +20,7 @@ engine 接收 `BlueprintExport` 对象，而非文件。您可以使用平台适
 
 <!--@include: ../../_shared/getting-started-validation.md-->
 
-### 十七种诊断
+### 二十五种诊断
 
 **错误 —— payload 被拒绝，什么都不会播放。** `errors` 非空，`engine.scene()` 也无从交付。
 
@@ -44,11 +44,23 @@ engine 接收 `BlueprintExport` 对象，而非文件。您可以使用平台适
 |---|---|
 | `NO_START_BLOCK` | scene 没有起始 block，`start()` 无处开始 |
 | `UNKNOWN_WAIT_BLOCK` | 某个 `waitForBlocks` id 不是本 scene 的 block，于是那条轨道**永久**停留。检查无法更进一步：一个确实存在的 id 也可能永远不会被播放 |
+| `EMPTY_FUNCTION` | 某个 action 有一个未选择函数的调用。游戏收到的是一个无法执行的调用 |
+| `UNDECLARED_FUNCTION` | 某个 action 调用了导出未声明的函数 —— 例如项目里残留的 v1 id。以前它会静默加载，然后在游戏中失败 |
+| `UNDECLARED_ARGUMENT` | 某个调用传入了函数未声明的参数 |
+| `UNDECLARED_DICTIONARY_KEY` | 某个 `dictionaryKey` 参数不是其参数所指字典中的条目 |
+| `UNDECLARED_DICTIONARY` | 某个 condition 测试了导出未声明的字典 |
+| `UNDECLARED_ENTRY` | 某个 condition 测试了字典中未声明的条目 |
+| `UNKNOWN_CHOICE_BLOCK` | 对保留字典 `choice` 的测试指向了一个不是本 scene 中 CHOICE 的 block |
+| `UNKNOWN_CHOICE_OPTION` | 对保留字典 `choice` 的测试指向了该 CHOICE 没有的选项 |
 | `UNKNOWN_FUNCTION` | 某个 action 调用了 `check.functions` 未列出的函数 id |
 | `UNKNOWN_DICTIONARY` | 某个 condition 测试了 `check.dictionaries` 未列出的字典 id |
 | `UNKNOWN_DICTIONARY_ENTRY` | 字典已知，条目键未知 |
 | `UNKNOWN_CARD` | 某个 block 引用了 `check.cards` 未列出的角色卡**名称** |
 
 最后四条只在你传入 `check` 时出现 —— 不传，engine 就没有可比对的东西。
+上面那八条始终生效：它们把 block **使用**的东西与导出自身**声明**的东西作比较，因此不需要 `check`。
+
+在 scene 中发现的诊断带有 `sceneId`（稳定 id `sc_…`，即 `handle.getSceneId()` 返回的值）和 `scenePath`，
+指向某个 block 时还带有 `blockId`。
 
 

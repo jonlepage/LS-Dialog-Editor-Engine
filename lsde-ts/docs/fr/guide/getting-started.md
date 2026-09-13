@@ -20,7 +20,7 @@ Le engine consomme un objet `BlueprintExport`, pas un fichier. Vous pouvez charg
 
 <!--@include: ../../_shared/getting-started-validation.md-->
 
-### Les dix-sept diagnostics
+### Les vingt-cinq diagnostics
 
 **Erreurs — le payload est refusé et rien ne joue.** `errors` n'est pas vide et `engine.scene()` n'a rien à vous rendre.
 
@@ -44,11 +44,24 @@ Le engine consomme un objet `BlueprintExport`, pas un fichier. Vous pouvez charg
 |---|---|
 | `NO_START_BLOCK` | La scène n'a pas de block de départ, donc `start()` n'a nulle part où commencer |
 | `UNKNOWN_WAIT_BLOCK` | Un id de `waitForBlocks` n'est pas un block de la scène, donc cette piste se gare **pour de bon**. La vérification ne peut pas aller plus loin : un id qui existe peut n'être jamais joué |
+| `EMPTY_FUNCTION` | Une action a un appel sans fonction choisie. Le jeu reçoit un appel qu'il ne peut pas exécuter |
+| `UNDECLARED_FUNCTION` | Une action appelle une fonction que l'export ne déclare pas — un id v1 resté dans le projet, par exemple. Avant, ça chargeait en silence et échouait en jeu |
+| `UNDECLARED_ARGUMENT` | Un appel passe un argument que la fonction ne déclare pas |
+| `UNDECLARED_DICTIONARY_KEY` | Un argument `dictionaryKey` n'est pas une entrée du dictionnaire que nomme son paramètre |
+| `UNDECLARED_DICTIONARY` | Une condition teste un dictionnaire que l'export ne déclare pas |
+| `UNDECLARED_ENTRY` | Une condition teste une entrée que son dictionnaire ne déclare pas |
+| `UNKNOWN_CHOICE_BLOCK` | Un test sur le dictionnaire réservé `choice` nomme un block qui n'est pas un CHOICE de cette scène |
+| `UNKNOWN_CHOICE_OPTION` | Un test sur le dictionnaire réservé `choice` nomme une option que ce CHOICE n'a pas |
 | `UNKNOWN_FUNCTION` | Une action appelle un id de fonction que votre `check.functions` ne liste pas |
 | `UNKNOWN_DICTIONARY` | Une condition teste un id de dictionnaire que votre `check.dictionaries` ne liste pas |
 | `UNKNOWN_DICTIONARY_ENTRY` | Le dictionnaire est connu, la clé d'entrée non |
 | `UNKNOWN_CARD` | Un block cite un NOM de carte d'acteur que votre `check.cards` ne liste pas |
 
 Les quatre derniers n'apparaissent que si vous passez `check` — sans lui le engine n'a rien à quoi comparer.
+Les huit au-dessus sont toujours actifs : ils comparent ce que les blocks UTILISENT à ce que l'export
+DÉCLARE lui-même, donc sans `check`.
+
+Un diagnostic trouvé dans une scène porte `sceneId` — l'id stable (`sc_…`), celui que rend
+`handle.getSceneId()` — et `scenePath`, plus `blockId` quand il vise un block.
 
 

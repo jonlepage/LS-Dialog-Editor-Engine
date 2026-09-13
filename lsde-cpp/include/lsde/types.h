@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <exception>
 #include <string>
 #include <vector>
 #include <optional>
@@ -436,18 +437,27 @@ struct BlueprintExport {
 struct DiagnosticEntry {
     /// Machine-readable code, e.g. "BROKEN_LINK" or "UNKNOWN_WAIT_BLOCK".
     ///
-    /// The seventeen the engine emits are listed in the Getting Started guide, split into the
-    /// eleven that refuse the payload and the six that let it play. It is a string and not an enum
+    /// The twenty-five the engine emits are listed in the Getting Started guide, split into the
+    /// eleven that refuse the payload and the fourteen that let it play. It is a string and not an enum
     /// on purpose: a runtime is allowed to add one — TypeScript and GDScript read the raw payload
     /// and can say WRONG_NAMING_CONVENTION, where this runtime only ever sees a typed struct and
     /// reports INVALID_FORMAT for the same file.
     std::string code;
     /// Human-readable description of the issue.
     std::string message;
-    /// Id of the scene where the issue was found, if applicable.
+    /// The stable id of the scene the issue was found in (sc_u0vqg2g8), if applicable - what
+    /// handle->getSceneId() answers, and what survives a rename.
+    ///
+    /// It used to hold the scene's PATH, under a name that said id. The path is `scenePath` now.
     std::optional<std::string> sceneId;
     /// Id of the block where the issue was found, if applicable.
     std::optional<std::string> blockId;
+    /// The path of that scene (reactor_breach) - what a writer reads, and what a rename changes.
+    ///
+    /// Declared LAST, after blockId, on purpose: a DiagnosticEntry is built positionally,
+    /// {code, message, sceneId, blockId}, and a field inserted in the middle would silently receive
+    /// every blockId written before it existed.
+    std::optional<std::string> scenePath;
 };
 
 /// Aggregate statistics from blueprint validation.
@@ -636,6 +646,13 @@ struct SceneContext {
     /// With Deadlocked: the blocks the parked tracks were still waiting for, each once, in the
     /// order they were asked for. Empty otherwise.
     std::vector<std::string> waitingFor;
+    /// With Faulted: what was thrown — the fault that closed the scene, not a cleanup that failed
+    /// while it closed. Empty otherwise.
+    ///
+    /// The same exception is ALSO re-thrown, to whoever entered the walk: in a game that is a key
+    /// press or a timer calling next(), never the code awaiting the end of the scene — which is why
+    /// it is handed here as well. Log it in one of the two places, not both.
+    std::exception_ptr error;
 };
 
 // ─── Handler Types ───────────────────────────────────────────────────────────
@@ -808,6 +825,14 @@ public:
     virtual void onCondition(TypedBlockHandler<BlueprintBlock, IConditionContext> handler) = 0;
     /// Override all ACTION blocks for this scene (Tier 2).
     virtual void onAction(TypedBlockHandler<BlueprintBlock, IActionContext> handler) = 0;
+
+    /// The stable id of this scene (sc_u0vqg2g8). Store THIS one outside the payload - a save file,
+    /// an asset - because it survives a rename.
+    ///
+    /// onSceneExit is global: with several scenes playing, this is how it tells which one ended.
+    virtual const std::string& getSceneId() const = 0;
+    /// The path of this scene (reactor_breach): what a writer reads, and what a rename changes.
+    virtual const std::string& getScenePath() const = 0;
 
     /// Get the block currently being executed, or nullptr if scene is not running.
     virtual const BlueprintBlock* getCurrentBlock() const = 0;

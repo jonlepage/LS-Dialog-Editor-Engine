@@ -26,9 +26,29 @@ runtimes as far as each language allows.
   move. It now closes.
 - **A cleanup that cancels its own scene** (or calls `engine.stop()`) no longer fires `onSceneExit`
   twice.
+- **C#: a `null` in the export no longer makes `Init()` throw.** Newtonsoft and System.Text.Json both
+  hand `"dict": null` over as a null string, and a null `dict`, `entry` or parameter `name` — or a
+  null function, dictionary, card or block id — threw `ArgumentNullException`, from the call whose job
+  is to refuse a payload and say why. They are warned about now, as in TypeScript, and a `choice` test
+  whose `entry` is null no longer throws in play either.
+- **`DUPLICATE_SCENE` catches two scenes sharing a stable id**, as the guide already said. Only a
+  repeated path was caught, and a lookup by that id silently opened whichever scene came last.
+- **The LLM guide (`llm-full-guide*.txt`) carries the code samples and every guide page.** Its
+  `<!--@include-->` directives were copied through unexpanded, and five pages — lifecycle, async
+  tracks, router, parsing, character distribution — were left out.
 
 ### Added
 
+- **`init()` checks what the blocks use**, not only the tables the export declares. Eight new
+  warnings, always on — no `check` needed: `EMPTY_FUNCTION`, `UNDECLARED_FUNCTION`,
+  `UNDECLARED_ARGUMENT`, `UNDECLARED_DICTIONARY_KEY`, `UNDECLARED_DICTIONARY`, `UNDECLARED_ENTRY`,
+  `UNKNOWN_CHOICE_BLOCK`, `UNKNOWN_CHOICE_OPTION`. A call to a function the export does not declare —
+  a v1 id left behind in a project — used to load without a word and fail in game.
+- **`onSceneExit` is handed the error that closed a faulted scene**, in `context.error`
+  (`Context.Error` in C#). It is still thrown to whoever called `next()`; log it in one place.
+- **The handle names its scene**: `getSceneId()` and `getScenePath()`, so a global `onSceneExit`
+  can tell which scene ended when several play. A class of your own that implements the handle
+  interface — a test double — has to add both.
 - **`onSceneExit` says why the scene ended**: `context.reason` is `completed`, `cancelled`,
   `invalidated`, `faulted` or `deadlocked`, and a deadlock also carries `context.waitingFor`, the
   blocks still awaited. `SceneEndReason` is exported (`LsdeTypes.SCENE_END_*` in GDScript).
@@ -38,6 +58,9 @@ runtimes as far as each language allows.
 
 ### Changed
 
+- **`DiagnosticEntry.sceneId` holds the scene's stable id** (`sc_…`) — what its name always said, and
+  what `handle.getSceneId()` answers. It held the path, which is the new `scenePath`. **Code that read
+  the path from `sceneId` must read `scenePath`.**
 - **A `resolve()` called inside `onBeforeBlock` takes effect when `onBeforeBlock` returns** — like
   `next()` inside a handler. Code written after `resolve()` now runs before the block is dispatched,
   not after it.

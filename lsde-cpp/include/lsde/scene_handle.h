@@ -83,6 +83,8 @@ public:
     void onChoice(TypedBlockHandler<BlueprintBlock, IChoiceContext> handler) override;
     void onCondition(TypedBlockHandler<BlueprintBlock, IConditionContext> handler) override;
     void onAction(TypedBlockHandler<BlueprintBlock, IActionContext> handler) override;
+    const std::string& getSceneId() const override;
+    const std::string& getScenePath() const override;
     const BlueprintBlock* getCurrentBlock() const override;
     const std::vector<std::string>& getVisitedBlocks() const override;
     bool isRunning() const override;
@@ -140,9 +142,11 @@ public:
 
     /// Code of the game threw during the walk. Close the scene; the track re-throws.
     ///
-    /// What a cleanup throws while closing is dropped here, on purpose: the game gets the exception
-    /// that started it, which is the one that explains everything after.
-    void fault() override;
+    /// `error` is handed to onSceneExit, because the re-throw reaches whoever entered the walk — a
+    /// key press, a timer — and never the code awaiting the end of the scene. What a cleanup throws
+    /// while closing is dropped, on purpose: the game gets the exception that started it, which is
+    /// the one that explains everything after.
+    void fault(std::exception_ptr error) override;
 
     /// Throw when the game calls into a running scene from another thread than the one that
     /// started it.
@@ -184,8 +188,10 @@ public:
 private:
     /// Close the scene down: cancel every track, fire onSceneExit, tell the engine.
     ///
-    /// `waitingFor` must be read BEFORE: the pending waits are cleared on the way in.
-    std::exception_ptr shutdown(const std::string& reason, std::vector<std::string> waitingFor = {});
+    /// `waitingFor` must be read BEFORE: the pending waits are cleared on the way in. `error` is
+    /// the fault that closed the scene, handed to onSceneExit.
+    std::exception_ptr shutdown(const std::string& reason, std::vector<std::string> waitingFor = {},
+                                std::exception_ptr error = nullptr);
     /// A track that ended is stopped, not deleted — see the note in shutdown().
     /// Retire an ended parallel track. A no-op by design — see the definition.
     void retireTrack(Track* track);
@@ -198,7 +204,7 @@ private:
     bool evaluateConditionWithHistory(const ConditionTest& test,
         const std::function<bool(const ConditionTest&)>& fallbackEvaluator);
     void fireSceneEnter();
-    void fireSceneExit(const std::string& reason, const std::vector<std::string>& waitingFor);
+    void fireSceneExit(const SceneContext& context);
     std::unique_ptr<IBaseBlockContext> createContext(const BlueprintBlock& block,
                                                      const std::string& entryPort);
     /// Returns the scene-level resolver if set, otherwise the engine-level resolver.

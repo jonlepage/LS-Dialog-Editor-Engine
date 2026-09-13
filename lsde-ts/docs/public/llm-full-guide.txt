@@ -56,7 +56,45 @@ Every runtime follows the same **callback-driven graph dispatcher** pattern:
 
 ## Installation
 
-<!--@include: ../_shared/install-tabs.md-->
+
+```bash [TypeScript]
+npm install @lsde/dialog-engine
+```
+```bash [C#]
+dotnet add package LsdeDialogEngine
+
+# JSON loader — choose ONE based on your platform:
+dotnet add package LsdeDialogEngine.Newtonsoft        # Unity
+dotnet add package LsdeDialogEngine.SystemTextJson    # .NET 5+ / Godot .NET
+```
+```bash [C++ (CMake)]
+# Add as a git submodule
+git submodule add https://github.com/jonlepage/LS-Dialog-Editor-Engine.git deps/lsde
+
+# CMakeLists.txt
+add_subdirectory(deps/lsde/lsde-cpp)
+target_link_libraries(your_target PRIVATE lsde)
+```
+```bash [Unreal Engine]
+# Copy the headers and source into your project
+# e.g. Source/YourModule/ThirdParty/lsde/
+
+cp -r lsde-cpp/include/lsde  YourProject/Source/YourModule/ThirdParty/lsde/include
+cp -r lsde-cpp/src/*          YourProject/Source/YourModule/ThirdParty/lsde/src
+
+# In your module's .Build.cs, add:
+# PublicIncludePaths.Add(Path.Combine(ModuleDirectory, "ThirdParty/lsde/include"));
+# Add the .cpp files from ThirdParty/lsde/src/ to your module
+```
+```bash [GDScript]
+# Clone the repository
+git clone https://github.com/jonlepage/LS-Dialog-Editor-Engine.git
+
+# Copy the addon into the Godot project
+mkdir -p addons
+cp -r LS-Dialog-Editor-Engine/lsde-gdscript/addons/lsde addons/lsde
+rm -rf LS-Dialog-Editor-Engine
+```
 
 ## Minimal Usage
 
@@ -65,15 +103,197 @@ The engine is a graph traversal machine — it dispatches blocks to registered h
 > TIP:
 The engine consumes a `BlueprintExport` object, not a file. You can load your blueprint from JSON, XML, or YAML using any parser suited to your platform. See [Parsing & Import](./parsing) for recommendations.
 
-<!--@include: ../_shared/getting-started-usage.md-->
+```ts [TypeScript]
+import { DialogueEngine } from '@lsde/dialog-engine';
+import blueprintJson from './blueprints.json';
+
+const engine = new DialogueEngine();
+engine.init({ data: blueprintJson });
+
+// Unified condition resolver — evaluates game-state conditions for both
+// choice visibility and condition block pre-evaluation.
+engine.onResolveCondition((cond) => game.evaluateCondition(cond));
+
+// 3 required handlers — bridge between the engine and your game
+// (onCondition is optional when onResolveCondition is installed)
+engine.onDialog(({ scene, block, context, next }) => {
+  game
+    .createDialogAuto(block, context)
+    .catch(() => scene.cancel())
+    .finally(() => next());
+});
+
+engine.onChoice(({ scene, block, context, next }) => {
+  game
+    .createChoiceAuto(block, context)
+    .catch(() => scene.cancel())
+    .finally(() => next());
+});
+
+engine.onAction(({ block, context, next }) => {
+  game
+    .executeActions(block.actions)
+    .catch((err) => context.reject(err))
+    .finally(() => next());
+});
+
+// Start a scene anywhere in your game code
+function myGameScript(sceneId: string) {
+  const scene = engine.scene(sceneId);
+  scene.start();
+}
+```
+```csharp [C#]
+using LsdeDialogEngine;
+using LsdeDialogEngine.Json; // LsdeDialogEngine.SystemTextJson package
+// Unity: use LsdeDialogEngine.Newtonsoft instead
+
+var blueprint = LsdeJson.Parse(File.ReadAllText("blueprints.json"));
+var engine = new DialogueEngine();
+engine.Init(new InitOptions { Data = blueprint });
+
+// Unified condition resolver — evaluates game-state conditions for both
+// choice visibility and condition block pre-evaluation.
+engine.OnResolveCondition(cond => Game.EvaluateCondition(cond));
+
+// 3 required handlers — bridge between the engine and your game
+engine.OnDialog(args => {
+    var (scene, block, context, next) = args;
+    Game.ShowDialog(block, context, onComplete: next);
+});
+
+engine.OnChoice(args => {
+    var (scene, block, context, next) = args;
+    Game.ShowChoices(block, context, onSelected: next);
+});
+
+engine.OnAction(args => {
+    var (scene, block, context, next) = args;
+    Game.ExecuteActions(block.Actions);
+    context.Resolve();
+    next();
+});
+
+// Start a scene anywhere in your game code
+void MyGameScript(string sceneId) {
+    var scene = engine.Scene(sceneId);
+    scene.Start();
+}
+```
+```cpp [C++]
+#include <lsde/engine.h>
+
+using namespace lsde;
+
+DialogueEngine engine;
+engine.init({blueprint});
+
+// Unified condition resolver — evaluates game-state conditions for both
+// choice visibility and condition block pre-evaluation.
+engine.onResolveCondition([](const ConditionTest& cond) {
+    return game->evaluateCondition(cond);
+});
+
+// 3 required handlers — bridge between the engine and your game
+engine.onDialog([](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn {
+    game->showDialog(block, ctx, [next]() { next(); });
+    return {};
+});
+
+engine.onChoice([](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn {
+    game->showOptions(block, ctx, [next]() { next(); });
+    return {};
+});
+
+engine.onAction([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
+    game->executeActions(block->actions);
+    ctx->resolve();
+    next();
+    return {};
+});
+
+// Start a scene anywhere in your game code
+auto scene = engine.scene(sceneId);
+scene->start();
+```
+```gdscript [GDScript]
+var engine = LsdeDialogueEngine.new()
+engine.init({"data": blueprint})
+
+# Unified condition resolver — evaluates game-state conditions for both
+# choice visibility and condition block pre-evaluation.
+engine.on_resolve_condition(func(cond):
+    return game.evaluate_condition(cond)
+)
+
+# 3 required handlers — bridge between the engine and your game
+engine.on_dialog(func(args):
+    await game.show_dialog(args["block"], args["context"])
+    args["next"].call()
+)
+
+engine.on_choice(func(args):
+    await game.show_options(args["block"], args["context"])
+    args["next"].call()
+)
+
+engine.on_action(func(args):
+    game.execute_actions(args["block"].actions)
+    args["context"].resolve()
+    args["next"].call()
+)
+
+# Start a scene anywhere in your game code
+func my_game_script(scene_id: String):
+    var scene = engine.scene(scene_id)
+    scene.start()
+```
 
 ## Blueprint Validation
 
 `engine.init()` returns a [diagnostic report](/api-ref/interfaces/DiagnosticReport) with errors, warnings, and stats. The `check` option cross-validates against the host application's capabilities:
 
-<!--@include: ../_shared/getting-started-validation.md-->
 
-### The seventeen diagnostics
+```ts [TypeScript]
+engine.init({
+  data,
+  check: {
+    functions: ['set_flag', 'play_sound'],          // function ids your game implements
+    dictionaries: { items: ['sword', 'shield'] },   // dictionary ids and their entry keys
+    cards: ['Alice', 'Bob'],                        // card NAMES, never the editor id
+  },
+});
+```
+```csharp [C#]
+engine.Init(new InitOptions {
+    Data = blueprint,
+    Check = new CheckOptions {
+        Functions = new() { "set_flag", "play_sound" },
+        Dictionaries = new() { ["items"] = new() { "sword", "shield" } },
+        Cards = new() { "Alice", "Bob" },
+    },
+});
+```
+```cpp [C++]
+lsde::CheckOptions check;
+check.functions = {"set_flag", "play_sound"};
+check.dictionaries = {{"items", {"sword", "shield"}}};
+check.cards = {"Alice", "Bob"};
+
+engine.init({blueprint, check});
+```
+```gdscript [GDScript]
+engine.init({
+    "data": blueprint,
+    "check": {
+        "functions": ["set_flag", "play_sound"],
+        "dictionaries": {"items": ["sword", "shield"]},
+        "cards": ["Alice", "Bob"],
+    },
+})
+```
+
+### The twenty-five diagnostics
 
 **Errors — the payload is refused and nothing plays.** `errors` is non-empty and `engine.scene()` has nothing to hand you.
 
@@ -97,12 +317,25 @@ The engine consumes a `BlueprintExport` object, not a file. You can load your bl
 |---|---|
 | `NO_START_BLOCK` | The scene has no start block, so `start()` has nowhere to begin |
 | `UNKNOWN_WAIT_BLOCK` | A `waitForBlocks` id is not a block of the scene, so that track parks **for good**. The check cannot go further: an id that does exist may still never be played |
+| `EMPTY_FUNCTION` | An action has a call with no function picked. The game is handed a call it cannot run |
+| `UNDECLARED_FUNCTION` | An action calls a function the export does not declare — a v1 id left behind in the project, say. It used to load silently and fail in game |
+| `UNDECLARED_ARGUMENT` | A call passes an argument the function does not declare |
+| `UNDECLARED_DICTIONARY_KEY` | A `dictionaryKey` argument is not an entry of the dictionary its parameter names |
+| `UNDECLARED_DICTIONARY` | A condition tests a dictionary the export does not declare |
+| `UNDECLARED_ENTRY` | A condition tests an entry its dictionary does not declare |
+| `UNKNOWN_CHOICE_BLOCK` | A test on the reserved `choice` dictionary names a block that is not a CHOICE of this scene |
+| `UNKNOWN_CHOICE_OPTION` | A test on the reserved `choice` dictionary names an option that CHOICE does not have |
 | `UNKNOWN_FUNCTION` | An action calls a function id your `check.functions` does not list |
 | `UNKNOWN_DICTIONARY` | A condition tests a dictionary id your `check.dictionaries` does not list |
 | `UNKNOWN_DICTIONARY_ENTRY` | The dictionary is known, the entry key is not |
 | `UNKNOWN_CARD` | A block cites an actor card NAME your `check.cards` does not list |
 
 The last four only appear when you pass `check` — without it the engine has nothing to compare against.
+The eight above them are always on: they compare what the blocks USE with what the export itself
+DECLARES, so no `check` is needed.
+
+A diagnostic found in a scene carries `sceneId` — the stable id (`sc_…`), what `handle.getSceneId()`
+answers — and `scenePath`, plus `blockId` when it points at a block.
 
 ================================================================================
 
@@ -112,7 +345,66 @@ The last four only appear when you pass `check` — without it the engine has no
 
 A `BlueprintExport` is the JSON file exported from the [LSDE](https://lepasoft.com/en/software/ls-dialog-editor "Lepasoft Dialog Editor") editor. It contains all the data the engine needs.
 
-<!--@include: ../_shared/blueprint-export-type.md-->
+
+```ts [TypeScript]
+interface BlueprintExport {
+  format: "lsde-blueprints";       // anything else is refused outright
+  version: 1;                      // the FORMAT version, not the editor's
+  generator: Generator;            // which software wrote the file
+  exportedAt: string;              // ISO 8601
+  project: string;
+  locales: string[];
+  referenceLocale: string;         // the locale written first
+  dictionaries: DictionaryDefinition[];
+  functions: FunctionDefinition[];
+  cards: Card[];                   // what a block's `actors` and `emotion` cite
+  scenes: BlueprintScene[];
+}
+```
+```csharp [C#]
+public class BlueprintExport {
+    public string Format { get; set; }              // "lsde-blueprints"
+    public int Version { get; set; }                // 1
+    public Generator? Generator { get; set; }
+    public string ExportedAt { get; set; }
+    public string Project { get; set; }
+    public List<string> Locales { get; set; }
+    public string ReferenceLocale { get; set; }
+    public List<DictionaryDefinition> Dictionaries { get; set; }
+    public List<FunctionDefinition> Functions { get; set; }
+    public List<Card> Cards { get; set; }
+    public List<BlueprintScene> Scenes { get; set; }
+}
+```
+```cpp [C++]
+struct BlueprintExport {
+    std::string format;                          // "lsde-blueprints"
+    int version = 0;                             // 1
+    Generator generator;
+    std::string exportedAt;
+    std::string project;
+    std::vector<std::string> locales;
+    std::string referenceLocale;
+    std::vector<DictionaryDefinition> dictionaries;
+    std::vector<FunctionDefinition> functions;
+    std::vector<Card> cards;
+    std::vector<BlueprintScene> scenes;
+};
+```
+```gdscript [GDScript]
+# Dictionary with keys:
+# "format":          String  — always "lsde-blueprints"
+# "version":         int     — the FORMAT version, 1
+# "generator":       Dictionary
+# "exportedAt":      String  — ISO 8601
+# "project":         String
+# "locales":         Array[String]
+# "referenceLocale": String
+# "dictionaries":    Array[Dictionary]
+# "functions":       Array[Dictionary]
+# "cards":           Array[Dictionary]
+# "scenes":          Array[Dictionary]
+```
 
 ## Scenes
 
@@ -120,7 +412,42 @@ A scene is a self-contained dialogue sequence — a conversation, a cutscene, a 
 
 Each scene has its own entry block, its own flow, and its own state. Multiple scenes can run in parallel (e.g. a main dialogue and a tutorial overlay). Scenes are defined by the [`BlueprintScene`](/api-ref/type-aliases/BlueprintScene) interface:
 
-<!--@include: ../_shared/blueprint-scene-type.md-->
+
+```ts [TypeScript]
+interface Scene {
+  scene: string;        // the path — reactor_breach. Builds the i18n keys; changes on a rename.
+  id: string;           // the stable id — sc_u0vqg2g8. Store THIS outside the payload.
+  label?: string;
+  start?: string;       // the id of the entry block. The scene names it; blocks carry no flag.
+  blocks: Block[];      // wires live on each block, in block.next. There is no connection table.
+}
+```
+```csharp [C#]
+public class BlueprintScene {
+    public string Scene { get; set; }        // the path — reactor_breach
+    public string Id { get; set; }           // the stable id — sc_u0vqg2g8
+    public string? Label { get; set; }
+    public string? Start { get; set; }       // the id of the entry block
+    public List<BlueprintBlock> Blocks { get; set; }
+}
+```
+```cpp [C++]
+struct BlueprintScene {
+    std::string scene;                       // the path — reactor_breach
+    std::string id;                          // the stable id — sc_u0vqg2g8
+    std::optional<std::string> label;
+    std::optional<std::string> start;        // the id of the entry block
+    std::vector<BlueprintBlock> blocks;
+};
+```
+```gdscript [GDScript]
+# Dictionary with keys:
+# "scene": String        — the path, reactor_breach
+# "id": String           — the stable id, sc_u0vqg2g8
+# "label": String (optional)
+# "start": String (optional) — the id of the entry block
+# "blocks": Array[Dictionary] — wires live on each block, in block["next"]
+```
 
 ## Connections
 
@@ -130,7 +457,40 @@ A wire has **never** crossed a scene, in any version of the format: `to` always 
 
 [`BlueprintConnection`](/api-ref/type-aliases/BlueprintConnection) is the **flattened** view of those wires, the one `engine.getSceneConnections(sceneRef)` returns — a wire with the block it leaves put back on it:
 
-<!--@include: ../_shared/blueprint-connection-type.md-->
+
+```ts [TypeScript]
+// A Link, plus the block it leaves. `Link` is what the payload carries, on block.next.
+type BlueprintConnection = Link & { from: string };
+
+interface Link {
+  port: string;    // the exit port NAME: out, then, catch, default, C1, K1, or a card id
+  to: string;      // the id of the target block, IN THE SAME SCENE
+  toPort: string;  // always "in"
+}
+```
+```csharp [C#]
+public class BlueprintConnection {
+    public string From { get; set; }    // the id of the block this wire leaves
+    public string Port { get; set; }    // the exit port NAME
+    public string To { get; set; }      // the id of the target block, in the same scene
+    public string ToPort { get; set; }  // always "in"
+}
+```
+```cpp [C++]
+struct BlueprintConnection {
+    std::string from;             // the id of the block this wire leaves
+    std::string port;             // the exit port NAME
+    std::string to;               // the id of the target block, in the same scene
+    std::string toPort = "in";
+};
+```
+```gdscript [GDScript]
+# Dictionary with keys:
+# "from": String    — the id of the block this wire leaves
+# "port": String    — the exit port NAME: out, then, catch, default, C1, K1, or a card id
+# "to": String      — the id of the target block, in the same scene
+# "toPort": String  — always "in"
+```
 
 You won't typically need to inspect them — the engine handles routing internally. `engine.getSceneConnections(sceneRef)` exposes them for **graph inspection**: a debug view that shows the wiring without playing the scene.
 
@@ -138,13 +498,86 @@ You won't typically need to inspect them — the engine handles routing internal
 
 Dictionaries describe the registers of your game — switches, variables, inventory. The developer declares them in the [LSDE](https://lepasoft.com/en/software/ls-dialog-editor "Lepasoft Dialog Editor") editor to expose available game variables to the narrative designer. At runtime, the developer maps each dictionary to the corresponding system in their game. [`Conditions`](/api-ref/interfaces/ConditionTest) and [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) use these keys to evaluate game state. Defined by the [`DictionaryDefinition`](/api-ref/interfaces/DictionaryDefinition) interface:
 
-<!--@include: ../_shared/blueprint-dictionary-type.md-->
+
+```ts [TypeScript]
+interface DictionaryDefinition {
+  id: string;                                  // what a ConditionTest.dict cites
+  valueType: 'boolean' | 'number' | 'string';  // what its entries hold
+  entries: string[];                           // the entry names, flat
+}
+```
+```csharp [C#]
+public class DictionaryDefinition {
+    public string Id { get; set; }
+    public string ValueType { get; set; }      // "boolean" | "number" | "string"
+    public List<string> Entries { get; set; }
+}
+```
+```cpp [C++]
+struct DictionaryDefinition {
+    std::string id;
+    std::string valueType;                     // "boolean" | "number" | "string"
+    std::vector<std::string> entries;
+};
+```
+```gdscript [GDScript]
+# Dictionary with keys:
+# "id": String
+# "valueType": "boolean" | "number" | "string"
+# "entries": Array[String]
+```
 
 ## Functions
 
 Functions describe what your game knows how to do — `set_flag`, `play_sound`, `give_item`. The developer declares them in the [LSDE](https://lepasoft.com/en/software/ls-dialog-editor "Lepasoft Dialog Editor") editor so that narrative designers can compose sequences with typed parameters. At runtime, the function `id` is what the developer maps to their own systems: an ACTION block cites it in `call.fn`, and its arguments arrive **by name** in `call.args`. Defined by the [`FunctionDefinition`](/api-ref/interfaces/FunctionDefinition) interface:
 
-<!--@include: ../_shared/blueprint-signature-type.md-->
+
+```ts [TypeScript]
+interface FunctionDefinition {
+  id: string;                  // what an ActionCall.fn names
+  params: FunctionParameter[];
+}
+
+interface FunctionParameter {
+  name: string;                // ActionCall.args is keyed BY NAME, never by position
+  type: ValueType;             // 'boolean' | 'number' | 'string' | 'dictionaryKey'
+  dictionary?: string;         // for type 'dictionaryKey': the DictionaryDefinition.id it draws from
+}
+```
+```csharp [C#]
+public class FunctionDefinition {
+    public string Id { get; set; }
+    public List<FunctionParameter> Params { get; set; }
+}
+
+public class FunctionParameter {
+    public string Name { get; set; }
+    public string Type { get; set; }
+    public string? Dictionary { get; set; }
+}
+```
+```cpp [C++]
+struct FunctionDefinition {
+    std::string id;
+    std::vector<FunctionParameter> params;
+};
+
+struct FunctionParameter {
+    std::string name;
+    std::string type;
+    std::optional<std::string> dictionary;
+};
+```
+```gdscript [GDScript]
+# FunctionDefinition Dictionary:
+# "id": String
+# "params": Array[FunctionParameter]
+#
+# FunctionParameter Dictionary:
+# "name": String   — args are keyed BY NAME, never by position
+# "type": "boolean" | "number" | "string" | "dictionaryKey"
+# "dictionary": String (optional) — for type "dictionaryKey", the DictionaryDefinition id
+```
 
 ================================================================================
 
@@ -160,7 +593,167 @@ Handlers come in two tiers: **global handlers** (registered on the engine) cover
 
 A dialog block represents a line of speech — a character talking, a narrator, on-screen text. The engine resolves the speaking character via the `onResolveCharacter` callback and exposes it as `context.character`. A typical dialog handler creates a text instance in the game (textbox, bubble, subtitle…), waits for the player or an animation to finish, then calls `next()` to advance the engine. The optional cleanup function lets you clean up side effects when the engine moves to the next block.
 
-<!--@include: ../_shared/block-dialog.md-->
+
+```ts [TypeScript]
+engine.onDialog(({ block, context, next }) => {
+  const { text, props } = block;
+  const { character, resolveCharacterPort } = context;
+  const line = game.getLocalizedText(text);
+  const emotion = game.getCharacterEmotion(character);
+
+  character && resolveCharacterPort(character.id);
+
+  game.moveCameraToCharacter(character);
+  game.animateCharacter(character, emotion);
+
+  const dialog = game.createDialog(line, character, emotion);
+
+  // next() tells the engine this block is done. WHEN to call it is answered by three
+  // natives, and `timeout` comes FIRST because it outranks the other two: all three
+  // say when the block is left, and the card is the most specific answer.
+  if (props?.timeout) {
+    // MILLISECONDS, and the countdown starts when the line has been SAID — `timeout`
+    // is how long it STAYS on screen afterwards. Arming it on arrival truncates any
+    // line slower to reveal than the timeout allows.
+    dialog.onRevealComplete(() => game.wait(props.timeout).then(() => next()));
+    // A click may HURRY that reveal; it may not dismiss a line that plays its own time.
+    dialog.onInput(() => dialog.skipReveal(), { once: true });
+  } else if (game.shouldWaitPlayerInputForDialog(props)) {
+    dialog.onInput(() => next(), { once: true });
+  } else {
+    dialog.onRevealComplete(() => next());
+  }
+
+  // cleanup: runs when the engine moves to the next block
+  return () => {
+    dialog.destroy();
+    game.animateCharacter(character, false);
+  };
+});
+```
+```csharp [C#]
+engine.OnDialog(args => {
+    var (scene, block, context, next) = args;
+    var (text, ch, emotion) = (
+        Game.GetLocalizedText(block.Text),
+        context.Character,
+        Game.GetCharacterEmotion(context.Character)
+    );
+
+    if (ch != null) context.ResolveCharacterPort(ch.Id);
+
+    Game.MoveCameraToCharacter(ch);
+    Game.AnimateCharacter(ch, emotion);
+
+    var dialog = Game.CreateDialog(text, ch, emotion);
+    var natives = block.NativeProperties;
+
+    // next() tells the engine this block is done. Timeout comes FIRST: it outranks
+    // WaitInput and it outranks leaving at once. All three say when the block is left,
+    // and the one the writer put on the card is the most specific answer.
+    if (natives?.Timeout > 0) {
+        // MILLISECONDS, and the countdown starts when the line has been SAID — Timeout
+        // is how long it STAYS on screen afterwards. Arming it on arrival truncates any
+        // line slower to reveal than the timeout allows.
+        dialog.OnRevealComplete(() =>
+            Game.Wait(natives.Timeout.Value).Then(() => next()));
+        // A click may HURRY that reveal; it may not dismiss a line playing its own time.
+        dialog.OnInput(() => dialog.SkipReveal(), once: true);
+    } else if (Game.ShouldWaitPlayerInputForDialog(natives)) {
+        dialog.OnInput(() => next(), once: true);
+    } else {
+        dialog.OnRevealComplete(() => next());
+    }
+
+    // cleanup: runs when the engine moves to the next block
+    return () => {
+        dialog.Destroy();
+        Game.AnimateCharacter(ch, false);
+    };
+});
+```
+```cpp [C++]
+engine.onDialog([&game](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn {
+    auto* ch = ctx->character();
+    auto text = game.getLocalizedText(block->text);
+    auto emotion = game.getCharacterEmotion(ch);
+
+    if (ch) ctx->resolveCharacterPort(ch->id);
+
+    game.moveCameraToCharacter(ch);
+    game.animateCharacter(ch, emotion);
+
+    auto* dialog = game.createDialog(text, ch, emotion);
+    auto natives = lsde::getNativeProperties(*block);
+
+    // next() tells the engine this block is done. timeout comes FIRST: it outranks
+    // waitInput and it outranks leaving at once. All three say when the block is left,
+    // and the one the writer put on the card is the most specific answer.
+    if (natives.timeout.value_or(0) > 0) {
+        // MILLISECONDS, and the countdown starts when the line has been SAID - timeout
+        // is how long it STAYS on screen afterwards. Arming it on arrival truncates any
+        // line slower to reveal than the timeout allows.
+        const auto stayMs = *natives.timeout;
+        dialog->onRevealComplete([&game, next, stayMs]() {
+            game.wait(stayMs).then([next]() { next(); });
+        });
+        // A click may HURRY that reveal; it may not dismiss a line playing its own time.
+        dialog->onInput([dialog]() { dialog->skipReveal(); });
+    } else if (game.shouldWaitPlayerInputForDialog(block->props)) {
+        dialog->onInput([next]() { next(); });
+    } else {
+        dialog->onRevealComplete([next]() { next(); });
+    }
+
+    // cleanup: runs when the engine moves to the next block
+    return [dialog, &game, ch]() {
+        dialog->destroy();
+        game.animateCharacter(ch, false);
+    };
+});
+```
+```gdscript [GDScript]
+engine.on_dialog(func(args):
+    var block = args["block"]
+    var ctx = args["context"]
+    var next_fn = args["next"]
+    var ch = ctx.character
+    var text = game.get_localized_text(block.get("text"))
+    var emotion = game.get_character_emotion(ch)
+
+    if ch:
+        ctx.resolve_character_port(ch.get("id", ""))
+
+    game.move_camera_to_character(ch)
+    game.animate_character(ch, emotion)
+
+    var dialog = game.create_dialog(text, ch, emotion)
+    var natives = block.get("props", {})
+    var stay_ms = natives.get("timeout", 0)
+
+    # next_fn.call() tells the engine this block is done. timeout comes FIRST: it
+    # outranks waitInput and it outranks leaving at once. All three say when the block
+    # is left, and the one written on the card is the most specific answer.
+    if stay_ms > 0:
+        # A click may HURRY the reveal; it may not dismiss a line playing its own time.
+        dialog.on_input(func(): dialog.skip_reveal(), true)
+        # MILLISECONDS, counted from the moment the line has been SAID — stay_ms is how
+        # long it REMAINS on screen afterwards, never how long it has to be said in.
+        await dialog.reveal_finished
+        await game.wait(stay_ms)
+        next_fn.call()
+    elif game.should_wait_player_input(natives):
+        dialog.on_input(func(): next_fn.call(), true)
+    else:
+        await dialog.reveal_finished
+        next_fn.call()
+
+    # cleanup: runs when the engine moves to the next block
+    return func():
+        dialog.destroy()
+        game.animate_character(ch, false)
+)
+```
 
 When the narrative designer assigns a dedicated output per character ([`portPerCharacter`](/api-ref/interfaces/NativeProperties#portpercharacter)), the handler must call `resolveCharacterPort()` to tell the engine which path to follow on `next()`.
 
@@ -168,7 +761,127 @@ When the narrative designer assigns a dedicated output per character ([`portPerC
 
 A choice block represents a branching point where the player picks a response — a dialogue menu, a list of options. `context.options` contains all available options. When [`onResolveCondition()`](/guide/choice-visibility) is configured, each option is tagged `visible: true | false` — the handler filters and displays whichever it wants. After the player interacts, `selectChoice(optionId)` tells the engine which path to follow — **the option id IS the port** the flow leaves by (`C1`, `C2`…) — then `next()` advances the flow.
 
-<!--@include: ../_shared/block-choice.md-->
+
+```ts [TypeScript]
+engine.onChoice(({ block, context, next }) => {
+  const natives = LsdeUtils.getNativeProperties(block);
+  const { options, selectChoice } = context;
+
+  // EVERY option is handed over, tagged. Filtering is your call — keeping the hidden ones lets
+  // you grey them out or show "[locked]" instead of making them vanish.
+  const offered = options.filter((o) => o.visible !== false);
+  const dialog = game.createChoice(offered);
+
+  // The option id IS its exit port (C1, C2…), so hand it straight back.
+  dialog
+    .then((selected) => selectChoice(selected))
+    .finally(() => next());
+
+  // Optional: if the writer set a timeout on this block. MILLISECONDS in v2, and a
+  // CHOICE has no line to reveal, so the countdown starts once the options are readable.
+  //
+  // It must still SELECT one. An option id IS the exit port, so a choice left without
+  // `selectChoice()` resolves to NO link at all and the branch dies silently — the
+  // engine has nothing to follow. Picking the first offered option is the usual answer;
+  // a `when` on it lets the writer decide which one that is.
+  if (natives.timeout) {
+    const timeout = game.wait(natives.timeout).then(() => {
+      if (offered.length > 0) selectChoice(offered[0].id);
+      next();
+    });
+    dialog.finally(() => timeout.cancel());
+  }
+
+  return () => dialog.destroy();
+});
+```
+```csharp [C#]
+engine.OnChoice(args => {
+    var natives = LsdeUtils.GetNativeProperties(args.Block);
+    var offered = args.Context.Options
+        .Where(o => o.Visible != false).ToList();
+
+    var dialog = Game.CreateChoice(offered);
+
+    // The option id IS its exit port (C1, C2…), so hand it straight back.
+    dialog.OnSelect(selected => {
+        args.Context.SelectChoice(selected);
+        args.Next();
+    });
+
+    // Optional: MILLISECONDS in v2, counted from the moment the options are readable.
+    // It must still SELECT one: an option id IS the exit port, so a choice left without
+    // SelectChoice() resolves to NO link and the branch dies silently.
+    if (natives.Timeout is { } timeout)
+        Game.Wait(timeout).Then(() => {
+            if (offered.Count > 0) args.Context.SelectChoice(offered[0].Id);
+            args.Next();
+        });
+
+    return () => dialog.Destroy();
+});
+```
+```cpp [C++]
+engine.onChoice([&game](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
+    std::vector<const lsde::RuntimeChoiceItem*> offered;
+    for (const auto& option : ctx->options())
+        if (option.visible.value_or(true))
+            offered.push_back(&option);
+
+    auto* dialog = game.createChoice(offered);
+
+    // The option id IS its exit port (C1, C2…), so hand it straight back.
+    dialog->onSelect([ctx, next](const std::string& selected) {
+        ctx->selectChoice(selected);
+        next();
+    });
+
+    // Optional: MILLISECONDS in v2, counted from the moment the options are readable.
+    // It must still SELECT one: an option id IS the exit port, so a choice left without
+    // selectChoice() resolves to NO link and the branch dies silently.
+    auto natives = lsde::getNativeProperties(*block);
+    if (natives.timeout) {
+        game.wait(*natives.timeout).then([ctx, next, offered]() {
+            if (!offered.empty()) ctx->selectChoice(offered.front()->id);
+            next();
+        });
+    }
+
+    return [dialog]() { dialog->destroy(); };
+});
+```
+```gdscript [GDScript]
+engine.on_choice(func(args):
+    var ctx = args["context"]
+    var natives = LsdeUtils.get_native_properties(args["block"])
+
+    var offered = []
+    for option in ctx.options:
+        if option.get("visible") != false:
+            offered.append(option)
+
+    var dialog = game.create_choice(offered)
+
+    # The option id IS its exit port (C1, C2…), so hand it straight back.
+    var selected = await dialog.choice_selected
+    ctx.select_choice(selected)
+    args["next"].call()
+
+    # Optional: natives.get("timeout") is in MILLISECONDS. Use a Timer node, started
+    # once the options are readable. It must still SELECT one: an option id IS the exit
+    # port, so a choice left without select_choice() resolves to NO link and the branch
+    # dies silently.
+
+    return func(): dialog.destroy()
+)
+```
+
+> TIP:
+With `engine.onResolveCondition()` installed, each option carries `visible: true | false`. Without
+one it is **undefined** — *unknown*, not *hidden*.
+
+That distinction matters: saying "hidden" about a question nobody could answer would take an answer
+away from the player. Filter on `visible !== false`, never on `visible === true`.
 
 See [Choice Visibility](/guide/choice-visibility) for the full opt-in tagging system.
 
@@ -191,7 +904,73 @@ A case with no `when` is always true, and makes every case below it unreachable 
 
 A test whose dictionary is the reserved word **`choice`** reads an answer the player already gave: `{ dict: "choice", entry: "CHOICE-001", value: "C1" }`. The engine answers it **itself**, from the scene's history — the question never reaches the game. See also `scene.getChoice(blockId)` and `scene.evaluateCondition(test)`.
 
-<!--@include: ../_shared/block-condition.md-->
+
+```ts [TypeScript]
+// Optional once onResolveCondition is installed: the engine has already evaluated every case and
+// already knows which port the flow leaves by. This handler is where you log it, or override it.
+engine.onCondition(({ block, context, next }) => {
+  // Each case carries its own exit port and its pre-evaluated result.
+  const matched = context.cases.filter((c) => c.result).map((c) => c.port);
+  console.log(`${block.id} matched:`, matched.join(', ') || 'none → default');
+
+  // Override the routing with a PORT NAME: 'out', 'default', or a case port like 'K2'.
+  // context.resolve('default');
+
+  next();
+});
+```
+```csharp [C#]
+engine.OnCondition(args => {
+    var matched = args.Context.Cases
+        .Where(c => c.Result == true)
+        .Select(c => c.Port)
+        .ToList();
+    Console.WriteLine($"{args.Block.Id} matched: {string.Join(", ", matched)}");
+
+    // args.Context.Resolve(Ports.Default);   // override with a PORT NAME
+
+    args.Next();
+    return null;
+});
+```
+```cpp [C++]
+engine.onCondition([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
+    for (const auto& c : ctx->cases()) {
+        std::cout << c.port << "=" << c.result.value_or(false) << " ";
+    }
+
+    // ctx->resolve(Ports::Default);   // override with a PORT NAME
+
+    next();
+    return {};
+});
+```
+```gdscript [GDScript]
+engine.on_condition(func(args):
+    var ctx = args["context"]
+    var matched = []
+    for c in ctx.cases:
+        if c["result"]:
+            matched.append(c["port"])
+    print("%s matched: %s" % [args["block"]["id"], ", ".join(matched)])
+
+    # ctx.resolve(LsdeTypes.PORT_DEFAULT)   # override with a PORT NAME
+
+    args["next"].call()
+    return Callable()
+)
+```
+
+> TIP:
+`portPerCase` absent — every case must hold: the flow leaves by `out` if they all do, `default`
+otherwise. `portPerCase: true` — the **first** case that holds takes its own port (`K1`, `K2`…),
+`default` when none does.
+
+A case with no `when` is always true, and makes every case below it unreachable.
+
+The **dispatcher mode is gone**. It fired every matching case at once, in parallel, which meant a
+writer read three wires leaving a condition as a choice when it was three simultaneous launches.
+Use `isAsync` on the target blocks instead — where a reader of the graph can see it.
 
 ## ROUTER
 
@@ -201,7 +980,69 @@ Its `K*` routes are walked like any other port: an `isAsync` target opens its ow
 
 There is **no `onRouter` handler** and `start()` requires none: the engine dispatches a router on its own. To observe one, use `handle.onBlock(id)`.
 
-<!--@include: ../_shared/block-router.md-->
+
+```ts [TypeScript]
+import type { RouterContext } from '@lsde/dialog-engine';
+
+// A ROUTER has no handler of its own: the engine evaluates EVERY case, launches the port of each
+// true one and picks `then` or `catch` before a handler could speak. To WATCH one, target it by id.
+handle.onBlock('ROUTER-001', ({ block, context, next }) => {
+  const { cases } = context as RouterContext;
+  const launched = cases.filter((c) => c.result).map((c) => c.port);
+  console.log(`${block.id} launched:`, launched.join(', ') || 'nothing');
+
+  // Nothing to resolve: the exits are a tally, not a choice.
+  next();
+});
+```
+```csharp [C#]
+handle.OnBlock("ROUTER-001", args => {
+    var cases = ((IRouterContext)args.Context).Cases;
+    var launched = cases.Where(c => c.Result == true).Select(c => c.Port).ToList();
+    Console.WriteLine($"{args.Block.Id} launched: {string.Join(", ", launched)}");
+
+    // Nothing to resolve: the exits are a tally, not a choice.
+    args.Next();
+    return null;
+});
+```
+```cpp [C++]
+handle->onBlock("ROUTER-001", [](auto*, auto* block, IBaseBlockContext* ctx, auto next) -> CleanupFn {
+    auto* router = dynamic_cast<IRouterContext*>(ctx);
+    for (const auto& c : router->cases()) {
+        if (c.result.value_or(false)) std::cout << block->id << " launched " << c.port << "\n";
+    }
+
+    // Nothing to resolve: the exits are a tally, not a choice.
+    next();
+    return {};
+});
+```
+```gdscript [GDScript]
+handle.on_block("ROUTER-001", func(args):
+    var ctx = args["context"]  # an LsdeBlockContext.RouterContext
+    var launched = []
+    for c in ctx.cases:
+        if c["result"]:
+            launched.append(c["port"])
+    print("%s launched: %s" % [args["block"]["id"], ", ".join(launched)])
+
+    # Nothing to resolve: the exits are a tally, not a choice.
+    args["next"].call()
+    return Callable()
+)
+```
+
+> TIP:
+A condition asks *which one* and leaves by a single port. A router asks *which ones*: every case
+is evaluated — a false one in the middle hides nothing after it — each true case launches its
+port, and the flow then continues by `then` when they **all** held, by `catch` when **any** did
+not. No case at all is `then`, the way `Promise.all([])` resolves.
+
+The `K*` routes are walked like any other port: an `isAsync` target opens its own track, the others
+are this track's, in turn, and the continuation comes **last** — which is what keeps `then`/`catch`
+as the main flow when the routes are async. `catch` cancels nothing: the tracks of the true cases
+are already running.
 
 See [The Router Block](/guide/router) for the full contract and diagrams, and [Distributing characters](/guide/character-distribution) for `inPortPerCharacter` — the entry port a router's routes typically name.
 
@@ -209,7 +1050,54 @@ See [The Router Block](/guide/router) for the full contract and diagrams, and [D
 
 An action block fires side effects in the game — give an item, play a sound, set a flag. `context.calls` carries the calls: each cites the `fn` of a declared [function](/guide/blueprints#functions), and its `args` arrive **by name**, never by position. The handler executes them then calls `context.resolve()` to follow the `then` port, or `context.reject()` to follow the `catch` port — and when the designer wired no `catch`, the flow carries on through `then` rather than stranding the player.
 
-<!--@include: ../_shared/block-action.md-->
+
+```ts [TypeScript]
+engine.onAction(({ block, context, next }) => {
+  const { actions } = block;
+  game
+    .executeActionsList(actions)
+    .then(() => context.resolve())
+    .catch((err) => context.reject(err))
+    .finally(() => next());
+});
+```
+```csharp [C#]
+engine.OnAction(args => {
+    var (scene, block, context, next) = args;
+    Game.ExecuteActionsList(block.Actions, onComplete: () => {
+        context.Resolve();
+        next();
+    }, onError: err => {
+        context.Reject(err);
+        next();
+    });
+    return null;
+});
+```
+```cpp [C++]
+engine.onAction([&game](auto* scene, auto* block, auto* ctx, auto next) -> CleanupFn {
+    auto* ab = dynamic_cast<const ActionBlock*>(block);
+    game.executeActionsList(ab->actions, [ctx, next]() {
+        ctx->resolve();
+        next();
+    }, [ctx, next](const auto& err) {
+        ctx->reject(err);
+        next();
+    });
+    return {};
+});
+```
+```gdscript [GDScript]
+engine.on_action(func(args):
+    var block = args["block"]
+    var ctx = args["context"]
+    var next_fn = args["next"]
+
+    await game.execute_actions_list(block.get("actions", []))
+    ctx.resolve()
+    next_fn.call()
+)
+```
 
 ## NOTE
 
@@ -272,6 +1160,2010 @@ Only **three** of these change anything about the traversal: `isAsync`, `waitFor
 
 ================================================================================
 
+# The Router Block
+
+A Router **launches every route whose condition is met**, waits for the ones that block, then says
+whether all of them were.
+
+It is the **precondition dispatcher** block: "launch everything that is in place, and tell me
+whether everything was."
+
+## Do not confuse it with a condition
+
+Both read conditions, but they are not in the same line of work.
+
+|  | CONDITION | ROUTER |
+|---|---|---|
+| The question | "**which one** is true?" | "**which ones** are true?" |
+| Cases evaluated | stops as soon as it has its answer | **all** of them, to the last |
+| Exits taken | **one only** | **one per true case**, plus a continuation |
+
+A condition **switches**. A Router **dispatches**.
+
+## The ports
+
+| Port | How many | Taken when |
+|---|---|---|
+| `K1`, `K2`, … | one per declared case | that case is true |
+| `then` | always 1 | **all** the cases were true |
+| `catch` | always 1 | **at least one** case was false |
+
+- **`then` and `catch` are exclusive.** One of the two is taken, never both, never neither.
+- **Both exist from the moment the block is created**, before the first case.
+- **`catch` does not mean "error"**, it means "a condition was not met".
+
+## Example
+
+```
+                    ┌─────────────────────────────┐
+   ── the flow ────►│  ROUTER  "the door"         │
+                    ├─────────────────────────────┤
+                    │ K1  items.gold_key > 0      ├──► ACTION  a chime            (isAsync)
+                    │ K2  quest.guard == 2        ├──► DIALOG  the guard nods     (isAsync)
+                    │ K3  purse.gold >= 50        ├──► ACTION  take 50 gold       (isAsync)
+                    ├─────────────────────────────┤
+                    │ then                        ├──► DIALOG  "the door opens"
+                    │ catch                       ├──► DIALOG  "something is missing"
+                    └─────────────────────────────┘
+```
+
+The key and the gold, but not the guard → K1 and K3 leave, 2 cases out of 3 → exit through
+**`catch`**.
+
+All three → three routes leave, exit through `then`.
+
+> WARNING:
+The chime rings, the gold is taken, **and** the player is told something is missing.
+
+## Execution
+
+```
+[[every isAsync route], [route 1], [route 2], …]  then  then | catch
+```
+
+1. Evaluate **every** case, in order, never stopping early.
+2. Launch **all** the `isAsync` routes at once.
+3. Run the others **one at a time**, each to its end.
+4. Continue through `then` if every case was true, otherwise `catch`.
+
+Recommended: `isAsync` on every target of your `K*` ports. The engine does not require it.
+
+### Example with non-async ports
+
+Every party member present reacts. They should speak **one after another**, not three bubbles at
+once — so their routes carry no `isAsync`.
+
+```
+                    ┌─────────────────────────────┐
+   ── the flow ────►│  ROUTER  "the reactions"    │
+                    ├─────────────────────────────┤
+                    │ K1  quest.door == 3         ├──► ACTION  shut the door      (isAsync)
+                    │ K2  party.aria == true      ├──► DIALOG  Aria: "at last!"
+                    │ K3  party.bram == true      ├──► DIALOG  Bram: "no way"
+                    ├─────────────────────────────┤
+                    │ then                        ├──► DIALOG  "the party is ready"
+                    └─────────────────────────────┘
+```
+
+All three cases are true:
+
+```
+time ───────────────────────────────────────────────►
+
+K1  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓            detached — lives its own life
+K2  ▓▓▓▓▓▓▓                   Aria speaks
+K3         ▓▓▓▓▓▓▓            then Bram
+then              ▓▓▓▓▓▓
+```
+
+```
+[[K1],[K2],[K3]].then
+```
+
+- **K2 is played to its end** — not just its first block, **the whole chain wired behind it**. K3
+  only starts afterwards.
+- **`then`** waits for K2 and K3. K1 may still be running.
+
+With `isAsync` on K2 and K3: Aria and Bram speak at the same time, and `then` leaves immediately.
+
+## The cases
+
+Same shape as the CONDITION block.
+
+- A flat list: `dictionary.entry` · operator · value.
+- Named operators — `equals`, `notEquals`, `lessThan`, `lessOrEqual`, `greaterThan`,
+  `greaterOrEqual`. The diagrams above use `>` and `==` for readability.
+- Every line after the first carries its own link: `and` or `or`.
+- No evaluation precedence is exported. The reference engine evaluates left to right.
+- A case **with no comparison is always true**.
+
+## On the game side
+
+```ts
+engine.onResolveCondition((test) => {
+  // test = { dict: "items", entry: "gold_key", op: "greaterThan", value: 0 }
+  return myGameState.answer(test);
+});
+```
+
+The engine decides which ports leave and picks `then` or `catch`. Nothing to route by hand.
+
+There is **no `onRouter` handler**, and none is needed: by the time a handler could speak, every
+true case has launched its port and the continuation is picked — there is nothing left to answer.
+`start()` does not require one. To watch a router — log what matched, drive a debug view — use
+`handle.onBlock(id)`: its context carries the pre-evaluated `cases`, ALL of them, and no `resolve`.
+
+
+```ts [TypeScript]
+import type { RouterContext } from '@lsde/dialog-engine';
+
+// A ROUTER has no handler of its own: the engine evaluates EVERY case, launches the port of each
+// true one and picks `then` or `catch` before a handler could speak. To WATCH one, target it by id.
+handle.onBlock('ROUTER-001', ({ block, context, next }) => {
+  const { cases } = context as RouterContext;
+  const launched = cases.filter((c) => c.result).map((c) => c.port);
+  console.log(`${block.id} launched:`, launched.join(', ') || 'nothing');
+
+  // Nothing to resolve: the exits are a tally, not a choice.
+  next();
+});
+```
+```csharp [C#]
+handle.OnBlock("ROUTER-001", args => {
+    var cases = ((IRouterContext)args.Context).Cases;
+    var launched = cases.Where(c => c.Result == true).Select(c => c.Port).ToList();
+    Console.WriteLine($"{args.Block.Id} launched: {string.Join(", ", launched)}");
+
+    // Nothing to resolve: the exits are a tally, not a choice.
+    args.Next();
+    return null;
+});
+```
+```cpp [C++]
+handle->onBlock("ROUTER-001", [](auto*, auto* block, IBaseBlockContext* ctx, auto next) -> CleanupFn {
+    auto* router = dynamic_cast<IRouterContext*>(ctx);
+    for (const auto& c : router->cases()) {
+        if (c.result.value_or(false)) std::cout << block->id << " launched " << c.port << "\n";
+    }
+
+    // Nothing to resolve: the exits are a tally, not a choice.
+    next();
+    return {};
+});
+```
+```gdscript [GDScript]
+handle.on_block("ROUTER-001", func(args):
+    var ctx = args["context"]  # an LsdeBlockContext.RouterContext
+    var launched = []
+    for c in ctx.cases:
+        if c["result"]:
+            launched.append(c["port"])
+    print("%s launched: %s" % [args["block"]["id"], ", ".join(launched)])
+
+    # Nothing to resolve: the exits are a tally, not a choice.
+    args["next"].call()
+    return Callable()
+)
+```
+
+> TIP:
+A condition asks *which one* and leaves by a single port. A router asks *which ones*: every case
+is evaluated — a false one in the middle hides nothing after it — each true case launches its
+port, and the flow then continues by `then` when they **all** held, by `catch` when **any** did
+not. No case at all is `then`, the way `Promise.all([])` resolves.
+
+The `K*` routes are walked like any other port: an `isAsync` target opens its own track, the others
+are this track's, in turn, and the continuation comes **last** — which is what keeps `then`/`catch`
+as the main flow when the routes are async. `catch` cancels nothing: the tracks of the true cases
+are already running.
+
+## Pitfalls
+
+- **The chosen port may be wired to nothing** — the track ends there, like any terminal block. Not
+  an error.
+- **Zero cases → `then`.**
+- **`catch` on an ACTION block means "the call failed"** — a different thing.
+- **"First one that holds wins" is not a Router**, it is a CONDITION with `portPerCase`.
+
+## What it does not do
+
+- **Wait for its `isAsync` routes** — the philosophy of TypeScript's `Promise.all`. Deferred.
+- **The `finally` concept.** Ruled out.
+
+## See also
+
+[Block Types](./block-types) · [Async Tracks](./async-tracks) · [Handlers](./handlers)
+
+================================================================================
+
+# Distributing characters
+
+A block carries a **list** of actors — `actors`. The engine **elects none of them**.
+
+That is deliberate: LSDE refuses to say whether the order of the list means "who speaks" or "who is
+present". The game decides, and it does so through a callback.
+
+## The principle
+
+```ts
+context.actors      // the cast posted on the block — always the whole list
+context.character   // the one who speaks, or undefined
+```
+
+`context.character` is `undefined` **until the game installs `onResolveCharacter`**. The engine does
+not guess.
+
+## The three tools
+
+| what the designer means | the tool | where it happens |
+|---|---|---|
+| "several present, **one speaks**" | `onResolveCharacter` | in the game's code |
+| "what follows **differs by speaker**" | `portPerCharacter` | one **exit** port per actor |
+| "**this entry** names its actor" | `inPortPerCharacter` | one **entry** port per actor |
+
+`portPerCharacter` and `inPortPerCharacter` are symmetric: one names the exits, the other the
+entries. Both name their ports by the **card id**, never by an index.
+
+## `inPortPerCharacter` — the wire names the actor
+
+When a block carries several actors and can be reached by several paths, the block alone cannot tell
+which actor the path it was reached by stands for. The entry port says it.
+
+```
+┌──────────────────────────────┐        ┌───────────────────────────┐
+│ ROUTER   CONDITION-004       │        │ DIALOG-009   "Me too"     │
+├──────────────────────────────┤        │ inPortPerCharacter: true  │
+│ K1  party.l1 ≠ true          ├───────►│ ◂ l1                      │
+│ K2  party.l2 ≠ true          ├───────►│ ◂ l2                      │
+│ K3  party.l3 ≠ true          ├───────►│ ◂ l3                      │
+├──────────────────────────────┤        │ ◂ in    (nobody named)    │
+│ then                         ├──►     └───────────────────────────┘
+└──────────────────────────────┘  DIALOG-010
+```
+
+`DIALOG-009` carries all three rabbits and one single line. Each true case of `CONDITION-004`
+launches the block **through its own rabbit's door**.
+
+### Step by step
+
+```
+1. CONDITION-004: case K1 is true                  →  the wire leaves
+2. it arrives on entry port  l1  of DIALOG-009
+3. the engine asks the game "give me l1"            →  onResolveCharacter([ l1 ])
+4a. the game returns card l1     →  DIALOG-009 is assigned to l1
+4b. the game returns undefined   →  nothing happens: that character does not exist
+```
+
+**The engine never decides on its own.** It asks, the game answers — the same callback as
+everywhere else. The one difference: it asks for **one** actor instead of handing over the whole
+list, so the game cannot pick the wrong rabbit.
+
+### What the context holds
+
+On the pass entered through `l1`:
+
+```ts
+context.actors      →  [ l1, l2, l3 ]   the block's cast, unchanged
+context.character   →  l1               or undefined if the game does not have it
+```
+
+`actors` does not change with the door: it is the list posted on the block. Only `character` does.
+
+### Entering through `in`
+
+The `in` port stays available on a block that has actor ports. Entering through it means **no actor
+named**: `onResolveCharacter` then receives the whole list, as everywhere else.
+
+A wire that names no actor port carries `toPort: "in"` — which is every wire of a project that does
+not use this property, so nothing already written changes.
+
+## The recommended convention
+
+**Several wires into one block launch that block several times, identically.**
+
+If each wire must say something **different**:
+
+| what differs | what to do |
+|---|---|
+| only the character | `inPortPerCharacter` — one entry port per actor |
+| the text as well | **one block per wire** |
+
+What to avoid: several wires into a multi-actor block **without** entry ports. The block is played
+several times with no way to tell which wire brought it, and nothing reports it.
+
+## See also
+
+[Handlers](./handlers) · [Block Types](./block-types) · [The Router Block](./router)
+
+================================================================================
+
+# Handlers
+
+## Handlers
+
+Handlers are the bridge between the engine and your game. They work like observers — you subscribe a function, and the engine calls it when the matching event occurs. This is how you trigger the right behaviors in your game engine: display text, play an animation, evaluate state, etc.
+
+The engine exposes the following handlers:
+
+| Handler | Level | Description |
+|---------|-------|-------------|
+| [`onDialog`](/api-ref/classes/DialogueEngine#ondialog) | global / scene | Dialog block — display text |
+| [`onChoice`](/api-ref/classes/DialogueEngine#onchoice) | global / scene | Choice block — present choices |
+| [`onCondition`](/api-ref/classes/DialogueEngine#oncondition) | global / scene | Condition block — evaluate and branch |
+| [`onAction`](/api-ref/classes/DialogueEngine#onaction) | global / scene | Action block — trigger side effects |
+| [`onResolveCharacter`](/api-ref/classes/DialogueEngine#onresolvecharacter) | global / scene | Resolve which character is speaking |
+| [`onBeforeBlock`](/api-ref/classes/DialogueEngine#onbeforeblock) | global | Before every block (delay, entry animations…) |
+| [`onValidateNextBlock`](/api-ref/classes/DialogueEngine#onvalidatenextblock) | global | Validate before progressing to a block |
+| [`onInvalidateBlock`](/api-ref/classes/DialogueEngine#oninvalidateblock) | global | React when validation fails |
+| [`onSceneEnter`](/api-ref/classes/DialogueEngine#onsceneenter) | global / scene | A scene starts |
+| [`onSceneExit`](/api-ref/classes/DialogueEngine#onsceneexit) | global / scene | A scene ends |
+| [`onBlock`](/api-ref/interfaces/SceneHandle#onblock) | scene | Override one block by its id (`DIALOG-001`) |
+| [`onDialogId`](/api-ref/interfaces/SceneHandle#ondialogid) | scene | Override one DIALOG block by its id (type-safe) |
+| [`onChoiceId`](/api-ref/interfaces/SceneHandle#onchoiceid) | scene | Override one CHOICE block by its id (type-safe) |
+| [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | Override one CONDITION block by its id (type-safe) |
+| [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | Override one ACTION block by its id (type-safe) |
+| [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) | global | Unified condition resolver (choice visibility + condition pre-evaluation) |
+
+`onDialog`, `onChoice`, and `onAction` are **required** — the engine validates their presence when `start()` is called and throws a descriptive error if any are missing. `onCondition` is **optional** when `onResolveCondition` is installed — the engine auto-routes from pre-evaluated condition groups.
+
+A ROUTER block has **no handler** and needs none: the engine evaluates every case, launches the port of each true one and continues by `then` (all held) or `catch` (one did not) on its own. To observe one, use `handle.onBlock(id)` — see [The Router Block](/guide/router).
+
+
+```ts [TypeScript]
+// required — the engine won't start without these
+engine.onDialog(dialogHandler);
+engine.onChoice(choiceHandler);
+engine.onCondition(conditionHandler);
+engine.onAction(actionHandler);
+
+// optional — lifecycle, validation, pre-execution
+engine.onBeforeBlock(beforeBlockHandler);
+engine.onResolveCharacter(resolveCharacterHandler);
+engine.onValidateNextBlock(validateHandler);
+engine.onSceneEnter(sceneEnterHandler);
+engine.onSceneExit(sceneExitHandler);
+
+const handle = engine.scene(sceneId);
+handle.start();
+```
+```csharp [C#]
+// required — the engine won't start without these
+engine.OnDialog(dialogHandler);
+engine.OnChoice(choiceHandler);
+engine.OnCondition(conditionHandler);
+engine.OnAction(actionHandler);
+
+// optional — lifecycle, validation, pre-execution
+engine.OnBeforeBlock(beforeBlockHandler);
+engine.OnResolveCharacter(resolveCharacterHandler);
+engine.OnValidateNextBlock(validateHandler);
+engine.OnSceneEnter(sceneEnterHandler);
+engine.OnSceneExit(sceneExitHandler);
+
+var handle = engine.Scene(sceneId);
+handle.Start();
+```
+```cpp [C++]
+// required — the engine won't start without these
+engine.onDialog(dialogHandler);
+engine.onChoice(choiceHandler);
+engine.onCondition(conditionHandler);
+engine.onAction(actionHandler);
+
+// optional — lifecycle, validation, pre-execution
+engine.onBeforeBlock(beforeBlockHandler);
+engine.onResolveCharacter(resolveCharacterHandler);
+engine.onValidateNextBlock(validateHandler);
+engine.onSceneEnter(sceneEnterHandler);
+engine.onSceneExit(sceneExitHandler);
+
+auto handle = engine.scene(sceneId);
+handle->start();
+```
+```gdscript [GDScript]
+# required — the engine won't start without these
+engine.on_dialog(dialog_handler)
+engine.on_choice(choice_handler)
+engine.on_condition(condition_handler)
+engine.on_action(action_handler)
+
+# optional — lifecycle, validation, pre-execution
+engine.on_before_block(before_block_handler)
+engine.on_resolve_character(resolve_character_handler)
+engine.on_validate_next_block(validate_handler)
+engine.on_scene_enter(scene_enter_handler)
+engine.on_scene_exit(scene_exit_handler)
+
+var handle = engine.scene(scene_id)
+handle.start()
+```
+
+## Two-Tier Handler System
+
+The engine resolves handlers in two tiers:
+
+- **Global handlers** — registered on the engine, they define the default behavior for every scene. They are typically all you need.
+- **Scene handlers** — registered on a specific [`SceneHandle`](/api-ref/interfaces/SceneHandle), they let you override or extend the default behavior when a scene requires a different rendering or control flow. This is rare, but available.
+
+When a block is dispatched, the engine resolves the handler in this order:
+1. `handle.onBlock(blockId)` or `handle.onDialogId(blockId)` / `handle.onActionId(blockId)` / ... — block-specific override
+2. `handle.onDialog()` / `handle.onChoice()` / ... — scene-level type handler
+3. `engine.onDialog()` / `engine.onChoice()` / ... — global handler
+
+When both tiers are present, both run in sequence — scene first, then global — unless the scene handler calls `context.preventGlobalHandler()` to suppress the global pass.
+
+
+```ts [TypeScript]
+// Tier 1 — global
+engine.onDialog(({ block, context, next }) => {
+  console.log('Global dialog handler');
+  next();
+});
+
+// Tier 2 — scene-specific
+const handle = engine.scene(sceneId);
+handle.onDialog(({ block, context, next }) => {
+  console.log('Scene-specific dialog handler');
+  context.preventGlobalHandler();
+  next();
+});
+handle.start();
+```
+```csharp [C#]
+// Tier 1 — global
+engine.OnDialog(args => {
+    Console.WriteLine("Global dialog handler");
+    args.Next();
+    return null;
+});
+
+// Tier 2 — scene-specific
+var handle = engine.Scene(sceneId);
+handle.OnDialog(args => {
+    Console.WriteLine("Scene-specific dialog handler");
+    args.Context.PreventGlobalHandler();
+    args.Next();
+    return null;
+});
+handle.Start();
+```
+```cpp [C++]
+// Tier 1 — global
+engine.onDialog([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
+    std::cout << "Global dialog handler\n";
+    next();
+    return {};
+});
+
+// Tier 2 — scene-specific
+auto handle = engine.scene(sceneId);
+handle->onDialog([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
+    std::cout << "Scene-specific dialog handler\n";
+    ctx->preventGlobalHandler();
+    next();
+    return {};
+});
+handle->start();
+```
+```gdscript [GDScript]
+# Tier 1 — global
+engine.on_dialog(func(args):
+    print("Global dialog handler")
+    args["next"].call()
+    return Callable()
+)
+
+# Tier 2 — scene-specific
+var handle = engine.scene(scene_id)
+handle.on_dialog(func(args):
+    print("Scene-specific dialog handler")
+    args["context"].prevent_global_handler()
+    args["next"].call()
+    return Callable()
+)
+handle.start()
+```
+
+## Character Resolution
+
+Character resolution is optional. By registering an `onResolveCharacter` callback, the engine invokes it before every block that has characters in its `actors`. The callback receives the list of characters assigned to the block and returns the one that should be active — or `undefined` if none is available. The resolved character is then accessible via `context.character` in all handlers.
+
+This is the ideal integration point to query your game state: check if a character is present in the scene, alive, in camera range, etc. Returning `undefined` opens the door to several strategies: skip the block via [`skipIfMissingActor`](/api-ref/interfaces/NativeProperties#skipifmissingactor), cancel the scene via `handle.cancel()`, or handle the case directly in the handler.
+
+
+```ts [TypeScript]
+// Engine-level — applies to all scenes
+engine.onResolveCharacter((characters) => {
+  return party.getActiveLeader(characters);
+});
+
+// Scene-level override
+const handle = engine.scene(sceneId);
+handle.onResolveCharacter((characters) => {
+  return battle.getActiveUnit(characters);
+});
+```
+```csharp [C#]
+engine.OnResolveCharacter(chars => party.GetActiveLeader(chars));
+
+var handle = engine.Scene(sceneId);
+handle.OnResolveCharacter(chars => battle.GetActiveUnit(chars));
+```
+```cpp [C++]
+engine.onResolveCharacter([](const auto& chars) {
+    return party.getActiveLeader(chars);
+});
+
+auto handle = engine.scene(sceneId);
+handle->onResolveCharacter([](const auto& chars) {
+    return battle.getActiveUnit(chars);
+});
+```
+```gdscript [GDScript]
+engine.on_resolve_character(func(chars):
+    return party.get_active_leader(chars)
+)
+
+var handle = engine.scene(scene_id)
+handle.on_resolve_character(func(chars):
+    return battle.get_active_unit(chars)
+)
+```
+
+## Scene Lifecycle
+
+The `onSceneEnter` and `onSceneExit` callbacks let you react to a scene starting and ending — enable cinema mode, freeze NPCs, prepare the UI, clean up resources, etc. They are available at global level (on the engine) and at scene level (via `handle.onEnter()` / `handle.onExit()`). The scene handler replaces the global one if defined.
+
+
+```ts [TypeScript]
+engine.onSceneEnter(({ scene }) => {
+  game.cinemaMode(true);
+  game.stopNpcMovements();
+});
+
+engine.onSceneExit(() => {
+  game.cinemaMode(false);
+  game.resumeNpcMovements();
+});
+
+// scene-level override
+const handle = engine.scene(sceneId);
+handle.onEnter(({ scene }) => {
+  game.playIntroSequence(scene);
+});
+```
+```csharp [C#]
+engine.OnSceneEnter(args => {
+    Game.CinemaMode(true);
+    Game.StopNpcMovements();
+});
+
+engine.OnSceneExit(args => {
+    Game.CinemaMode(false);
+    Game.ResumeNpcMovements();
+});
+
+// scene-level override
+var handle = engine.Scene(sceneId);
+handle.OnEnter(args => {
+    Game.PlayIntroSequence(args.Scene);
+});
+```
+```cpp [C++]
+engine.onSceneEnter([&game](const lsde::SceneLifecycleArgs&) {
+    game.cinemaMode(true);
+    game.stopNpcMovements();
+});
+
+engine.onSceneExit([&game](const lsde::SceneLifecycleArgs&) {
+    game.cinemaMode(false);
+    game.resumeNpcMovements();
+});
+
+// scene-level override
+auto handle = engine.scene(sceneId);
+handle->onEnter([&game](const lsde::SceneLifecycleArgs& args) {
+    game.playIntroSequence(args.scene);
+});
+```
+```gdscript [GDScript]
+engine.on_scene_enter(func(args):
+    game.cinema_mode(true)
+    game.stop_npc_movements()
+)
+
+engine.on_scene_exit(func(args):
+    game.cinema_mode(false)
+    game.resume_npc_movements()
+)
+
+# scene-level override
+var handle = engine.scene(scene_id)
+handle.on_enter(func(args):
+    game.play_intro_sequence(args["scene"])
+)
+```
+
+## Block Override
+
+`onBlock(blockId)` lets you target a specific block by its identifier and assign it a dedicated handler. This is a rare use case — generic handlers cover the vast majority of needs — but for very specific scenarios where an individual block requires distinct behavior, it is available.
+
+
+```ts [TypeScript]
+const handle = engine.scene(sceneId);
+handle.onBlock('DIALOG-001', ({ block, context, next }) => {
+  next();
+});
+```
+```csharp [C#]
+var handle = engine.Scene(sceneId);
+handle.OnBlock("DIALOG-001", args => {
+    args.Next();
+    return null;
+});
+```
+```cpp [C++]
+auto handle = engine.scene(sceneId);
+handle->onBlock("DIALOG-001", [](auto*, auto*, auto*, auto next) -> CleanupFn {
+    next();
+    return {};
+});
+```
+```gdscript [GDScript]
+var handle = engine.scene(scene_id)
+handle.on_block("DIALOG-001", func(args):
+    args["next"].call()
+    return Callable()
+)
+```
+
+## Type-Safe Block Override
+
+`onDialogId(blockId)`, `onChoiceId(blockId)`, `onConditionId(blockId)`, and `onActionId(blockId)` are type-safe alternatives to `onBlock(blockId)`. They work exactly the same way — same priority, same `preventGlobalHandler` support — but the handler receives the specialized block type and context instead of the generic union.
+
+Use these when you know the block type at registration time and want full autocompletion on `block` and `context`.
+
+
+```ts [TypeScript]
+const handle = engine.scene(sceneId);
+handle.onActionId('ACTION-001', ({ block, context, next }) => {
+  // block is ActionBlock — actions is directly accessible
+  for (const action of block.actions ?? []) {
+    executeAction(action);
+  }
+  // context is ActionContext — resolve/reject are available
+  context.resolve();
+  next();
+});
+```
+```csharp [C#]
+var handle = engine.Scene(sceneId);
+handle.OnActionId("ACTION-001", args => {
+    // args.Block is ActionBlock — Actions is directly accessible
+    foreach (var action in args.Block.Actions ?? [])
+        ExecuteAction(action);
+    // args.Context is IActionContext — Resolve/Reject are available
+    args.Context.Resolve();
+    args.Next();
+});
+```
+```cpp [C++]
+auto handle = engine.scene(sceneId);
+handle->onActionId("ACTION-001", [](auto* scene, const ActionBlock* block, IActionContext* ctx, auto next) -> CleanupFn {
+    // block is const ActionBlock* — actions is directly accessible
+    for (const auto& action : block->actions)
+        executeAction(action);
+    // ctx is IActionContext* — resolve/reject are available
+    ctx->resolve();
+    next();
+    return {};
+});
+```
+```gdscript [GDScript]
+var handle = engine.scene(scene_id)
+handle.on_action_id("ACTION-001", func(args):
+    # args["block"] contains actions directly
+    for action in args["block"].get("actions", []):
+        execute_action(action)
+    # args["context"] has resolve/reject
+    args["context"]["resolve"].call()
+    args["next"].call()
+    return Callable()
+)
+```
+
+## Visual Reference
+
+### Two-Tier Handler Dispatch
+
+```mermaid
+flowchart TD
+    A[block dispatched] --> B{resolve scene handler}
+    B --> B1{"onBlock(blockId) /\nonDialogId(blockId) etc.?"}
+    B1 -- found --> S
+    B1 -- not found --> B2{"handle.onDialog() etc.?"}
+    B2 -- found --> S
+    B2 -- not found --> G
+    S[execute scene handler] --> D{preventGlobalHandler?}
+    D -- yes --> Z[done]
+    D -- no --> G["execute global handler\nengine.onDialog() etc."]
+    G --> Z
+```
+
+================================================================================
+
+# Game Engine Integration
+
+LSDE is engine-agnostic — no dependency on any game engine, UI framework, or audio system. It walks a graph and calls your handlers. This page shows how to wire it into the most common game engines.
+
+For detailed handler implementation, see [Block Types](./block-types) and [Handlers](./handlers).
+
+## Full Integration
+
+The following example shows one way to integrate LSDE into each engine. It covers the 4 required handlers — dialog, choice, condition, action — in a single class, as a starting point.
+
+Every game has its own needs. Adapt the structure, the layout, and the UI to your project.
+
+
+```ts [TypeScript — Phaser]
+// Phaser 3.80+ — overlay scene that handles all LSDE block types
+import Phaser from 'phaser';
+import { type DialogueEngine, LsdeUtils } from '@lsde/dialog-engine';
+
+export class DialogueUI extends Phaser.Scene {
+  private pendingNext: (() => void) | null = null;
+
+  constructor() {
+    super({ key: 'DialogueUI' });
+  }
+
+  create(params: { engine: DialogueEngine }) {
+    const dialog = this.createDialogPanel();
+    const choices = this.createChoicePanel();
+
+    // player advances dialogue via keyboard or touch
+    this.input.keyboard?.addKey('SPACE').on('down', () => this.advance());
+    this.input.on('pointerdown', () => this.advance());
+
+    // ── DIALOG ────────────────────────────────────────────────
+    params.engine.onDialog(({ block, context, next }) => {
+      const { text, props } = block;
+      const { character, resolveCharacterPort } = context;
+      const line = LsdeUtils.getLocalizedText(text);
+
+      character && resolveCharacterPort(character.id);
+
+      dialog.show(line, character?.name);
+      this.pendingNext = next;
+
+      // `timeout` outranks waitInput: a line carrying one plays its own time and the
+      // click may only hurry its reveal, never dismiss it.
+      this.dismissableByInput = !props?.timeout;
+
+      // auto-advance for blocks. MILLISECONDS in v2 — no × 1000 — and counted from the
+      // moment the line has been SAID, not from the moment the block arrived.
+      let timer: Phaser.Time.TimerEvent | null = null;
+      if (props?.timeout) {
+        dialog.onRevealComplete(() => {
+          timer = this.time.delayedCall(props.timeout, () => this.leaveBlock());
+        });
+      }
+
+      return () => { dialog.hide(); this.pendingNext = null; timer?.destroy(); };
+    });
+
+    // ── CHOICE ────────────────────────────────────────────────
+    params.engine.onChoice(({ block, context, next }) => {
+      const { props } = block;
+      const { choices: items, selectChoice } = context;
+      const offered = items.filter(c => c.visible !== false);
+
+      const buttons = choices.show(offered, (optionId) => {
+        selectChoice(optionId);
+        next();
+      });
+
+      // On a CHOICE there is no line to reveal, so the countdown starts once the options
+      // are on screen and readable. MILLISECONDS in v2 — no × 1000. And it must still
+      // SELECT one: an option id IS the exit port, so a choice left without selectChoice()
+      // resolves to NO link and the branch dies silently.
+      let timer: Phaser.Time.TimerEvent | null = null;
+      if (props?.timeout) {
+        timer = this.time.delayedCall(props.timeout, () => {
+          if (offered.length > 0) selectChoice(offered[0].id);
+          next();
+        });
+      }
+
+      return () => { choices.hide(buttons); timer?.destroy(); };
+    });
+
+    // ── CONDITION ─────────────────────────────────────────────
+    params.engine.onCondition(({ block, context, next }) => {
+      // evaluate your game state — return true or false
+      const result = true; // ← replace with your game logic
+      context.resolve(result);
+      next();
+    });
+
+    // ── ACTION ────────────────────────────────────────────────
+    params.engine.onAction(({ block, context, next }) => {
+      // execute your game effects — set flags, play sounds, give items
+      // context.resolve() on success, context.reject(err) on failure
+      context.resolve();
+      next();
+    });
+  }
+
+  /** What the pointer calls. A line still revealing takes the click as "show me the
+   *  rest"; a line on a `timeout` plays its own time and never leaves this way. */
+  private advance() {
+    if (!this.dialog.revealComplete) { this.dialog.skipReveal(); return; }
+    if (!this.dismissableByInput) return;
+    this.leaveBlock();
+  }
+
+  private leaveBlock() {
+    if (this.pendingNext) { this.pendingNext(); this.pendingNext = null; }
+  }
+
+  // ── UI factories ──────────────────────────────────────────────
+
+  private createDialogPanel() {
+    const bg = this.add
+      .graphics()
+      .fillStyle(0x000000, 0.8)
+      .fillRoundedRect(0, 0, 700, 150, 12);
+
+    const nameText = this.add.text(16, 12, '', {
+      fontSize: '16px', color: '#ffcc00', fontStyle: 'bold',
+    });
+    const bodyText = this.add.text(16, 38, '', {
+      fontSize: '14px', color: '#ffffff', wordWrap: { width: 668 },
+    });
+
+    const container = this.add
+      .container(50, 430, [bg, nameText, bodyText])
+      .setScrollFactor(0)
+      .setDepth(1000)
+      .setVisible(false);
+
+    return {
+      show: (text?: string, speaker?: string) => {
+        nameText.setText(speaker ?? '');
+        bodyText.setText(text ?? '');
+        container.setVisible(true);
+      },
+      hide: () => container.setVisible(false),
+    };
+  }
+
+  private createChoicePanel() {
+    return {
+      show: (
+        visible: { id: string; text?: Record<string, string> }[],
+        onSelect: (optionId: string) => void,
+      ) => {
+        return visible.map((choice, i) => {
+          const text = LsdeUtils.getLocalizedText(choice.text) ?? choice.label ?? '';
+          return this.add
+            .text(80, 440 + i * 40, text, { fontSize: '15px', color: '#ffffff' })
+            .setScrollFactor(0)
+            .setDepth(1001)
+            .setInteractive({ useHandCursor: true })
+            .on('pointerdown', () => onSelect(choice.id));
+        });
+      },
+      hide: (buttons: Phaser.GameObjects.Text[]) => buttons.forEach(b => b.destroy()),
+    };
+  }
+}
+
+// start a dialogue scene from your game:
+// this.scene.launch('DialogueUI', { engine });
+// engine.scene(sceneId).start();
+```
+```csharp [C# — Unity]
+// Unity 2021+ — MonoBehaviour that handles all LSDE block types
+using System.Linq;
+using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
+using LsdeDialogEngine;
+
+public class DialogueUI : MonoBehaviour
+{
+    [Header("Dialog UI — assign in Inspector")]
+    [SerializeField] private GameObject dialogPanel;
+    [SerializeField] private TMP_Text speakerName;
+    [SerializeField] private TMP_Text dialogText;
+
+    [Header("Choice UI")]
+    [SerializeField] private Transform choiceContainer;
+    [SerializeField] private GameObject choiceButtonPrefab;
+
+    private DialogueEngine _engine;
+    private System.Action _pendingNext;
+
+    /// <summary>
+    /// Call once to wire all LSDE handlers to this UI.
+    /// The engine must be initialized before calling this method.
+    /// </summary>
+    public void Register(DialogueEngine engine)
+    {
+        _engine = engine;
+
+        // ── DIALOG ────────────────────────────────────────────
+        engine.OnDialog(args => {
+            var (_, block, context, next) = args;
+            var text = LsdeUtils.GetLocalizedText(block.Text);
+            var ch = context.Character;
+
+            if (ch != null) context.ResolveCharacterPort(ch.Id);
+
+            speakerName.text = ch?.Name ?? "";
+            dialogText.text = text ?? "";
+            dialogPanel.SetActive(true);
+
+            _pendingNext = next;
+
+            return () => { dialogPanel.SetActive(false); _pendingNext = null; };
+        });
+
+        // ── CHOICE ────────────────────────────────────────────
+        engine.OnChoice(args => {
+            var (_, block, context, next) = args;
+            var visible = context.Options
+                .Where(c => c.Visible != false).ToList();
+
+            foreach (var choice in visible)
+            {
+                var btn = Instantiate(choiceButtonPrefab, choiceContainer);
+                btn.GetComponentInChildren<TMP_Text>().text =
+                    LsdeUtils.GetLocalizedText(choice.Text) ?? choice.Label ?? "";
+
+                var optionId = choice.Id;
+                btn.GetComponent<Button>().onClick.AddListener(() => {
+                    context.SelectChoice(optionId);
+                    next();
+                });
+            }
+
+            return () => {
+                foreach (Transform child in choiceContainer)
+                    Destroy(child.gameObject);
+            };
+        });
+
+        // ── CONDITION ─────────────────────────────────────────
+        engine.OnCondition(args => {
+            var (_, block, context, next) = args;
+
+            // evaluate your game state — return true or false
+            var result = true; // ← replace with your game logic
+            context.Resolve(result);
+            next();
+            return null;
+        });
+
+        // ── ACTION ────────────────────────────────────────────
+        engine.OnAction(args => {
+            var (_, block, context, next) = args;
+
+            // execute your game effects — set flags, play sounds, give items
+            // context.Resolve() on success, context.Reject(err) on failure
+            context.Resolve();
+            next();
+            return null;
+        });
+    }
+
+    /// <summary>Wire this to your Continue button's OnClick in the Inspector.</summary>
+    public void OnContinueClick()
+    {
+        if (_pendingNext == null) return;
+        _pendingNext();
+        _pendingNext = null;
+    }
+
+    /// <summary>Start a dialogue scene from your game code.</summary>
+    public void StartScene(string sceneId)
+    {
+        var handle = _engine.Scene(sceneId);
+        handle.Start();
+    }
+}
+```
+```cpp [C++ — Unreal]
+// UE5 — GameInstanceSubsystem that handles all LSDE block types
+// Engine is a lsde::DialogueEngine member initialized in Initialize()
+#include "lsde/engine.h"
+#include "lsde/utils.h"
+#include "DialogueSubsystem.h"
+#include "DialogueWidget.h"
+#include "ChoiceWidget.h"
+
+void UDialogueSubsystem::RegisterHandlers()
+{
+    // ── DIALOG ────────────────────────────────────────────────
+    Engine.onDialog([this](auto* scene, const auto* block, auto* ctx, auto next) -> lsde::CleanupFn {
+        auto localized = lsde::LsdeUtils::GetLocalizedText(block->text);
+        auto* ch = ctx->character();
+
+        if (ch) ctx->resolveCharacterPort(ch->id);
+
+        DialogWidget->SetDialogue(
+            FString(UTF8_TO_TCHAR(localized.value_or("").c_str())),
+            FString(UTF8_TO_TCHAR(ch ? ch->name.c_str() : "")));
+        DialogWidget->SetVisibility(ESlateVisibility::Visible);
+
+        PendingNext = std::move(next);
+
+        return [this]() {
+            DialogWidget->SetVisibility(ESlateVisibility::Collapsed);
+            PendingNext = nullptr;
+        };
+    });
+
+    // ── CHOICE ────────────────────────────────────────────────
+    // PendingChoiceCtx is valid only during the current block — the engine
+    // invalidates it once the cleanup runs or the scene advances.
+    Engine.onChoice([this](auto* scene, const auto* block, auto* ctx, auto next) -> lsde::CleanupFn {
+        const auto& choices = ctx->options();
+
+        for (const auto& c : choices) {
+            if (!c.visible.has_value() || c.visible.value()) {
+                auto text = lsde::LsdeUtils::GetLocalizedText(c.text);
+                ChoiceWidget->AddOption(
+                    FString(UTF8_TO_TCHAR(c.id.c_str())),
+                    FString(UTF8_TO_TCHAR(text.value_or("").c_str())));
+            }
+        }
+
+        PendingChoiceCtx = ctx;
+        PendingChoiceNext = std::move(next);
+
+        return [this]() {
+            ChoiceWidget->ClearOptions();
+            PendingChoiceCtx = nullptr;
+        };
+    });
+
+    // ── CONDITION ─────────────────────────────────────────────
+    Engine.onCondition([](auto*, const auto* block, auto* ctx, auto next) -> lsde::CleanupFn {
+        // evaluate your game state — return true or false
+        bool result = true; // ← replace with your game logic
+        ctx->resolve(result);
+        next();
+        return {};
+    });
+
+    // ── ACTION ────────────────────────────────────────────────
+    Engine.onAction([](auto*, const auto* block, auto* ctx, auto next) -> lsde::CleanupFn {
+        // execute your game effects — set flags, play sounds, give items
+        // ctx->resolve() on success, ctx->reject(err) on failure
+        ctx->resolve();
+        next();
+        return {};
+    });
+}
+
+// UFUNCTION(BlueprintCallable) — call from your Continue button
+void UDialogueSubsystem::AdvanceDialogue()
+{
+    if (PendingNext) { PendingNext(); PendingNext = nullptr; }
+}
+
+// UFUNCTION(BlueprintCallable) — call from your choice button delegate
+void UDialogueSubsystem::OnChoiceSelected(const FString& OptionId)
+{
+    if (PendingChoiceCtx) {
+        PendingChoiceCtx->selectChoice(TCHAR_TO_UTF8(*OptionId));
+        if (PendingChoiceNext) { PendingChoiceNext(); PendingChoiceNext = nullptr; }
+        PendingChoiceCtx = nullptr;
+    }
+}
+
+// UFUNCTION(BlueprintCallable) — start a dialogue scene
+void UDialogueSubsystem::StartScene(const FString& SceneId)
+{
+    auto handle = Engine.scene(TCHAR_TO_UTF8(*SceneId));
+    handle->start();
+}
+```
+```gdscript [GDScript — Godot]
+# Godot 4.3+ — autoload node that handles all LSDE block types
+# Register as autoload in Project > Settings > Autoload
+extends Node
+
+@onready var dialogue_panel: PanelContainer = %DialoguePanel
+@onready var speaker_label: Label = %SpeakerLabel
+@onready var dialogue_label: RichTextLabel = %DialogueLabel
+@onready var choice_container: VBoxContainer = %ChoiceContainer
+
+var _engine: LsdeDialogueEngine
+var _pending_next: Callable
+
+func _ready() -> void:
+    var json = JSON.parse_string(
+        FileAccess.open("res://data/blueprints.json", FileAccess.READ).get_as_text())
+    _engine = LsdeDialogueEngine.new()
+    _engine.init({"data": json})
+    _engine.set_locale("en")
+
+    _register_handlers()
+
+func _register_handlers() -> void:
+
+    # ── DIALOG ────────────────────────────────────────────────
+    _engine.on_dialog(func(args):
+        var block = args["block"]
+        var ctx = args["context"]
+        var next_fn = args["next"]
+        var ch = ctx.character
+        var text = LsdeUtils.get_localized_text(block.get("text"))
+
+        if ch:
+            ctx.resolve_character_port(ch.get("id", ""))
+
+        speaker_label.text = ch.get("name", "") if ch else ""
+        dialogue_label.text = text if text else ""
+        dialogue_panel.visible = true
+
+        _pending_next = next_fn
+
+        return func():
+            dialogue_panel.visible = false
+            _pending_next = Callable()
+    )
+
+    # ── CHOICE ────────────────────────────────────────────────
+    _engine.on_choice(func(args):
+        var ctx = args["context"]
+        var next_fn = args["next"]
+        var choices = ctx.options
+
+        var visible: Array = []
+        for c in choices:
+            if c.get("visible") != false:
+                visible.append(c)
+
+        for c in visible:
+            var btn = Button.new()
+            var label = LsdeUtils.get_localized_text(c.get("text"))
+            btn.text = label if label else c.get("label", "")
+            btn.pressed.connect(func():
+                ctx.select_choice(c["id"])
+                next_fn.call()
+            )
+            choice_container.add_child(btn)
+
+        return func():
+            for child in choice_container.get_children():
+                child.queue_free()
+    )
+
+    # ── CONDITION ─────────────────────────────────────────────
+    _engine.on_condition(func(args):
+        var ctx = args["context"]
+        var next_fn = args["next"]
+
+        # evaluate your game state — return true or false
+        var result = true  # ← replace with your game logic
+        ctx.resolve(result)
+        next_fn.call()
+    )
+
+    # ── ACTION ────────────────────────────────────────────────
+    _engine.on_action(func(args):
+        var ctx = args["context"]
+        var next_fn = args["next"]
+
+        # execute your game effects — set flags, play sounds, give items
+        # ctx.resolve() on success, ctx.reject(err) on failure
+        ctx.resolve()
+        next_fn.call()
+    )
+
+## Player input — advance dialogue on ui_accept (Space, Enter, gamepad A)
+func _unhandled_input(event: InputEvent) -> void:
+    if event.is_action_pressed("ui_accept") and _pending_next.is_valid():
+        _pending_next.call()
+        _pending_next = Callable()
+        get_viewport().set_input_as_handled()
+
+## Start a dialogue scene from your game code
+func start_scene(scene_id: String) -> void:
+    var handle = _engine.scene(scene_id)
+    handle.start()
+```
+
+## The 4 Handlers
+
+Each handler receives the block data and a `next()` callback. The developer processes the data in their engine, then calls `next()` when the block is done. The timing of that call belongs entirely to the game.
+
+- **Dialog** — text, character, native properties. Display the dialogue in your UI, wait for player input or a delay, then call `next()`. Return a cleanup function to hide the UI when the engine moves to the next block.
+
+- **Choice** — list of choices tagged `visible` when `onResolveCondition()` is installed. The engine hands you **every** option, tagged; filter on `visible !== false`. Create the corresponding UI elements — buttons, list, radial menu. On player selection, `selectChoice(optionId)` tells the engine which branch to follow, then `next()` advances the flow.
+
+- **Condition** — the cases defined in the block. Install `onResolveCondition()` once and the engine pre-evaluates them, which makes `onCondition` optional. To override the routing, `context.resolve(port)` takes a **port name** — `"out"`, `"default"`, or a case port (`"K1"`).
+
+- **Action** — the block's calls, in `context.calls`: an `fn` and its `args` **by name**. Execute them in your engine — play a sound, give an item, trigger a cinematic. `context.resolve()` leaves by `then`, `context.reject()` leaves by `catch` — falling back to `then` when no `catch` is wired.
+
+## Tips
+
+- **`next()` is the remote control.** Call it instantly for rapid-fire dialogue, or hold it until an animation finishes. The engine waits — it has no concept of time.
+- **Cleanup functions clean up after you.** Return a function from any handler — the engine calls it when moving to the next block. Perfect for hiding UI, stopping audio, or freeing nodes.
+- **`onBeforeBlock` handles delays.** The engine does not enforce `props.delay` — `onBeforeBlock` reads it and calls `resolve()` after a timer. Full control.
+- **Async tracks are parallel flows.** When a cutscene needs dialogue and camera movement at the same time, blocks marked `isAsync` in the editor run on independent tracks.
+
+================================================================================
+
+# Parsing & Import
+
+## Overview
+
+The engine is **format-agnostic** — `engine.init({ data })` receives a deserialized `BlueprintExport` object, not a file or raw string. The engine never reads files and has no dependency on any serialization library.
+
+The [LSDE editor](https://lepasoft.com) exports blueprints in multiple formats:
+
+| Format | Full graph? | Use case |
+|--------|------------|----------|
+| **JSON** | Yes | Default — widest parser support across all platforms |
+| **XML** | Yes | XML-based pipelines, localization tools (XLIFF), legacy systems |
+| **YAML** | Yes | Human-readable editing, git-friendly diffs, config-driven workflows |
+| **CSV** | No (flat) | Localization / translation — export to Excel or Google Sheets |
+
+CSV exports a flat table of dialogue text by locale. It does **not** contain connections, conditions, or actions — it cannot be used with the engine runtime.
+
+## Recommended Parsers
+
+| Platform | JSON | XML | YAML |
+|---|---|---|---|
+| **Unity** | [Newtonsoft.Json](https://docs.unity3d.com/Packages/com.unity.nuget.newtonsoft-json@3.0/) (`com.unity.nuget.newtonsoft-json`) | `System.Xml` (native) | not recommended |
+| **Unreal Engine** | `FJsonSerializer` (native module `Json`) | `XmlParser` (native) | [UnrealYAML](https://github.com/jwindgassen/UnrealYAML) (marketplace) |
+| **Godot** | `JSON.parse_string()` (native) | `XMLParser` (native) | [godot-yaml](https://github.com/fimbul-works/godot-yaml) (GDExtension) |
+| **TypeScript** | `JSON.parse()` (native) | [fast-xml-parser](https://www.npmjs.com/package/fast-xml-parser) | [yaml](https://www.npmjs.com/package/yaml) |
+| **CSharp** | `System.Text.Json` (.NET 5+) / `Newtonsoft.Json` | `System.Xml` (native) | [YamlDotNet](https://github.com/aaubry/YamlDotNet) |
+| **CPP** | [nlohmann/json](https://github.com/nlohmann/json) (header-only) | [tinyxml2](https://github.com/leethomason/tinyxml2) / [pugixml](https://github.com/zeux/pugixml) | [yaml-cpp](https://github.com/jbeder/yaml-cpp) |
+
+## Unity
+
+
+```csharp [JSON — LsdeDialogEngine.Newtonsoft]
+// Install: dotnet add package LsdeDialogEngine.Newtonsoft
+// Unity Package Manager: com.unity.nuget.newtonsoft-json (auto-pulled)
+using LsdeDialogEngine;
+using LsdeDialogEngine.Newtonsoft;
+
+var json = File.ReadAllText("blueprints.json");
+var blueprint = LsdeJson.Parse(json);
+engine.Init(new InitOptions { Data = blueprint });
+```
+```csharp [JSON — manual Newtonsoft]
+// Without companion package — manual converter setup
+using Newtonsoft.Json;
+using LsdeDialogEngine;
+
+var json = File.ReadAllText("blueprints.json");
+var settings = new JsonSerializerSettings();
+settings.Converters.Add(new BlueprintBlockNewtonsoftConverter()); // see Polymorphic Dispatch
+var blueprint = JsonConvert.DeserializeObject<BlueprintExport>(json, settings);
+engine.Init(new InitOptions { Data = blueprint });
+```
+```csharp [XML — System.Xml]
+// System.Xml is native — nothing to install
+using System.Xml.Linq;
+using LsdeDialogEngine;
+
+var doc = XDocument.Load("blueprint.xml");
+// Manual mapping from XElement → BlueprintExport required.
+// See polymorphic dispatch section below for BlueprintBlock handling.
+```
+
+## Unreal Engine
+
+
+```cpp [JSON — FJsonSerializer (native)]
+#include "Json.h"
+#include <lsde/engine.h>
+
+FString JsonStr;
+FFileHelper::LoadFileToString(JsonStr, TEXT("blueprints.json"));
+
+TSharedPtr<FJsonObject> JsonObject;
+auto Reader = TJsonReaderFactory<>::Create(JsonStr);
+FJsonSerializer::Deserialize(Reader, JsonObject);
+
+// Map FJsonObject → BlueprintExport manually.
+// Dispatch on block "type" field for polymorphism.
+```
+```cpp [XML — XmlParser (native)]
+#include "XmlParser.h"
+
+FXmlFile XmlFile(TEXT("blueprint.xml"));
+auto* Root = XmlFile.GetRootNode();
+// Walk XML nodes → map to BlueprintExport.
+```
+
+## Godot
+
+
+```gdscript [JSON (native)]
+var file = FileAccess.open("res://blueprint.json", FileAccess.READ)
+var data = JSON.parse_string(file.get_as_text())
+file.close()
+
+engine.init({"data": data})
+# No polymorphism issues — GDScript uses dynamic Dictionaries.
+```
+```gdscript [XML — XMLParser (native)]
+var parser = XMLParser.new()
+parser.open("res://blueprint.xml")
+# Walk parser events → build Dictionary matching BlueprintExport structure.
+# See Godot docs: XMLParser class reference.
+```
+
+## TypeScript (TS/JS)
+
+
+```ts [JSON — import (bundler)]
+// Bundlers (Vite, Webpack, esbuild) auto-parse .json imports.
+import blueprintJson from './blueprints.json';
+engine.init({ data: blueprintJson });
+```
+```ts [JSON — manual]
+const json = fs.readFileSync('./blueprints.json', 'utf-8');
+engine.init({ data: JSON.parse(json) });
+// No polymorphism issues — JS objects are dynamically typed.
+```
+```ts [XML — fast-xml-parser]
+// npm install fast-xml-parser
+import { XMLParser } from 'fast-xml-parser';
+const xml = fs.readFileSync('./blueprint.xml', 'utf-8');
+const parser = new XMLParser({ ignoreAttributes: false });
+const data = parser.parse(xml);
+engine.init({ data });
+```
+```ts [YAML — yaml]
+// npm install yaml
+import { parse } from 'yaml';
+const yml = fs.readFileSync('./blueprint.yaml', 'utf-8');
+engine.init({ data: parse(yml) });
+```
+
+## CSharp (C#)
+
+
+```csharp [JSON — LsdeDialogEngine.SystemTextJson]
+// Install: dotnet add package LsdeDialogEngine.SystemTextJson
+using LsdeDialogEngine;
+using LsdeDialogEngine.Json;
+
+var json = File.ReadAllText("blueprints.json");
+var blueprint = LsdeJson.Parse(json);
+engine.Init(new InitOptions { Data = blueprint });
+```
+```csharp [JSON — manual System.Text.Json]
+// Without companion package — manual converter setup
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using LsdeDialogEngine;
+
+var json = File.ReadAllText("blueprints.json");
+var options = new JsonSerializerOptions {
+    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    Converters = {
+        new JsonStringEnumConverter(),
+        new BlueprintBlockConverter(),       // see Polymorphic Dispatch
+        new BlockPropertyValueConverter(),
+    },
+};
+var blueprint = JsonSerializer.Deserialize<BlueprintExport>(json, options);
+engine.Init(new InitOptions { Data = blueprint });
+```
+```csharp [XML — System.Xml (native)]
+// System.Xml is included in .NET — nothing to install.
+using System.Xml.Linq;
+using LsdeDialogEngine;
+
+var doc = XDocument.Load("blueprint.xml");
+// Manual mapping from XElement → BlueprintExport required.
+```
+```csharp [YAML — YamlDotNet]
+// dotnet add package YamlDotNet
+using YamlDotNet.Serialization;
+using LsdeDialogEngine;
+
+var yaml = File.ReadAllText("blueprint.yaml");
+var deserializer = new DeserializerBuilder().Build();
+// YamlDotNet requires custom type converters for polymorphic blocks.
+```
+
+## CPP (C++)
+
+
+```cpp [JSON — lsde/json_loader.h]
+// Include the optional JSON loader (requires nlohmann/json)
+#include <lsde/json_loader.h>
+
+auto blueprint = lsde::LsdeJson::parseFile("blueprints.json");
+// or from string:
+// auto blueprint = lsde::LsdeJson::parse(jsonString);
+engine.init({blueprint});
+```
+```cpp [JSON — manual nlohmann/json]
+// Without json_loader.h — manual polymorphic dispatch
+#include <nlohmann/json.hpp>
+#include <lsde/engine.h>
+
+std::ifstream f("blueprints.json");
+auto j = nlohmann::json::parse(f);
+auto blueprint = j.get<lsde::BlueprintExport>();
+// Requires custom from_json — see polymorphic dispatch below.
+```
+```cpp [XML — tinyxml2]
+#include <tinyxml2.h>
+tinyxml2::XMLDocument doc;
+doc.LoadFile("blueprint.xml");
+// Walk XML elements → map to BlueprintExport.
+```
+```cpp [YAML — yaml-cpp]
+// Install: apt install libyaml-cpp-dev (or include source)
+#include <yaml-cpp/yaml.h>
+auto node = YAML::LoadFile("blueprint.yaml");
+// Requires custom YAML::convert specializations.
+```
+
+## Polymorphic Dispatch
+
+`BlueprintScene.blocks` is an array of `BlueprintBlock` — a **discriminated union** with 5 subtypes identified by the `type` field:
+
+| `type` | Subtype | Specific fields |
+|--------|---------|----------------|
+| `DIALOG` | `DialogBlock` | `text`, `content`, `structureKey` |
+| `CHOICE` | `ChoiceBlock` | `choices` |
+| `CONDITION` | `ConditionBlock` | `conditions` |
+| `ACTION` | `ActionBlock` | `actions` |
+| `NOTE` | `NoteBlock` | *(none)* |
+
+**Dynamically-typed languages** (TypeScript, GDScript) handle this automatically — parsed objects already contain all fields.
+
+**Statically-typed languages** (C#, C++) need a custom converter that reads the `type` field and constructs the correct subtype. Without it, subtype-specific fields like `text` or `choices` are silently lost.
+
+> INFO:
+If you use `LsdeDialogEngine.Newtonsoft` or `LsdeDialogEngine.SystemTextJson`, these converters are already included — just call `LsdeJson.Parse(json)`. The code below is for manual integration only.
+
+### CSharp — Newtonsoft.Json (Unity)
+
+```csharp
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using LsdeDialogEngine;
+
+class BlueprintBlockNewtonsoftConverter : JsonConverter<BlueprintBlock>
+{
+    public override BlueprintBlock ReadJson(JsonReader reader, Type objectType,
+        BlueprintBlock existingValue, bool hasExistingValue, JsonSerializer serializer)
+    {
+        var obj = JObject.Load(reader);
+        var type = obj["type"]?.ToString();
+        BlueprintBlock block = type switch
+        {
+            "dialog"    => new DialogBlock(),
+            "choice"    => new ChoiceBlock(),
+            "condition" => new ConditionBlock(),
+            "action"    => new ActionBlock(),
+            "note"      => new NoteBlock(),
+            _           => throw new JsonException($"Unknown block type: {type}")
+        };
+        serializer.Populate(obj.CreateReader(), block);
+        return block;
+    }
+
+    public override void WriteJson(JsonWriter writer, BlueprintBlock value, JsonSerializer serializer)
+        => serializer.Serialize(writer, value, value.GetType());
+}
+```
+
+### CSharp — System.Text.Json (.NET 5+)
+
+```csharp
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using LsdeDialogEngine;
+
+class BlueprintBlockConverter : JsonConverter<BlueprintBlock>
+{
+    public override BlueprintBlock Read(ref Utf8JsonReader reader, Type typeToConvert,
+        JsonSerializerOptions options)
+    {
+        using var doc = JsonDocument.ParseValue(ref reader);
+        var root = doc.RootElement;
+        var type = root.GetProperty("type").GetString();
+        var json = root.GetRawText();
+        return type switch
+        {
+            "dialog"    => JsonSerializer.Deserialize<DialogBlock>(json, options)!,
+            "choice"    => JsonSerializer.Deserialize<ChoiceBlock>(json, options)!,
+            "condition" => JsonSerializer.Deserialize<ConditionBlock>(json, options)!,
+            "action"    => JsonSerializer.Deserialize<ActionBlock>(json, options)!,
+            "note"      => JsonSerializer.Deserialize<NoteBlock>(json, options)!,
+            _           => throw new JsonException($"Unknown block type: {type}")
+        };
+    }
+
+    public override void Write(Utf8JsonWriter writer, BlueprintBlock value,
+        JsonSerializerOptions options)
+        => JsonSerializer.Serialize(writer, value, value.GetType(), options);
+}
+
+class BlockPropertyValueConverter : JsonConverter<object>
+{
+    public override object Read(ref Utf8JsonReader reader, Type typeToConvert,
+        JsonSerializerOptions options)
+    {
+        return reader.TokenType switch
+        {
+            JsonTokenType.String => reader.GetString(),
+            JsonTokenType.Number => reader.TryGetInt64(out var l) ? (object)(double)l : reader.GetDouble(),
+            JsonTokenType.True   => true,
+            JsonTokenType.False  => false,
+            JsonTokenType.Null   => null,
+            _                    => throw new JsonException($"Unexpected token {reader.TokenType}")
+        };
+    }
+
+    public override void Write(Utf8JsonWriter writer, object value, JsonSerializerOptions options)
+        => JsonSerializer.Serialize(writer, value, options);
+}
+```
+
+### CPP — nlohmann/json
+
+```cpp
+#include <nlohmann/json.hpp>
+#include <lsde/types.h>
+
+void from_json(const nlohmann::json& j, std::unique_ptr<lsde::BlueprintBlock>& block) {
+    auto type = j.at("type").get<std::string>();
+    if      (type == "dialog")    block = std::make_unique<lsde::DialogBlock>();
+    else if (type == "choice")    block = std::make_unique<lsde::ChoiceBlock>();
+    else if (type == "condition") block = std::make_unique<lsde::ConditionBlock>();
+    else if (type == "action")    block = std::make_unique<lsde::ActionBlock>();
+    else if (type == "note")      block = std::make_unique<lsde::NoteBlock>();
+    else throw std::runtime_error("Unknown block type: " + type);
+    j.get_to(*block);
+}
+```
+
+================================================================================
+
+# Lifecycle & Validation
+
+## Execution Order for Each Block
+
+1. **Previous block cleanup** — The cleanup function returned by the *previous* block's handler runs at transition time (when `next()` is called)
+2. `onValidateNextBlock` — Validation before execution
+3. `onBeforeBlock` — Pre-processing (must call `resolve()` to continue)
+4. Type handler (Tier 2 then Tier 1)
+
+## Scene Events
+
+
+```ts [TypeScript]
+engine.onSceneEnter(({ scene, context }) => {
+  // Called when handle.start() is executed
+});
+
+engine.onSceneExit(({ scene, context }) => {
+  // Called when the scene ends. context.reason says why:
+  // 'completed' | 'cancelled' | 'invalidated' | 'faulted' | 'deadlocked'
+  // scene.getSceneId() says WHICH scene — a global handler needs it when several play.
+  if (context.reason === 'faulted') {
+    console.error(`Scene ${scene.getSceneId()} failed`, context.error);
+  }
+  if (context.reason === 'deadlocked') {
+    console.warn('Scene stuck waiting for', context.waitingFor);
+  }
+});
+```
+```csharp [C#]
+engine.OnSceneEnter(args => {
+    // Called when handle.Start() is executed
+});
+
+engine.OnSceneExit(args => {
+    // Called when the scene ends. args.Context.Reason says why (SceneEndReason.*)
+    // args.Scene.GetSceneId() says WHICH scene — a global handler needs it when several play.
+    if (args.Context.Reason == SceneEndReason.Faulted)
+        Debug.LogException(args.Context.Error);
+    if (args.Context.Reason == SceneEndReason.Deadlocked)
+        Debug.LogWarning($"{args.Scene.GetSceneId()} stuck waiting for {string.Join(", ", args.Context.WaitingFor)}");
+});
+```
+```cpp [C++]
+engine.onSceneEnter([](const lsde::SceneLifecycleArgs& args) {
+    // Called when handle->start() is executed
+});
+
+engine.onSceneExit([](const lsde::SceneLifecycleArgs& args) {
+    // Called when the scene ends. args.context.reason says why (lsde::SceneEndReason::*)
+    // args.scene->getSceneId() says WHICH scene — a global handler needs it when several play.
+    if (args.context.reason == lsde::SceneEndReason::Faulted) {
+        // args.context.error holds the exception: std::rethrow_exception it to read it
+    }
+    if (args.context.reason == lsde::SceneEndReason::Deadlocked) {
+        // args.context.waitingFor names the blocks the scene was stuck on
+    }
+});
+```
+```gdscript [GDScript]
+engine.on_scene_enter(func(args):
+    pass # Called when handle.start() is executed
+)
+
+engine.on_scene_exit(func(args):
+    # Called when the scene ends. args["context"]["reason"] says why (LsdeTypes.SCENE_END_*)
+    # args["scene"].get_scene_id() says WHICH scene — a global handler needs it when several play.
+    if args["context"]["reason"] == LsdeTypes.SCENE_END_DEADLOCKED:
+        push_warning("%s stuck waiting for %s" % [args["scene"].get_scene_id(), str(args["context"]["waitingFor"])])
+)
+```
+
+## onValidateNextBlock
+
+Intercepts each block transition for validation. The handler receives the **resolved character** for both the upcoming block (`nextContext`) and the previously executed block (`fromContext`):
+
+
+```ts [TypeScript]
+engine.onValidateNextBlock(({ nextBlock, fromBlock, nextContext, fromContext }) => {
+  return { valid: true };
+});
+
+engine.onInvalidateBlock(({ scene, reason }) => {
+  console.error('Invalid block:', reason);
+  scene.cancel();
+});
+```
+```csharp [C#]
+engine.OnValidateNextBlock(args => {
+    // args.NextContext.Character, args.FromContext?.Character
+    return new ValidationResult { Valid = true };
+});
+
+engine.OnInvalidateBlock(args => {
+    Console.Error.WriteLine($"Invalid block: {args.Reason}");
+    args.Scene.Cancel();
+});
+```
+```cpp [C++]
+engine.onValidateNextBlock([](const auto& args) {
+    // args.nextContext.character, args.fromContext.character (check args.hasFromContext)
+    return ValidationResult{true};
+});
+
+engine.onInvalidateBlock([](auto* scene, const auto& reason) {
+    std::cerr << "Invalid block: " << reason << "\n";
+    scene->cancel();
+});
+```
+```gdscript [GDScript]
+engine.on_validate_next_block(func(args):
+    # args["nextContext"]["character"], args["fromContext"]["character"]
+    return {"valid": true}
+)
+
+engine.on_invalidate_block(func(args):
+    printerr("Invalid block: %s" % args["reason"])
+    args["scene"].cancel()
+)
+```
+
+### Character Gating
+
+Use `nextContext.character` to control which blocks are allowed to execute based on game state:
+
+
+```ts [TypeScript]
+// Block if the character is stunned
+engine.onValidateNextBlock(({ nextContext }) => {
+  const { character } = nextContext;
+  if (!character) return { valid: false, reason: 'no_character' };
+  if (game.characterHasStatus(character, 'stunned'))
+    return { valid: false, reason: 'character_stunned' };
+  return { valid: true };
+});
+```
+```csharp [C#]
+engine.OnValidateNextBlock(args => {
+    var character = args.NextContext.Character;
+    if (character == null)
+        return ValidationResult.Fail("no_character");
+    if (game.CharacterHasStatus(character, "stunned"))
+        return ValidationResult.Fail("character_stunned");
+    return ValidationResult.Ok();
+});
+```
+```cpp [C++]
+engine.onValidateNextBlock([&game](const auto& args) {
+    auto* character = args.nextContext.character;
+    if (!character) return ValidationResult{false, "no_character"};
+    if (game.characterHasStatus(character, "stunned"))
+        return ValidationResult{false, "character_stunned"};
+    return ValidationResult{true};
+});
+```
+```gdscript [GDScript]
+engine.on_validate_next_block(func(args):
+    var character = args["nextContext"]["character"]
+    if character == null:
+        return {"valid": false, "reason": "no_character"}
+    if game.character_has_status(character, "stunned"):
+        return {"valid": false, "reason": "character_stunned"}
+    return {"valid": true}
+)
+```
+
+Use `fromContext.character` to validate transitions between characters (e.g. relationship checks, cooldowns). `fromContext` is `null` for the first block of a scene.
+
+## onBeforeBlock
+
+Called before each block. **Must call `resolve()`** to continue:
+
+
+```ts [TypeScript]
+engine.onBeforeBlock(({ block, resolve }) => {
+  const delay = LsdeUtils.getNativeProperties(block)?.delay;
+  if (delay) {
+    setTimeout(resolve, delay * 1000);
+  } else {
+    resolve();
+  }
+});
+```
+```csharp [C#]
+engine.OnBeforeBlock(args => {
+    var delay = args.Block.NativeProperties?.Delay;
+    if (delay.HasValue)
+    {
+        // use your engine's delay system (coroutine, DOTween, Invoke, etc.)
+        DelayThenCall((float)delay.Value, args.Resolve);
+    }
+    else
+    {
+        args.Resolve();
+    }
+});
+```
+```cpp [C++]
+engine.onBeforeBlock([](const auto& args) {
+    auto delay = args.block->props
+        ? args.block->props->delay : std::nullopt;
+    if (delay.has_value()) {
+        // use your engine's timer system (FTimerManager, SDL_AddTimer, etc.)
+        scheduleDelay(delay.value(), [&args]() { args.resolve(); });
+    } else {
+        args.resolve();
+    }
+});
+```
+```gdscript [GDScript]
+engine.on_before_block(func(args):
+    var delay = args["block"].get("props", {}).get("delay", 0)
+    if delay > 0:
+        await get_tree().create_timer(delay).timeout
+    args["resolve"].call()
+)
+```
+
+A `resolve()` called **while `onBeforeBlock` is still running** takes effect when it returns — exactly
+like `next()` called inside a handler. The type handler is dispatched after your callback has
+finished, so any line you write after `resolve()` runs **before** the block, not after it.
+
+## Cleanup Functions
+
+A handler can return a cleanup function, called when leaving the block:
+
+
+```ts [TypeScript]
+engine.onDialog(({ block, next }) => {
+  const element = showDialogUI(block);
+
+  // next() is called later — by player input, timer, etc.
+
+  return () => {
+    element.remove(); // called when the engine moves to the next block
+  };
+});
+```
+```csharp [C#]
+engine.OnDialog(args => {
+    var element = ShowDialogUI(args.Block);
+
+    // next() is called later — by player input, timer, etc.
+
+    return () => element.SetActive(false);
+});
+```
+```cpp [C++]
+engine.onDialog([](auto*, auto* block, auto* ctx, auto next) -> CleanupFn {
+    auto* element = showDialogUI(block);
+
+    // next() is called later — by player input, timer, etc.
+
+    return [element]() { element->remove(); };
+});
+```
+```gdscript [GDScript]
+engine.on_dialog(func(args):
+    var element = show_dialog_ui(args["block"])
+
+    # next is called later — by player input, timer, etc.
+
+    return func(): element.queue_free()
+)
+```
+
+## Error Boundaries
+
+**Nothing is swallowed.** If any of your code throws while the engine walks the graph — a type
+handler, a cleanup function, `onValidateNextBlock`, `onInvalidateBlock`, `onBeforeBlock`,
+`onResolveCondition`, `onResolveCharacter` or `onSceneEnter` — the engine closes the **whole scene**
+first, and then re-throws the error to whoever called `start()`, `next()` or `resolve()`.
+
+It holds on **every track**. A handler that throws on an `isAsync` branch closes the scene, not only
+its branch.
+
+The order is what makes this usable. By the time the error reaches your code:
+
+- the cleanup functions have run
+- the async tracks are cancelled
+- `onSceneExit` has fired, with `reason: 'faulted'` and the error itself in `context.error`
+
+The dialogue stopped **properly**, and you decide what happens next — carry on without it, show a
+screen, or let it crash. Put your own `try/catch` around `start()`, `next()` or `resolve()`.
+
+The error arrives in **two** places, on purpose. It is thrown to whoever called `next()` — in a game,
+usually a click or a timer — and it is handed to `onSceneExit` in `context.error`, which is where the
+code awaiting the end of the dialogue is listening. Log it in one of the two, not both.
+
+An exception thrown by `onSceneExit` itself reaches you the same way, and the scene is released all
+the same: `engine.isRunning()` no longer counts it. Unless the scene was already closing on a fault:
+you then receive that fault, the one that explains the rest.
+
+> WARNING:
+GDScript has no exceptions. A script error inside a handler is pushed to the Godot log and the call
+returns `null`: the block simply waits for a `next()` that will never come. Nothing closes the scene
+for you.
+
+> TIP:
+v1 swallowed a handler exception silently — not even logged — while an exception from the cleanup
+that same handler returned reached the caller. One fault, two opposite behaviours, and the quiet
+one hid real bugs for as long as a project ran.
+
+2.0.0 fixed that for the type handler only. A throwing validation, `onBeforeBlock` or resolver — or a
+handler on a parallel track — still left the scene open with nothing able to move it, and a game
+awaiting the end of the dialogue waited forever.
+
+## Why a Scene Ended
+
+`onSceneExit` is told why, in `context.reason`:
+
+| `reason` | When |
+|---|---|
+| `completed` | The flow ran out of graph |
+| `cancelled` | `scene.cancel()` or `engine.stop()` |
+| `invalidated` | `onValidateNextBlock` refused the block the last running track was entering |
+| `faulted` | Your code threw during the walk. `context.error` holds what was thrown — see [Error Boundaries](#error-boundaries) |
+| `deadlocked` | Every track left is parked on a `waitForBlocks` nothing can finish. `context.waitingFor` names those blocks |
+
+`onSceneEnter` receives no reason.
+
+`scene.getSceneId()` says **which** scene ended, and `scene.getScenePath()` gives its path. A global
+`onSceneExit` needs it as soon as two scenes play at once. Store the id, not the path: the path
+changes the day someone renames the scene.
+
+**A deadlock closes the scene.** A block waiting on a block no track will ever finish — one on a
+branch the flow did not take, for instance — used to hold the scene open for good, with no
+`onSceneExit`. The scene now closes as `deadlocked` the moment the last track able to move stops,
+and `waitingFor` tells you which join was miswired.
+
+## One Thread
+
+The engine is not thread-safe. Call `next()`, `resolve()` and `cancel()` from the thread that
+**started** the scene — in Unity, the main thread; in Unreal, the game thread.
+
+In C# and C++ a call from another thread is **refused** with an exception that names both threads,
+and it changes nothing: the same `next()` still works once it is called from the right thread. In
+Unity, switch back before calling into the engine (`await UniTask.SwitchToMainThread()`, or queue the
+call for the main thread).
+
+## cancel()
+
+Calling `scene.cancel()` triggers this sequence:
+
+1. All **async tracks** are cancelled
+2. The **cleanup function** of the current block is executed
+3. The `onSceneExit` handler is called, with `reason: 'cancelled'`
+4. The scene is marked as finished
+
+A cleanup that calls `scene.cancel()` or `engine.stop()` while the scene is already closing is
+ignored: `onSceneExit` fires once.
+
+
+```ts [TypeScript]
+engine.onInvalidateBlock(({ scene, reason }) => {
+  console.error('Validation failed:', reason);
+  scene.cancel();
+});
+```
+```csharp [C#]
+engine.OnInvalidateBlock(args => {
+    Console.Error.WriteLine($"Validation failed: {args.Reason}");
+    args.Scene.Cancel();
+});
+```
+```cpp [C++]
+engine.onInvalidateBlock([](auto* scene, const auto& reason) {
+    std::cerr << "Validation failed: " << reason << "\n";
+    scene->cancel();
+});
+```
+```gdscript [GDScript]
+engine.on_invalidate_block(func(args):
+    printerr("Validation failed: %s" % args["reason"])
+    args["scene"].cancel()
+)
+```
+
+## NativeProperties
+
+Execution properties that control how a block is dispatched by the engine:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `isAsync` | `boolean?` | Execute on a parallel async track |
+| `delay` | `number?` | **MILLISECONDS** before the block plays. Applied by `onBeforeBlock`, never by the engine |
+| `timeout` | `number?` | **MILLISECONDS** the block STAYS after its line has been said, then it leaves on its own — an auto-advance for blocks. **Outranks `waitInput`**. Passed through; the engine enforces nothing |
+| `portPerCharacter` | `boolean?` | One output port per character in metadata |
+| `skipIfMissingActor` | `boolean?` | Skip block if referenced actor is absent |
+| `debug` | `boolean?` | Debug flag for editor use |
+| `waitForBlocks` | `string[]?` | Block ids **of this scene**. The block is held **before it is dispatched** until every one of them has **finished**. If nothing can ever finish them, the scene closes as `deadlocked` |
+| `waitInput` | `boolean?` | Passive flag for explicit player input control |
+
+## Visual Reference
+
+### Block Execution Flow
+
+```mermaid
+flowchart TD
+    A["next() called"] --> B["cleanup previous block"]
+    B --> C["the track enters the block"]
+    C --> D{NOTE block?}
+    D -- yes --> E[skip to next connection]
+    D -- no --> F["onValidateNextBlock\n• nextContext.character\n• fromContext.character"]
+    F --> G{valid?}
+    G -- no --> H["onInvalidateBlock\nthe engine ends the flow"]
+    G -- yes --> I["onBeforeBlock\nresolve()"]
+    I --> J[type handler\nTier 2 then Tier 1]
+    J --> K["next() → advance"]
+```
+
+### Character Gating Flow
+
+```mermaid
+flowchart TD
+    A["block.actors\n= [Lia, Bob, Sam]"] --> B["onResolveCharacter\ngame returns: Lia"]
+    B --> C["onValidateNextBlock\nnextContext.character = Lia\nfromContext.character = prev"]
+    C --> D{valid?}
+    D -- "Lia OK" --> E["execute block\ncontext.character = Lia"]
+    D -- "Lia stunned" --> F["onInvalidateBlock\nthe engine ends the flow"]
+    D -- "undefined\nno character in party" --> F
+```
+
+================================================================================
+
 # Choice Visibility
 
 ## Overview
@@ -284,7 +3176,29 @@ If visibility filtering is needed (e.g., hiding choices based on game state or p
 
 Register a condition resolver on the engine — once, before starting any scene:
 
-<!--@include: ../_shared/choice-filter-setup.md-->
+
+```ts [TypeScript]
+engine.onResolveCondition((condition) => {
+  // Evaluate game-state conditions only.
+  // choice: conditions are handled internally by the engine.
+  return gameState.check(condition.key, condition.operator, condition.value);
+});
+```
+```csharp [C#]
+engine.OnResolveCondition(cond => {
+    return GameState.Check(cond.Key, cond.Operator, cond.Value);
+});
+```
+```cpp [C++]
+engine.onResolveCondition([](const ConditionTest& cond) {
+    return gameState.check(cond.key, cond.op, cond.value);
+});
+```
+```gdscript [GDScript]
+engine.on_resolve_condition(func(cond):
+    return game_state.check(cond)
+)
+```
 
 When installed, the engine evaluates each choice's `when` **before** calling `onChoice`. The same resolver also pre-evaluates condition block groups — see [Condition blocks](/guide/block-types#condition) for details.
 
@@ -296,7 +3210,54 @@ When installed, the engine evaluates each choice's `when` **before** calling `on
 
 In the handler, filter with one line:
 
-<!--@include: ../_shared/choice-visibility-handler.md-->
+
+```ts [TypeScript]
+engine.onChoice(({ context, next }) => {
+  // `visible` is undefined when no resolver is installed: unknown, not hidden.
+  const offered = context.options.filter(o => o.visible !== false);
+  showOptionsUI(offered, (optionId) => {
+    context.selectChoice(optionId);   // the option id IS the exit port (C1, C2…)
+    next();
+  });
+});
+```
+```csharp [C#]
+engine.OnChoice(args => {
+    var offered = args.Context.Options
+        .Where(o => o.Visible != false).ToList();
+    ShowChoicesUI(offered, optionId => {
+        args.Context.SelectChoice(optionId);
+        args.Next();
+    });
+    return null;
+});
+```
+```cpp [C++]
+engine.onChoice([](auto*, auto*, auto* ctx, auto next) -> lsde::CleanupFn {
+    std::vector<const lsde::RuntimeChoiceItem*> offered;
+    for (const auto& o : ctx->options())
+        if (!o.visible.has_value() || *o.visible)
+            offered.push_back(&o);
+    showOptionsUI(offered, [ctx, next](const std::string& optionId) {
+        ctx->selectChoice(optionId);
+        next();
+    });
+    return {};
+});
+```
+```gdscript [GDScript]
+engine.on_choice(func(args):
+    var offered = []
+    for o in args["context"].options:
+        if o.get("visible") != false:
+            offered.append(o)
+    show_options_ui(offered, func(option_id):
+        args["context"].select_choice(option_id)
+        args["next"].call()
+    )
+    return Callable()
+)
+```
 
 ### Why `visible !== false` and not `=== true`?
 
@@ -595,7 +3556,69 @@ tutorial.on_choice(func(args):
 
 With `onResolveCondition`, a single callback handles **both** choice visibility and condition block pre-evaluation. No more duplicating logic:
 
-<!--@include: ../_shared/choice-reusable-filter.md-->
+
+```ts [TypeScript]
+// ONE evaluator answers everything about game state: option visibility AND condition cases.
+// A test on the reserved `choice` dictionary never reaches it — the engine answers those from the
+// history it kept during the scene.
+engine.onResolveCondition((test) => game.evaluate(test.dict, test.entry, test.op, test.value));
+
+// onCondition is now optional: the engine already knows which port to take.
+// Keep it to log what matched, or to override with a PORT NAME.
+engine.onCondition(({ block, context, next }) => {
+  const matched = context.cases.filter((c) => c.result).map((c) => c.port);
+  game.log(`${block.id} → ${matched[0] ?? 'default'}`);
+  next();
+});
+```
+```csharp [C#]
+engine.OnResolveCondition(test => Game.Evaluate(test.Dict, test.Entry, test.Op, test.Value));
+
+engine.OnCondition(args => {
+    var matched = args.Context.Cases
+        .Where(c => c.Result == true)
+        .Select(c => c.Port)
+        .FirstOrDefault() ?? Ports.Default;
+    Game.Log($"{args.Block.Id} → {matched}");
+    args.Next();
+    return null;
+});
+```
+```cpp [C++]
+engine.onResolveCondition([&game](const lsde::ConditionTest& test) {
+    return game.evaluate(test.dict, test.entry, test.op, test.value);
+});
+
+engine.onCondition([&game](auto*, auto* block, auto* ctx, auto next) -> lsde::CleanupFn {
+    for (const auto& c : ctx->cases()) {
+        if (c.result.value_or(false)) { game.log(block->id + " -> " + c.port); break; }
+    }
+    next();
+    return {};
+});
+```
+```gdscript [GDScript]
+engine.on_resolve_condition(func(test: Dictionary) -> bool:
+    return game.evaluate(test["dict"], test["entry"], test["op"], test["value"]))
+
+engine.on_condition(func(args):
+    for c in args["context"].cases:
+        if c["result"]:
+            game.log("%s -> %s" % [args["block"]["id"], c["port"]])
+            break
+    args["next"].call()
+    return Callable()
+)
+```
+
+> WARNING:
+The same callback feeds option visibility and condition routing, so you write your game-state
+lookup once.
+
+Inside, the engine keeps them apart on purpose. Routing has to pick a branch, so a question it
+cannot answer becomes `false` and the flow takes `default`. An option has no such obligation:
+saying `false` about a question nobody could answer would **hide an answer from the player**, so
+`visible` stays `undefined` instead.
 
 > TIP:
 Before `onResolveCondition`, the same `gameState.check(...)` logic had to be registered in both `onResolveCondition` and `onCondition` separately. With the unified resolver, it's one callback — the engine handles both automatically.
@@ -645,134 +3668,217 @@ away the ability to show a locked answer.
 
 ================================================================================
 
-# Handlers
+# Async Tracks
 
-## Handlers
+When a block has `props.isAsync = true`, the engine creates a **parallel track** that runs independently of the main flow.
 
-Handlers are the bridge between the engine and your game. They work like observers — you subscribe a function, and the engine calls it when the matching event occurs. This is how you trigger the right behaviors in your game engine: display text, play an animation, evaluate state, etc.
+## How Tracks are Created
 
-The engine exposes the following handlers:
+During port resolution, if multiple outgoing connections exist:
+- The **first non-async connection** becomes the continuation of the current flow
+- The **other connections** (to blocks with `isAsync`) become new parallel tracks
 
-| Handler | Level | Description |
-|---------|-------|-------------|
-| [`onDialog`](/api-ref/classes/DialogueEngine#ondialog) | global / scene | Dialog block — display text |
-| [`onChoice`](/api-ref/classes/DialogueEngine#onchoice) | global / scene | Choice block — present choices |
-| [`onCondition`](/api-ref/classes/DialogueEngine#oncondition) | global / scene | Condition block — evaluate and branch |
-| [`onAction`](/api-ref/classes/DialogueEngine#onaction) | global / scene | Action block — trigger side effects |
-| [`onResolveCharacter`](/api-ref/classes/DialogueEngine#onresolvecharacter) | global / scene | Resolve which character is speaking |
-| [`onBeforeBlock`](/api-ref/classes/DialogueEngine#onbeforeblock) | global | Before every block (delay, entry animations…) |
-| [`onValidateNextBlock`](/api-ref/classes/DialogueEngine#onvalidatenextblock) | global | Validate before progressing to a block |
-| [`onInvalidateBlock`](/api-ref/classes/DialogueEngine#oninvalidateblock) | global | React when validation fails |
-| [`onSceneEnter`](/api-ref/classes/DialogueEngine#onsceneenter) | global / scene | A scene starts |
-| [`onSceneExit`](/api-ref/classes/DialogueEngine#onsceneexit) | global / scene | A scene ends |
-| [`onBlock`](/api-ref/interfaces/SceneHandle#onblock) | scene | Override one block by its id (`DIALOG-001`) |
-| [`onDialogId`](/api-ref/interfaces/SceneHandle#ondialogid) | scene | Override one DIALOG block by its id (type-safe) |
-| [`onChoiceId`](/api-ref/interfaces/SceneHandle#onchoiceid) | scene | Override one CHOICE block by its id (type-safe) |
-| [`onConditionId`](/api-ref/interfaces/SceneHandle#onconditionid) | scene | Override one CONDITION block by its id (type-safe) |
-| [`onActionId`](/api-ref/interfaces/SceneHandle#onactionid) | scene | Override one ACTION block by its id (type-safe) |
-| [`onResolveCondition`](/api-ref/classes/DialogueEngine#onresolvecondition) | global | Unified condition resolver (choice visibility + condition pre-evaluation) |
+This applies to both the main track **and** async tracks — an async track can spawn sub-tracks from its own outgoing async connections, creating a hierarchy of parallel execution.
 
-`onDialog`, `onChoice`, and `onAction` are **required** — the engine validates their presence when `start()` is called and throws a descriptive error if any are missing. `onCondition` is **optional** when `onResolveCondition` is installed — the engine auto-routes from pre-evaluated condition groups.
+## Track Lifecycle
 
-A ROUTER block has **no handler** and needs none: the engine evaluates every case, launches the port of each true one and continues by `then` (all held) or `catch` (one did not) on its own. To observe one, use `handle.onBlock(id)` — see [The Router Block](/guide/router).
+- `onBeforeBlock` is called for **all blocks** (main and async tracks) — see [Lifecycle](./lifecycle) for `resolve()` details
+- Async tracks separate outgoing connections into main vs async, just like the main track
+- Tracks are automatically cancelled when the scene ends or `cancel()` is called
+- When a track finishes naturally (no more connections), its sub-tracks **continue to live** independently
+- When a track is explicitly cancelled (`cancel()`), the cancellation **cascades** to all child tracks
 
-<!--@include: ../_shared/handler-basic.md-->
+## waitForBlocks — waiting for another track
 
-## Two-Tier Handler System
+`props.waitForBlocks` holds a block until the blocks it names have **finished**. It is the join half of the fork `isAsync` opens: a branch runs in parallel, and a block downstream waits for it to be **over** before it plays.
 
-The engine resolves handlers in two tiers:
+**Finished, not reached.** A listed block counts once the flow has **left** it: your game called `next()`, the exit port was resolved, and the block's cleanup has run. So the bubble is off the screen and the audio voice is stopped *before* the joining line is dispatched — which is the whole point of drawing a join.
 
-- **Global handlers** — registered on the engine, they define the default behavior for every scene. They are typically all you need.
-- **Scene handlers** — registered on a specific [`SceneHandle`](/api-ref/interfaces/SceneHandle), they let you override or extend the default behavior when a scene requires a different rendering or control flow. This is rare, but available.
+> WARNING:
+In the first 2.x releases, being **reached** was enough. That made the property nearly inert in the shape designers actually draw: a fork into two blocks, then a join on both, lifted in the very tick it was registered — the two had been dispatched a fraction of a millisecond earlier — and the joining line spoke over them.
 
-When a block is dispatched, the engine resolves the handler in this order:
-1. `handle.onBlock(blockId)` or `handle.onDialogId(blockId)` / `handle.onActionId(blockId)` / ... — block-specific override
-2. `handle.onDialog()` / `handle.onChoice()` / ... — scene-level type handler
-3. `engine.onDialog()` / `engine.onChoice()` / ... — global handler
+`getVisitedBlocks()` is unaffected: it still lists what the player has been **shown**, which includes a block still mid-sentence.
 
-When both tiers are present, both run in sequence — scene first, then global — unless the scene handler calls `context.preventGlobalHandler()` to suppress the global pass.
+**It holds the block BEFORE the block is dispatched.** No handler is called, so your game never learns the block exists until the wait lifts — nothing of it can reach the screen early. That is the engine's decision and not a rendering choice you could make differently: `waitForBlocks` is a native property, the designer ticks it in LSDE, and the engine owes them the behaviour.
 
-<!--@include: ../_shared/handler-tier1.md-->
+The rule is the same on **every** track, the one the player is watching included.
 
-## Character Resolution
+- The ids name blocks **of this scene**. A wire has never crossed a scene boundary.
+- **All** of them must have finished, not just one.
+- Finishing a block releases everything waiting on it, in turn.
+- A block that never finishes parks its track for good — and a block waiting on player input forever never finishes. `init()` reports `UNKNOWN_WAIT_BLOCK` when an id is not a block of the scene at all, but it cannot know whether a real one will ever be played.
 
-Character resolution is optional. By registering an `onResolveCharacter` callback, the engine invokes it before every block that has characters in its `actors`. The callback receives the list of characters assigned to the block and returns the one that should be active — or `undefined` if none is available. The resolved character is then accessible via `context.character` in all handlers.
+The sequence for a block carrying both `waitForBlocks` and `delay`:
 
-This is the ideal integration point to query your game state: check if a character is present in the scene, alive, in camera range, etc. Returning `undefined` opens the door to several strategies: skip the block via [`skipIfMissingActor`](/api-ref/interfaces/NativeProperties#skipifmissingactor), cancel the scene via `handle.cancel()`, or handle the case directly in the handler.
+```
+waitForBlocks gate → onBeforeBlock (delay) → handler → next()
+```
 
-<!--@include: ../_shared/handler-character.md-->
+## waitInput — Player Input Flag
 
-## Scene Lifecycle
+`props.waitInput` is a **passive flag** — the engine exposes it but does not interpret it. Your game handler reads it to decide whether to wait for explicit player input (e.g., a second controller, a custom event, or an NPC auto-selection).
 
-The `onSceneEnter` and `onSceneExit` callbacks let you react to a scene starting and ending — enable cinema mode, freeze NPCs, prepare the UI, clean up resources, etc. They are available at global level (on the engine) and at scene level (via `handle.onEnter()` / `handle.onExit()`). The scene handler replaces the global one if defined.
+## TrackInfo API — Observability
 
-<!--@include: ../_shared/handler-lifecycle.md-->
+Use `scene.getTrackInfos()` to inspect running async tracks. Returns a read-only snapshot of each track's state:
 
-## Block Override
 
-`onBlock(blockId)` lets you target a specific block by its identifier and assign it a dedicated handler. This is a rare use case — generic handlers cover the vast majority of needs — but for very specific scenarios where an individual block requires distinct behavior, it is available.
+```ts [TypeScript]
+const tracks = scene.getTrackInfos();
+for (const track of tracks) {
+  console.log(`Track ${track.id} (parent: ${track.parentTrackId}) at block ${track.currentBlockId}`);
+}
+```
+```csharp [C#]
+var tracks = scene.GetTrackInfos();
+foreach (var track in tracks)
+{
+    Console.WriteLine($"Track {track.Id} (parent: {track.ParentTrackId}) at block {track.CurrentBlockId}");
+}
+```
+```cpp [C++]
+auto tracks = scene->getTrackInfos();
+for (const auto& track : tracks) {
+    std::cout << "Track " << track.id
+              << " (parent: " << track.parentTrackId << ")"
+              << " at block " << track.currentBlockId << "\n";
+}
+```
+```gdscript [GDScript]
+var tracks = scene.get_track_infos()
+for track in tracks:
+    print("Track %d (parent: %s) at block %s" % [
+        track["id"], str(track["parentTrackId"]), track["currentBlockId"]])
+```
 
-<!--@include: ../_shared/handler-block-override.md-->
+Each `TrackInfo` contains: `id`, `parentTrackId`, `startBlockId`, `currentBlockId`, `running`. Use this for debug overlays, play-mode renderers, or validation.
 
-## Type-Safe Block Override
+## What Works in Async Tracks (and What Doesn't)
 
-`onDialogId(blockId)`, `onChoiceId(blockId)`, `onConditionId(blockId)`, and `onActionId(blockId)` are type-safe alternatives to `onBlock(blockId)`. They work exactly the same way — same priority, same `preventGlobalHandler` support — but the handler receives the specialized block type and context instead of the generic union.
+Async tracks are great for things that happen *alongside* the main conversation — ambient effects, parallel animations, companion reactions. But they have limits.
 
-Use these when you know the block type at registration time and want full autocompletion on `block` and `context`.
+**DO — parallel content:**
+| Use case | Why it works |
+|---|---|
+| NPC ambient dialogue ("barks") | Dialog blocks on an async track — NPCs comment, react, or banter while the main conversation continues |
+| Character reactions synced to events | Use `waitForBlocks` to trigger a reaction when a specific block is reached |
+| Play ambient sounds or music | Action block, no player interaction needed |
+| Trigger camera movements | Action block, runs in parallel |
+| Delayed effects | Combine `waitForBlocks` + `delay` for precise timing |
 
-<!--@include: ../_shared/handler-block-override-typed.md-->
+**DON'T — player interaction or game logic branching:**
+| Use case | Why it breaks |
+|---|---|
+| CHOICE block in async track | The player is already interacting with the main track — who answers the async choice? |
+| Critical game state changes | If the async track is cancelled (scene ends), the action never executes |
+
+> WARNING:
+A CHOICE block in an async track implies the player should make a selection while already engaged with the main dialogue. The most common scenario is an AI-driven "choice" (e.g., a companion NPC auto-selects based on personality). If an async track hits a CHOICE block without a scene-level handler that auto-selects, the flow will stall or end silently.
+
+## Multiple Scenes in Parallel
+
+The engine supports running multiple scenes simultaneously. Each `SceneHandle` has its own state, visited blocks, and async tracks. Global handlers (Tier 1) are shared — use the `scene` argument to know which scene is calling:
+
+
+```ts [TypeScript]
+engine.onDialog(({ scene, block, context, next }) => {
+  if (scene === mainDialogue) {
+    showMainUI(block);
+    // next() called later — by player input
+  } else if (scene === tutorialOverlay) {
+    showTutorialBubble(block);
+    // auto-advance after display
+    next();
+  }
+});
+
+const mainDialogue = engine.scene('main-quest');
+const tutorialOverlay = engine.scene('tutorial-hints');
+mainDialogue.start();
+tutorialOverlay.start();
+```
+```csharp [C#]
+engine.OnDialog(args => {
+    if (args.Scene == mainDialogue)
+    {
+        ShowMainUI(args.Block);
+        // next() called later — by player input
+    }
+    else if (args.Scene == tutorialOverlay)
+    {
+        ShowTutorialBubble(args.Block);
+        // auto-advance after display
+        args.Next();
+    }
+    return null;
+});
+
+var mainDialogue = engine.Scene("main-quest");
+var tutorialOverlay = engine.Scene("tutorial-hints");
+mainDialogue.Start();
+tutorialOverlay.Start();
+```
+```cpp [C++]
+engine.onDialog([&](auto* scene, auto* block, auto*, auto next) -> CleanupFn {
+    if (scene == mainDialogue.get()) {
+        showMainUI(block);
+        // next() called later — by player input
+    } else if (scene == tutorialOverlay.get()) {
+        showTutorialBubble(block);
+        // auto-advance after display
+        next();
+    }
+    return {};
+});
+
+auto mainDialogue = engine.scene("main-quest");
+auto tutorialOverlay = engine.scene("tutorial-hints");
+mainDialogue->start();
+tutorialOverlay->start();
+```
+```gdscript [GDScript]
+engine.on_dialog(func(args):
+    if args["scene"] == main_dialogue:
+        show_main_ui(args["block"])
+        # next() called later — by player input
+    elif args["scene"] == tutorial_overlay:
+        show_tutorial_bubble(args["block"])
+        # auto-advance after display
+        args["next"].call()
+    return Callable()
+)
+
+var main_dialogue = engine.scene("main-quest")
+var tutorial_overlay = engine.scene("tutorial-hints")
+main_dialogue.start()
+tutorial_overlay.start()
+```
+
+> TIP:
+For many concurrent scenes, consider registering scene-level (Tier 2) handlers on each handle instead of routing in the global handler. Cleaner separation, no `if/else` chains.
 
 ## Visual Reference
 
-### Two-Tier Handler Dispatch
-
 ```mermaid
-flowchart TD
-    A[block dispatched] --> B{resolve scene handler}
-    B --> B1{"onBlock(blockId) /\nonDialogId(blockId) etc.?"}
-    B1 -- found --> S
-    B1 -- not found --> B2{"handle.onDialog() etc.?"}
-    B2 -- found --> S
-    B2 -- not found --> G
-    S[execute scene handler] --> D{preventGlobalHandler?}
-    D -- yes --> Z[done]
-    D -- no --> G["execute global handler\nengine.onDialog() etc."]
-    G --> Z
+flowchart LR
+    A["[A]"] --> B["[B]"]
+    B --> C["[C]"]
+    A -- async --> D["[D]"]
+    D --> E["[E]"]
+    D -- async --> F["[F]"]
+
+    style A fill:#4a9,stroke:#333
+    style B fill:#4a9,stroke:#333
+    style C fill:#4a9,stroke:#333
+    style D fill:#69b,stroke:#333
+    style E fill:#69b,stroke:#333
+    style F fill:#c7a,stroke:#333
 ```
 
-================================================================================
-
-# Game Engine Integration
-
-LSDE is engine-agnostic — no dependency on any game engine, UI framework, or audio system. It walks a graph and calls your handlers. This page shows how to wire it into the most common game engines.
-
-For detailed handler implementation, see [Block Types](./block-types) and [Handlers](./handlers).
-
-## Full Integration
-
-The following example shows one way to integrate LSDE into each engine. It covers the 4 required handlers — dialog, choice, condition, action — in a single class, as a starting point.
-
-Every game has its own needs. Adapt the structure, the layout, and the UI to your project.
-
-<!--@include: ../_shared/integration-complete.md-->
-
-## The 4 Handlers
-
-Each handler receives the block data and a `next()` callback. The developer processes the data in their engine, then calls `next()` when the block is done. The timing of that call belongs entirely to the game.
-
-- **Dialog** — text, character, native properties. Display the dialogue in your UI, wait for player input or a delay, then call `next()`. Return a cleanup function to hide the UI when the engine moves to the next block.
-
-- **Choice** — list of choices tagged `visible` when `onResolveCondition()` is installed. The engine hands you **every** option, tagged; filter on `visible !== false`. Create the corresponding UI elements — buttons, list, radial menu. On player selection, `selectChoice(optionId)` tells the engine which branch to follow, then `next()` advances the flow.
-
-- **Condition** — the cases defined in the block. Install `onResolveCondition()` once and the engine pre-evaluates them, which makes `onCondition` optional. To override the routing, `context.resolve(port)` takes a **port name** — `"out"`, `"default"`, or a case port (`"K1"`).
-
-- **Action** — the block's calls, in `context.calls`: an `fn` and its `args` **by name**. Execute them in your engine — play a sound, give an item, trigger a cinematic. `context.resolve()` leaves by `then`, `context.reject()` leaves by `catch` — falling back to `then` when no `catch` is wired.
-
-## Tips
-
-- **`next()` is the remote control.** Call it instantly for rapid-fire dialogue, or hold it until an animation finishes. The engine waits — it has no concept of time.
-- **Cleanup functions clean up after you.** Return a function from any handler — the engine calls it when moving to the next block. Perfect for hiding UI, stopping audio, or freeing nodes.
-- **`onBeforeBlock` handles delays.** The engine does not enforce `props.delay` — `onBeforeBlock` reads it and calls `resolve()` after a timer. Full control.
-- **Async tracks are parallel flows.** When a cutscene needs dialogue and camera movement at the same time, blocks marked `isAsync` in the editor run on independent tracks.
+- Main track: A &rarr; B &rarr; C
+- Track 1 (parallel): D &rarr; E
+- Track 2 (sub-track of D): F
+- Scene cancel &rarr; all tracks cancelled
+- Track D ends naturally &rarr; F continues
 
 ================================================================================

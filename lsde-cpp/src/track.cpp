@@ -149,7 +149,7 @@ void Track::run(Step first) {
     try {
         while (step) step = take(*step);
     } catch (...) {
-        _host.fault();
+        _host.fault(std::current_exception());
         throw;
     }
 }

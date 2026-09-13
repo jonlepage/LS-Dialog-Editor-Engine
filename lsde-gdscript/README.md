@@ -161,7 +161,7 @@ examples/playground.gd            # Console playground
 
 | Method | Description |
 |--------|-------------|
-| `engine.init(options)` | Validate + build graph. Returns diagnostic `Dictionary`. |
+| `engine.init(options)` | Validate + build graph. Returns diagnostic `Dictionary` — errors refuse the payload. Warnings also cover what the blocks use that the export does not declare: a function, argument, dictionary, entry or choice test (`UNDECLARED_*`, `UNKNOWN_CHOICE_*`, `EMPTY_FUNCTION`), no `check` needed. |
 | `engine.set_locale(locale)` | Set active locale. |
 | `engine.scene(scene_ref)` | Create scene handle. Call `handle.start()` to begin. |
 | `engine.stop()` | Cancel all active scenes. |
@@ -213,6 +213,8 @@ A ROUTER block has **no handler** and needs none: the engine evaluates every cas
 | `handle.on_enter(handler)` | Override global `on_scene_enter` for this scene. |
 | `handle.on_exit(handler)` | Override global `on_scene_exit` for this scene. |
 | `handle.on_resolve_character(fn)` | Override character resolver for this scene. |
+| `handle.get_scene_id()` | The stable id of the scene (`sc_…`). Store this one: it survives a rename. |
+| `handle.get_scene_path()` | The scene path (`reactor_breach`) — what a writer reads, and what a rename changes. |
 | `handle.get_current_block()` | Get the block currently being executed, or `null`. |
 | `handle.get_visited_blocks()` | Ordered list of visited block ids, for this scene. |
 | `handle.get_choice_history()` | Map of CHOICE block id → the option ids the player picked. |

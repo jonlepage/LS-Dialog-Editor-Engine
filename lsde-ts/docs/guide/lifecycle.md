@@ -55,13 +55,18 @@ The order is what makes this usable. By the time the error reaches your code:
 
 - the cleanup functions have run
 - the async tracks are cancelled
-- `onSceneExit` has fired, with `reason: 'faulted'`
+- `onSceneExit` has fired, with `reason: 'faulted'` and the error itself in `context.error`
 
 The dialogue stopped **properly**, and you decide what happens next — carry on without it, show a
 screen, or let it crash. Put your own `try/catch` around `start()`, `next()` or `resolve()`.
 
+The error arrives in **two** places, on purpose. It is thrown to whoever called `next()` — in a game,
+usually a click or a timer — and it is handed to `onSceneExit` in `context.error`, which is where the
+code awaiting the end of the dialogue is listening. Log it in one of the two, not both.
+
 An exception thrown by `onSceneExit` itself reaches you the same way, and the scene is released all
-the same: `engine.isRunning()` no longer counts it.
+the same: `engine.isRunning()` no longer counts it. Unless the scene was already closing on a fault:
+you then receive that fault, the one that explains the rest.
 
 ::: warning GDScript
 GDScript has no exceptions. A script error inside a handler is pushed to the Godot log and the call
@@ -88,10 +93,14 @@ awaiting the end of the dialogue waited forever.
 | `completed` | The flow ran out of graph |
 | `cancelled` | `scene.cancel()` or `engine.stop()` |
 | `invalidated` | `onValidateNextBlock` refused the block the last running track was entering |
-| `faulted` | Your code threw during the walk — see [Error Boundaries](#error-boundaries) |
+| `faulted` | Your code threw during the walk. `context.error` holds what was thrown — see [Error Boundaries](#error-boundaries) |
 | `deadlocked` | Every track left is parked on a `waitForBlocks` nothing can finish. `context.waitingFor` names those blocks |
 
 `onSceneEnter` receives no reason.
+
+`scene.getSceneId()` says **which** scene ended, and `scene.getScenePath()` gives its path. A global
+`onSceneExit` needs it as soon as two scenes play at once. Store the id, not the path: the path
+changes the day someone renames the scene.
 
 **A deadlock closes the scene.** A block waiting on a block no track will ever finish — one on a
 branch the flow did not take, for instance — used to hold the scene open for good, with no

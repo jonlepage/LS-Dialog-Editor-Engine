@@ -65,7 +65,7 @@ void SceneHandleImpl::start() {
     try {
         fireSceneEnter();
     } catch (...) {
-        shutdown(SceneEndReason::Faulted);
+        shutdown(SceneEndReason::Faulted, {}, std::current_exception());
         throw;
     }
     // onSceneEnter is allowed to cancel the scene it was told about.
@@ -102,6 +102,14 @@ void SceneHandleImpl::onDialog(TypedBlockHandler<BlueprintBlock, IDialogContext>
 void SceneHandleImpl::onChoice(TypedBlockHandler<BlueprintBlock, IChoiceContext> h) { _sceneRegistry.choiceHandler = wrapHandler<BlueprintBlock, IChoiceContext>(std::move(h)); }
 void SceneHandleImpl::onCondition(TypedBlockHandler<BlueprintBlock, IConditionContext> h) { _sceneRegistry.conditionHandler = wrapHandler<BlueprintBlock, IConditionContext>(std::move(h)); }
 void SceneHandleImpl::onAction(TypedBlockHandler<BlueprintBlock, IActionContext> h) { _sceneRegistry.actionHandler = wrapHandler<BlueprintBlock, IActionContext>(std::move(h)); }
+
+/// The stable id of this scene — the one to store outside the payload.
+///
+/// onSceneExit is global, and the handle it is given was the only way to tell WHICH scene ended
+/// when several play at once; it could not say. The id is what survives a rename.
+const std::string& SceneHandleImpl::getSceneId() const { return _sceneGraph.getScene().id; }
+/// The path of this scene — what a writer reads, and what a rename changes.
+const std::string& SceneHandleImpl::getScenePath() const { return _sceneGraph.getScene().scene; }
 
 /// The block the flow the player is watching is on. Parallel tracks have their own.
 const BlueprintBlock* SceneHandleImpl::getCurrentBlock() const {
@@ -214,9 +222,9 @@ std::exception_ptr SceneHandleImpl::trackParked() {
     return shutdown(SceneEndReason::Deadlocked, waitingFor());
 }
 
-void SceneHandleImpl::fault() {
+void SceneHandleImpl::fault(std::exception_ptr error) {
     if (!_running || _closing) return;
-    shutdown(SceneEndReason::Faulted);
+    shutdown(SceneEndReason::Faulted, {}, std::move(error));
 }
 
 void SceneHandleImpl::ensureOwnerThread(const char* call) {
@@ -329,7 +337,8 @@ void SceneHandleImpl::onResolveCharacter(std::function<const Card*(const std::ve
 }
 
 
-std::exception_ptr SceneHandleImpl::shutdown(const std::string& reason, std::vector<std::string> waitingFor) {
+std::exception_ptr SceneHandleImpl::shutdown(const std::string& reason, std::vector<std::string> waitingFor,
+                                             std::exception_ptr error) {
     if (_closing) return nullptr;
     _closing = true;
 
@@ -363,9 +372,14 @@ std::exception_ptr SceneHandleImpl::shutdown(const std::string& reason, std::vec
     // answered true, and stop() could not reach it — cancel() returns at once on a scene that is
     // not running. The engine is ALWAYS told; what onSceneExit threw is carried like a cleanup's
     // fault.
+    SceneContext context;
+    context.reason = reason;
+    if (reason == SceneEndReason::Deadlocked) context.waitingFor = std::move(waitingFor);
+    context.error = std::move(error);
+
     std::exception_ptr exitFault = nullptr;
     try {
-        fireSceneExit(reason, waitingFor);
+        fireSceneExit(context);
     } catch (...) {
         exitFault = std::current_exception();
     }
@@ -462,13 +476,9 @@ void SceneHandleImpl::fireSceneEnter() {
     if (handler) handler({this, {}});
 }
 
-void SceneHandleImpl::fireSceneExit(const std::string& reason, const std::vector<std::string>& waitingFor) {
+void SceneHandleImpl::fireSceneExit(const SceneContext& context) {
     auto handler = _sceneRegistry.exitHandler ? _sceneRegistry.exitHandler : _globalRegistry.sceneExitHandler;
-    if (!handler) return;
-    SceneContext context;
-    context.reason = reason;
-    if (reason == SceneEndReason::Deadlocked) context.waitingFor = waitingFor;
-    handler({this, context});
+    if (handler) handler({this, context});
 }
 
 // ─── Internal helpers ────────────────────────────────────────────────────────

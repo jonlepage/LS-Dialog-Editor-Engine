@@ -59,6 +59,12 @@ void from_json(const nlohmann::json& j, ExpectedStats& v) {
     j.at("connectionCount").get_to(v.connectionCount);
 }
 
+void from_json(const nlohmann::json& j, ExpectedLocation& v) {
+    v.sceneId = optString(j, "sceneId");
+    v.scenePath = optString(j, "scenePath");
+    v.blockId = optString(j, "blockId");
+}
+
 void from_json(const nlohmann::json& j, TestCase& v) {
     j.at("id").get_to(v.id);
     v.description = optString(j, "description");
@@ -85,6 +91,9 @@ void from_json(const nlohmann::json& j, TestCase& v) {
     }
 
     v.expectedExitReason = optString(j, "expectedExitReason");
+    v.expectedExitError = optString(j, "expectedExitError");
+    v.expectedSceneId = optString(j, "expectedSceneId");
+    v.expectedScenePath = optString(j, "expectedScenePath");
 
     auto waitingFor = j.find("expectedWaitingFor");
     if (waitingFor != j.end() && waitingFor->is_array()) {
@@ -106,6 +115,9 @@ void from_json(const nlohmann::json& j, TestCase& v) {
 
     auto stats = j.find("expectedStats");
     if (stats != j.end() && !stats->is_null()) v.expectedStats = stats->get<ExpectedStats>();
+
+    auto at = j.find("expectedAt");
+    if (at != j.end() && at->is_object()) v.expectedAt = at->get<ExpectedLocation>();
 }
 
 void from_json(const nlohmann::json& j, TestSuite& v) {

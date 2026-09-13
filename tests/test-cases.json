@@ -8244,6 +8244,237 @@
           "expectedExitReason": "faulted"
         }
       ]
+    },
+    {
+      "id": "scene-handle-names-its-scene",
+      "description": "The handle gives the stable id and the path of its scene.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "The only line",
+                  "fr": "The only line"
+                }
+              }
+            ],
+            "start": "DIALOG-001"
+          }
+        ]
+      },
+      "sceneId": "s1",
+      "cases": [
+        {
+          "id": "id-and-path",
+          "steps": [
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-001"
+              },
+              "action": {
+                "type": "next"
+              }
+            }
+          ],
+          "expectedVisited": [
+            "DIALOG-001"
+          ],
+          "expectedSceneId": "sc_s1",
+          "expectedScenePath": "s1"
+        }
+      ]
+    },
+    {
+      "id": "fault-hands-its-error-to-on-scene-exit",
+      "description": "onSceneExit is handed the error that closed the scene, alongside faulted.",
+      "requiresExceptions": true,
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "throws",
+                  "fr": "throws"
+                }
+              }
+            ],
+            "start": "DIALOG-001"
+          }
+        ]
+      },
+      "sceneId": "s1",
+      "cases": [
+        {
+          "id": "the-error-itself",
+          "steps": [
+            {
+              "expect": {
+                "type": "dialog",
+                "blockId": "DIALOG-001"
+              },
+              "action": {
+                "type": "throw",
+                "error": "the handler failed"
+              }
+            }
+          ],
+          "expectedThrow": true,
+          "expectedVisited": [
+            "DIALOG-001"
+          ],
+          "expectedExitReason": "faulted",
+          "expectedExitError": "the handler failed"
+        }
+      ]
     }
   ]
 }

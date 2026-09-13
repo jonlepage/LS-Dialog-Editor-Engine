@@ -470,7 +470,12 @@
           "id": "refused",
           "expectedErrors": [
             "DUPLICATE_BLOCK_ID"
-          ]
+          ],
+          "expectedAt": {
+            "sceneId": "sc_s1",
+            "scenePath": "s1",
+            "blockId": "DIALOG-001"
+          }
         }
       ]
     },
@@ -705,7 +710,11 @@
           "id": "refused",
           "expectedErrors": [
             "DUPLICATE_SCENE"
-          ]
+          ],
+          "expectedAt": {
+            "sceneId": "sc_s1",
+            "scenePath": "s1"
+          }
         }
       ]
     },
@@ -812,7 +821,12 @@
           "id": "refused",
           "expectedErrors": [
             "BROKEN_LINK"
-          ]
+          ],
+          "expectedAt": {
+            "sceneId": "sc_s1",
+            "scenePath": "s1",
+            "blockId": "DIALOG-001"
+          }
         }
       ]
     },
@@ -912,7 +926,12 @@
           "id": "refused",
           "expectedErrors": [
             "INVALID_START_BLOCK"
-          ]
+          ],
+          "expectedAt": {
+            "sceneId": "sc_s1",
+            "scenePath": "s1",
+            "blockId": "NOWHERE-001"
+          }
         }
       ]
     },
@@ -1012,7 +1031,11 @@
           "expectedErrors": [],
           "expectedWarnings": [
             "NO_START_BLOCK"
-          ]
+          ],
+          "expectedAt": {
+            "sceneId": "sc_s1",
+            "scenePath": "s1"
+          }
         }
       ]
     },
@@ -1501,6 +1524,10 @@
             "sceneCount": 1,
             "blockCount": 0,
             "connectionCount": 0
+          },
+          "expectedAt": {
+            "sceneId": "sc_s1",
+            "scenePath": "s1"
           }
         }
       ]
@@ -1622,7 +1649,12 @@
           "expectedErrors": [],
           "expectedWarnings": [
             "UNKNOWN_WAIT_BLOCK"
-          ]
+          ],
+          "expectedAt": {
+            "sceneId": "sc_s1",
+            "scenePath": "s1",
+            "blockId": "DIALOG-002"
+          }
         }
       ]
     },
@@ -2349,7 +2381,11 @@
           "id": "refused",
           "expectedErrors": [
             "DUPLICATE_SCENE"
-          ]
+          ],
+          "expectedAt": {
+            "sceneId": "sc_first",
+            "scenePath": "first"
+          }
         }
       ]
     },
@@ -2363,6 +2399,1693 @@
           "expectedErrors": [
             "MISSING_DATA"
           ]
+        }
+      ]
+    },
+    {
+      "id": "usage-declared-is-clean",
+      "description": "Calls, arguments and tests that name what the export declares warn about nothing.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "set_switch",
+            "params": [
+              {
+                "name": "flag",
+                "type": "dictionaryKey",
+                "dictionary": "switches"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "ACTION-001",
+                "key": "__blueprints__.s1.ACTION-001",
+                "type": "action",
+                "calls": [
+                  {
+                    "fn": "play_music",
+                    "args": {
+                      "track": "theme"
+                    }
+                  },
+                  {
+                    "fn": "set_switch",
+                    "args": {
+                      "flag": "door_unlocked"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "CHOICE-001",
+                "key": "__blueprints__.s1.CHOICE-001",
+                "type": "choice",
+                "options": [
+                  {
+                    "id": "C1",
+                    "key": "__blueprints__.s1.CHOICE-001.C1",
+                    "text": {
+                      "en": "Yes",
+                      "fr": "Yes"
+                    },
+                    "when": [
+                      {
+                        "dict": "variables",
+                        "entry": "credits",
+                        "op": "greaterOrEqual",
+                        "value": 50
+                      }
+                    ]
+                  },
+                  {
+                    "id": "C2",
+                    "key": "__blueprints__.s1.CHOICE-001.C2",
+                    "text": {
+                      "en": "No",
+                      "fr": "No"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "COND-001",
+                "key": "__blueprints__.s1.COND-001",
+                "type": "condition",
+                "cases": [
+                  {
+                    "port": "out",
+                    "when": [
+                      {
+                        "dict": "switches",
+                        "entry": "met_vesk",
+                        "op": "equals",
+                        "value": true
+                      },
+                      {
+                        "dict": "choice",
+                        "entry": "CHOICE-001",
+                        "op": "equals",
+                        "value": "C2",
+                        "join": "and"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "start": "ACTION-001"
+          }
+        ]
+      },
+      "cases": [
+        {
+          "id": "clean",
+          "expectedErrors": [],
+          "expectedWarnings": []
+        }
+      ]
+    },
+    {
+      "id": "usage-empty-function",
+      "description": "A call nobody picked a function for.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "set_switch",
+            "params": [
+              {
+                "name": "flag",
+                "type": "dictionaryKey",
+                "dictionary": "switches"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "ACTION-001",
+                "key": "__blueprints__.s1.ACTION-001",
+                "type": "action",
+                "calls": [
+                  {
+                    "fn": "",
+                    "args": {}
+                  }
+                ]
+              }
+            ],
+            "start": "ACTION-001"
+          }
+        ]
+      },
+      "cases": [
+        {
+          "id": "warned",
+          "expectedErrors": [],
+          "expectedWarnings": [
+            "EMPTY_FUNCTION"
+          ],
+          "expectedAt": {
+            "sceneId": "sc_s1",
+            "scenePath": "s1",
+            "blockId": "ACTION-001"
+          }
+        }
+      ]
+    },
+    {
+      "id": "usage-undeclared-function",
+      "description": "A call to a function the export does not declare - a v1 id, say.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "set_switch",
+            "params": [
+              {
+                "name": "flag",
+                "type": "dictionaryKey",
+                "dictionary": "switches"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "ACTION-001",
+                "key": "__blueprints__.s1.ACTION-001",
+                "type": "action",
+                "calls": [
+                  {
+                    "fn": "f3b1c2d4-v1-uuid",
+                    "args": {
+                      "track": "theme"
+                    }
+                  }
+                ]
+              }
+            ],
+            "start": "ACTION-001"
+          }
+        ]
+      },
+      "cases": [
+        {
+          "id": "warned",
+          "expectedErrors": [],
+          "expectedWarnings": [
+            "UNDECLARED_FUNCTION"
+          ],
+          "expectedAt": {
+            "sceneId": "sc_s1",
+            "scenePath": "s1",
+            "blockId": "ACTION-001"
+          }
+        }
+      ]
+    },
+    {
+      "id": "usage-undeclared-argument",
+      "description": "An argument the called function does not declare.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "set_switch",
+            "params": [
+              {
+                "name": "flag",
+                "type": "dictionaryKey",
+                "dictionary": "switches"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "ACTION-001",
+                "key": "__blueprints__.s1.ACTION-001",
+                "type": "action",
+                "calls": [
+                  {
+                    "fn": "play_music",
+                    "args": {
+                      "track": "theme",
+                      "volume": 3
+                    }
+                  }
+                ]
+              }
+            ],
+            "start": "ACTION-001"
+          }
+        ]
+      },
+      "cases": [
+        {
+          "id": "warned",
+          "expectedErrors": [],
+          "expectedWarnings": [
+            "UNDECLARED_ARGUMENT"
+          ],
+          "expectedAt": {
+            "sceneId": "sc_s1",
+            "scenePath": "s1",
+            "blockId": "ACTION-001"
+          }
+        }
+      ]
+    },
+    {
+      "id": "usage-undeclared-dictionary-key",
+      "description": "A dictionaryKey argument that is not an entry of the dictionary its parameter names.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "set_switch",
+            "params": [
+              {
+                "name": "flag",
+                "type": "dictionaryKey",
+                "dictionary": "switches"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "ACTION-001",
+                "key": "__blueprints__.s1.ACTION-001",
+                "type": "action",
+                "calls": [
+                  {
+                    "fn": "set_switch",
+                    "args": {
+                      "flag": "door_open"
+                    }
+                  }
+                ]
+              }
+            ],
+            "start": "ACTION-001"
+          }
+        ]
+      },
+      "cases": [
+        {
+          "id": "warned",
+          "expectedErrors": [],
+          "expectedWarnings": [
+            "UNDECLARED_DICTIONARY_KEY"
+          ],
+          "expectedAt": {
+            "sceneId": "sc_s1",
+            "scenePath": "s1",
+            "blockId": "ACTION-001"
+          }
+        }
+      ]
+    },
+    {
+      "id": "usage-undeclared-dictionary",
+      "description": "A condition on a dictionary the export does not declare.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "set_switch",
+            "params": [
+              {
+                "name": "flag",
+                "type": "dictionaryKey",
+                "dictionary": "switches"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "COND-001",
+                "key": "__blueprints__.s1.COND-001",
+                "type": "condition",
+                "cases": [
+                  {
+                    "port": "out",
+                    "when": [
+                      {
+                        "dict": "party",
+                        "entry": "size",
+                        "op": "equals",
+                        "value": 3
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "start": "COND-001"
+          }
+        ]
+      },
+      "cases": [
+        {
+          "id": "warned",
+          "expectedErrors": [],
+          "expectedWarnings": [
+            "UNDECLARED_DICTIONARY"
+          ],
+          "expectedAt": {
+            "sceneId": "sc_s1",
+            "scenePath": "s1",
+            "blockId": "COND-001"
+          }
+        }
+      ]
+    },
+    {
+      "id": "usage-undeclared-entry",
+      "description": "A condition on an entry its dictionary does not declare.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "set_switch",
+            "params": [
+              {
+                "name": "flag",
+                "type": "dictionaryKey",
+                "dictionary": "switches"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "COND-001",
+                "key": "__blueprints__.s1.COND-001",
+                "type": "condition",
+                "cases": [
+                  {
+                    "port": "out",
+                    "when": [
+                      {
+                        "dict": "switches",
+                        "entry": "door_open",
+                        "op": "equals",
+                        "value": true
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "start": "COND-001"
+          }
+        ]
+      },
+      "cases": [
+        {
+          "id": "warned",
+          "expectedErrors": [],
+          "expectedWarnings": [
+            "UNDECLARED_ENTRY"
+          ],
+          "expectedAt": {
+            "sceneId": "sc_s1",
+            "scenePath": "s1",
+            "blockId": "COND-001"
+          }
+        }
+      ]
+    },
+    {
+      "id": "usage-unknown-choice-block",
+      "description": "A test on the reserved choice dictionary whose entry is not a CHOICE block of this scene.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "set_switch",
+            "params": [
+              {
+                "name": "flag",
+                "type": "dictionaryKey",
+                "dictionary": "switches"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog"
+              },
+              {
+                "id": "COND-001",
+                "key": "__blueprints__.s1.COND-001",
+                "type": "condition",
+                "cases": [
+                  {
+                    "port": "out",
+                    "when": [
+                      {
+                        "dict": "choice",
+                        "entry": "DIALOG-001",
+                        "op": "equals",
+                        "value": "C1"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "start": "DIALOG-001"
+          }
+        ]
+      },
+      "cases": [
+        {
+          "id": "warned",
+          "expectedErrors": [],
+          "expectedWarnings": [
+            "UNKNOWN_CHOICE_BLOCK"
+          ],
+          "expectedAt": {
+            "sceneId": "sc_s1",
+            "scenePath": "s1",
+            "blockId": "COND-001"
+          }
+        }
+      ]
+    },
+    {
+      "id": "usage-unknown-choice-option",
+      "description": "A test on the reserved choice dictionary naming an option that CHOICE block does not have.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "set_switch",
+            "params": [
+              {
+                "name": "flag",
+                "type": "dictionaryKey",
+                "dictionary": "switches"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "CHOICE-001",
+                "key": "__blueprints__.s1.CHOICE-001",
+                "type": "choice",
+                "options": [
+                  {
+                    "id": "C1",
+                    "key": "__blueprints__.s1.CHOICE-001.C1",
+                    "text": {
+                      "en": "Yes",
+                      "fr": "Yes"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "COND-001",
+                "key": "__blueprints__.s1.COND-001",
+                "type": "condition",
+                "cases": [
+                  {
+                    "port": "out",
+                    "when": [
+                      {
+                        "dict": "choice",
+                        "entry": "CHOICE-001",
+                        "op": "equals",
+                        "value": "C9"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "start": "CHOICE-001"
+          }
+        ]
+      },
+      "cases": [
+        {
+          "id": "warned",
+          "expectedErrors": [],
+          "expectedWarnings": [
+            "UNKNOWN_CHOICE_OPTION"
+          ],
+          "expectedAt": {
+            "sceneId": "sc_s1",
+            "scenePath": "s1",
+            "blockId": "COND-001"
+          }
+        }
+      ]
+    },
+    {
+      "id": "duplicate-scene-id",
+      "description": "Two scenes under two paths sharing one stable id - a scene file copied and renamed by hand.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "first",
+            "id": "sc_same",
+            "blocks": [
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "A",
+                  "fr": "A"
+                }
+              }
+            ],
+            "start": "DIALOG-001"
+          },
+          {
+            "scene": "second",
+            "id": "sc_same",
+            "blocks": [
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "B",
+                  "fr": "B"
+                }
+              }
+            ],
+            "start": "DIALOG-001"
+          }
+        ]
+      },
+      "cases": [
+        {
+          "id": "refused",
+          "expectedErrors": [
+            "DUPLICATE_SCENE"
+          ],
+          "expectedAt": {
+            "sceneId": "sc_same",
+            "scenePath": "second"
+          }
+        }
+      ]
+    },
+    {
+      "id": "missing-scene-path",
+      "description": "A scene with no path is refused, and still named - by its stable id.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "",
+            "id": "sc_nopath",
+            "start": "DIALOG-001",
+            "blocks": [
+              {
+                "id": "DIALOG-001",
+                "key": "__blueprints__.s1.DIALOG-001",
+                "type": "dialog",
+                "text": {
+                  "en": "A",
+                  "fr": "A"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "cases": [
+        {
+          "id": "refused",
+          "expectedErrors": [
+            "MISSING_SCENE_PATH"
+          ],
+          "expectedAt": {
+            "sceneId": "sc_nopath"
+          }
+        }
+      ]
+    },
+    {
+      "id": "null-names-in-blocks",
+      "description": "A dict, an entry or a parameter name written null is warned about like any name nothing declares - never thrown.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "with_unnamed_param",
+            "params": [
+              {
+                "name": null,
+                "type": "string"
+              }
+            ]
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "ACTION-001",
+                "key": "__blueprints__.s1.ACTION-001",
+                "type": "action",
+                "calls": [
+                  {
+                    "fn": "with_unnamed_param",
+                    "args": {
+                      "value": "x"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "COND-001",
+                "key": "__blueprints__.s1.COND-001",
+                "type": "condition",
+                "cases": [
+                  {
+                    "port": "out",
+                    "when": [
+                      {
+                        "dict": null,
+                        "entry": "door_unlocked",
+                        "op": "equals",
+                        "value": true
+                      },
+                      {
+                        "dict": "switches",
+                        "entry": null,
+                        "op": "equals",
+                        "value": true,
+                        "join": "and"
+                      },
+                      {
+                        "dict": "choice",
+                        "entry": null,
+                        "op": "equals",
+                        "value": "C1",
+                        "join": "and"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "start": "ACTION-001"
+          }
+        ]
+      },
+      "cases": [
+        {
+          "id": "warned-not-thrown",
+          "expectedErrors": [],
+          "expectedWarnings": [
+            "UNDECLARED_ARGUMENT",
+            "UNDECLARED_DICTIONARY",
+            "UNDECLARED_ENTRY",
+            "UNKNOWN_CHOICE_BLOCK"
+          ],
+          "expectedAt": {
+            "sceneId": "sc_s1",
+            "scenePath": "s1"
+          }
+        }
+      ]
+    },
+    {
+      "id": "null-ids-in-the-header",
+      "description": "A function, a dictionary or a card whose id is null: nothing can name it, and nothing throws.",
+      "blueprint": {
+        "format": "lsde-blueprints",
+        "version": 1,
+        "generator": {
+          "app": "LSDE",
+          "version": "2.0.3"
+        },
+        "exportedAt": "2026-09-07T00:00:00.000Z",
+        "project": "Conformance",
+        "locales": [
+          "en",
+          "fr"
+        ],
+        "referenceLocale": "en",
+        "dictionaries": [
+          {
+            "id": "switches",
+            "valueType": "boolean",
+            "entries": [
+              "door_unlocked",
+              "met_vesk"
+            ]
+          },
+          {
+            "id": "variables",
+            "valueType": "number",
+            "entries": [
+              "credits",
+              "trust"
+            ]
+          },
+          {
+            "id": null,
+            "valueType": "boolean",
+            "entries": [
+              "x"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "id": "play_music",
+            "params": [
+              {
+                "name": "track",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": "give_item",
+            "params": [
+              {
+                "name": "item",
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "id": null,
+            "params": []
+          }
+        ],
+        "cards": [
+          {
+            "id": "var1",
+            "name": "kael",
+            "role": "characters"
+          },
+          {
+            "id": "var2",
+            "name": "nora",
+            "role": "characters"
+          },
+          {
+            "id": "var3",
+            "name": "afraid",
+            "role": "emotions"
+          },
+          {
+            "id": null,
+            "name": "ghost",
+            "role": "characters"
+          }
+        ],
+        "scenes": [
+          {
+            "scene": "s1",
+            "id": "sc_s1",
+            "blocks": [
+              {
+                "id": "ACTION-001",
+                "key": "__blueprints__.s1.ACTION-001",
+                "type": "action",
+                "calls": [
+                  {
+                    "fn": "play_music",
+                    "args": {
+                      "track": "theme"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "COND-001",
+                "key": "__blueprints__.s1.COND-001",
+                "type": "condition",
+                "cases": [
+                  {
+                    "port": "out",
+                    "when": [
+                      {
+                        "dict": "switches",
+                        "entry": "door_unlocked",
+                        "op": "equals",
+                        "value": true
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "start": "ACTION-001"
+          }
+        ]
+      },
+      "cases": [
+        {
+          "id": "clean",
+          "expectedErrors": [],
+          "expectedWarnings": []
         }
       ]
     }

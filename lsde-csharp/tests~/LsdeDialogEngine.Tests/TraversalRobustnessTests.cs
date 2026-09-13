@@ -524,5 +524,102 @@ namespace LsdeDialogEngine.Tests
             Assert.True(p.Handle.IsRunning());
             Assert.Empty(p.Exits);
         }
+
+        // ─── The cause of a faulted end ──────────────────────────────────
+        //
+        // A fault is re-thrown to whoever entered the walk. In Unity that is a click or a timer
+        // calling Next() — never the code awaiting the end of the scene, which only learned
+        // Faulted. So the exception is handed to OnSceneExit too, and STILL re-thrown.
+
+        [Fact]
+        public void OnSceneExitIsHandedTheVeryExceptionThatWasRethrown()
+        {
+            var p = Setup(Build.OneScene(
+                    Build.Dialog("D1").Wire("D2").Wire("BG"), Build.Dialog("D2"), Async(Build.Dialog("BG"))),
+                hold: new[] { "D1" }, throwAt: "BG");
+            p.Handle.Start();
+
+            var error = Assert.Throws<InvalidOperationException>(() => p.Held["D1"]());
+
+            Assert.Equal(SceneEndReason.Faulted, Assert.Single(p.Exits).Reason);
+            Assert.Same(error, p.Exits[0].Error);
+        }
+
+        [Fact]
+        public void TheExceptionIsTheFaultThatClosedTheSceneNotACleanupThatFailedWhileItClosed()
+        {
+            var p = Setup(Build.OneScene(
+                    Build.Dialog("D1").Wire("M").Wire("BG"), Build.Dialog("M"),
+                    Async(Build.Dialog("BG")).Wire("BG2"), Build.Dialog("BG2")),
+                // M is held by BOTH tiers, or the global handler leaves it during Start().
+                hold: new[] { "BG", "M" }, throwAt: "BG2");
+            p.Handle.OnDialogId("M", args =>
+            {
+                p.Held["M"] = args.Next;
+                return () => throw new InvalidOperationException("cleanup boom");
+            });
+            p.Handle.Start();
+
+            var error = Assert.Throws<InvalidOperationException>(() => p.Held["BG"]());
+
+            Assert.Equal("boom in BG2", error.Message);
+            Assert.Equal("boom in BG2", Assert.Single(p.Exits).Error?.Message);
+        }
+
+        [Fact]
+        public void OnSceneExitIsHandedTheExceptionOfAThrowingOnSceneEnter()
+        {
+            var p = Setup(Build.OneScene(Build.Dialog("D1")),
+                configure: e => e.OnSceneEnter(_ => throw new InvalidOperationException("enter boom")));
+
+            var error = Assert.Throws<InvalidOperationException>(() => p.Handle.Start());
+
+            Assert.Same(error, Assert.Single(p.Exits).Error);
+        }
+
+        [Fact]
+        public void NoExceptionWhenTheSceneDidNotFault()
+        {
+            var p = Setup(Build.OneScene(Build.Dialog("D1")));
+            p.Handle.Start();
+
+            Assert.Null(Assert.Single(p.Exits).Error);
+        }
+
+        // ─── Which scene ended ───────────────────────────────────────────
+
+        [Fact]
+        public void TheHandleNamesItsScene()
+        {
+            var p = Setup(Build.OneScene(Build.Dialog("D1")), hold: new[] { "D1" });
+
+            Assert.Equal("sc_s1", p.Handle.GetSceneId());
+            Assert.Equal("s1", p.Handle.GetScenePath());
+        }
+
+        [Fact]
+        public void AGlobalOnSceneExitCanTellTwoScenesApart()
+        {
+            var engine = new DialogueEngine();
+            Assert.Empty(engine.Init(new InitOptions
+            {
+                Data = Build.Blueprint(
+                    Build.Scene(new List<BlueprintBlock> { Build.Dialog("A1") }, "first"),
+                    Build.Scene(new List<BlueprintBlock> { Build.Dialog("B1") }, "second")),
+            }).Errors);
+            engine.OnDialog(args => { });
+            engine.OnChoice(args => args.Next());
+            engine.OnAction(args => args.Next());
+            engine.OnResolveCondition(_ => true);
+
+            var ended = new List<string>();
+            engine.OnSceneExit(args => ended.Add(args.Scene.GetSceneId()));
+
+            engine.Scene("first").Start();
+            engine.Scene("second").Start();
+            engine.Stop();
+
+            Assert.Equal(new List<string> { "sc_first", "sc_second" }, ended);
+        }
     }
 }

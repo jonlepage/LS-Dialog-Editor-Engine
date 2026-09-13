@@ -454,13 +454,58 @@ describe( 'a per-scene export loaded one file at a time', () => {
 			.toEqual( whole.getSceneGraph( 'reactor_breach' )?.getAllBlocks().map( b => b.id ) );
 	} );
 
-	it( 'reports the same scene twice when a file is passed twice', () => {
+	it( 'reports the same scene twice when a file is passed twice — once, not once per name', () => {
 		const data = load( PER_SCENE[0]! );
 		data.scenes.push( { ...data.scenes[0]! } );
 
 		const report = validateBlueprint( { data } );
 
-		expect( report.errors.map( e => e.code ) ).toContain( 'DUPLICATE_SCENE' );
+		// The copy repeats the path AND the stable id: one scene too many, so one error.
+		expect( report.errors.map( e => e.code ) ).toEqual( ['DUPLICATE_SCENE'] );
+	} );
+
+	it( 'reports two scenes sharing a stable id under two paths — a scene file copied and renamed by hand', () => {
+		const data = load( PER_SCENE[0]! );
+		const original = data.scenes[0]!;
+		data.scenes.push( { ...original, scene: 'reactor_breach_copy' } );
+
+		const report = validateBlueprint( { data } );
+
+		// It used to load. The guide promised this check, the validator only compared paths, and a
+		// lookup by that id silently opened whichever scene came last.
+		expect( report.errors.map( e => e.code ) ).toEqual( ['DUPLICATE_SCENE'] );
+		expect( report.errors[0]!.sceneId ).toBe( original.id );
+		expect( report.errors[0]!.scenePath ).toBe( 'reactor_breach_copy' );
+	} );
+} );
+
+describe( 'a diagnostic names its scene by id AND by path', () => {
+
+	// `sceneId` held the PATH, under a name that said id — while `handle.getSceneId()` answers the
+	// stable id. A tool keeping it next to an asset kept the one name a rename breaks.
+
+	it( 'sceneId is the stable id, scenePath the path', () => {
+		const data = load( SINGLE_FILE );
+		const reactor = data.scenes.find( s => s.scene === 'reactor_breach' )!;
+		reactor.blocks[0]!.next = [{ port: 'out', to: 'NOWHERE-001', toPort: 'in' }];
+
+		const report = validateBlueprint( { data } );
+
+		expect( report.errors.map( e => e.code ) ).toEqual( ['BROKEN_LINK'] );
+		expect( report.errors[0]!.sceneId ).toBe( reactor.id );
+		expect( report.errors[0]!.scenePath ).toBe( 'reactor_breach' );
+	} );
+
+	it( 'a scene with no path is still named, by its id', () => {
+		const data = load( SINGLE_FILE );
+		const reactor = data.scenes.find( s => s.scene === 'reactor_breach' )!;
+		reactor.scene = '';
+
+		const report = validateBlueprint( { data } );
+
+		const missing = report.errors.filter( e => e.code === 'MISSING_SCENE_PATH' );
+		expect( missing ).toHaveLength( 1 );
+		expect( missing[0]!.sceneId ).toBe( reactor.id );
 	} );
 } );
 

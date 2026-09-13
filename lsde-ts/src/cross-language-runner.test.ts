@@ -62,13 +62,23 @@ interface Case {
 	expectedExitReason?: string;
 	/** With `deadlocked`: the blocks still awaited, in the order the engine reports them. */
 	expectedWaitingFor?: string[];
+	/** With `faulted`: the message of the error `onSceneExit` is handed. */
+	expectedExitError?: string;
 	/** Does an exception come out of `start()`? Absent means it must not. */
 	expectedThrow?: boolean;
+	/** What the handle answers to `getSceneId()` / `getScenePath()`. */
+	expectedSceneId?: string;
+	expectedScenePath?: string;
 	orderIndependent?: boolean;
 	// Validation only
 	expectedErrors?: string[];
 	expectedWarnings?: string[];
 	expectedStats?: { sceneCount: number; blockCount: number; connectionCount: number };
+	/**
+	 * Where every error and warning of the case points. Each field given must match on every one of
+	 * them: `sceneId` is the stable id, `scenePath` the path.
+	 */
+	expectedAt?: { sceneId?: string; scenePath?: string; blockId?: string };
 }
 
 interface Step {
@@ -258,6 +268,18 @@ function runFlowSpec( filename: string ): void {
 							expect( exits[0]?.waitingFor ).toEqual( tc.expectedWaitingFor );
 						}
 
+						if ( tc.expectedExitError !== undefined ) {
+							expect( ( exits[0]?.error as Error | undefined )?.message ).toBe( tc.expectedExitError );
+						}
+
+						if ( tc.expectedSceneId !== undefined ) {
+							expect( handle.getSceneId() ).toBe( tc.expectedSceneId );
+						}
+
+						if ( tc.expectedScenePath !== undefined ) {
+							expect( handle.getScenePath() ).toBe( tc.expectedScenePath );
+						}
+
 						if ( tc.expectedVisited ) {
 							const visited = Array.from( handle.getVisitedBlocks() );
 							if ( tc.orderIndependent ) {
@@ -289,21 +311,24 @@ function runValidationSpec( filename: string ): void {
 					it( tc.id + ( tc.description ? ` — ${ tc.description }` : '' ), () => {
 						const report = new DialogueEngine().init( { data: payloadOf( suite ) } );
 
+						// Compared WHOLE, order aside. Checking only that each listed code was present let a
+						// runtime add a code the spec does not list, unnoticed. The order is left out on
+						// purpose: in C++ a PropertyBag is an unordered_map, so two warnings about one call
+						// may come in either order.
 						if ( tc.expectedErrors ) {
-							const codes = report.errors.map( e => e.code );
-							if ( tc.expectedErrors.length === 0 ) {
-								expect( codes ).toEqual( [] );
-							} else {
-								for ( const code of tc.expectedErrors ) expect( codes ).toContain( code );
-							}
+							expect( report.errors.map( e => e.code ).sort() ).toEqual( [...tc.expectedErrors].sort() );
 						}
 
 						if ( tc.expectedWarnings ) {
-							const codes = report.warnings.map( w => w.code );
-							if ( tc.expectedWarnings.length === 0 ) {
-								expect( codes ).toEqual( [] );
-							} else {
-								for ( const code of tc.expectedWarnings ) expect( codes ).toContain( code );
+							expect( report.warnings.map( w => w.code ).sort() ).toEqual( [...tc.expectedWarnings].sort() );
+						}
+
+						if ( tc.expectedAt ) {
+							for ( const entry of [...report.errors, ...report.warnings] ) {
+								for ( const [field, value] of Object.entries( tc.expectedAt ) ) {
+									const actual = entry[field as 'sceneId' | 'scenePath' | 'blockId'];
+									expect( actual, `${ entry.code } ${ field }` ).toBe( value );
+								}
 							}
 						}
 

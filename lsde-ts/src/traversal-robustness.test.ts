@@ -27,7 +27,7 @@ import {
 // ─── Harness ─────────────────────────────────────────────────────────────────
 
 /** What `onSceneExit` is told. Read loosely: the fields arrive with the fix. */
-type ExitContext = SceneContext & { reason?: string; waitingFor?: readonly string[] };
+type ExitContext = SceneContext & { reason?: string; waitingFor?: readonly string[]; error?: unknown };
 
 interface Played {
 	engine: DialogueEngine;
@@ -468,6 +468,114 @@ describe( 'onSceneExit is told why the scene ended', () => {
 		} );
 		p.handle.start();
 		expect( entered[0]!.reason ).toBeUndefined();
+	} );
+
+} );
+
+// ─── The cause of a faulted end ──────────────────────────────────────────────
+//
+// A fault is re-thrown to whoever entered the walk. In a game that is a click or a timer calling
+// next() — never the code awaiting the end of the scene, which only learned `faulted`. So the error
+// that closed the scene is handed to onSceneExit too. It is STILL re-thrown: problem 11 decided that
+// nothing is swallowed.
+
+describe( 'onSceneExit is handed the error that closed the scene', () => {
+
+	it( 'the very error that was re-thrown, alongside faulted', () => {
+		const p = setup(
+			[dialog( 'D1', { next: [link( 'D2' ), link( 'BG' )] } ), dialog( 'D2' ), dialog( 'BG', { props: { isAsync: true } } )],
+			{ hold: ['D1'], throwAt: 'BG' },
+		);
+		p.handle.start();
+
+		let thrown: unknown = undefined;
+		try {
+			p.held.get( 'D1' )!();
+		} catch ( err ) {
+			thrown = err;
+		}
+
+		expect( thrown ).toBeInstanceOf( Error );
+		expect( p.exits[0]!.reason ).toBe( 'faulted' );
+		expect( p.exits[0]!.error ).toBe( thrown );
+	} );
+
+	it( 'the fault that closed the scene, not a cleanup that failed while it closed', () => {
+		const p = setup(
+			[
+				dialog( 'D1', { next: [link( 'M' ), link( 'BG' )] } ),
+				dialog( 'M' ),
+				dialog( 'BG', { props: { isAsync: true }, next: [link( 'BG2' )] } ),
+				dialog( 'BG2' ),
+			],
+			// M is held by BOTH tiers: the scene handler below keeps its next(), and the global one must
+			// not call it either — otherwise M is left during start() and its cleanup throws there.
+			{ hold: ['BG', 'M'], throwAt: 'BG2' },
+		);
+		p.handle.onDialogId( 'M', ( { next } ) => {
+			p.held.set( 'M', next );
+			return () => { throw new Error( 'cleanup boom' ); };
+		} );
+		p.handle.start();
+
+		expect( () => p.held.get( 'BG' )!() ).toThrow( 'boom in BG2' );
+		expect( ( p.exits[0]!.error as Error ).message ).toBe( 'boom in BG2' );
+	} );
+
+	it( 'the error of a throwing onSceneEnter', () => {
+		const p = setup( [dialog( 'D1' )], {
+			configure: e => e.onSceneEnter( () => { throw new Error( 'enter boom' ); } ),
+		} );
+
+		expect( () => p.handle.start() ).toThrow( 'enter boom' );
+		expect( ( p.exits[0]!.error as Error ).message ).toBe( 'enter boom' );
+	} );
+
+	it( 'no error when the scene did not fault', () => {
+		const p = setup( [dialog( 'D1' )] );
+		p.handle.start();
+
+		expect( p.exits[0]!.reason ).toBe( 'completed' );
+		expect( p.exits[0]!.error ).toBeUndefined();
+	} );
+
+} );
+
+// ─── Which scene ended ───────────────────────────────────────────────────────
+
+/** The handle, read through the two names it gains. */
+type NamedHandle = { getSceneId(): string; getScenePath(): string };
+
+describe( 'the handle names its scene', () => {
+
+	it( 'getSceneId() is the stable id, getScenePath() the path a writer reads', () => {
+		const p = setup( [dialog( 'D1' )], { hold: ['D1'] } );
+		const named = p.handle as unknown as NamedHandle;
+
+		expect( named.getSceneId() ).toBe( 'sc_test0001' );
+		expect( named.getScenePath() ).toBe( 's1' );
+	} );
+
+	it( 'so a global onSceneExit can tell two scenes apart', () => {
+		const engine = new DialogueEngine();
+		expect( engine.init( { data: blueprint( [
+			scene( [dialog( 'A1' )], { scene: 'first', id: 'sc_first' } ),
+			scene( [dialog( 'B1' )], { scene: 'second', id: 'sc_second' } ),
+		] ) } ).errors ).toEqual( [] );
+
+		engine.onDialog( () => {} );
+		engine.onChoice( ( { next } ) => { next(); } );
+		engine.onAction( ( { next } ) => { next(); } );
+		engine.onResolveCondition( () => true );
+
+		const ended: string[] = [];
+		engine.onSceneExit( ( { scene: s } ) => { ended.push( ( s as unknown as NamedHandle ).getSceneId() ); } );
+
+		engine.scene( 'first' ).start();
+		engine.scene( 'second' ).start();
+		engine.stop();
+
+		expect( ended ).toEqual( ['sc_first', 'sc_second'] );
 	} );
 
 } );

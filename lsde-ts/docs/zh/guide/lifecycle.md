@@ -53,13 +53,16 @@ handler 可以返回一个清理函数，在离开 block 时调用：
 
 - 清理函数已经执行
 - async 轨道已经取消
-- `onSceneExit` 已经以 `reason: 'faulted'` 触发
+- `onSceneExit` 已经以 `reason: 'faulted'` 触发，错误本身在 `context.error` 中
 
 对话**干净地**停止了，接下来做什么由你决定 — 不带它继续、显示一个画面，或者让它崩溃。请在
 `start()`、`next()` 或 `resolve()` 外面放上你自己的 `try/catch`。
 
+错误**有意地**出现在两个地方。它被抛给调用 `next()` 的一方 —— 在游戏中通常是一次点击或一个计时器 ——
+同时通过 `context.error` 交给 `onSceneExit`，而等待对话结束的代码正是在那里监听。只在其中一处记录日志。
+
 由 `onSceneExit` 本身抛出的异常也以同样的方式到达你这里，而 scene 依然会被释放：`engine.isRunning()`
-不再计入它。
+不再计入它。除非 scene 本来就正因一个错误而关闭：那时你收到的是那个错误，正是它解释了其余的一切。
 
 ::: warning GDScript
 GDScript 没有异常。handler 中的脚本错误会输出到 Godot 日志，调用返回 `null`：block 只会一直等待一个
@@ -83,10 +86,13 @@ handler — 仍会让 scene 保持打开，却没有任何东西能让它前进�
 | `completed` | 流程走到了图的尽头 |
 | `cancelled` | `scene.cancel()` 或 `engine.stop()` |
 | `invalidated` | `onValidateNextBlock` 拒绝了最后一条运行中的轨道正要进入的 block |
-| `faulted` | 遍历过程中你的代码抛出了异常 — 参见[错误边界](#错误边界) |
+| `faulted` | 遍历过程中你的代码抛出了异常。`context.error` 保存了被抛出的内容 — 参见[错误边界](#错误边界) |
 | `deadlocked` | 剩下的所有轨道都停在一个没有任何东西能完成的 `waitForBlocks` 上。`context.waitingFor` 列出这些 block |
 
 `onSceneEnter` 不会收到原因。
+
+`scene.getSceneId()` 说明**哪一个** scene 结束了，`scene.getScenePath()` 给出它的路径。只要有两个 scene
+同时播放，全局的 `onSceneExit` 就需要它。请保存 id 而不是路径：有人重命名 scene 的那一天，路径就会改变。
 
 **死锁会关闭 scene。** 一个等待永远不会有轨道完成的 block 的 block — 例如流程没有走的分支上的 block —
 过去会让 scene 永久保持打开，也没有 `onSceneExit`。现在，只要最后一条能前进的轨道停下，scene 就会以

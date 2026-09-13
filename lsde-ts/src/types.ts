@@ -221,8 +221,8 @@ export interface DiagnosticEntry {
 	/**
 	 * Machine-readable code, e.g. `BROKEN_LINK` or `UNKNOWN_WAIT_BLOCK`.
 	 *
-	 * The seventeen the engine emits are listed in the Getting Started guide, split into the
-	 * eleven that refuse the payload and the six that let it play. It is a `string` and not a
+	 * The twenty-five the engine emits are listed in the Getting Started guide, split into the
+	 * eleven that refuse the payload and the fourteen that let it play. It is a `string` and not a
 	 * union on purpose: a runtime is allowed to add one — TypeScript and GDScript read the raw
 	 * payload and can say `WRONG_NAMING_CONVENTION`, where C# and C++ only ever see a typed
 	 * object and report `INVALID_FORMAT` for the same file.
@@ -230,8 +230,15 @@ export interface DiagnosticEntry {
 	code: string;
 	/** Human-readable description of the issue. */
 	message: string;
-	/** Id of the scene where the issue was found, if applicable. */
+	/**
+	 * The stable id of the scene the issue was found in (`sc_u0vqg2g8`), if applicable — what
+	 * `handle.getSceneId()` answers, and what survives a rename.
+	 *
+	 * It used to hold the scene's PATH, under a name that said id. The path is `scenePath` now.
+	 */
 	sceneId?: string;
+	/** The path of that scene (`reactor_breach`) — what a writer reads, and what a rename changes. */
+	scenePath?: string;
 	/** Id of the block where the issue was found, if applicable. */
 	blockId?: string;
 }
@@ -429,6 +436,15 @@ export interface SceneContext {
 	reason?: SceneEndReason;
 	/** With `deadlocked`: the blocks the parked tracks were still waiting for, each once. */
 	waitingFor?: readonly string[];
+	/**
+	 * With `faulted`: what was thrown — the fault that closed the scene, not a cleanup that failed
+	 * while it closed.
+	 *
+	 * The same error is ALSO re-thrown, to whoever entered the walk: in a game that is a click or a
+	 * timer calling `next()`, never the code awaiting the end of the scene — which is why it is handed
+	 * here as well. Log it in one of the two places, not both.
+	 */
+	error?: unknown;
 }
 
 // ─── Handler Types ───────────────────────────────────────────────────────────
@@ -672,6 +688,15 @@ export interface SceneHandle {
 	/** Override all ACTION blocks for this scene. */
 	onAction(handler: ActionHandler): void;
 
+	/**
+	 * The stable id of this scene (`sc_u0vqg2g8`). Store THIS one outside the payload — a save file,
+	 * an asset — because it survives a rename.
+	 *
+	 * `engine.onSceneExit` is global: with several scenes playing, this is how it tells which one ended.
+	 */
+	getSceneId(): string;
+	/** The path of this scene (`reactor_breach`): what a writer reads, and what a rename changes. */
+	getScenePath(): string;
 	/** Get the block currently being executed. */
 	getCurrentBlock(): BlueprintBlock | null;
 	/** The id of every block visited so far, in this scene. */

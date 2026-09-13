@@ -581,3 +581,174 @@ TEST(TraversalRobustness, CancelFromAnotherThreadIsRefused) {
     EXPECT_TRUE(p->handle->isRunning());
     EXPECT_TRUE(p->exits.empty());
 }
+
+// ─── The cause of a faulted end ──────────────────────────────────────────────
+//
+// A fault is re-thrown to whoever entered the walk: a key press, a timer calling next() — never the
+// code awaiting the end of the scene, which only learned `faulted`. So the exception is handed to
+// onSceneExit too, and STILL re-thrown.
+
+namespace {
+
+std::string messageOf(const std::exception_ptr& error) {
+    if (!error) return "";
+    try {
+        std::rethrow_exception(error);
+    } catch (const std::exception& e) {
+        return e.what();
+    } catch (...) {
+        return "<not a std::exception>";
+    }
+}
+
+} // namespace
+
+TEST(TraversalRobustness, OnSceneExitIsHandedTheExceptionThatWasRethrown) {
+    auto p = setup({wired(wired(dialog("D1"), "D2"), "BG"), dialog("D2"), async(dialog("BG"))}, {"D1"}, "BG");
+    p->handle->start();
+
+    std::exception_ptr thrown;
+    try {
+        p->held["D1"]();
+    } catch (...) {
+        thrown = std::current_exception();
+    }
+
+    ASSERT_TRUE(static_cast<bool>(thrown));
+    ASSERT_EQ(1u, p->exits.size());
+    EXPECT_EQ(std::string(SceneEndReason::Faulted), p->exits[0].reason.value_or(""));
+    // Compared by message: an exception_ptr may hold a copy of the exception object.
+    EXPECT_EQ(messageOf(thrown), messageOf(p->exits[0].error));
+    EXPECT_EQ("boom in BG", messageOf(p->exits[0].error));
+}
+
+TEST(TraversalRobustness, TheExceptionIsTheFaultThatClosedTheSceneNotACleanupThatFailedWhileItClosed) {
+    // M is held by BOTH tiers, or the global handler leaves it during start().
+    auto p = setup({wired(wired(dialog("D1"), "M"), "BG"), dialog("M"), wired(async(dialog("BG")), "BG2"), dialog("BG2")},
+                   {"BG", "M"}, "BG2");
+    Played* raw = p.get();
+    p->handle->onDialogId("M", [raw](ISceneHandle*, const BlueprintBlock*, IDialogContext*, std::function<void()> next) -> CleanupFn {
+        raw->held["M"] = next;
+        return []() { throw std::runtime_error("cleanup boom"); };
+    });
+    p->handle->start();
+
+    EXPECT_THROW(p->held["BG"](), std::runtime_error);
+    ASSERT_EQ(1u, p->exits.size());
+    EXPECT_EQ("boom in BG2", messageOf(p->exits[0].error));
+}
+
+TEST(TraversalRobustness, OnSceneExitIsHandedTheExceptionOfAThrowingOnSceneEnter) {
+    auto p = setup({dialog("D1")}, {}, "", [](DialogueEngine& e) {
+        e.onSceneEnter([](const SceneLifecycleArgs&) { throw std::runtime_error("enter boom"); });
+    });
+
+    EXPECT_THROW(p->handle->start(), std::runtime_error);
+    ASSERT_EQ(1u, p->exits.size());
+    EXPECT_EQ("enter boom", messageOf(p->exits[0].error));
+}
+
+TEST(TraversalRobustness, NoExceptionWhenTheSceneDidNotFault) {
+    auto p = setup({dialog("D1")});
+    p->handle->start();
+
+    ASSERT_EQ(1u, p->exits.size());
+    EXPECT_FALSE(static_cast<bool>(p->exits[0].error));
+}
+
+// ─── Which scene ended ───────────────────────────────────────────────────────
+
+TEST(TraversalRobustness, TheHandleNamesItsScene) {
+    auto p = setup({dialog("D1")}, {"D1"});
+
+    EXPECT_EQ("sc_test0001", p->handle->getSceneId());
+    EXPECT_EQ("s1", p->handle->getScenePath());
+}
+
+TEST(TraversalRobustness, AGlobalOnSceneExitCanTellTwoScenesApart) {
+    auto data = oneScene({dialog("A1")});
+    data.scenes[0].scene = "first";
+    data.scenes[0].id = "sc_first";
+    BlueprintScene second;
+    second.scene = "second";
+    second.id = "sc_second";
+    second.start = "B1";
+    second.blocks.push_back(dialog("B1"));
+    data.scenes.push_back(second);
+
+    DialogueEngine engine;
+    ASSERT_TRUE(engine.init({data}).errors.empty());
+    engine.onDialog([](ISceneHandle*, const BlueprintBlock*, IDialogContext*, std::function<void()>) -> CleanupFn {
+        return {};
+    });
+    engine.onChoice([](ISceneHandle*, const BlueprintBlock*, IChoiceContext*, std::function<void()> next) -> CleanupFn {
+        next();
+        return {};
+    });
+    engine.onAction([](ISceneHandle*, const BlueprintBlock*, IActionContext*, std::function<void()> next) -> CleanupFn {
+        next();
+        return {};
+    });
+    engine.onResolveCondition([](const ConditionTest&) { return true; });
+
+    std::vector<std::string> ended;
+    engine.onSceneExit([&ended](const SceneLifecycleArgs& args) { ended.push_back(args.scene->getSceneId()); });
+
+    auto firstHandle = engine.scene("first");
+    auto secondHandle = engine.scene("second");
+    firstHandle->start();
+    secondHandle->start();
+    engine.stop();
+
+    EXPECT_EQ(std::vector<std::string>({"sc_first", "sc_second"}), ended);
+}
+
+// ─── What the blocks use ─────────────────────────────────────────────────────
+//
+// The codes are pinned in all four runtimes by the shared spec. What only a native test can pin is
+// WHERE a warning points and WHAT it names.
+
+TEST(UsageValidation, AnUndeclaredFunctionIsNamedAndLocated) {
+    auto action = block("ACTION-001", BlockType::Action);
+    ActionCall call;
+    call.fn = "f3b1c2d4-v1-uuid";
+    call.args["track"] = std::string("theme");
+    action.calls.push_back(call);
+
+    DialogueEngine engine;
+    auto report = engine.init({oneScene({action})});
+
+    ASSERT_TRUE(report.errors.empty());
+    ASSERT_EQ(1u, report.warnings.size());
+    EXPECT_EQ("UNDECLARED_FUNCTION", report.warnings[0].code);
+    EXPECT_EQ("sc_test0001", report.warnings[0].sceneId.value_or(""));
+    EXPECT_EQ("s1", report.warnings[0].scenePath.value_or(""));
+    EXPECT_EQ("ACTION-001", report.warnings[0].blockId.value_or(""));
+    EXPECT_NE(std::string::npos, report.warnings[0].message.find("f3b1c2d4-v1-uuid"));
+}
+
+TEST(UsageValidation, AnUndeclaredEntryIsNamed) {
+    ConditionTest test = flag();
+    test.dict = "switches";
+    test.entry = "door_open";
+    ConditionCase conditionCase;
+    conditionCase.port = "out";
+    conditionCase.when = std::vector<ConditionTest>{test};
+    auto condition = block("COND-001", BlockType::Condition);
+    condition.cases = {conditionCase};
+
+    auto data = oneScene({condition});
+    DictionaryDefinition switches;
+    switches.id = "switches";
+    switches.valueType = "boolean";
+    switches.entries = {"door_unlocked"};
+    data.dictionaries.push_back(switches);
+
+    DialogueEngine engine;
+    auto report = engine.init({data});
+
+    ASSERT_TRUE(report.errors.empty());
+    ASSERT_EQ(1u, report.warnings.size());
+    EXPECT_EQ("UNDECLARED_ENTRY", report.warnings[0].code);
+    EXPECT_NE(std::string::npos, report.warnings[0].message.find("door_open"));
+}

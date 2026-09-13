@@ -11,8 +11,9 @@
 
 import type {
 	InitOptions, DiagnosticReport, DiagnosticEntry, DiagnosticStats,
-	Blueprints, Scene, Block,
+	Blueprints, Scene, Block, ActionCall, ConditionTest, FunctionDefinition,
 } from './types.js';
+import { BlockType, Ports, ValueType } from './types.js';
 
 /** The only payload this engine reads. A file that says anything else is refused outright. */
 const SUPPORTED_FORMAT = 'lsde-blueprints';
@@ -76,11 +77,30 @@ function detectNamingConvention( raw: Record<string, unknown> ): string | undefi
 }
 
 /**
+ * What the header of the export declares, looked up by id — for the checks that read what the
+ * blocks USE.
+ */
+interface Declared {
+	functions: Map<string, FunctionDefinition>;
+	/** Dictionary id → its entry keys. */
+	dictionaries: Map<string, Set<string>>;
+}
+
+function declaredBy( payload: Blueprints ): Declared {
+	return {
+		functions: new Map( ( payload.functions ?? [] ).map( fn => [fn.id, fn] ) ),
+		dictionaries: new Map( ( payload.dictionaries ?? [] ).map( dict => [dict.id, new Set( dict.entries ?? [] )] ) ),
+	};
+}
+
+/**
  * Validate a blueprint payload, and optionally cross-check it against what the game declares.
  *
  * Structural checks: the format header, scene paths, block id uniqueness **within a scene**,
- * the entry block, link targets, and the blocks a `waitForBlocks` names. With `check`, also
- * warns about functions, dictionaries and cards the game does not know.
+ * the entry block, link targets, and the blocks a `waitForBlocks` names. Always, too: what the
+ * blocks USE — the functions and arguments an action calls, the dictionaries and entries a
+ * condition tests — against what the export declares. With `check`, also warns about functions,
+ * dictionaries and cards the game does not know.
  *
  * @returns a {@link DiagnosticReport}. Errors mean the payload will not play correctly;
  *          warnings mean it will, but something looks wrong.
@@ -145,7 +165,10 @@ export function validateBlueprint( options: InitOptions ): DiagnosticReport {
 		return { errors, warnings, stats: empty };
 	}
 
+	const declared = declaredBy( payload );
 	const scenePaths = new Set<string>();
+	/** Stable id → the path of the first scene that carried it. */
+	const sceneIds = new Map<string, string>();
 	let totalBlocks = 0;
 	let totalConnections = 0;
 
@@ -155,12 +178,25 @@ export function validateBlueprint( options: InitOptions ): DiagnosticReport {
 				code: 'DUPLICATE_SCENE',
 				message: `Scene "${ scene.scene }" appears more than once. `
 					+ `When loading a per-scene export, pass each file exactly once.`,
-				sceneId: scene.scene,
+				sceneId: scene.id,
+				scenePath: scene.scene,
+			} );
+		} else if ( scene.id && sceneIds.has( scene.id ) ) {
+			// Two paths, one stable id: a scene file copied and renamed by hand. It used to load, and a
+			// lookup by that id opened whichever of the two came last, without a word. The same scene
+			// passed twice repeats its path as well, and is reported once, just above.
+			errors.push( {
+				code: 'DUPLICATE_SCENE',
+				message: `Scenes "${ sceneIds.get( scene.id ) }" and "${ scene.scene }" share the stable id `
+					+ `"${ scene.id }", so a lookup by that id cannot tell them apart.`,
+				sceneId: scene.id,
+				scenePath: scene.scene,
 			} );
 		}
 		scenePaths.add( scene.scene );
+		if ( scene.id && !sceneIds.has( scene.id ) ) sceneIds.set( scene.id, scene.scene );
 
-		validateScene( scene, errors, warnings );
+		validateScene( scene, declared, errors, warnings );
 
 		const blocks = blocksOf( scene );
 		totalBlocks += blocks.length;
@@ -191,11 +227,13 @@ function blocksOf( scene: Scene ): Block[] {
 
 function validateScene(
 	scene: Scene,
+	declared: Declared,
 	errors: DiagnosticEntry[],
 	warnings: DiagnosticEntry[],
 ): void {
 	if ( !scene.scene ) {
-		errors.push( { code: 'MISSING_SCENE_PATH', message: 'Scene is missing its path.' } );
+		// Named by its id: without a path, that is the one name left to find the scene by.
+		errors.push( { code: 'MISSING_SCENE_PATH', message: 'Scene is missing its path.', sceneId: scene.id } );
 	}
 
 	// A truncated file, or one written by hand, can carry a scene with no `blocks` at all, and
@@ -211,17 +249,20 @@ function validateScene(
 	// A block id is unique inside its scene and nowhere else: the counter restarts at 1 in every
 	// scene, so DIALOG-001 in two scenes is not a collision, it is the normal case.
 	const blockIds = new Set<string>();
+	const blocksById = new Map<string, Block>();
 
 	for ( const block of blocks ) {
 		if ( blockIds.has( block.id ) ) {
 			errors.push( {
 				code: 'DUPLICATE_BLOCK_ID',
 				message: `Duplicate block id "${ block.id }" within scene "${ scene.scene }".`,
-				sceneId: scene.scene,
+				sceneId: scene.id,
+				scenePath: scene.scene,
 				blockId: block.id,
 			} );
 		}
 		blockIds.add( block.id );
+		blocksById.set( block.id, block );
 	}
 
 	// The scene names its own entry, so there is no such thing as two start blocks.
@@ -229,13 +270,15 @@ function validateScene(
 		warnings.push( {
 			code: 'NO_START_BLOCK',
 			message: `Scene "${ scene.scene }" has no start block and cannot play.`,
-			sceneId: scene.scene,
+			sceneId: scene.id,
+			scenePath: scene.scene,
 		} );
 	} else if ( !blockIds.has( scene.start ) ) {
 		errors.push( {
 			code: 'INVALID_START_BLOCK',
 			message: `Scene "${ scene.scene }" starts on "${ scene.start }", which is not a block of this scene.`,
-			sceneId: scene.scene,
+			sceneId: scene.id,
+			scenePath: scene.scene,
 			blockId: scene.start,
 		} );
 	}
@@ -243,16 +286,17 @@ function validateScene(
 	for ( const block of blocks ) {
 		validateLinks( scene, block, blockIds, errors );
 		validateWaits( scene, block, blockIds, warnings );
+		validateUsage( scene, block, blocksById, declared, warnings );
 	}
 }
 
 /**
  * `waitForBlocks` names blocks OF THIS SCENE that must have FINISHED before this one is dispatched.
  *
- * A name that is not in the scene can never finish, so the block parks for good: on the main
- * flow that is the whole dialogue stopping with no `onSceneExit`, and on a parallel track it is a
- * branch that silently never finishes. Neither shows up anywhere at runtime, which is why it is
- * said here — a warning, not an error: the rest of the scene still plays.
+ * A name that is not in the scene can never finish, so the block parks for good. It used to hold the
+ * scene open with no `onSceneExit`; the engine now closes it as `deadlocked` — either way the dialogue
+ * stops there, and nothing on screen says why, which is why it is said here. A warning, not an error:
+ * the rest of the scene still plays.
  */
 function validateWaits(
 	scene: Scene,
@@ -269,10 +313,164 @@ function validateWaits(
 				code: 'UNKNOWN_WAIT_BLOCK',
 				message: `${ describeBlock( block ) } waits for "${ id }", which is not a block of `
 					+ `scene "${ scene.scene }". It can never be visited, so this block never advances.`,
-				sceneId: scene.scene,
+				sceneId: scene.id,
+				scenePath: scene.scene,
 				blockId: block.id,
 			} );
 		}
+	}
+}
+
+// ─── What the blocks use ─────────────────────────────────────────────────────
+
+/**
+ * What a block USES must be what the export DECLARES.
+ *
+ * An export carries two kinds of facts: the tables its header declares, and what its blocks use.
+ * `check` compares the first kind against the game; nothing read the second. So an action calling a
+ * function the export does not declare — a v1 id left behind in the project — loaded without a
+ * word, and failed in game, far from the cause.
+ *
+ * Always on, no `check` needed: the export contradicts ITSELF, whatever the game knows. Warnings,
+ * not errors — the scene still plays; only the call or the test that names nothing goes wrong. The
+ * codes say UNDECLARED where the existing ones say UNKNOWN: those mean "the game does not know it".
+ *
+ * Two things are left alone on purpose. A declared parameter with no argument: the format does not
+ * say which parameters are optional. And the TYPE of a value: a number written `3` or `3.0`, a
+ * boolean written as a string by hand, would make the warning noisier than the defect it catches.
+ */
+function validateUsage(
+	scene: Scene,
+	block: Block,
+	blocksById: Map<string, Block>,
+	declared: Declared,
+	warnings: DiagnosticEntry[],
+): void {
+	for ( const call of block.calls ?? [] ) {
+		validateCall( scene, block, call, declared, warnings );
+	}
+	for ( const test of testsOf( block ) ) {
+		validateTest( scene, block, test, blocksById, declared, warnings );
+	}
+}
+
+/** Every condition test a block carries: the cases of a condition or a router, and the options of a choice. */
+function testsOf( block: Block ): ConditionTest[] {
+	const tests: ConditionTest[] = [];
+	for ( const conditionCase of block.cases ?? [] ) tests.push( ...( conditionCase.when ?? [] ) );
+	for ( const option of block.options ?? [] ) tests.push( ...( option.when ?? [] ) );
+	return tests;
+}
+
+function validateCall(
+	scene: Scene,
+	block: Block,
+	call: ActionCall,
+	declared: Declared,
+	warnings: DiagnosticEntry[],
+): void {
+	const where = `${ describeBlock( block ) } in scene "${ scene.scene }"`;
+	const at = { sceneId: scene.id, scenePath: scene.scene, blockId: block.id };
+
+	// The contract allows it — "not picked yet" — but the game is then handed a call it cannot run.
+	if ( !call.fn ) {
+		warnings.push( { code: 'EMPTY_FUNCTION', message: `${ where } has a call with no function picked.`, ...at } );
+		return;
+	}
+
+	const fn = declared.functions.get( call.fn );
+	if ( !fn ) {
+		warnings.push( {
+			code: 'UNDECLARED_FUNCTION',
+			message: `${ where } calls "${ call.fn }", which the export does not declare in its functions.`,
+			...at,
+		} );
+		// Nothing more to say about its arguments: nobody knows what they should be.
+		return;
+	}
+
+	const params = new Map( ( fn.params ?? [] ).map( param => [param.name, param] ) );
+	for ( const [name, value] of Object.entries( call.args ?? {} ) ) {
+		const param = params.get( name );
+		if ( !param ) {
+			warnings.push( {
+				code: 'UNDECLARED_ARGUMENT',
+				message: `${ where } calls "${ fn.id }" with argument "${ name }", which "${ fn.id }" does not declare.`,
+				...at,
+			} );
+			continue;
+		}
+
+		if ( param.type !== ValueType.DictionaryKey ) continue;
+
+		const entries = param.dictionary !== undefined ? declared.dictionaries.get( param.dictionary ) : undefined;
+		if ( !entries ) {
+			warnings.push( {
+				code: 'UNDECLARED_DICTIONARY_KEY',
+				message: `${ where } passes "${ String( value ) }" as "${ name }" of "${ fn.id }", picked in dictionary `
+					+ `"${ param.dictionary ?? '' }", which the export does not declare.`,
+				...at,
+			} );
+		} else if ( !entries.has( String( value ) ) ) {
+			warnings.push( {
+				code: 'UNDECLARED_DICTIONARY_KEY',
+				message: `${ where } passes "${ String( value ) }" as "${ name }" of "${ fn.id }", which is not an entry `
+					+ `of dictionary "${ param.dictionary }".`,
+				...at,
+			} );
+		}
+	}
+}
+
+function validateTest(
+	scene: Scene,
+	block: Block,
+	test: ConditionTest,
+	blocksById: Map<string, Block>,
+	declared: Declared,
+	warnings: DiagnosticEntry[],
+): void {
+	const where = `${ describeBlock( block ) } in scene "${ scene.scene }"`;
+	const at = { sceneId: scene.id, scenePath: scene.scene, blockId: block.id };
+
+	// The reserved `choice` dictionary is not declared anywhere: it reads the answers given IN THIS
+	// SCENE, so its entry must be a CHOICE block of this scene and its value one of that block's options.
+	if ( test.dict === Ports.Choice ) {
+		const target = blocksById.get( test.entry );
+		if ( !target || target.type !== BlockType.Choice ) {
+			warnings.push( {
+				code: 'UNKNOWN_CHOICE_BLOCK',
+				message: `${ where } tests the answer given at "${ test.entry }", which is not a CHOICE block of this `
+					+ `scene. The engine only remembers the answers given in the scene that is playing.`,
+				...at,
+			} );
+			return;
+		}
+		if ( !( target.options ?? [] ).some( option => option.id === String( test.value ) ) ) {
+			warnings.push( {
+				code: 'UNKNOWN_CHOICE_OPTION',
+				message: `${ where } tests whether "${ String( test.value ) }" was picked at ${ test.entry }, which has no such option.`,
+				...at,
+			} );
+		}
+		return;
+	}
+
+	const entries = declared.dictionaries.get( test.dict );
+	if ( !entries ) {
+		warnings.push( {
+			code: 'UNDECLARED_DICTIONARY',
+			message: `${ where } tests dictionary "${ test.dict }", which the export does not declare.`,
+			...at,
+		} );
+		return;
+	}
+	if ( !entries.has( test.entry ) ) {
+		warnings.push( {
+			code: 'UNDECLARED_ENTRY',
+			message: `${ where } tests "${ test.dict }.${ test.entry }", an entry dictionary "${ test.dict }" does not declare.`,
+			...at,
+		} );
 	}
 }
 
@@ -297,7 +495,8 @@ function validateLinks(
 				code: 'BROKEN_LINK',
 				message: `${ describeBlock( block ) } links from port "${ link.port }" to "${ link.to }", `
 					+ `which is not a block of scene "${ scene.scene }".`,
-				sceneId: scene.scene,
+				sceneId: scene.id,
+				scenePath: scene.scene,
 				blockId: block.id,
 			} );
 		}
@@ -335,7 +534,7 @@ function crossValidate(
 				continue;
 			}
 			const knownSet = new Set( knownEntries );
-			for ( const entry of dict.entries ) {
+			for ( const entry of dict.entries ?? [] ) {
 				if ( !knownSet.has( entry ) ) {
 					warnings.push( {
 						code: 'UNKNOWN_DICTIONARY_ENTRY',

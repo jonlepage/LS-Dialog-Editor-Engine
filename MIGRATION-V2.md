@@ -2852,3 +2852,218 @@ principale se parque en dernier, la boucle de 10 000 tours, la faute sur une pis
 
 Sous Godot, le processus quitte encore avec « resources still in use at exit » : préexistant, voir
 plus haut.
+
+---
+
+# Ce que les blocs utilisent, et quelle scène s'est terminée avec quoi (2026-09-12)
+
+Deux demandes de la même intégration Unity, arrivées après la passe précédente. Toutes deux vérifiées
+dans le code avant d'être acceptées, puis écrites tests rouges d'abord en TypeScript.
+
+## 1. `init()` ne lisait jamais ce que les blocs utilisent
+
+Un export porte deux sortes de faits : les tables que son en-tête **déclare** (fonctions,
+dictionnaires, cartes) et ce que ses blocs **utilisent** (appels, arguments, tests de condition).
+`crossValidate` comparait la première sorte au jeu, et seulement si le jeu passait `check`. Personne
+ne lisait la seconde. Un appel à une fonction absente de l'export — un id v1 resté dans le projet — a
+passé le chargement sans un mot, puis a échoué en jeu, loin de sa cause.
+
+**Décision.** Des **avertissements**, pas des erreurs : la scène joue, seul l'appel ou le test qui ne
+désigne rien échoue. **Toujours actifs**, sans `check` : l'export se contredit lui-même, quoi que le
+jeu déclare.
+
+| Code | Quand |
+|---|---|
+| `EMPTY_FUNCTION` | un appel sans `fn` — le contrat l'autorise (« pas encore choisi ») |
+| `UNDECLARED_FUNCTION` | `fn` absent de la table `functions` |
+| `UNDECLARED_ARGUMENT` | une clé de `args` qui n'est pas un paramètre de la fonction |
+| `UNDECLARED_DICTIONARY_KEY` | un argument `dictionaryKey` qui n'est pas une entrée du dictionnaire de son paramètre, ou dont le dictionnaire n'est pas déclaré |
+| `UNDECLARED_DICTIONARY` | une condition sur un dictionnaire absent |
+| `UNDECLARED_ENTRY` | une condition sur une entrée absente de ce dictionnaire |
+| `UNKNOWN_CHOICE_BLOCK` | un test sur `choice` dont l'entrée n'est pas un bloc CHOICE **de cette scène** |
+| `UNKNOWN_CHOICE_OPTION` | un test sur `choice` qui nomme une option que ce bloc n'a pas |
+
+**Le préfixe `UNDECLARED_` est voulu.** `UNKNOWN_FUNCTION` et `UNKNOWN_DICTIONARY*` existaient déjà
+et veulent dire « le **jeu** ne le connaît pas ». Réutiliser ces noms aurait mélangé deux fautes
+différentes, qui ne se corrigent pas au même endroit.
+
+Les conditions sont lues partout où elles existent : `cases[].when` (condition, routeur) et
+`options[].when` (choix). Un appel à une fonction non déclarée ne dit rien de ses arguments : personne
+ne sait ce qu'ils devraient être.
+
+**Laissé de côté exprès.** Un paramètre déclaré sans argument : le format ne dit pas lesquels sont
+optionnels. Le **type** d'une valeur : plus bruyant que le défaut qu'il attraperait.
+
+**Preuve qu'il n'y a pas de bruit.** Avant d'écrire la règle, un script a passé l'export de référence
+(fichier unique et fichiers par scène) : 20 appels, 24 tests, **zéro constat**. Les trois tests
+natifs qui exigeaient déjà zéro avertissement sur ce fichier (C++ `json_loader_test.cpp`, C#
+`LsdeJsonTests.cs` ×2) sont restés verts, et `usage-validation.test.ts` l'épingle maintenant en TS.
+
+## 2. La cause d'une fin fautive n'arrivait pas au bon endroit
+
+`faulted` disait qu'une scène avait fauté, pas pourquoi. L'exception est relancée à celui qui est
+entré dans le parcours : en Unity, un clic ou un timer qui appelle `next()` — jamais le code qui
+attend la fin de la scène.
+
+**Décision.** `SceneContext.error` porte la faute qui a **fermé** la scène (`unknown` en TS,
+`Exception?` en C#, `std::exception_ptr` en C++). C'est la première : un cleanup qui échoue pendant
+la fermeture reste écarté. Et elle est **toujours relancée** — le problème 11 a décidé que rien n'est
+avalé. La doc dit de la journaliser à un seul des deux endroits. GDScript : sans objet, pas
+d'exceptions.
+
+## 3. `onSceneExit` ne savait pas quelle scène s'était terminée
+
+`engine.onSceneExit` est global, et le handle qu'il reçoit n'exposait ni l'id ni le chemin de sa
+scène. Avec deux scènes en cours, impossible de savoir laquelle venait de finir.
+
+**Décision.** `getSceneId()` et `getScenePath()` sur le handle, dans les quatre runtimes, lus sur
+`SceneGraph.getScene()`. La doc rappelle de stocker l'**id** : le chemin change au renommage.
+
+## La spec partagée
+
+Neuf suites de validation (une par code, plus une où tout est déclaré et rien n'avertit) et deux
+suites de flux : l'id et le chemin du handle, et l'erreur remise à `onSceneExit`
+(`requiresExceptions`). Nouveaux champs : `expectedExitError`, `expectedSceneId`,
+`expectedScenePath`.
+
+## Ce que cette passe n'a pas vérifié
+
+- **Preuve rouge : en TypeScript seulement** (20 tests rouges avant le correctif). Les trois ports
+  ont été écrits avec leurs tests.
+- **L'ordre de deux avertissements sur un même appel** n'est pas garanti en C++ : `PropertyBag` est
+  un `unordered_map`. La spec vérifie les codes, jamais leur ordre dans un appel.
+- **Une erreur rencontrée en route, dans un test et non dans le moteur.** Un handler de scène posé sur
+  un bloc ne bloque pas le handler global, qui appelait `next()` : le cleanup lancé pendant `start()`
+  ressemblait à une faute du moteur. L'erreur exacte a été relue avant de corriger le test.
+
+## Relevé mesuré
+
+| Runtime | Avant | Après |
+|---|---|---|
+| TypeScript | 528 | **565 / 565** (`tsc --noEmit` propre) |
+| C# | 261 (235 + 13 + 13) | **282 / 282** (256 + 13 + 13) |
+| C++ | 160 | **168 / 168** |
+| GDScript | 403, 1 sautée | **418 / 418**, 2 suites sautées (`requiresExceptions`) |
+| Spec partagée | 76 suites / 85 cas | **87 suites / 96 cas** |
+
+## Deuxième passe sur la même logique (même jour)
+
+La première passe avait testé les ajouts sans relire toute la logique, scénario par scénario. Ce qui a
+été fait ensuite :
+
+- **Relu ligne à ligne**, dans les quatre runtimes contre la référence TS : le chemin d'une faute
+  jusqu'à `onSceneExit`, et le validateur.
+- **Exécuté en TypeScript, 22 scénarios de faute.** Handler ; cleanup au départ d'un bloc ; cleanup
+  pendant `cancel()` ; `onValidateNextBlock`, `onInvalidateBlock`, `onBeforeBlock`,
+  `onResolveCondition`, `onResolveCharacter` ; `onSceneEnter` seul et après un `cancel()` ; piste
+  enfant qui faute en s'ouvrant ; piste libérée par un `waitForBlocks` ; `resolve()` tardif ;
+  `throw undefined` ; `cancel()` puis `throw` ; `onSceneExit` qui lève sur une fin normale et sur une
+  fin fautive ; `stop()` avec un cleanup qui lève ; deux scènes, l'une ouverte par chemin, l'autre par
+  id. Plus onze cas limites du validateur : `args: null`, `when: null`, `3` pour l'entrée `"3"`, un
+  CHOICE sans option… Tous conformes.
+- **Un trou dans la spec, bouché.** Les quatre runners vérifiaient qu'un code attendu était PRÉSENT,
+  pas qu'il était SEUL : un port qui ajoutait un avertissement passait sans bruit. Ils comparent
+  maintenant la liste entière, triée — l'ordre reste libre, à cause du `unordered_map` de C++. Aucun
+  port n'émettait de code en trop.
+- **Une phrase de la doc, précisée** (lifecycle ×4). « Une exception levée par `onSceneExit` vous
+  parvient de la même façon » est vrai sur une fin normale. Sur une fin fautive, c'est la faute
+  d'origine qui est relancée, et celle de `onSceneExit` est écartée — le même choix que pour un
+  cleanup qui échoue pendant la fermeture. Et `context.error` manquait aux lignes `onSceneExit` des
+  README TS, C# et C++.
+
+**Toujours pas vérifié.** Les 22 scénarios n'ont tourné qu'en TypeScript. En C# et en C++, quatre
+tests natifs et la suite partagée couvrent `error` ; le code de fermeture y est le même, ligne à ligne.
+
+**À savoir côté intégration.** `ISceneHandle` gagne deux membres : une classe du jeu qui l'implémente —
+une doublure de test, typiquement — ne compile plus tant qu'elle ne les ajoute pas. Aucune dans ce
+dépôt.
+
+| Runtime | Relevé, runners en comparaison exacte |
+|---|---|
+| TypeScript | **565 / 565** (`tsc --noEmit` propre) |
+| C# | **282 / 282** (256 + 13 + 13) |
+| C++ | **168 / 168** |
+| GDScript | **418 / 418**, 2 suites sautées (`requiresExceptions`) |
+
+---
+
+# Relecture avant publication : null, sceneId, doublon d'id, guide LLM (2026-09-12)
+
+Une relecture côté intégration Unity a trouvé quatre points. Chacun a été vérifié par du code exécuté
+avant d'être corrigé, tests rouges d'abord.
+
+## 1. C# : un `null` dans l'export faisait planter `Init()`
+
+Newtonsoft (`NullValueHandling.Include`, son défaut) et System.Text.Json lisent `"dict": null` comme une
+chaîne nulle, quel que soit l'initialiseur de la propriété. `Init()` levait alors
+`ArgumentNullException`, depuis la fonction dont le rôle est de refuser un fichier en disant pourquoi.
+Le TypeScript, lui, avertissait.
+
+- **Causé par la passe précédente :** `Dict` null, `Entry` null sur un test `choice`, `Name` null d'un
+  paramètre — tous lus par le nouveau validateur.
+- **Déjà vrai avant :** un id de fonction, de dictionnaire, de carte ou de bloc null, et
+  `"blocks": null`, plantaient dans le graphe (`Graph.cs`, inchangé depuis 2.0.0). La passe précédente
+  avait vu ce cas en relisant et l'avait jugé irréaliste : c'était une erreur.
+- **Trouvé en plus :** en jeu, un test `choice` dont `Entry` est null levait la même exception.
+
+**Décision.** Un null ne nomme rien : il est ignoré à l'indexation et averti à l'usage, comme en TS.
+C++ n'est pas concerné, son chargeur change null en `""`. GDScript : le nouveau code lit ces champs
+sans variable typée et ne parcourt plus une liste null.
+
+## 2. `DiagnosticEntry.sceneId` contenait le chemin
+
+Le champ s'appelait id, était documenté « Id of the scene », et recevait le chemin dans les quatre
+runtimes, alors que `handle.getSceneId()` rend l'id stable. **Décision de Jonathan : les deux.**
+`sceneId` porte maintenant l'id stable, `scenePath` le chemin. Le changement de valeur est signalé
+dans le CHANGELOG. `MISSING_SCENE_PATH` porte aussi `sceneId` : sans chemin, c'est le seul nom qui
+reste.
+
+En C++, `scenePath` est déclaré APRÈS `blockId` : un `DiagnosticEntry` se construit par position, et un
+champ inséré au milieu aurait reçu en silence chaque `blockId`.
+
+## 3. `DUPLICATE_SCENE` ne regardait que le chemin
+
+Trouvé en vérifiant le point 2. La doc promettait « un chemin ou un id stable ». Deux scènes sous deux
+chemins avec le même id se chargeaient, et une recherche par cet id ouvrait la dernière sans rien dire.
+**Décision :** vérifier l'id aussi, comme la doc le disait. La même scène passée deux fois répète chemin
+ET id, et reste signalée une seule fois.
+
+## 4. Le guide LLM et les README
+
+- `generate-llm-guide.js` recopiait les 23 `<!--@include-->` sans les développer : le guide texte
+  anglais passe de 27 blocs de code à 192. Il omettait aussi cinq pages — lifecycle, async-tracks,
+  router, parsing, character-distribution. Une forme d'include non prise en charge (plage de lignes,
+  région) fait échouer le script plutôt que d'inclure la mauvaise portion.
+- Les README ne mentionnaient pas les avertissements d'usage. Le plan le prévoyait ; la passe précédente
+  ne l'avait pas fait, et son rapport disait les README à jour.
+
+## La spec partagée
+
+- `expectedAt` : où pointe chaque diagnostic d'un cas (`sceneId`, `scenePath`, `blockId`). Ajouté aux
+  suites qui situent un diagnostic dans une scène.
+- Nouvelles suites : `duplicate-scene-id`, `missing-scene-path`, `null-names-in-blocks`,
+  `null-ids-in-the-header`. Un id de bloc null et une liste de blocs null restent des tests natifs C# :
+  GDScript lit ces deux-là dans des variables typées.
+
+## Preuve rouge
+
+TypeScript : 23 tests. C# : 28, dont les 7 tests natifs sur null et le test Newtonsoft, tous par
+`ArgumentNullException`. C++ : 2. GDScript : toutes les suites situées, et le doublon d'id.
+
+## Non fait, volontairement
+
+- Le BOM perdu de `Validator.cs` : c'était le seul des 30 fichiers C# à en avoir un.
+- GDScript lit toujours l'id d'un bloc et sa liste de blocs dans des variables typées : un null y reste
+  une erreur de script, comme avant.
+- Le build de la doc a échoué une fois sans message, pendant que les suites C#, C++ et GDScript
+  tournaient en parallèle ; seul, il passe. Cause non établie.
+
+## Relevé mesuré
+
+| Runtime | Avant | Après |
+|---|---|---|
+| TypeScript | 565 | **572 / 572** (`tsc --noEmit` propre) |
+| C# | 282 | **294 / 294** (267 + 14 + 13) |
+| C++ | 168 | **168 / 168** |
+| GDScript | 418, 2 sautées | **422 / 422**, 2 suites sautées |
+| Spec partagée | 87 suites / 96 cas | **91 suites / 100 cas** |

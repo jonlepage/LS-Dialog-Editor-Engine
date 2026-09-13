@@ -220,6 +220,29 @@ void runFlowCase(const TestSuite& suite, const TestCase& testCase) {
         EXPECT_EQ(*testCase.expectedWaitingFor, exits[0].waitingFor);
     }
 
+    if (testCase.expectedExitError) {
+        ASSERT_FALSE(exits.empty());
+        std::string message;
+        if (exits[0].error) {
+            try {
+                std::rethrow_exception(exits[0].error);
+            } catch (const std::exception& error) {
+                message = error.what();
+            } catch (...) {
+                message = "<not a std::exception>";
+            }
+        }
+        EXPECT_EQ(*testCase.expectedExitError, message);
+    }
+
+    if (testCase.expectedSceneId) {
+        EXPECT_EQ(*testCase.expectedSceneId, handle->getSceneId());
+    }
+
+    if (testCase.expectedScenePath) {
+        EXPECT_EQ(*testCase.expectedScenePath, handle->getScenePath());
+    }
+
     if (testCase.expectedVisited) {
         std::vector<std::string> visited = handle->getVisitedBlocks();
         std::vector<std::string> expected = *testCase.expectedVisited;
@@ -239,36 +262,37 @@ void runValidationCase(const TestSuite& suite, const TestCase& testCase) {
     DialogueEngine engine;
     auto report = engine.init(optionsOf(suite));
 
-    auto codesOf = [](const std::vector<DiagnosticEntry>& entries) {
+    // Compared WHOLE, order aside. Checking only that each listed code was present let a runtime add
+    // a code the spec does not list, unnoticed. The order is left out on purpose: a PropertyBag is an
+    // unordered_map, so two warnings about one call may come in either order.
+    auto sorted = [](std::vector<std::string> codes) {
+        std::sort(codes.begin(), codes.end());
+        return codes;
+    };
+    auto codesOf = [&sorted](const std::vector<DiagnosticEntry>& entries) {
         std::vector<std::string> codes;
         for (const auto& entry : entries) codes.push_back(entry.code);
-        return codes;
+        return sorted(std::move(codes));
     };
 
     if (testCase.expectedErrors) {
-        auto codes = codesOf(report.errors);
-        if (testCase.expectedErrors->empty()) {
-            EXPECT_TRUE(codes.empty())
-                << "expected no error, got " << (codes.empty() ? "" : codes[0]);
-        } else {
-            for (const auto& code : *testCase.expectedErrors) {
-                EXPECT_NE(std::find(codes.begin(), codes.end(), code), codes.end())
-                    << "missing error " << code;
-            }
-        }
+        EXPECT_EQ(sorted(*testCase.expectedErrors), codesOf(report.errors));
     }
 
     if (testCase.expectedWarnings) {
-        auto codes = codesOf(report.warnings);
-        if (testCase.expectedWarnings->empty()) {
-            EXPECT_TRUE(codes.empty())
-                << "expected no warning, got " << (codes.empty() ? "" : codes[0]);
-        } else {
-            for (const auto& code : *testCase.expectedWarnings) {
-                EXPECT_NE(std::find(codes.begin(), codes.end(), code), codes.end())
-                    << "missing warning " << code;
-            }
-        }
+        EXPECT_EQ(sorted(*testCase.expectedWarnings), codesOf(report.warnings));
+    }
+
+    if (testCase.expectedAt) {
+        const auto& where = *testCase.expectedAt;
+        auto located = [&where](const DiagnosticEntry& entry) {
+            SCOPED_TRACE(entry.code);
+            if (where.sceneId) EXPECT_EQ(*where.sceneId, entry.sceneId.value_or(""));
+            if (where.scenePath) EXPECT_EQ(*where.scenePath, entry.scenePath.value_or(""));
+            if (where.blockId) EXPECT_EQ(*where.blockId, entry.blockId.value_or(""));
+        };
+        for (const auto& entry : report.errors) located(entry);
+        for (const auto& entry : report.warnings) located(entry);
     }
 
     if (testCase.expectedStats) {

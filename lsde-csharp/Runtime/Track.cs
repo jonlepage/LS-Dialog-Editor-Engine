@@ -173,10 +173,12 @@ namespace LsdeDialogEngine
         /// release it.</summary>
         Exception? TrackParked();
 
-        /// <summary>Code of the game threw during the walk: close the scene. The caller re-throws.</summary>
+        /// <summary>Code of the game threw <paramref name="error"/> during the walk: close the scene,
+        /// and hand the error to OnSceneExit. The caller re-throws.</summary>
         /// <remarks>Idempotent — a fault on a nested track passes through every walk on its way
-        /// out, and only the first one closes anything.</remarks>
-        void Fault();
+        /// out, and only the first one closes anything, so the error OnSceneExit sees is the one
+        /// that started it.</remarks>
+        void Fault(Exception error);
 
         /// <summary>Throw when the game calls into the scene from another thread than the one that
         /// started it. <paramref name="call"/> names the call, for the message.</summary>
@@ -359,9 +361,9 @@ namespace LsdeDialogEngine
             {
                 while (step != null) step = Take(step);
             }
-            catch
+            catch (Exception err)
             {
-                _host.Fault();
+                _host.Fault(err);
                 throw;
             }
         }

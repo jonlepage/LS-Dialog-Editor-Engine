@@ -6,7 +6,7 @@
 //         docs/public/llm-full-api.txt        (English only — auto-generated from code)
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
+import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -14,7 +14,8 @@ const docsDir = join(__dirname, '..', 'docs');
 const outDir = join(docsDir, 'public');
 mkdirSync(outDir, { recursive: true });
 
-const BOM = '\uFEFF';
+// The byte-order mark, written as a code so it stays visible here.
+const BOM = String.fromCharCode(0xfeff);
 const separator = '\n\n' + '='.repeat(80) + '\n\n';
 
 function cleanMarkdown(content) {
@@ -28,16 +29,55 @@ function cleanMarkdown(content) {
     .replace(/^:::\s*$/gm, '');                    // closing :::
 }
 
+// ─── Includes ────────────────────────────────────────────────────────────────
+
+/**
+ * Expand VitePress `<!--@include: path-->` directives, relative to the file that holds them.
+ *
+ * The guide pages keep their code samples in `_shared/*.md` and pull them in this way. The directive
+ * belongs to VitePress, so a plain concatenation copied it through verbatim: every sample of the guide
+ * was missing from the text an AI integrator reads, replaced by twenty-three comments it could not
+ * follow.
+ *
+ * Line ranges and regions (`file.md{3,10}`, `file.md#region`) are VitePress features these docs do not
+ * use. They are refused rather than guessed at: including the wrong span would be worse than failing.
+ */
+const INCLUDE = /<!--\s*@include:\s*(.+?)\s*-->/g;
+
+function expandIncludes(content, fromDir, trail = []) {
+  return content.replace(INCLUDE, (_directive, target) => {
+    if (/[{#]/.test(target)) {
+      throw new Error(`Unsupported @include form "${target}" — only a plain path is expanded.`);
+    }
+    const path = resolve(fromDir, target);
+    if (!existsSync(path)) {
+      throw new Error(`@include target not found: ${path}`);
+    }
+    if (trail.includes(path)) {
+      throw new Error(`@include cycle: ${[...trail, path].join(' -> ')}`);
+    }
+    return expandIncludes(readFileSync(path, 'utf-8'), dirname(path), [...trail, path]).trim();
+  });
+}
+
 // ─── Guide (all locales) ─────────────────────────────────────────────────────
 
+// Every page of the guide sidebar, in its order (docs/.vitepress/config.ts), so the text reads like
+// the site. Lifecycle, async tracks, router, parsing and character distribution used to be left out:
+// how a scene ends, what a join or a router does, was invisible to an AI integrator.
 const guideFiles = [
   'what-is-lsde.md',
   'getting-started.md',
   'blueprints.md',
   'block-types.md',
-  'choice-visibility.md',
+  'router.md',
+  'character-distribution.md',
   'handlers.md',
   'integration.md',
+  'parsing.md',
+  'lifecycle.md',
+  'choice-visibility.md',
+  'async-tracks.md',
 ];
 
 const locales = [
@@ -65,8 +105,11 @@ ${'='.repeat(60)}\n\n`;
 
   for (const file of guideFiles) {
     const filePath = join(guideDir, file);
-    if (!existsSync(filePath)) continue;
-    const content = readFileSync(filePath, 'utf-8');
+    if (!existsSync(filePath)) {
+      console.log(`Missing: ${filePath} — left out of llm-full-guide${locale.suffix}.txt`);
+      continue;
+    }
+    const content = expandIncludes(readFileSync(filePath, 'utf-8'), guideDir);
     guide += cleanMarkdown(content).trim() + separator;
   }
 

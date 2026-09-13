@@ -40,8 +40,13 @@ def header(scenes):
     }
 
 
+def scene_id(path):
+    """The stable id `scene()` gives a path - and what a diagnostic's sceneId must then carry."""
+    return "sc_" + path.replace("-", "_")[:8]
+
+
 def scene(path, blocks, start=None):
-    s = {"scene": path, "id": "sc_" + path.replace("-", "_")[:8], "blocks": blocks}
+    s = {"scene": path, "id": scene_id(path), "blocks": blocks}
     entry = start or (blocks[0]["id"] if blocks else None)
     if entry:
         s["start"] = entry
@@ -76,6 +81,14 @@ def cmp_(dict_, entry, value, op="equals", join=None):
     if join:
         c["join"] = join
     return c
+
+
+def at(path, block_id=None):
+    """Where every diagnostic of a case points: the scene's stable id AND its path, and the block."""
+    where = {"sceneId": scene_id(path), "scenePath": path}
+    if block_id:
+        where["blockId"] = block_id
+    return where
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -622,7 +635,7 @@ validation_suites = [
         "blueprint": header([scene("s1", [
             dlg("DIALOG-001", "A"), dlg("DIALOG-001", "A again"),
         ])]),
-        "cases": [{"id": "refused", "expectedErrors": ["DUPLICATE_BLOCK_ID"]}],
+        "cases": [{"id": "refused", "expectedErrors": ["DUPLICATE_BLOCK_ID"], "expectedAt": at("s1", "DIALOG-001")}],
     },
     {
         "id": "ids-repeat-across-scenes",
@@ -642,7 +655,7 @@ validation_suites = [
         "description": "The same scene passed twice, as when a per-scene file is loaded twice.",
         "blueprint": header([scene("s1", [dlg("DIALOG-001", "A")]),
                              scene("s1", [dlg("DIALOG-001", "A")])]),
-        "cases": [{"id": "refused", "expectedErrors": ["DUPLICATE_SCENE"]}],
+        "cases": [{"id": "refused", "expectedErrors": ["DUPLICATE_SCENE"], "expectedAt": at("s1")}],
     },
     {
         "id": "broken-link",
@@ -650,19 +663,19 @@ validation_suites = [
         "blueprint": header([scene("s1", [
             dlg("DIALOG-001", "A", next=[wire("out", "DIALOG-999")]),
         ])]),
-        "cases": [{"id": "refused", "expectedErrors": ["BROKEN_LINK"]}],
+        "cases": [{"id": "refused", "expectedErrors": ["BROKEN_LINK"], "expectedAt": at("s1", "DIALOG-001")}],
     },
     {
         "id": "invalid-start-block",
         "description": "The scene names an entry it does not hold.",
         "blueprint": header([scene("s1", [dlg("DIALOG-001", "A")], start="NOWHERE-001")]),
-        "cases": [{"id": "refused", "expectedErrors": ["INVALID_START_BLOCK"]}],
+        "cases": [{"id": "refused", "expectedErrors": ["INVALID_START_BLOCK"], "expectedAt": at("s1", "NOWHERE-001")}],
     },
     {
         "id": "no-start-block",
         "description": "A scene with no entry loads; it just cannot play. Not a reason to refuse the file.",
         "blueprint": header([{"scene": "s1", "id": "sc_s1", "blocks": [dlg("DIALOG-001", "A")]}]),
-        "cases": [{"id": "warned", "expectedErrors": [], "expectedWarnings": ["NO_START_BLOCK"]}],
+        "cases": [{"id": "warned", "expectedErrors": [], "expectedWarnings": ["NO_START_BLOCK"], "expectedAt": at("s1")}],
     },
     {
         "id": "two-non-async-targets-is-not-a-fault",
@@ -1054,6 +1067,7 @@ validation_suites += [
             "expectedErrors": [],
             "expectedWarnings": ["NO_START_BLOCK"],
             "expectedStats": {"sceneCount": 1, "blockCount": 0, "connectionCount": 0},
+            "expectedAt": at("s1"),
         }],
     },
     {
@@ -1064,7 +1078,8 @@ validation_suites += [
             block("DIALOG-002", "dialog", text={"en": "waits"},
                   props={"waitForBlocks": ["DIALOG-404"]}),
         ])]),
-        "cases": [{"id": "warned", "expectedErrors": [], "expectedWarnings": ["UNKNOWN_WAIT_BLOCK"]}],
+        "cases": [{"id": "warned", "expectedErrors": [], "expectedWarnings": ["UNKNOWN_WAIT_BLOCK"],
+                   "expectedAt": at("s1", "DIALOG-002")}],
     },
 ]
 
@@ -1583,7 +1598,7 @@ validation_suites += [
         "id": "per-scene-files-twice",
         "description": "The same file passed twice is the same scene twice.",
         "blueprintFiles": [one_file("first"), one_file("first")],
-        "cases": [{"id": "refused", "expectedErrors": ["DUPLICATE_SCENE"]}],
+        "cases": [{"id": "refused", "expectedErrors": ["DUPLICATE_SCENE"], "expectedAt": at("first")}],
     },
     {
         "id": "per-scene-files-empty",
@@ -1701,6 +1716,210 @@ flow_suites += [
             "expectedCleanupCalls": 1,
             "expectedExitReason": "faulted",
         }],
+    },
+]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# What the BLOCKS use, and which scene ended with what (2026-09-12)
+# ══════════════════════════════════════════════════════════════════════════
+#
+# Found during the same Unity integration. init() compared the header tables against the game and
+# never read what the blocks use: a call to a function the export does not declare - a v1 id left
+# in a project - loaded without a word and failed in game. These warnings are always on, no `check`
+# needed: the export contradicts itself. UNDECLARED, not UNKNOWN - the UNKNOWN_* codes mean "the game
+# does not know it".
+#
+# And a fault is re-thrown to whoever entered the walk - a click, a timer calling next() - never to the
+# code awaiting the end of the scene, which is why onSceneExit is now handed the error too, and why the
+# handle names its scene: onSceneExit is global.
+#
+# New fields: `expectedExitError` (the message of context.error), `expectedSceneId`,
+# `expectedScenePath`.
+
+def usage_header(scenes):
+    """The shared header, plus one function whose parameter is picked in a dictionary."""
+    payload = header(scenes)
+    payload["functions"] = FUNCTIONS + [
+        {"id": "set_switch", "params": [{"name": "flag", "type": "dictionaryKey", "dictionary": "switches"}]},
+    ]
+    return payload
+
+
+def usage_suite(sid, description, blocks, code, block_id):
+    return {
+        "id": sid,
+        "description": description,
+        "blueprint": usage_header([scene("s1", blocks)]),
+        "cases": [{"id": "warned", "expectedErrors": [], "expectedWarnings": [code],
+                   "expectedAt": at("s1", block_id)}],
+    }
+
+
+def one_call(fn, args):
+    return block("ACTION-001", "action", calls=[{"fn": fn, "args": args}])
+
+
+def one_test(dict_, entry, value):
+    return block("COND-001", "condition", cases=[{"port": "out", "when": [cmp_(dict_, entry, value)]}])
+
+
+validation_suites += [
+    {
+        "id": "usage-declared-is-clean",
+        "description": "Calls, arguments and tests that name what the export declares warn about nothing.",
+        "blueprint": usage_header([scene("s1", [
+            block("ACTION-001", "action", calls=[
+                {"fn": "play_music", "args": {"track": "theme"}},
+                {"fn": "set_switch", "args": {"flag": "door_unlocked"}},
+            ]),
+            block("CHOICE-001", "choice", options=[
+                opt("C1", "Yes", when=[cmp_("variables", "credits", 50, "greaterOrEqual")]),
+                opt("C2", "No"),
+            ]),
+            block("COND-001", "condition", cases=[{"port": "out", "when": [
+                cmp_("switches", "met_vesk", True),
+                cmp_("choice", "CHOICE-001", "C2", join="and"),
+            ]}]),
+        ])]),
+        "cases": [{"id": "clean", "expectedErrors": [], "expectedWarnings": []}],
+    },
+    usage_suite("usage-empty-function", "A call nobody picked a function for.",
+                [one_call("", {})], "EMPTY_FUNCTION", "ACTION-001"),
+    usage_suite("usage-undeclared-function", "A call to a function the export does not declare - a v1 id, say.",
+                [one_call("f3b1c2d4-v1-uuid", {"track": "theme"})], "UNDECLARED_FUNCTION", "ACTION-001"),
+    usage_suite("usage-undeclared-argument", "An argument the called function does not declare.",
+                [one_call("play_music", {"track": "theme", "volume": 3})], "UNDECLARED_ARGUMENT", "ACTION-001"),
+    usage_suite("usage-undeclared-dictionary-key",
+                "A dictionaryKey argument that is not an entry of the dictionary its parameter names.",
+                [one_call("set_switch", {"flag": "door_open"})], "UNDECLARED_DICTIONARY_KEY", "ACTION-001"),
+    usage_suite("usage-undeclared-dictionary", "A condition on a dictionary the export does not declare.",
+                [one_test("party", "size", 3)], "UNDECLARED_DICTIONARY", "COND-001"),
+    usage_suite("usage-undeclared-entry", "A condition on an entry its dictionary does not declare.",
+                [one_test("switches", "door_open", True)], "UNDECLARED_ENTRY", "COND-001"),
+    usage_suite("usage-unknown-choice-block",
+                "A test on the reserved choice dictionary whose entry is not a CHOICE block of this scene.",
+                [block("DIALOG-001", "dialog"), one_test("choice", "DIALOG-001", "C1")], "UNKNOWN_CHOICE_BLOCK",
+                "COND-001"),
+    usage_suite("usage-unknown-choice-option",
+                "A test on the reserved choice dictionary naming an option that CHOICE block does not have.",
+                [block("CHOICE-001", "choice", options=[opt("C1", "Yes")]),
+                 one_test("choice", "CHOICE-001", "C9")], "UNKNOWN_CHOICE_OPTION", "COND-001"),
+]
+
+flow_suites += [
+    {
+        "id": "scene-handle-names-its-scene",
+        "description": "The handle gives the stable id and the path of its scene.",
+        "blueprint": header([scene("s1", [dlg("DIALOG-001", "The only line")])]),
+        "sceneId": "s1",
+        "cases": [{
+            "id": "id-and-path",
+            "steps": [
+                {"expect": {"type": "dialog", "blockId": "DIALOG-001"}, "action": {"type": "next"}},
+            ],
+            "expectedVisited": ["DIALOG-001"],
+            "expectedSceneId": "sc_s1",
+            "expectedScenePath": "s1",
+        }],
+    },
+    {
+        "id": "fault-hands-its-error-to-on-scene-exit",
+        "description": "onSceneExit is handed the error that closed the scene, alongside faulted.",
+        "requiresExceptions": True,
+        "blueprint": header([scene("s1", [dlg("DIALOG-001", "throws")])]),
+        "sceneId": "s1",
+        "cases": [{
+            "id": "the-error-itself",
+            "steps": [
+                {"expect": {"type": "dialog", "blockId": "DIALOG-001"},
+                 "action": {"type": "throw", "error": "the handler failed"}},
+            ],
+            "expectedThrow": True,
+            "expectedVisited": ["DIALOG-001"],
+            "expectedExitReason": "faulted",
+            "expectedExitError": "the handler failed",
+        }],
+    },
+]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Review before release (2026-09-12): where a diagnostic points, null fields, a repeated stable id
+# ══════════════════════════════════════════════════════════════════════════
+#
+# `sceneId` on a diagnostic held the scene's PATH, under a name that said id - while
+# `handle.getSceneId()` answers the stable id. It holds the stable id now, and the path moved to
+# `scenePath`. New field `expectedAt`: every error and warning of the case carries these values.
+#
+# A JSON null reaches C# as a null string whatever the property's initializer says - Newtonsoft and
+# System.Text.Json alike - and init() threw ArgumentNullException on several of them. TypeScript warns,
+# and every runtime must. A null block id and a null block list are pinned by native tests instead:
+# GDScript reads those two into typed variables.
+#
+# DUPLICATE_SCENE was documented as "a path or a stable id" and only compared paths: two scenes sharing
+# an id loaded, and a lookup by that id opened the last one without a word.
+
+validation_suites += [
+    {
+        "id": "duplicate-scene-id",
+        "description": "Two scenes under two paths sharing one stable id - a scene file copied and renamed by hand.",
+        "blueprint": header([
+            dict(scene("first", [dlg("DIALOG-001", "A")]), id="sc_same"),
+            dict(scene("second", [dlg("DIALOG-001", "B")]), id="sc_same"),
+        ]),
+        "cases": [{
+            "id": "refused",
+            "expectedErrors": ["DUPLICATE_SCENE"],
+            "expectedAt": {"sceneId": "sc_same", "scenePath": "second"},
+        }],
+    },
+    {
+        "id": "missing-scene-path",
+        "description": "A scene with no path is refused, and still named - by its stable id.",
+        "blueprint": header([{"scene": "", "id": "sc_nopath", "start": "DIALOG-001",
+                              "blocks": [dlg("DIALOG-001", "A")]}]),
+        "cases": [{"id": "refused", "expectedErrors": ["MISSING_SCENE_PATH"], "expectedAt": {"sceneId": "sc_nopath"}}],
+    },
+    {
+        "id": "null-names-in-blocks",
+        "description": "A dict, an entry or a parameter name written null is warned about like any name "
+                       "nothing declares - never thrown.",
+        "blueprint": dict(
+            header([scene("s1", [
+                block("ACTION-001", "action", calls=[{"fn": "with_unnamed_param", "args": {"value": "x"}}]),
+                block("COND-001", "condition", cases=[{"port": "out", "when": [
+                    cmp_(None, "door_unlocked", True),
+                    cmp_("switches", None, True, join="and"),
+                    cmp_("choice", None, "C1", join="and"),
+                ]}]),
+            ])]),
+            functions=FUNCTIONS + [{"id": "with_unnamed_param", "params": [{"name": None, "type": "string"}]}],
+        ),
+        "cases": [{
+            "id": "warned-not-thrown",
+            "expectedErrors": [],
+            "expectedWarnings": ["UNDECLARED_ARGUMENT", "UNDECLARED_DICTIONARY", "UNDECLARED_ENTRY",
+                                 "UNKNOWN_CHOICE_BLOCK"],
+            "expectedAt": at("s1"),
+        }],
+    },
+    {
+        "id": "null-ids-in-the-header",
+        "description": "A function, a dictionary or a card whose id is null: nothing can name it, and "
+                       "nothing throws.",
+        "blueprint": dict(
+            header([scene("s1", [
+                block("ACTION-001", "action", calls=[{"fn": "play_music", "args": {"track": "theme"}}]),
+                block("COND-001", "condition", cases=[{"port": "out", "when": [
+                    cmp_("switches", "door_unlocked", True),
+                ]}]),
+            ])]),
+            functions=FUNCTIONS + [{"id": None, "params": []}],
+            dictionaries=DICTIONARIES + [{"id": None, "valueType": "boolean", "entries": ["x"]}],
+            cards=CARDS + [{"id": None, "name": "ghost", "role": "characters"}],
+        ),
+        "cases": [{"id": "clean", "expectedErrors": [], "expectedWarnings": []}],
     },
 ]
 

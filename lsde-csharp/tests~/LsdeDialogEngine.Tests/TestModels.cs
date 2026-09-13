@@ -73,10 +73,21 @@ namespace LsdeDialogEngine.Tests
         /// <summary>Does an exception come out of Start()? Null means it must not.</summary>
         public bool? ExpectedThrow { get; set; }
 
+        /// <summary>With faulted: the message of the exception OnSceneExit is handed.</summary>
+        public string? ExpectedExitError { get; set; }
+
+        /// <summary>What the handle answers to GetSceneId() / GetScenePath().</summary>
+        public string? ExpectedSceneId { get; set; }
+        public string? ExpectedScenePath { get; set; }
+
         // Validation only
         public List<string>? ExpectedErrors { get; set; }
         public List<string>? ExpectedWarnings { get; set; }
         public ExpectedStats? ExpectedStats { get; set; }
+
+        /// <summary>Where every error and warning of the case points. Each field given must match on
+        /// every one of them: SceneId is the stable id, ScenePath the path.</summary>
+        public ExpectedLocation? ExpectedAt { get; set; }
     }
 
     public class ExpectedStats
@@ -84,6 +95,13 @@ namespace LsdeDialogEngine.Tests
         public int SceneCount { get; set; }
         public int BlockCount { get; set; }
         public int ConnectionCount { get; set; }
+    }
+
+    public class ExpectedLocation
+    {
+        public string? SceneId { get; set; }
+        public string? ScenePath { get; set; }
+        public string? BlockId { get; set; }
     }
 
     public class TestStep

@@ -55,14 +55,19 @@ C'est l'ordre qui rend la chose utilisable. Au moment où l'erreur atteint votre
 
 - les fonctions de cleanup ont tourné
 - les tracks async sont annulés
-- `onSceneExit` a été appelé, avec `reason: 'faulted'`
+- `onSceneExit` a été appelé, avec `reason: 'faulted'` et l'erreur elle-même dans `context.error`
 
 Le dialogue s'est arrêté **proprement**, et c'est vous qui décidez de la suite — continuer sans lui,
 afficher un écran, ou laisser planter. Mettez votre propre `try/catch` autour de `start()`, `next()`
 ou `resolve()`.
 
+L'erreur arrive à **deux** endroits, exprès. Elle est lancée à celui qui a appelé `next()` — dans un
+jeu, souvent un clic ou un timer — et elle est remise à `onSceneExit` dans `context.error`, là où
+écoute le code qui attend la fin du dialogue. Journalisez-la à un seul des deux endroits.
+
 Une exception levée par `onSceneExit` lui-même vous parvient de la même façon, et la scène est
-libérée malgré tout : `engine.isRunning()` ne la compte plus.
+libérée malgré tout : `engine.isRunning()` ne la compte plus. Sauf si la scène se fermait déjà sur une
+faute : vous recevez alors cette faute, celle qui explique le reste.
 
 ::: warning GDScript
 GDScript n'a pas d'exceptions. Une erreur de script dans un handler part dans le log de Godot et
@@ -90,10 +95,14 @@ rien pour la faire avancer, et un jeu qui attendait la fin du dialogue attendait
 | `completed` | Le flux n'a plus de graphe |
 | `cancelled` | `scene.cancel()` ou `engine.stop()` |
 | `invalidated` | `onValidateNextBlock` a refusé le block où entrait le dernier track vivant |
-| `faulted` | Votre code a throw pendant le parcours — voir [Error Boundaries](#error-boundaries) |
+| `faulted` | Votre code a throw pendant le parcours. `context.error` contient ce qui a été lancé — voir [Error Boundaries](#error-boundaries) |
 | `deadlocked` | Tous les tracks restants sont parqués sur un `waitForBlocks` que rien ne peut terminer. `context.waitingFor` nomme ces blocks |
 
 `onSceneEnter` ne reçoit pas de raison.
+
+`scene.getSceneId()` dit **quelle** scène s'est terminée, et `scene.getScenePath()` donne son chemin.
+Un `onSceneExit` global en a besoin dès que deux scènes jouent en même temps. Stockez l'id, pas le
+chemin : le chemin change le jour où quelqu'un renomme la scène.
 
 **Un interblocage ferme la scène.** Un block qui attend un block qu'aucun track ne terminera jamais —
 par exemple un block d'une branche que le flux n'a pas prise — gardait la scène ouverte pour de bon,

@@ -279,10 +279,51 @@ func _test_code_after_a_synchronous_resolve_runs_before_the_block_is_dispatched(
 
 	_assert_eq(order, ["after resolve", "dispatched"], "the block is dispatched once on_before_block returns")
 
+# ─── Which scene ended ────────────────────────────────────────────────────
+
+func _test_the_handle_names_its_scene() -> void:
+	var played := _setup([_dialog("D1")], ["D1"])
+
+	_assert_eq(played["handle"].get_scene_id(), "sc_test0001", "get_scene_id() is the stable id")
+	_assert_eq(played["handle"].get_scene_path(), "s1", "get_scene_path() is the path a writer reads")
+
+func _test_a_global_on_scene_exit_can_tell_two_scenes_apart() -> void:
+	var data := _one_scene([_dialog("A1")])
+	var second: Dictionary = data["scenes"][0].duplicate(true)
+	second["scene"] = "second"
+	second["id"] = "sc_second"
+	second["blocks"] = [_dialog("B1")]
+	second["start"] = "B1"
+	data["scenes"][0]["scene"] = "first"
+	data["scenes"][0]["id"] = "sc_first"
+	data["scenes"].append(second)
+
+	var engine := LsdeDialogueEngine.new()
+	_assert_eq(engine.init({"data": data})["errors"].size(), 0, "two scenes load")
+	engine.on_dialog(func(_args: Dictionary) -> Variant: return null)
+	engine.on_choice(func(args: Dictionary) -> Variant:
+		args["next"].call()
+		return null)
+	engine.on_action(func(args: Dictionary) -> Variant:
+		args["next"].call()
+		return null)
+	engine.on_resolve_condition(func(_test: Dictionary) -> bool: return true)
+
+	var ended: Array = []
+	engine.on_scene_exit(func(args: Dictionary) -> void: ended.append(args["scene"].get_scene_id()))
+
+	engine.scene("first").start()
+	engine.scene("second").start()
+	engine.stop()
+
+	_assert_eq(ended, ["sc_first", "sc_second"], "a global on_scene_exit tells two scenes apart")
+
 # ─── Entry point ──────────────────────────────────────────────────────────
 
 func run() -> Dictionary:
 	print("\n── Traversal Robustness Tests ──")
+	_test_the_handle_names_its_scene()
+	_test_a_global_on_scene_exit_can_tell_two_scenes_apart()
 	_test_a_condition_action_loop_of_ten_thousand_passes()
 	_test_the_same_loop_with_an_on_before_block_that_resolves_at_once()
 	_test_a_queue_of_ten_thousand_wires_walked_in_turn()

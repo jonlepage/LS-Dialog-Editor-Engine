@@ -15,7 +15,7 @@ import type {
 	BlueprintBlock, SceneHandle,
 	BlockHandler, BaseBlockContext,
 	DialogHandler, ChoiceHandler, ConditionHandler, ActionHandler,
-	SceneLifecycleHandler, TrackInfo,
+	SceneLifecycleHandler, SceneContext, TrackInfo,
 	ConditionTest, Card, RuntimeConditionCase,
 	ConditionBlock, RouterBlock,
 } from './types.js';
@@ -137,7 +137,7 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 		// all: nothing to advance, nothing to end it. Same rule as the walk — close, then surface.
 		const enterFault = runCleanup( () => this.fireSceneEnter() );
 		if ( enterFault ) {
-			this.shutdown( SceneEndReason.Faulted );
+			this.shutdown( SceneEndReason.Faulted, undefined, enterFault );
 			throw enterFault.value;
 		}
 		// `onSceneEnter` is allowed to cancel the scene it was told about.
@@ -205,6 +205,21 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 
 	onAction( handler: ActionHandler ): void {
 		this.sceneRegistry.actionHandler = handler;
+	}
+
+	/**
+	 * The stable id of this scene (`sc_u0vqg2g8`) — the one to store outside the payload.
+	 *
+	 * `engine.onSceneExit` is global, and the handle it is given was the only way to tell WHICH scene
+	 * ended when several play at once; it could not say. The id is what survives a rename.
+	 */
+	getSceneId(): string {
+		return this.sceneGraph.getScene().id;
+	}
+
+	/** The path of this scene (`reactor_breach`) — what a writer reads, and what a rename changes. */
+	getScenePath(): string {
+		return this.sceneGraph.getScene().scene;
 	}
 
 	/** The block the flow the player is watching is on. Parallel tracks have their own. */
@@ -362,12 +377,14 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 	/**
 	 * @internal — Code of the game threw during the walk. Close the scene; the track re-throws.
 	 *
-	 * What a cleanup throws while closing is dropped here, on purpose: the game gets the error that
-	 * started it, which is the one that explains everything after.
+	 * `error` is handed to `onSceneExit`, because the re-throw reaches whoever entered the walk — a
+	 * click, a timer — and never the code awaiting the end of the scene. What a cleanup throws while
+	 * closing is dropped, on purpose: the game gets the error that started it, which is the one that
+	 * explains everything after.
 	 */
-	fault(): void {
+	fault( error: unknown ): void {
 		if ( !this.running || this.closing ) return;
-		this.shutdown( SceneEndReason.Faulted );
+		this.shutdown( SceneEndReason.Faulted, undefined, { value: error } );
 	}
 
 	/**
@@ -439,9 +456,10 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 	 * end, from a note loop, from `cancel()` and from a handler that already failed, and only the
 	 * caller knows which error the game should see.
 	 *
-	 * `waitingFor` must be read BEFORE: the pending waits are cleared on the way in.
+	 * `waitingFor` must be read BEFORE: the pending waits are cleared on the way in. `error` is the
+	 * fault that closed the scene, carried in a cell so that `throw undefined` is still a fault.
 	 */
-	private shutdown( reason: SceneEndReason, waitingFor?: string[] ): CleanupFault {
+	private shutdown( reason: SceneEndReason, waitingFor?: string[], error?: CleanupFault ): CleanupFault {
 		if ( this.closing ) return null;
 		this.closing = true;
 
@@ -467,7 +485,10 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 		// answered true, and `stop()` could not reach it — `cancel()` returns at once on a scene
 		// that is not running. The engine is ALWAYS told; what `onSceneExit` threw is carried like
 		// a cleanup's fault.
-		const exitFault = runCleanup( () => this.fireSceneExit( reason, waitingFor ) );
+		const context: SceneContext = { reason };
+		if ( waitingFor ) context.waitingFor = waitingFor;
+		if ( error ) context.error = error.value;
+		const exitFault = runCleanup( () => this.fireSceneExit( context ) );
 		this.callbacks.onSceneEnded( this );
 		return fault ?? exitFault;
 	}
@@ -479,10 +500,10 @@ export class SceneHandleImpl implements SceneHandle, TrackHost {
 		}
 	}
 
-	private fireSceneExit( reason: SceneEndReason, waitingFor?: string[] ): void {
+	private fireSceneExit( context: SceneContext ): void {
 		const handler = this.sceneRegistry.exitHandler ?? this.globalRegistry.sceneExitHandler;
 		if ( handler ) {
-			handler( { scene: this, context: waitingFor ? { reason, waitingFor } : { reason } } );
+			handler( { scene: this, context } );
 		}
 	}
 

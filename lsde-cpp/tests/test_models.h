@@ -56,6 +56,14 @@ struct ExpectedStats {
     int connectionCount = 0;
 };
 
+/// Where every error and warning of a validation case points. Each field given must match on every
+/// one of them: sceneId is the stable id, scenePath the path.
+struct ExpectedLocation {
+    std::optional<std::string> sceneId;
+    std::optional<std::string> scenePath;
+    std::optional<std::string> blockId;
+};
+
 struct TestCase {
     std::string id;
     std::optional<std::string> description;
@@ -75,10 +83,16 @@ struct TestCase {
     std::optional<std::vector<std::string>> expectedWaitingFor;
     /// Does an exception come out of start()? Defaults to no.
     bool expectedThrow = false;
+    /// With faulted: the message of the exception onSceneExit is handed.
+    std::optional<std::string> expectedExitError;
+    /// What the handle answers to getSceneId() / getScenePath().
+    std::optional<std::string> expectedSceneId;
+    std::optional<std::string> expectedScenePath;
     /// Validation only. nullopt = the spec says nothing; an empty vector = expect none.
     std::optional<std::vector<std::string>> expectedErrors;
     std::optional<std::vector<std::string>> expectedWarnings;
     std::optional<ExpectedStats> expectedStats;
+    std::optional<ExpectedLocation> expectedAt;
 };
 
 struct TestSuite {

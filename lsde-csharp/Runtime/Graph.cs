@@ -32,16 +32,19 @@ namespace LsdeDialogEngine
             _scene = scene;
             _blocksById = new Dictionary<string, BlueprintBlock>();
 
-            foreach (var block in scene.Blocks)
+            // A JSON null reaches here as null whatever the initializer says — "blocks": null, a block
+            // whose "id" is null — and a Dictionary refuses a null key: Init() threw on both. A block
+            // with no id is not indexed; nothing can link to it.
+            foreach (var block in scene.Blocks ?? new List<BlueprintBlock>())
             {
-                _blocksById[block.Id] = block;
+                if (block.Id != null) _blocksById[block.Id] = block;
             }
         }
 
         /// <summary>A block by its id, which is unique WITHIN this scene only.</summary>
         public BlueprintBlock? GetBlock(string id)
         {
-            return _blocksById.TryGetValue(id, out var block) ? block : null;
+            return id != null && _blocksById.TryGetValue(id, out var block) ? block : null;
         }
 
         /// <summary>
@@ -65,7 +68,7 @@ namespace LsdeDialogEngine
         public List<BlueprintConnection> GetConnections()
         {
             var wires = new List<BlueprintConnection>();
-            foreach (var block in _scene.Blocks)
+            foreach (var block in _scene.Blocks ?? new List<BlueprintBlock>())
             {
                 if (block.Next == null) continue;
                 foreach (var link in block.Next)
@@ -96,7 +99,7 @@ namespace LsdeDialogEngine
         public BlueprintScene GetScene() => _scene;
 
         /// <summary>Every block of the scene, in payload order. NOTE blocks included.</summary>
-        public List<BlueprintBlock> GetAllBlocks() => _scene.Blocks;
+        public List<BlueprintBlock> GetAllBlocks() => _scene.Blocks ?? new List<BlueprintBlock>();
     }
 
     /// <summary>
@@ -121,6 +124,9 @@ namespace LsdeDialogEngine
 
             foreach (var scene in data.Scenes)
             {
+                // Init() refuses a scene with no path (MISSING_SCENE_PATH); a graph built directly
+                // simply leaves it out, rather than throwing on a null key.
+                if (scene.Scene == null) continue;
                 _sceneGraphs[scene.Scene] = new SceneGraph(scene);
 
                 // A scene answers to its path AND to its rename-proof id. The path is what builds
@@ -132,25 +138,37 @@ namespace LsdeDialogEngine
                 }
             }
 
+            // A null id is not indexed: a Dictionary refuses a null key — Init() threw
+            // ArgumentNullException on it — and nothing can look up what has no id.
             if (data.Functions != null)
             {
-                foreach (var fn in data.Functions) _functionsById[fn.Id] = fn;
+                foreach (var fn in data.Functions)
+                {
+                    if (fn.Id != null) _functionsById[fn.Id] = fn;
+                }
             }
 
             if (data.Dictionaries != null)
             {
-                foreach (var dict in data.Dictionaries) _dictionariesById[dict.Id] = dict;
+                foreach (var dict in data.Dictionaries)
+                {
+                    if (dict.Id != null) _dictionariesById[dict.Id] = dict;
+                }
             }
 
             if (data.Cards != null)
             {
-                foreach (var card in data.Cards) _cardsById[card.Id] = card;
+                foreach (var card in data.Cards)
+                {
+                    if (card.Id != null) _cardsById[card.Id] = card;
+                }
             }
         }
 
         /// <summary>A scene by its path (reactor_breach) or by its stable id (sc_u0vqg2g8).</summary>
         public SceneGraph? GetSceneGraph(string sceneRef)
         {
+            if (sceneRef == null) return null;
             if (_sceneGraphs.TryGetValue(sceneRef, out var direct)) return direct;
             if (_scenePathById.TryGetValue(sceneRef, out var path)
                 && _sceneGraphs.TryGetValue(path, out var byId)) return byId;
@@ -160,19 +178,19 @@ namespace LsdeDialogEngine
         /// <summary>A declared engine function, as an action call's Fn names it.</summary>
         public FunctionDefinition? GetFunction(string functionId)
         {
-            return _functionsById.TryGetValue(functionId, out var fn) ? fn : null;
+            return functionId != null && _functionsById.TryGetValue(functionId, out var fn) ? fn : null;
         }
 
         /// <summary>A declared dictionary, as a condition test's Dict cites it.</summary>
         public DictionaryDefinition? GetDictionary(string dictionaryId)
         {
-            return _dictionariesById.TryGetValue(dictionaryId, out var dict) ? dict : null;
+            return dictionaryId != null && _dictionariesById.TryGetValue(dictionaryId, out var dict) ? dict : null;
         }
 
         /// <summary>A card by its editor id (var1), the other end of a block's Actors and Emotion.</summary>
         public Card? GetCard(string cardId)
         {
-            return _cardsById.TryGetValue(cardId, out var card) ? card : null;
+            return cardId != null && _cardsById.TryGetValue(cardId, out var card) ? card : null;
         }
 
         /// <summary>Every card holding a given role — Cards mixes characters, emotions, places and none.</summary>

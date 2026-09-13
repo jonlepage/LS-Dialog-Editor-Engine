@@ -124,11 +124,12 @@ public:
     virtual std::exception_ptr trackEnded(Track* track, const std::string& ending) = 0;
     /// A track just parked on a waitForBlocks. The scene closes if nothing is left to release it.
     virtual std::exception_ptr trackParked() = 0;
-    /// Code of the game threw during the walk: close the scene. The caller re-throws.
+    /// Code of the game threw `error` during the walk: close the scene, and hand `error` to
+    /// onSceneExit. The caller re-throws.
     ///
     /// Idempotent — a fault on a nested track passes through every walk on its way out, and only
-    /// the first one closes anything.
-    virtual void fault() = 0;
+    /// the first one closes anything, so the error onSceneExit sees is the one that started it.
+    virtual void fault(std::exception_ptr error) = 0;
     /// Throw when the game calls into a running scene from another thread than the one that
     /// started it. `call` names the call, for the message.
     virtual void ensureOwnerThread(const char* call) = 0;

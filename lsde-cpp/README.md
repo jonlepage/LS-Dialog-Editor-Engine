@@ -194,7 +194,7 @@ samples/playground/        # Console playground
 
 | Method | Description |
 |--------|-------------|
-| `engine.init(options)` | Validate + build graph. Returns `DiagnosticReport`. |
+| `engine.init(options)` | Validate + build graph. Returns `DiagnosticReport` — errors refuse the payload. Warnings also cover what the blocks use that the export does not declare: a function, argument, dictionary, entry or choice test (`UNDECLARED_*`, `UNKNOWN_CHOICE_*`, `EMPTY_FUNCTION`), no `check` needed. |
 | `engine.setLocale(locale)` | Set active locale. Also syncs `LsdeUtils::locale`. |
 | `engine.scene(sceneRef)` | Create scene handle (`unique_ptr`). Call `handle->start()`. |
 | `engine.stop()` | Cancel all active scenes. |
@@ -226,7 +226,7 @@ A ROUTER block has **no handler** and needs none: the engine evaluates every cas
 | `engine.onValidateNextBlock(handler)` | Validate before entering a block. |
 | `engine.onInvalidateBlock(handler)` | Called when a block fails validation. |
 | `engine.onSceneEnter(handler)` | Called when any scene starts. |
-| `engine.onSceneExit(handler)` | Called when any scene ends. `args.context.reason` says why (`SceneEndReason`): `completed`, `cancelled`, `invalidated`, `faulted` or `deadlocked` (with `args.context.waitingFor`). |
+| `engine.onSceneExit(handler)` | Called when any scene ends. `args.context.reason` says why (`SceneEndReason`): `completed`, `cancelled`, `invalidated`, `faulted` (with `args.context.error`, the `std::exception_ptr`) or `deadlocked` (with `args.context.waitingFor`). |
 
 ### Scene Handle (Tier 2 — Per-Scene)
 
@@ -246,6 +246,8 @@ A ROUTER block has **no handler** and needs none: the engine evaluates every cas
 | `handle->onEnter(handler)` | Override global `onSceneEnter` for this scene. |
 | `handle->onExit(handler)` | Override global `onSceneExit` for this scene. |
 | `handle->onResolveCharacter(fn)` | Override character resolver for this scene. |
+| `handle->getSceneId()` | The stable id of the scene (`sc_…`). Store this one: it survives a rename. |
+| `handle->getScenePath()` | The scene path (`reactor_breach`) — what a writer reads, and what a rename changes. |
 | `handle->getCurrentBlock()` | Get the block currently being executed, or `nullptr`. |
 | `handle->getVisitedBlocks()` | Ordered list of visited block ids, for this scene. |
 | `handle->getChoiceHistory()` | Map of CHOICE block id → the option ids the player picked. |

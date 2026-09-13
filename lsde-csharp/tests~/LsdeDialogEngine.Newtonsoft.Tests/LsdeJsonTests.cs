@@ -172,5 +172,30 @@ namespace LsdeDialogEngine.Newtonsoft.Tests
             Assert.NotNull(natives.WaitForBlocks);
             Assert.Equal(new[] { "DIALOG-012", "DIALOG-007" }, natives.WaitForBlocks!);
         }
+
+        // ─── A JSON null ─────────────────────────────────────────────────────
+        //
+        // Newtonsoft hands "dict": null over as a null string (NullValueHandling.Include, its default),
+        // whatever the property's initializer says — and Init() threw ArgumentNullException on it.
+
+        [Fact]
+        public void ANullDictLoadsAndIsWarnedAboutRatherThanThrown()
+        {
+            const string json = """
+            {"format":"lsde-blueprints","version":1,"generator":{"app":"LSDE","version":"2.0.3"},
+             "exportedAt":"2026-09-12T00:00:00.000Z","project":"nulls","locales":["en"],"referenceLocale":"en",
+             "dictionaries":[],"functions":[],"cards":[],
+             "scenes":[{"scene":"s1","id":"sc_s1","start":"COND-001","blocks":[{"id":"COND-001","key":"k",
+               "type":"condition","cases":[{"port":"out","when":[{"dict":null,"entry":"e","op":"equals","value":1}]}]}]}]}
+            """;
+
+            var blueprint = LsdeJson.Parse(json);
+            Assert.Null(blueprint.Scenes[0].Blocks[0].Cases![0].When![0].Dict);
+
+            var report = new DialogueEngine().Init(new InitOptions { Data = blueprint });
+
+            Assert.Empty(report.Errors);
+            Assert.Equal(new[] { "UNDECLARED_DICTIONARY" }, report.Warnings.Select(w => w.Code));
+        }
     }
 }

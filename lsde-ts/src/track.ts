@@ -186,12 +186,13 @@ export interface TrackHost {
 	/** A track just parked on a `waitForBlocks`. The scene closes if nothing is left to release it. */
 	trackParked(): CleanupFault;
 	/**
-	 * Code of the game threw during the walk: close the scene. The caller re-throws.
+	 * Code of the game threw `error` during the walk: close the scene, and hand `error` to
+	 * `onSceneExit`. The caller re-throws.
 	 *
 	 * Idempotent — a fault on a nested track passes through every walk on its way out, and only the
-	 * first one closes anything.
+	 * first one closes anything, so the error `onSceneExit` sees is the one that started it.
 	 */
-	fault(): void;
+	fault( error: unknown ): void;
 }
 
 // ─── Track ───────────────────────────────────────────────────────────────────
@@ -368,7 +369,7 @@ export class Track implements Waiter {
 		try {
 			while ( step ) step = this.take( step );
 		} catch ( err ) {
-			this.host.fault();
+			this.host.fault( err );
 			throw err;
 		}
 	}

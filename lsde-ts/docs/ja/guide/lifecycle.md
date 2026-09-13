@@ -55,13 +55,18 @@ handler、クリーンアップ関数、`onValidateNextBlock`、`onInvalidateBlo
 
 - クリーンアップ関数は実行済み
 - async トラックは取り消し済み
-- `onSceneExit` は `reason: 'faulted'` で発火済み
+- `onSceneExit` は `reason: 'faulted'` で発火済みで、エラーそのものは `context.error` に入っています
 
 対話は**正しく**停止しており、次に何をするかはあなたが決めます — それなしで続行する、画面を出す、
 あるいはクラッシュさせる。`start()`、`next()`、`resolve()` の周りにご自身の `try/catch` を置いてください。
 
+エラーは意図的に**二か所**に届きます。`next()` を呼び出した側 — ゲームでは多くの場合クリックやタイマー —
+へスローされ、同時に `onSceneExit` の `context.error` にも渡されます。対話の終了を待つコードが聞いて
+いるのはこちらです。ログはどちらか一方でのみ出してください。
+
 `onSceneExit` 自体がスローした例外も同じ経路で届き、それでも scene は解放されます：
-`engine.isRunning()` はもうそれを数えません。
+`engine.isRunning()` はもうそれを数えません。ただし scene がすでにエラーで閉じようとしていた場合は、
+そのエラーの方が届きます — 残りを説明するのはそちらです。
 
 ::: warning GDScript
 GDScript には例外がありません。handler 内のスクリプトエラーは Godot のログに出力され、呼び出しは `null`
@@ -87,10 +92,14 @@ v1 は handler の例外を静かに飲み込んでいました — ログにも
 | `completed` | フローがグラフの終わりに達した |
 | `cancelled` | `scene.cancel()` または `engine.stop()` |
 | `invalidated` | 最後に動いていたトラックが入ろうとした block を `onValidateNextBlock` が拒否した |
-| `faulted` | 走査中にあなたのコードがスローした — [エラー境界](#エラー境界)を参照 |
+| `faulted` | 走査中にあなたのコードがスローした。`context.error` にスローされたものが入っている — [エラー境界](#エラー境界)を参照 |
 | `deadlocked` | 残っているトラックがすべて、何も完了させられない `waitForBlocks` で待機している。`context.waitingFor` がそれらの block を示す |
 
 `onSceneEnter` には理由が渡されません。
+
+`scene.getSceneId()` は**どの** scene が終わったかを示し、`scene.getScenePath()` はそのパスを返します。
+2 つの scene が同時に再生されると、グローバルな `onSceneExit` にはこれが必要になります。パスではなく id
+を保存してください：scene の名前が変わった日にパスは変わります。
 
 **デッドロックは scene を閉じます。** どのトラックも完了させない block を待つ block — たとえばフローが
 通らなかったブランチの block — は、`onSceneExit` もなく scene を永久に開いたままにしていました。いまは

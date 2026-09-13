@@ -13,6 +13,7 @@ void from_json(const nlohmann::json& j, StepExpect& v);
 void from_json(const nlohmann::json& j, StepAction& v);
 void from_json(const nlohmann::json& j, TestStep& v);
 void from_json(const nlohmann::json& j, ExpectedStats& v);
+void from_json(const nlohmann::json& j, ExpectedLocation& v);
 void from_json(const nlohmann::json& j, TestCase& v);
 void from_json(const nlohmann::json& j, TestSuite& v);
 void from_json(const nlohmann::json& j, TestFile& v);

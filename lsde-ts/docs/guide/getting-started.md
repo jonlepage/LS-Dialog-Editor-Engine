@@ -20,7 +20,7 @@ The engine consumes a `BlueprintExport` object, not a file. You can load your bl
 
 <!--@include: ../_shared/getting-started-validation.md-->
 
-### The seventeen diagnostics
+### The twenty-five diagnostics
 
 **Errors — the payload is refused and nothing plays.** `errors` is non-empty and `engine.scene()` has nothing to hand you.
 
@@ -44,11 +44,24 @@ The engine consumes a `BlueprintExport` object, not a file. You can load your bl
 |---|---|
 | `NO_START_BLOCK` | The scene has no start block, so `start()` has nowhere to begin |
 | `UNKNOWN_WAIT_BLOCK` | A `waitForBlocks` id is not a block of the scene, so that track parks **for good**. The check cannot go further: an id that does exist may still never be played |
+| `EMPTY_FUNCTION` | An action has a call with no function picked. The game is handed a call it cannot run |
+| `UNDECLARED_FUNCTION` | An action calls a function the export does not declare — a v1 id left behind in the project, say. It used to load silently and fail in game |
+| `UNDECLARED_ARGUMENT` | A call passes an argument the function does not declare |
+| `UNDECLARED_DICTIONARY_KEY` | A `dictionaryKey` argument is not an entry of the dictionary its parameter names |
+| `UNDECLARED_DICTIONARY` | A condition tests a dictionary the export does not declare |
+| `UNDECLARED_ENTRY` | A condition tests an entry its dictionary does not declare |
+| `UNKNOWN_CHOICE_BLOCK` | A test on the reserved `choice` dictionary names a block that is not a CHOICE of this scene |
+| `UNKNOWN_CHOICE_OPTION` | A test on the reserved `choice` dictionary names an option that CHOICE does not have |
 | `UNKNOWN_FUNCTION` | An action calls a function id your `check.functions` does not list |
 | `UNKNOWN_DICTIONARY` | A condition tests a dictionary id your `check.dictionaries` does not list |
 | `UNKNOWN_DICTIONARY_ENTRY` | The dictionary is known, the entry key is not |
 | `UNKNOWN_CARD` | A block cites an actor card NAME your `check.cards` does not list |
 
 The last four only appear when you pass `check` — without it the engine has nothing to compare against.
+The eight above them are always on: they compare what the blocks USE with what the export itself
+DECLARES, so no `check` is needed.
+
+A diagnostic found in a scene carries `sceneId` — the stable id (`sc_…`), what `handle.getSceneId()`
+answers — and `scenePath`, plus `blockId` when it points at a block.
 
 

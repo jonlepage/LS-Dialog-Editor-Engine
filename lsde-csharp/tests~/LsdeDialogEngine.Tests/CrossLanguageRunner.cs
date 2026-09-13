@@ -225,6 +225,22 @@ namespace LsdeDialogEngine.Tests
                 Assert.Equal(testCase.ExpectedWaitingFor, exits[0].WaitingFor?.ToList());
             }
 
+            if (testCase.ExpectedExitError != null)
+            {
+                Assert.NotEmpty(exits);
+                Assert.Equal(testCase.ExpectedExitError, exits[0].Error?.Message);
+            }
+
+            if (testCase.ExpectedSceneId != null)
+            {
+                Assert.Equal(testCase.ExpectedSceneId, handle.GetSceneId());
+            }
+
+            if (testCase.ExpectedScenePath != null)
+            {
+                Assert.Equal(testCase.ExpectedScenePath, handle.GetScenePath());
+            }
+
             if (testCase.ExpectedVisited != null)
             {
                 var visited = handle.GetVisitedBlocks().ToList();
@@ -291,29 +307,28 @@ namespace LsdeDialogEngine.Tests
             var (suite, testCase) = Find(filename, suiteId, caseId);
             var report = new DialogueEngine().Init(OptionsOf(suite));
 
+            // Compared WHOLE, order aside. Checking only that each listed code was present let a
+            // runtime add a code the spec does not list, unnoticed. The order is left out on purpose:
+            // in C++ a PropertyBag is an unordered_map, so two warnings about one call may come in
+            // either order.
             if (testCase.ExpectedErrors != null)
             {
-                var codes = report.Errors.Select(e => e.Code).ToList();
-                if (testCase.ExpectedErrors.Count == 0)
-                {
-                    Assert.Empty(codes);
-                }
-                else
-                {
-                    foreach (var code in testCase.ExpectedErrors) Assert.Contains(code, codes);
-                }
+                Assert.Equal(Sorted(testCase.ExpectedErrors), Sorted(report.Errors.Select(e => e.Code)));
             }
 
             if (testCase.ExpectedWarnings != null)
             {
-                var codes = report.Warnings.Select(w => w.Code).ToList();
-                if (testCase.ExpectedWarnings.Count == 0)
+                Assert.Equal(Sorted(testCase.ExpectedWarnings), Sorted(report.Warnings.Select(w => w.Code)));
+            }
+
+            if (testCase.ExpectedAt != null)
+            {
+                var where = testCase.ExpectedAt;
+                foreach (var entry in report.Errors.Concat(report.Warnings))
                 {
-                    Assert.Empty(codes);
-                }
-                else
-                {
-                    foreach (var code in testCase.ExpectedWarnings) Assert.Contains(code, codes);
+                    if (where.SceneId != null) Assert.Equal(where.SceneId, entry.SceneId);
+                    if (where.ScenePath != null) Assert.Equal(where.ScenePath, entry.ScenePath);
+                    if (where.BlockId != null) Assert.Equal(where.BlockId, entry.BlockId);
                 }
             }
 
@@ -323,6 +338,13 @@ namespace LsdeDialogEngine.Tests
                 Assert.Equal(testCase.ExpectedStats.BlockCount, report.Stats.BlockCount);
                 Assert.Equal(testCase.ExpectedStats.ConnectionCount, report.Stats.ConnectionCount);
             }
+        }
+
+        private static List<string> Sorted(IEnumerable<string> codes)
+        {
+            var list = codes.ToList();
+            list.Sort(string.CompareOrdinal);
+            return list;
         }
     }
 }
